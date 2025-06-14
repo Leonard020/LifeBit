@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  postgres-db:
+    image: postgres:16
+    container_name: lifebit_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=lifebit_db
+      - POSTGRES_USER=lifebit_user
+      - POSTGRES_PASSWORD=lifebit_password
+    ports:
+      - "5432:5432"
+    restart: always
+volumes:
+  postgres_data:
