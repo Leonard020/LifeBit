@@ -1,6 +1,6 @@
 
 -- 1. ENUM 타입 (역할)
--- CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
+CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
 
 -- 2. users
 DROP TABLE IF EXISTS users CASCADE;
