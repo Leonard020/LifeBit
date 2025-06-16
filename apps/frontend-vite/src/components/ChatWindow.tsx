@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,7 +36,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const addMessage = (type: 'user' | 'ai', content: string) => {
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random()}`,
       type,
       content,
       timestamp: new Date()
@@ -46,15 +45,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   };
 
   const analyzeInput = (input: string, type: 'exercise' | 'diet') => {
-    // 간단한 분석 로직 (실제로는 더 복잡한 AI 분석이 필요)
     const exerciseKeywords = ['kg', '세트', '회', '분', '운동'];
     const dietKeywords = ['개', '그램', 'g', '먹었', '섭취'];
-    
+
     if (type === 'exercise') {
       const hasWeight = /\d+kg/i.test(input);
       const hasSets = /\d+세트/i.test(input);
       const hasReps = /\d+회/i.test(input);
-      
+
       if (!hasWeight || !hasSets || !hasReps) {
         return {
           type: 'incomplete',
@@ -74,7 +72,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         };
       }
     }
-    
+
     return { type: 'complete' };
   };
 
@@ -88,23 +86,73 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     addMessage('ai', "식단을 기록하시려 하시는군요! 예시를 들어 '아침에 바나나 1개, 계란 2개 먹었어요'와 같이 입력해주세요");
   };
 
-  const handleVoiceToggle = () => {
-    setIsRecording(!isRecording);
-    // 실제 음성 인식 로직은 여기에 구현
-    if (!isRecording) {
-      // 음성 인식 시작
+  const record3Seconds = async (): Promise<Blob> => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    const chunks: Blob[] = [];
+
+    return new Promise((resolve) => {
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        resolve(blob);
+      };
+      mediaRecorder.start();
+
       setTimeout(() => {
-        setIsRecording(false);
-        setInputValue("벤치프레스 60kg 5세트 8회 했어요"); // 예시 음성 인식 결과
-      }, 3000);
+        mediaRecorder.stop();
+        stream.getTracks().forEach((track) => track.stop());
+      }, 5000);
+    });
+  };
+
+  const handleVoiceToggle = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      return;
     }
+
+    setIsRecording(true);
+
+    try {
+      const audioBlob = await record3Seconds();
+      const file = new File([audioBlob], "voice.webm", { type: "audio/webm" });
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("http://localhost:8001/api/py/voice", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.gpt_reply) {
+        console.error("🧨 서버 오류 응답:", data);
+        addMessage("ai", "서버 오류가 발생했어요. 음성을 다시 녹음해주세요.");
+        setIsRecording(false);
+        return;
+      }
+     
+      if (typeof data.user_input === 'string') {
+        setInputValue(data.user_input);
+      } else {
+        setInputValue('');
+      }
+      addMessage("user", data.user_input || '');
+      addMessage("ai", data.gpt_reply);
+    } catch (err) {
+      console.error("음성 처리 실패:", err);
+      addMessage("ai", "음성 인식에 실패했습니다. 다시 시도해주세요.");
+    }
+
+    setIsRecording(false);
   };
 
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
 
     addMessage('user', inputValue);
-    
+
     if (isAwaitingConfirmation) {
       if (inputValue.includes('네') || inputValue.includes('예') || inputValue.includes('저장')) {
         if (pendingRecord && onRecordSubmit) {
@@ -121,16 +169,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       }
     } else if (currentRecordType) {
       const analysis = analyzeInput(inputValue, currentRecordType);
-      
+
       if (analysis.type === 'incomplete') {
         const missingInfo = analysis.missingFields?.join(', ');
         addMessage('ai', `입력해주신 내용에서 ${missingInfo} 정보가 누락되었습니다. 추가로 입력해주세요.`);
       } else {
-        // 완전한 정보가 있을 때 확인 요청
         const summary = currentRecordType === 'exercise' 
           ? "운동 기록을 정리하면 다음과 같습니다:"
           : "식단 기록을 정리하면 다음과 같습니다:";
-        
+
         addMessage('ai', `${summary}\n"${inputValue}"\n\n이렇게 저장할까요? (네/아니요)`);
         setIsAwaitingConfirmation(true);
         setPendingRecord({ type: currentRecordType, content: inputValue });
@@ -157,12 +204,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     });
   };
 
-  // 입력 텍스트가 있는지 확인
   const hasInputText = inputValue.trim().length > 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-200px)] max-w-4xl mx-auto">
-      {/* 뱃지 섹션 */}
       <div className="flex gap-3 mb-6 justify-center">
         <Badge 
           variant="outline" 
@@ -182,7 +227,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         </Badge>
       </div>
 
-      {/* 채팅 메시지 영역 */}
       <Card className="flex-1 flex flex-col">
         <CardContent className="flex-1 p-4 overflow-y-auto">
           {messages.length === 0 ? (
@@ -229,7 +273,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           )}
         </CardContent>
 
-        {/* 입력 영역 */}
         <div className="border-t p-4">
           <div className="flex space-x-2 items-end">
             <Input
@@ -239,24 +282,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
               onKeyPress={handleKeyPress}
               className="flex-1"
             />
-            
-            {/* 동적 버튼 전환 */}
+
             {!hasInputText ? (
-              // 텍스트가 없을 때: 마이크 버튼
-              <Button
-                size="icon"
-                variant={isRecording ? 'default' : 'ghost'}
-                className={`${
-                  isRecording 
-                    ? 'gradient-bg text-white animate-pulse' 
-                    : 'hover:bg-gradient-to-br hover:from-teal-400 hover:to-blue-500 hover:text-white'
-                }`}
-                onClick={handleVoiceToggle}
-              >
-                {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              </Button>
+           <Button
+           size="icon"
+           variant={isRecording ? 'default' : 'outline'}
+           className={`
+             ${isRecording 
+               ? 'gradient-bg text-white animate-pulse' 
+               : 'hover:bg-gradient-to-br hover:from-teal-400 hover:to-blue-500 hover:text-white'}
+           `}
+           onClick={handleVoiceToggle}
+         >
+           {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+         </Button>
             ) : (
-              // 텍스트가 있을 때: 전송 버튼
               <Button 
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim()}
@@ -271,4 +311,3 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     </div>
   );
 };
-
