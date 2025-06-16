@@ -14,6 +14,9 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
+USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
+
+
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -47,18 +50,21 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         print("🎧 [LOG] Whisper 결과:", transcript["text"])
         user_text = transcript["text"]
 
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "운동 기록 또는 식단 기록을 도와주세요. 형식은 '운동', '식단' 중 하나로 구분됩니다."},
-                {"role": "user", "content": user_text}
-            ]
-        )
+        if USE_GPT:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "운동 기록 또는 식단 기록을 도와주세요. 형식은 '운동', '식단' 중 하나로 구분됩니다."},
+                    {"role": "user", "content": user_text}
+                ]
+            )
+            gpt_reply = response.choices[0].message["content"]
+            print("🤖 [LOG] GPT 응답:", gpt_reply)
+        else:
+            gpt_reply = "[GPT 비활성화 상태입니다]"
+            print("🤖 [LOG] GPT 호출 생략됨 (USE_GPT=False)")
 
-        gpt_reply = response.choices[0].message["content"]
-        print("🤖 [LOG] GPT 응답:", gpt_reply)
-
-        record_type = "exercise" if "운동" in gpt_reply else "diet"
+        record_type = "exercise" if "운동" in gpt_reply else "diet" if "식단" in gpt_reply else "exercise"
 
         if record_type == "exercise":
             new_record = models.ExerciseSession(
