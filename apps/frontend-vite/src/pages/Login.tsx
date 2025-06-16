@@ -17,10 +17,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { login, LoginData } from '@/api/auth';
 import { Separator } from '@/components/ui/separator';
 
-import axios from 'axios'; // 이 줄이 필요합니다!
+import axios from 'axios';
 
-
-// 로그인 폼 스키마
 const loginSchema = z.object({
   email: z.string().email('유효한 이메일을 입력해주세요.'),
   password: z.string().min(6, '비밀번호는 최소 6자 이상이어야 합니다.'),
@@ -42,7 +40,6 @@ export default function Login() {
     },
   });
 
-
   const handleSubmit = async (values: LoginFormData) => {
     try {
       const loginData: LoginData = {
@@ -50,7 +47,7 @@ export default function Login() {
         password: values.password,
         rememberMe: values.rememberMe,
       };
-  
+
       await login(loginData);
       toast({
         title: '로그인 성공',
@@ -60,12 +57,10 @@ export default function Login() {
     } catch (error: unknown) {
       console.error('Login failed:', error);
       let errorMessage = '로그인에 실패했습니다.';
-  
+
       if (axios.isAxiosError(error)) {
-        // axios 에러이면서 message가 있을 경우
         errorMessage = error.response?.data?.message || error.message;
       } else if (error instanceof Error) {
-        // 일반적인 JS 에러 객체
         if (error.message === 'Invalid response data') {
           errorMessage = '서버 응답 형식이 올바르지 않습니다.';
         } else if (error.message === 'Network Error') {
@@ -74,7 +69,7 @@ export default function Login() {
           errorMessage = error.message;
         }
       }
-  
+
       toast({
         variant: 'destructive',
         title: '로그인 실패',
@@ -82,30 +77,35 @@ export default function Login() {
       });
     }
   };
-  
-  
-  
 
   const handleSocialLogin = (provider: string) => {
     if (provider === 'Google') {
+      const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const redirectUri = 'http://localhost:8001/api/auth/google/callback';
+
       window.location.href =
         'https://accounts.google.com/o/oauth2/v2/auth' +
         '?response_type=code' +
-        `&client_id=${import.meta.env.VITE_GOOGLE_CLIENT_ID}` +
-        '&redirect_uri=http://localhost:8000/auth/google/callback' +
+        `&client_id=${googleClientId}` +
+        `&redirect_uri=${redirectUri}` +
         '&scope=openid%20email%20profile';
     } else if (provider === 'Kakao') {
+      const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
+      const redirectUri = 'http://localhost:8001/api/auth/kakao/callback';
+
+      console.log("✅ Kakao Client ID:", kakaoClientId);
+
       window.location.href =
         'https://kauth.kakao.com/oauth/authorize' +
         '?response_type=code' +
-        `&client_id=${import.meta.env.VITE_KAKAO_CLIENT_ID}` +
-        '&redirect_uri=http://localhost:8000/auth/kakao/callback';
+        `&client_id=${kakaoClientId}` +
+        `&redirect_uri=${redirectUri}`;
     }
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
-        {/* Logo and Title */}
         <div className="text-center">
           <div className="gradient-bg w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-3xl">L</span>
@@ -118,7 +118,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Login Form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <FormField
@@ -128,11 +127,7 @@ export default function Login() {
                 <FormItem>
                   <FormLabel>이메일</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="email" 
-                      placeholder="name@example.com" 
-                      {...field} 
-                    />
+                    <Input type="email" placeholder="name@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -146,11 +141,7 @@ export default function Login() {
                 <FormItem>
                   <FormLabel>비밀번호</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      {...field} 
-                    />
+                    <Input type="password" placeholder="••••••••" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -164,10 +155,7 @@ export default function Login() {
                 render={({ field }) => (
                   <FormItem className="flex items-center space-x-2">
                     <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                     <label
                       htmlFor="rememberMe"
@@ -179,10 +167,7 @@ export default function Login() {
                 )}
               />
 
-              <Link
-                to="/forgot-password"
-                className="text-sm font-medium text-primary hover:underline"
-              >
+              <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
                 비밀번호 찾기
               </Link>
             </div>
@@ -193,71 +178,45 @@ export default function Login() {
           </form>
         </Form>
 
-        {/* Social Login */}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <Separator className="w-full" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              또는
-            </span>
+            <span className="bg-background px-2 text-muted-foreground">또는</span>
           </div>
         </div>
 
         <div className="space-y-3">
           <Button
             variant="outline"
-            className="w-full"
+            className="w-full flex items-center justify-center gap-2 bg-white text-black border border-gray-300 hover:bg-blue-600 hover:text-white transition-colors"
             onClick={() => handleSocialLogin('Google')}
           >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt="Google logo"
+              className="h-5 w-5"
+            />
             Google로 계속하기
           </Button>
 
           <Button
             variant="outline"
-            className="w-full"
+            className="w-full flex items-center justify-center gap-2 bg-[#FEE500] text-black border border-[#FEE500] hover:opacity-90"
             onClick={() => handleSocialLogin('Kakao')}
           >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path
-                fill="#FEE500"
-                d="M12 3C6.477 3 2 6.477 2 12c0 5.523 4.477 10 10 10s10-4.477 10-10c0-5.523-4.477-10-10-10z"
-              />
-              <path
-                fill="#000000"
-                d="M12 6.956c-3.142 0-5.687 2.013-5.687 4.5 0 1.621 1.08 3.044 2.709 3.847l-.69 2.573c-.024.092-.002.19.055.26.059.071.148.111.242.111.046 0 .093-.01.135-.031l3.045-2.06c.069-.046.148-.069.228-.069.035 0 .069.004.103.012.168.035.337.052.505.052 3.142 0 5.687-2.013 5.687-4.5s-2.545-4.5-5.687-4.5z"
-              />
-            </svg>
+            <img
+              src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png"
+              alt="Kakao logo"
+              className="h-5 w-5"
+            />
             카카오로 계속하기
           </Button>
         </div>
-
-        {/* Sign Up Link */}
         <p className="text-center text-sm">
           계정이 없으신가요?{' '}
-          <Link
-            to="/signup"
-            className="font-medium text-primary hover:underline"
-          >
+          <Link to="/signup" className="font-medium text-primary hover:underline">
             회원가입
           </Link>
         </p>
