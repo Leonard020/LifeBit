@@ -16,16 +16,38 @@ export interface SignUpData {
     password: string;
 }
 
+// 사용자 정보 타입
+export interface UserInfo {
+    userId: string;
+    email: string;
+    nickname: string;
+}
+
 // 로그인 API
 export const login = async (data: LoginData) => {
-    const response = await axios.post(API_ENDPOINTS.LOGIN, data);
-    const { token, user } = response.data;
-    
-    // 토큰과 사용자 정보 저장
-    setToken(token);
-    setUserInfo(user);
-    
-    return response.data;
+    try {
+        const response = await axios.post(API_ENDPOINTS.LOGIN, data);
+        const { token, userId, email, nickname } = response.data;
+        
+        if (!token || !userId || !email || !nickname) {
+            throw new Error('Invalid response data');
+        }
+
+        const userInfo: UserInfo = {
+            userId,
+            email,
+            nickname
+        };
+
+        // 토큰과 사용자 정보 저장
+        setToken(token);
+        setUserInfo(userInfo);
+        
+        return response.data;
+    } catch (error) {
+        console.error('Login failed:', error);
+        throw error;
+    }
 };
 
 // 회원가입 API

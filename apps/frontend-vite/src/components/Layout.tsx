@@ -16,7 +16,7 @@ import {
 import { AppSidebar } from '@/components/AppSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { FileText, BarChart3, Trophy, User, Moon, Sun, ChevronUp } from 'lucide-react';
-import { isAuthenticated, getUserInfo, removeToken } from '@/utils/auth';
+import { isLoggedIn as checkIsLoggedIn, getUserInfo, removeToken } from '@/utils/auth';
 import { logout } from '@/api/auth';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -28,13 +28,24 @@ interface LayoutProps {
 const WebHeader = () => {
   const { toast } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(isAuthenticated());
+  const [isLoggedIn, setIsLoggedIn] = useState(checkIsLoggedIn());
   const [userInfo, setUserInfo] = useState(getUserInfo());
   const { open: sidebarOpen } = useSidebar();
 
   useEffect(() => {
-    setIsLoggedIn(isAuthenticated());
-    setUserInfo(getUserInfo());
+    const checkLoginStatus = () => {
+      setIsLoggedIn(checkIsLoggedIn());
+      const user = getUserInfo();
+      setUserInfo(user);
+    };
+
+    checkLoginStatus();
+    // 로그인 상태 변경을 감지하기 위한 이벤트 리스너
+    window.addEventListener('storage', checkLoginStatus);
+    
+    return () => {
+      window.removeEventListener('storage', checkLoginStatus);
+    };
   }, []);
 
   const handleLogout = () => {

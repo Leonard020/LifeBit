@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signUp } from '@/api/auth';
@@ -61,7 +60,18 @@ const SignUp = () => {
       navigate('/login');
     } catch (error: any) {
       console.error('Sign up failed:', error);
-      setError(error.response?.data || '회원가입에 실패했습니다.');
+      if (error.response?.data) {
+        // 필드별 유효성 검사 에러
+        if (typeof error.response.data === 'object' && !error.response.data.message) {
+          const errorMessages = Object.values(error.response.data).join('\n');
+          setError(errorMessages);
+        } else {
+          // 일반 에러 메시지
+          setError(error.response.data.message || '회원가입에 실패했습니다.');
+        }
+      } else {
+        setError('서버와의 통신에 실패했습니다.');
+      }
     } finally {
       setIsLoading(false);
     }

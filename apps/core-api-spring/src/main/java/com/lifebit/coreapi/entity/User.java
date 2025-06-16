@@ -35,8 +35,8 @@ public class User {
     @Column(length = 10)
     private String gender;
 
-    @Enumerated(EnumType.STRING)
-    private UserRole role = UserRole.USER;
+    @Column(columnDefinition = "user_role")
+    private String role;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -44,6 +44,7 @@ public class User {
     @PrePersist
     protected void onCreate() {
         this.uuid = UUID.randomUUID();
+        this.role = "USER";
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }

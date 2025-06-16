@@ -9,6 +9,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -18,27 +21,31 @@ public class UserService {
     @Transactional
     public User signUp(SignUpRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email is already in use");
+            throw new RuntimeException("이미 사용 중인 이메일입니다.");
         }
         if (userRepository.existsByNickname(request.getNickname())) {
-            throw new RuntimeException("Nickname is already in use");
+            throw new RuntimeException("이미 사용 중인 닉네임입니다.");
         }
 
-        User user = new User();
-        user.setEmail(request.getEmail());
-        user.setNickname(request.getNickname());
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-
-        return userRepository.save(user);
+        LocalDateTime now = LocalDateTime.now();
+        return userRepository.saveWithRole(
+            request.getEmail(),
+            request.getNickname(),
+            passwordEncoder.encode(request.getPassword()),
+            "USER",
+            UUID.randomUUID(),
+            now,
+            now
+        );
     }
 
     @Transactional(readOnly = true)
     public User login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 사용자입니다."));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new RuntimeException("Invalid password");
+            throw new RuntimeException("비밀번호가 일치하지 않습니다.");
         }
 
         return user;
