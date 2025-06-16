@@ -4,10 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:windows": "concurrently \"powershell -File ./scripts/start-ai-api.ps1\" \"powershell -File ./scripts/start-core-api.ps1\" \"powershell -File ./scripts/start-frontend.ps1\"",
+    "dev:mac": "concurrently \"bash ./scripts/start-ai-api.sh\" \"bash ./scripts/start-core-api.sh\" \"bash ./scripts/start-frontend.sh\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.12.1"
+  "packageManager": "pnpm@10.12.1",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }
