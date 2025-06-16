@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { signUp } from '@/api/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,11 @@ import { Progress } from '@/components/ui/progress';
 import { Mail, Lock, User, Eye, EyeOff, Check } from 'lucide-react';
 
 const SignUp = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     nickname: '',
@@ -37,13 +41,30 @@ const SignUp = () => {
     checkPasswordStrength(password);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      alert('비밀번호가 일치하지 않습니다.');
+      setError('비밀번호가 일치하지 않습니다.');
       return;
     }
-    console.log('Sign up attempt:', formData);
+
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await signUp({
+        email: formData.email,
+        nickname: formData.nickname,
+        password: formData.password
+      });
+      console.log('Sign up successful:', response);
+      navigate('/login');
+    } catch (error: any) {
+      console.error('Sign up failed:', error);
+      setError(error.response?.data || '회원가입에 실패했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getPasswordStrengthText = () => {
@@ -191,12 +212,18 @@ const SignUp = () => {
                 </Label>
               </div>
 
+              {error && (
+                <div className="text-red-500 text-sm mb-4">
+                  {error}
+                </div>
+              )}
+
               <Button 
                 type="submit" 
                 className="w-full gradient-bg hover:opacity-90 transition-opacity"
-                disabled={!formData.agreeTerms}
+                disabled={!formData.agreeTerms || isLoading}
               >
-                회원가입
+                {isLoading ? '회원가입 중...' : '회원가입'}
               </Button>
             </form>
 

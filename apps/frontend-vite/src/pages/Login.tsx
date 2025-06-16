@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { login } from '@/api/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,17 +10,32 @@ import { Separator } from '@/components/ui/separator';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     rememberMe: false
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log('Login attempt:', formData);
+    setError(null);
+    setIsLoading(true);
+    
+    try {
+      const response = await login(formData);
+      console.log('Login successful:', response);
+      // TODO: Save user data to state management (e.g., Redux, Zustand)
+      navigate('/');
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      setError(error.response?.data || '로그인에 실패했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -102,8 +118,18 @@ const Login = () => {
                 </Button>
               </div>
 
-              <Button type="submit" className="w-full gradient-bg hover:opacity-90 transition-opacity">
-                로그인
+              {error && (
+                <div className="text-red-500 text-sm mb-4">
+                  {error}
+                </div>
+              )}
+              
+              <Button 
+                type="submit" 
+                className="w-full gradient-bg hover:opacity-90 transition-opacity"
+                disabled={isLoading}
+              >
+                {isLoading ? '로그인 중...' : '로그인'}
               </Button>
             </form>
 
