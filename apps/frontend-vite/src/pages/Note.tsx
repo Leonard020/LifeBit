@@ -220,7 +220,7 @@ const Note = () => {
           <TabsContent value="exercise" className="space-y-6">
             <Card className="hover-lift">
               <CardHeader>
-                <CardTitle>운동 부위별 분포</CardTitle>
+                <CardTitle>운동 부위별 목표</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   붉은 선은 목표치를 나타냅니다
                 </p>

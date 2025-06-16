@@ -26,7 +26,7 @@ class ExerciseOutput(BaseModel):
     exercise_date: date
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class MealOutput(BaseModel):
     user_id: int
@@ -35,4 +35,4 @@ class MealOutput(BaseModel):
     log_date: date
 
     class Config:
-        orm_mode = True
+        from_attributes = True
