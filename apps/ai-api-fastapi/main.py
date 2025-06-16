@@ -7,12 +7,17 @@ import openai, os
 from dotenv import load_dotenv
 import tempfile
 from datetime import date
+from auth_routes import router as auth_router
+
 
 # Load .env
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
+
+from auth_routes import router as auth_router
+app.include_router(auth_router)
 
 USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
 

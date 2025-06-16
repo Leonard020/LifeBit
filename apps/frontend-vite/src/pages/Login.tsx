@@ -17,6 +17,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { login, LoginData } from '@/api/auth';
 import { Separator } from '@/components/ui/separator';
 
+import axios from 'axios'; // 이 줄이 필요합니다!
+
+
 // 로그인 폼 스키마
 const loginSchema = z.object({
   email: z.string().email('유효한 이메일을 입력해주세요.'),
@@ -39,6 +42,7 @@ export default function Login() {
     },
   });
 
+
   const handleSubmit = async (values: LoginFormData) => {
     try {
       const loginData: LoginData = {
@@ -46,25 +50,31 @@ export default function Login() {
         password: values.password,
         rememberMe: values.rememberMe,
       };
-      
+  
       await login(loginData);
       toast({
         title: '로그인 성공',
         description: '환영합니다!',
       });
       navigate('/');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login failed:', error);
       let errorMessage = '로그인에 실패했습니다.';
-      
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message === 'Invalid response data') {
-        errorMessage = '서버 응답 형식이 올바르지 않습니다.';
-      } else if (error.message === 'Network Error') {
-        errorMessage = '서버에 연결할 수 없습니다.';
+  
+      if (axios.isAxiosError(error)) {
+        // axios 에러이면서 message가 있을 경우
+        errorMessage = error.response?.data?.message || error.message;
+      } else if (error instanceof Error) {
+        // 일반적인 JS 에러 객체
+        if (error.message === 'Invalid response data') {
+          errorMessage = '서버 응답 형식이 올바르지 않습니다.';
+        } else if (error.message === 'Network Error') {
+          errorMessage = '서버에 연결할 수 없습니다.';
+        } else {
+          errorMessage = error.message;
+        }
       }
-
+  
       toast({
         variant: 'destructive',
         title: '로그인 실패',
@@ -72,16 +82,26 @@ export default function Login() {
       });
     }
   };
+  
+  
+  
 
   const handleSocialLogin = (provider: string) => {
-    // TODO: Implement social login
-    console.log(`${provider} login clicked`);
-    toast({
-      title: '준비 중',
-      description: `${provider} 로그인은 현재 개발 중입니다.`,
-    });
+    if (provider === 'Google') {
+      window.location.href =
+        'https://accounts.google.com/o/oauth2/v2/auth' +
+        '?response_type=code' +
+        `&client_id=${import.meta.env.VITE_GOOGLE_CLIENT_ID}` +
+        '&redirect_uri=http://localhost:8000/auth/google/callback' +
+        '&scope=openid%20email%20profile';
+    } else if (provider === 'Kakao') {
+      window.location.href =
+        'https://kauth.kakao.com/oauth/authorize' +
+        '?response_type=code' +
+        `&client_id=${import.meta.env.VITE_KAKAO_CLIENT_ID}` +
+        '&redirect_uri=http://localhost:8000/auth/kakao/callback';
+    }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
