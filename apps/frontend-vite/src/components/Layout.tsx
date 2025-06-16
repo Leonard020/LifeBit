@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
@@ -16,6 +16,9 @@ import {
 import { AppSidebar } from '@/components/AppSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { FileText, BarChart3, Trophy, User, Moon, Sun, ChevronUp } from 'lucide-react';
+import { isLoggedIn as checkIsLoggedIn, getUserInfo, removeToken } from '@/utils/auth';
+import { logout } from '@/api/auth';
+import { useToast } from '@/components/ui/use-toast';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,9 +26,37 @@ interface LayoutProps {
 
 // 웹용 헤더 컴포넌트 분리
 const WebHeader = () => {
+  const { toast } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(checkIsLoggedIn());
+  const [userInfo, setUserInfo] = useState(getUserInfo());
   const { open: sidebarOpen } = useSidebar();
+
+  useEffect(() => {
+    const checkLoginStatus = () => {
+      setIsLoggedIn(checkIsLoggedIn());
+      const user = getUserInfo();
+      setUserInfo(user);
+    };
+
+    checkLoginStatus();
+    // 로그인 상태 변경을 감지하기 위한 이벤트 리스너
+    window.addEventListener('storage', checkLoginStatus);
+    
+    return () => {
+      window.removeEventListener('storage', checkLoginStatus);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setIsLoggedIn(false);
+    setUserInfo(null);
+    toast({
+      title: "로그아웃",
+      description: "성공적으로 로그아웃되었습니다.",
+    });
+  };
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -46,7 +77,7 @@ const WebHeader = () => {
             </Link>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
             {/* Dark Mode Toggle */}
             <Button
               variant="ghost"
@@ -69,13 +100,16 @@ const WebHeader = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-sm font-medium">
+                    {userInfo?.nickname || '사용자'}
+                  </div>
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       마이페이지
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsLoggedIn(false)}>
+                  <DropdownMenuItem onClick={handleLogout}>
                     로그아웃
                   </DropdownMenuItem>
                 </DropdownMenuContent>

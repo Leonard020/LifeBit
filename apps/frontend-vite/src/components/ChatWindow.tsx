@@ -78,7 +78,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const handleExerciseClick = () => {
     setCurrentRecordType('exercise');
-    addMessage('ai', "운동을 기록하시려 하시는군요! 예시로 '벤치프레스 60kg 5세트 8회했어요'와 같이 입력해주세요");
+    addMessage('ai', "운동을 기록하시려 하시는군요! 예시로 '스쿼트 30kg 3세트 10회했어요'와 같이 입력해주세요");
   };
 
   const handleDietClick = () => {
