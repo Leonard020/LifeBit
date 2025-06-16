@@ -131,7 +131,7 @@ export interface FeedbackData {
 // ============================================================================
 
 // 기본 API URL 설정
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // API 호출을 위한 헬퍼 함수
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {

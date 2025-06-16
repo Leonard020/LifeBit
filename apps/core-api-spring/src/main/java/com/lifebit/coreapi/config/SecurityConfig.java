@@ -23,10 +23,21 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configure(http)) // CORS 활성화
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/actuator/**", "/").permitAll()
+                .requestMatchers(
+                    "/api/auth/**", 
+                    "/actuator/**", 
+                    "/",
+                    "/api/health-statistics/**", // 건강 통계 API
+                    "/api/health-records/**",    // 건강 기록 API
+                    "/api/user-goals/**",        // 사용자 목표 API
+                    "/api/recommendations/**",   // 추천 API
+                    "/api/exercise-sessions/**", // 운동 세션 API
+                    "/api/meal-logs/**"          // 식단 기록 API
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
