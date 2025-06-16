@@ -1,6 +1,7 @@
 package com.lifebit.coreapi.entity;
 
 public enum UserRole {
+<<<<<<< HEAD
     ADMIN("ADMIN"),
     USER("USER");
 
@@ -13,4 +14,7 @@ public enum UserRole {
     public String getValue() {
         return value;
     }
+=======
+    ADMIN, USER
+>>>>>>> home01
 } 
