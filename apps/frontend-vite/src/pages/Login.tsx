@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { login } from '@/api/auth';
@@ -8,9 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +28,19 @@ const Login = () => {
     
     try {
       const response = await login(formData);
-      console.log('Login successful:', response);
-      // TODO: Save user data to state management (e.g., Redux, Zustand)
+      toast({
+        title: "로그인 성공",
+        description: "환영합니다! 건강한 하루 되세요.",
+      });
       navigate('/');
     } catch (error: any) {
       console.error('Login failed:', error);
-      setError(error.response?.data || '로그인에 실패했습니다.');
+      setError(error.response?.data?.message || '로그인에 실패했습니다.');
+      toast({
+        variant: "destructive",
+        title: "로그인 실패",
+        description: error.response?.data?.message || '로그인에 실패했습니다.',
+      });
     } finally {
       setIsLoading(false);
     }
