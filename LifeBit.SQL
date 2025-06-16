@@ -1,3 +1,12 @@
+-- 트랜잭션 초기화
+ROLLBACK;
+
+-- 트랜잭션 시작
+BEGIN;
+
+-- pgcrypto 확장 추가
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- 1. ENUM 타입들
 DROP TYPE IF EXISTS user_role CASCADE;
 DROP TYPE IF EXISTS badge_type CASCADE;
@@ -238,3 +247,6 @@ CREATE TABLE log_y2024m02 PARTITION OF log
 
 -- 인덱스 수정 (파티셔닝 컬럼 포함)
 CREATE INDEX idx_log_created_at ON log(created_at, event_type);
+
+-- 트랜잭션 커밋
+COMMIT;
