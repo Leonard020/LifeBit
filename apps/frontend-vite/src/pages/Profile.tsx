@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { User, Mail, Ruler, Weight, Calendar, Target, Dumbbell, Heart, Plus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getUserProfile, updateUserProfile } from '@/api/auth';
+import { isLoggedIn } from '@/utils/auth';
+import { useNavigate } from 'react-router-dom';
 
 interface StrengthGoal {
   id: string;
@@ -17,12 +20,14 @@ interface StrengthGoal {
 
 const Profile = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState({
-    nickname: '건강이',
-    email: 'health@example.com',
-    height: '170',
-    weight: '65',
-    age: '25',
+    nickname: '',
+    email: '',
+    height: '',
+    weight: '',
+    age: '',
     gender: 'male',
   });
 
@@ -66,11 +71,69 @@ const Profile = () => {
     ));
   };
 
-  const handleProfileSave = () => {
-    toast({
-      title: "프로필 저장 완료",
-      description: "개인정보가 성공적으로 업데이트되었습니다.",
-    });
+  // 컴포넌트 마운트 시 사용자 프로필 로드
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      // 로그인 상태 확인
+      if (!isLoggedIn()) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const userProfile = await getUserProfile();
+        setProfileData({
+          nickname: userProfile.nickname || '',
+          email: userProfile.email || '',
+          height: userProfile.height ? userProfile.height.toString() : '',
+          weight: userProfile.weight ? userProfile.weight.toString() : '',
+          age: userProfile.age ? userProfile.age.toString() : '',
+          gender: userProfile.gender || 'male',
+        });
+      } catch (error) {
+        console.error('Failed to load user profile:', error);
+        toast({
+          variant: 'destructive',
+          title: '프로필 로드 실패',
+          description: '사용자 정보를 불러올 수 없습니다.',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserProfile();
+  }, [navigate, toast]);
+
+  const handleProfileSave = async () => {
+    try {
+      setLoading(true);
+      
+      // 숫자 필드들을 적절한 타입으로 변환
+      const updateData = {
+        nickname: profileData.nickname,
+        height: profileData.height ? parseFloat(profileData.height) : null,
+        weight: profileData.weight ? parseFloat(profileData.weight) : null,
+        age: profileData.age ? parseInt(profileData.age) : null,
+        gender: profileData.gender,
+      };
+
+      await updateUserProfile(updateData);
+      
+      toast({
+        title: "프로필 저장 완료",
+        description: "개인정보가 성공적으로 업데이트되었습니다.",
+      });
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      toast({
+        variant: 'destructive',
+        title: '프로필 저장 실패',
+        description: '개인정보 업데이트에 실패했습니다.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoalsSave = () => {
@@ -79,6 +142,29 @@ const Profile = () => {
       description: "건강 목표가 성공적으로 설정되었습니다.",
     });
   };
+
+  // 로딩 중일 때 보여줄 컴포넌트
+  if (loading) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8 pb-24">
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <User className="h-10 w-10 text-gray-400" />
+              </div>
+              <h1 className="text-2xl font-bold mb-2">마이페이지</h1>
+              <p className="text-muted-foreground">사용자 정보를 불러오는 중...</p>
+            </div>
+            <div className="space-y-4">
+              <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -125,8 +211,8 @@ const Profile = () => {
                       id="email"
                       type="email"
                       value={profileData.email}
-                      onChange={(e) => setProfileData({...profileData, email: e.target.value})}
-                      className="pl-10"
+                      readOnly
+                      className="pl-10 bg-gray-50 cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -187,8 +273,12 @@ const Profile = () => {
                 </div>
               </div>
 
-              <Button onClick={handleProfileSave} className="w-full gradient-bg hover:opacity-90 transition-opacity">
-                기본 정보 저장
+              <Button 
+                onClick={handleProfileSave} 
+                disabled={loading}
+                className="w-full gradient-bg hover:opacity-90 transition-opacity"
+              >
+                {loading ? '저장 중...' : '기본 정보 저장'}
               </Button>
             </CardContent>
           </Card>

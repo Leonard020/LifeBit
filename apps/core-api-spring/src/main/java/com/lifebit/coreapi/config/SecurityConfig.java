@@ -31,13 +31,17 @@ public class SecurityConfig {
                     "/api/auth/**", 
                     "/actuator/**", 
                     "/",
-                    "/api/health-statistics/**", // 건강 통계 API
-                    "/api/health-records/**",    // 건강 기록 API
-                    "/api/user-goals/**",        // 사용자 목표 API
-                    "/api/recommendations/**",   // 추천 API
-                    "/api/exercise-sessions/**", // 운동 세션 API
-                    "/api/meal-logs/**"          // 식단 기록 API
+                    "/api/health/**"             // 헬스체크 API
                 ).permitAll()
+                .requestMatchers(
+                    "/api/users/**",             // 사용자 프로필 API (인증 필요)
+                    "/api/health-statistics/**", // 건강 통계 API (인증 필요)
+                    "/api/health-records/**",    // 건강 기록 API (인증 필요)
+                    "/api/user-goals/**",        // 사용자 목표 API (인증 필요)
+                    "/api/recommendations/**",   // 추천 API (인증 필요)
+                    "/api/exercise-sessions/**", // 운동 세션 API (인증 필요)
+                    "/api/meal-logs/**"          // 식단 기록 API (인증 필요)
+                ).authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
