@@ -6,8 +6,8 @@ import requests, os
 from dotenv import load_dotenv
 from auth_utils import create_access_token
 from models import UserRole  # 상단에 추가
-from fastapi.responses import JSONResponse
 from pathlib import Path
+from passlib.hash import bcrypt
 
 # Load .env
 env_path = Path(__file__).parent / '.env'
@@ -283,15 +283,21 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login_user(data: dict, db: Session = Depends(get_db)):
+    if not data:
+        raise HTTPException(status_code=400, detail="요청 데이터가 없습니다.")
+    
     email = data.get("email")
     password = data.get("password")
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="이메일과 비밀번호를 모두 입력해주세요.")
 
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
         raise HTTPException(status_code=400, detail="존재하지 않는 이메일입니다.")
     
-    # ⚠️ 실제 서비스에서는 비밀번호 해시 비교 필요
-    if user.password != password:
+    # bcrypt로 비밀번호 검증
+    if not bcrypt.verify(password, user.password_hash):
         raise HTTPException(status_code=400, detail="비밀번호가 일치하지 않습니다.")
 
     jwt_token = create_access_token(email=user.email, user_id=user.user_id, role=user.role.value)

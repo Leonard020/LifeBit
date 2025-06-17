@@ -35,23 +35,28 @@ export interface ProfileUpdateData {
 // 로그인 API
 export const login = async (data: LoginData) => {
     try {
-        const response = await axios.post(API_ENDPOINTS.LOGIN, data);
+        console.log('Login request data:', { email: data.email, password: '***' });
+        const response = await axios.post(API_ENDPOINTS.LOGIN, {
+            email: data.email,
+            password: data.password
+        });
+        console.log('Login response:', response.data);
         const {
-            token,
-            userId,
+            access_token,
+            user_id,
             email,
             nickname,
             role,
             provider
         } = response.data;
 
-        if (!token || !userId || !email || !nickname) {
+        if (!access_token || !user_id || !email || !nickname) {
             console.error('Invalid login response:', response.data);
             throw new Error('Invalid response data');
         }
 
         const userInfo: UserInfo = {
-            userId: userId.toString(),
+            userId: user_id.toString(),
             email,
             nickname,
             role,
@@ -59,11 +64,11 @@ export const login = async (data: LoginData) => {
         };
 
         // 토큰과 사용자 정보 저장
-        setToken(token);
+        setToken(access_token);
         setUserInfo(userInfo);
 
         return {
-            access_token: token,
+            access_token,
             nickname
         };
     } catch (error) {
