@@ -1,66 +1,78 @@
 package com.lifebit.coreapi.controller;
 
+import com.lifebit.coreapi.entity.MealLog;
+import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.service.MealService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/meal-logs")
+@RequiredArgsConstructor
 public class MealLogController {
+    private final MealService mealService;
 
     @GetMapping("/{userId}")
-    public ResponseEntity<List<Map<String, Object>>> getMealLogs(
+    public ResponseEntity<List<MealLog>> getMealLogs(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "month") String period) {
         
-        // Mock 식단 로그 데이터 반환
-        Map<String, Object> log1 = Map.of(
-            "meal_log_id", 1,
-            "uuid", "550e8400-e29b-41d4-a716-446655440400",
-            "user_id", userId,
-            "food_item_id", 1,
-            "food_name", "닭가슴살",
-            "quantity", new BigDecimal("150.0"),
-            "log_date", LocalDate.now().minusDays(1).toString(),
-            "created_at", LocalDateTime.now().minusDays(1).toString()
-        );
+        // 기간에 따른 날짜 범위 계산
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate;
         
-        Map<String, Object> log2 = Map.of(
-            "meal_log_id", 2,
-            "uuid", "550e8400-e29b-41d4-a716-446655440401",
-            "user_id", userId,
-            "food_item_id", 2,
-            "food_name", "현미밥",
-            "quantity", new BigDecimal("200.0"),
-            "log_date", LocalDate.now().toString(),
-            "created_at", LocalDateTime.now().toString()
-        );
+        switch (period.toLowerCase()) {
+            case "week":
+                startDate = endDate.minusWeeks(1);
+                break;
+            case "month":
+                startDate = endDate.minusMonths(1);
+                break;
+            case "year":
+                startDate = endDate.minusYears(1);
+                break;
+            default:
+                startDate = endDate.minusMonths(1);
+        }
         
-        List<Map<String, Object>> mockLogs = List.of(log1, log2);
-        
-        return ResponseEntity.ok(mockLogs);
+        User user = new User(userId);
+        List<MealLog> mealLogs = mealService.getMealHistory(user, startDate, endDate);
+        return ResponseEntity.ok(mealLogs);
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createMealLog(
-            @RequestBody Map<String, Object> request) {
+    public ResponseEntity<MealLog> createMealLog(
+            @RequestBody CreateMealLogRequest request) {
         
-        // Mock 응답 데이터
-        Map<String, Object> response = Map.of(
-            "meal_log_id", 3,
-            "uuid", "550e8400-e29b-41d4-a716-446655440402",
-            "user_id", request.get("user_id"),
-            "food_item_id", request.get("food_item_id"),
-            "quantity", request.get("quantity"),
-            "log_date", request.get("log_date"),
-            "created_at", LocalDateTime.now().toString()
+        MealLog mealLog = mealService.recordMeal(
+            request.getUserId(),
+            request.getFoodItemId(),
+            request.getQuantity()
         );
         
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(mealLog);
+    }
+    
+    // 내부 DTO 클래스
+    public static class CreateMealLogRequest {
+        private Long userId;
+        private Long foodItemId;
+        private BigDecimal quantity;
+        
+        // Getters and Setters
+        public Long getUserId() { return userId; }
+        public void setUserId(Long userId) { this.userId = userId; }
+        
+        public Long getFoodItemId() { return foodItemId; }
+        public void setFoodItemId(Long foodItemId) { this.foodItemId = foodItemId; }
+        
+        public BigDecimal getQuantity() { return quantity; }
+        public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
     }
 } 

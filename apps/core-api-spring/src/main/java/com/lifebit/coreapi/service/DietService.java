@@ -2,21 +2,27 @@ package com.lifebit.coreapi.service;
 
 import com.lifebit.coreapi.dto.DietLogDTO;
 import com.lifebit.coreapi.dto.DietNutritionDTO;
+import com.lifebit.coreapi.dto.DietCalendarDTO;
 import com.lifebit.coreapi.entity.FoodItem;
 import com.lifebit.coreapi.entity.MealLog;
 import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.entity.UserGoal;
 import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserRepository;
+import com.lifebit.coreapi.repository.UserGoalRepository;
+import com.lifebit.coreapi.repository.ExerciseSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -27,6 +33,8 @@ public class DietService {
     private final MealLogRepository mealLogRepository;
     private final FoodItemRepository foodItemRepository;
     private final UserRepository userRepository;
+    private final UserGoalRepository userGoalRepository;
+    private final ExerciseSessionRepository exerciseSessionRepository;
 
     public List<DietLogDTO> getDailyDietRecords(Long userId, LocalDate date) {
         User user = userRepository.findById(userId)
@@ -40,18 +48,15 @@ public class DietService {
     }
 
     public List<DietNutritionDTO> getNutritionGoals(Long userId, LocalDate date) {
-        // 기본 영양소 목표 설정 (실제로는 사용자별 목표를 DB에서 가져와야 함)
-        List<DietNutritionDTO> goals = List.of(
-            new DietNutritionDTO("칼로리", 2000.0, 0.0, "kcal", 0.0),
-            new DietNutritionDTO("탄수화물", 250.0, 0.0, "g", 0.0),
-            new DietNutritionDTO("단백질", 150.0, 0.0, "g", 0.0),
-            new DietNutritionDTO("지방", 67.0, 0.0, "g", 0.0)
-        );
+        // 사용자별 목표 가져오기
+        UserGoal userGoal = userGoalRepository.findByUserId(userId)
+            .orElse(getDefaultUserGoal(userId));
 
-        // 해당 날짜의 실제 섭취량 계산
-        List<MealLog> dailyMealLogs = getDailyDietRecords(userId, date).stream()
-            .map(this::convertToMealLog)
-            .collect(Collectors.toList());
+        // 해당 날짜의 실제 섭취량 계산 (직접 엔티티 조회)
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        List<MealLog> dailyMealLogs = mealLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
 
         double totalCalories = 0.0;
         double totalCarbs = 0.0;
@@ -76,17 +81,42 @@ public class DietService {
             }
         }
 
-        // 목표 대비 백분율 계산
+        // 목표 대비 백분율 계산 (Integer -> double 변환)
         return List.of(
-            new DietNutritionDTO("칼로리", 2000.0, totalCalories, "kcal", 
-                calculatePercentage(totalCalories, 2000.0)),
-            new DietNutritionDTO("탄수화물", 250.0, totalCarbs, "g", 
-                calculatePercentage(totalCarbs, 250.0)),
-            new DietNutritionDTO("단백질", 150.0, totalProtein, "g", 
-                calculatePercentage(totalProtein, 150.0)),
-            new DietNutritionDTO("지방", 67.0, totalFat, "g", 
-                calculatePercentage(totalFat, 67.0))
+            new DietNutritionDTO("칼로리", 0.0, totalCalories, "kcal", 0.0),
+            new DietNutritionDTO("탄수화물", userGoal.getDailyCarbsTarget().doubleValue(), totalCarbs, "g", 
+                calculatePercentage(totalCarbs, userGoal.getDailyCarbsTarget().doubleValue())),
+            new DietNutritionDTO("단백질", userGoal.getDailyProteinTarget().doubleValue(), totalProtein, "g", 
+                calculatePercentage(totalProtein, userGoal.getDailyProteinTarget().doubleValue())),
+            new DietNutritionDTO("지방", userGoal.getDailyFatTarget().doubleValue(), totalFat, "g", 
+                calculatePercentage(totalFat, userGoal.getDailyFatTarget().doubleValue()))
         );
+    }
+
+    public Map<String, DietCalendarDTO> getCalendarRecords(Long userId, int year, int month) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        YearMonth yearMonth = YearMonth.of(year, month);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+        
+        Map<String, DietCalendarDTO> calendarData = new HashMap<>();
+        
+        // 해당 월의 식단 기록 가져오기 (운동은 제외)
+        List<MealLog> dietRecords = mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
+        
+        // 식단 기록 처리
+        for (MealLog mealLog : dietRecords) {
+            String dateStr = mealLog.getLogDate().toString();
+            
+            DietCalendarDTO dto = calendarData.getOrDefault(dateStr, new DietCalendarDTO());
+            dto.setHasDiet(true);
+            dto.setDietCount(dto.getDietCount() + 1);
+            calendarData.put(dateStr, dto);
+        }
+        
+        return calendarData;
     }
 
     @Transactional
@@ -110,8 +140,36 @@ public class DietService {
     }
 
     @Transactional
+    public DietLogDTO updateDietRecord(Long id, DietLogDTO request) {
+        MealLog mealLog = mealLogRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Diet record not found"));
+        
+        FoodItem foodItem = foodItemRepository.findById(request.getFoodItemId())
+            .orElseThrow(() -> new RuntimeException("Food item not found"));
+        
+        mealLog.setFoodItem(foodItem);
+        mealLog.setQuantity(BigDecimal.valueOf(request.getQuantity()));
+        
+        MealLog updatedMealLog = mealLogRepository.save(mealLog);
+        return convertToDietLogDTO(updatedMealLog);
+    }
+
+    @Transactional
     public void deleteDietRecord(Long id) {
         mealLogRepository.deleteById(id);
+    }
+
+    private UserGoal getDefaultUserGoal(Long userId) {
+        UserGoal defaultGoal = new UserGoal();
+        defaultGoal.setUuid(UUID.randomUUID());
+        defaultGoal.setUserId(userId);
+        defaultGoal.setWeeklyWorkoutTarget(3);
+        defaultGoal.setDailyCarbsTarget(250);
+        defaultGoal.setDailyProteinTarget(150);
+        defaultGoal.setDailyFatTarget(67);
+        defaultGoal.setCreatedAt(LocalDateTime.now());
+        defaultGoal.setUpdatedAt(LocalDateTime.now());
+        return defaultGoal;
     }
 
     private DietLogDTO convertToDietLogDTO(MealLog mealLog) {
@@ -122,7 +180,7 @@ public class DietService {
         dto.setFoodName(mealLog.getFoodItem().getName());
         dto.setQuantity(mealLog.getQuantity().doubleValue());
         dto.setLogDate(mealLog.getLogDate().toString());
-        dto.setUnit("g"); // 기본 단위
+        dto.setUnit("g");
         
         // 영양소 정보 설정
         FoodItem foodItem = mealLog.getFoodItem();
@@ -140,24 +198,6 @@ public class DietService {
         }
         
         return dto;
-    }
-
-    private MealLog convertToMealLog(DietLogDTO dto) {
-        MealLog mealLog = new MealLog();
-        mealLog.setMealLogId(dto.getId());
-        mealLog.setQuantity(BigDecimal.valueOf(dto.getQuantity()));
-        mealLog.setLogDate(LocalDate.parse(dto.getLogDate()));
-        
-        FoodItem foodItem = new FoodItem();
-        foodItem.setFoodItemId(dto.getFoodItemId());
-        foodItem.setName(dto.getFoodName());
-        foodItem.setCalories(BigDecimal.valueOf(dto.getCalories()));
-        foodItem.setCarbs(BigDecimal.valueOf(dto.getCarbs()));
-        foodItem.setProtein(BigDecimal.valueOf(dto.getProtein()));
-        foodItem.setFat(BigDecimal.valueOf(dto.getFat()));
-        
-        mealLog.setFoodItem(foodItem);
-        return mealLog;
     }
 
     private double calculatePercentage(double current, double target) {
