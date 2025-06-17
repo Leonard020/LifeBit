@@ -1,23 +1,121 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatisticsCharts } from '../components/health/StatisticsCharts';
 import { RecommendationPanel } from '../components/health/RecommendationPanel';
 import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
 import { useHealthRealtime } from '../api/healthApi';
+import { getHealthStatistics } from '@/api/auth';
+import { getToken, getUserInfo } from '@/utils/auth';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
-// 임시 사용자 데이터 (나중에 인증 시스템으로 교체)
-const TEMP_USER = {
-  id: '1',
-  name: '테스트 사용자',
-  email: 'test@example.com',
-};
+interface HealthStatistics {
+  currentWeight: number;
+  weightChange: number;
+  currentBMI: number;
+  bmiChange: number;
+  weeklyWorkouts: number;
+  workoutGoal: number;
+  goalAchievementRate: number;
+  goalChange: number;
+  totalCaloriesBurned: number;
+  averageDailyCalories: number;
+  streak: number;
+  totalWorkoutDays: number;
+}
 
 const HealthLog: React.FC = () => {
   // 기간 선택 상태 (일/주/월/년)
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
-  
+  const [healthStats, setHealthStats] = useState<HealthStatistics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // 사용자 정보 가져오기
+  const userInfo = getUserInfo();
+  const userId = userInfo?.userId;
+
   // 실시간 업데이트 구독
-  useHealthRealtime(TEMP_USER.id);
+  useHealthRealtime(userId || '');
+
+  useEffect(() => {
+    const fetchHealthData = async () => {
+      try {
+        const token = getToken();
+        if (!token || !userId) {
+          navigate('/login');
+          return;
+        }
+
+        setLoading(true);
+        setError(null);
+        
+        const data = await getHealthStatistics(userId, selectedPeriod);
+        setHealthStats(data);
+      } catch (error) {
+        console.error('Failed to fetch health statistics:', error);
+        setError('건강 데이터를 불러오는데 실패했습니다.');
+        toast.error('건강 데이터를 불러오는데 실패했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchHealthData();
+    }
+  }, [userId, selectedPeriod, navigate]);
+
+  if (!userId) {
+    return null; // 리다이렉트 중
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="ml-2">건강 데이터를 불러오는 중...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">건강 로그</h1>
+            <p className="text-red-500 mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!healthStats) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">건강 로그</h1>
+            <p className="text-gray-600">건강 데이터가 없습니다.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,30 +147,30 @@ const HealthLog: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <SummaryCard
             title="현재 체중"
-            value="70.5kg"
-            change="+0.2kg"
-            changeType="increase"
+            value={`${healthStats.currentWeight}kg`}
+            change={`${healthStats.weightChange >= 0 ? '+' : ''}${healthStats.weightChange}kg`}
+            changeType={healthStats.weightChange > 0 ? 'increase' : healthStats.weightChange < 0 ? 'decrease' : 'success'}
             icon="⚖️"
           />
           <SummaryCard
             title="BMI"
-            value="22.1"
-            change="-0.1"
-            changeType="decrease"
+            value={healthStats.currentBMI.toString()}
+            change={`${healthStats.bmiChange >= 0 ? '+' : ''}${healthStats.bmiChange}`}
+            changeType={healthStats.bmiChange > 0 ? 'increase' : healthStats.bmiChange < 0 ? 'decrease' : 'success'}
             icon="📊"
           />
           <SummaryCard
             title="주간 운동"
-            value="3회"
-            change="목표 달성"
-            changeType="success"
+            value={`${healthStats.weeklyWorkouts}회`}
+            change={healthStats.weeklyWorkouts >= healthStats.workoutGoal ? '목표 달성' : `${healthStats.workoutGoal - healthStats.weeklyWorkouts}회 부족`}
+            changeType={healthStats.weeklyWorkouts >= healthStats.workoutGoal ? 'success' : 'increase'}
             icon="🏃‍♂️"
           />
           <SummaryCard
             title="목표 달성률"
-            value="85%"
-            change="+5%"
-            changeType="increase"
+            value={`${healthStats.goalAchievementRate}%`}
+            change={`${healthStats.goalChange >= 0 ? '+' : ''}${healthStats.goalChange}%`}
+            changeType={healthStats.goalChange > 0 ? 'increase' : healthStats.goalChange < 0 ? 'decrease' : 'success'}
             icon="🎯"
           />
         </div>
@@ -82,7 +180,7 @@ const HealthLog: React.FC = () => {
           {/* 왼쪽: 통계 차트 (2/3 공간) */}
           <div className="lg:col-span-2">
             <StatisticsCharts 
-              userId={TEMP_USER.id} 
+              userId={userId} 
               period={selectedPeriod}
             />
           </div>
@@ -90,7 +188,7 @@ const HealthLog: React.FC = () => {
           {/* 오른쪽: 추천 패널 (1/3 공간) */}
           <div className="lg:col-span-1">
             <RecommendationPanel 
-              userId={TEMP_USER.id}
+              userId={userId}
             />
           </div>
         </div>
@@ -98,7 +196,7 @@ const HealthLog: React.FC = () => {
         {/* 하단: 목표 진행률 */}
         <div>
           <GoalProgress 
-            userId={TEMP_USER.id}
+            userId={userId}
             period={selectedPeriod}
           />
         </div>

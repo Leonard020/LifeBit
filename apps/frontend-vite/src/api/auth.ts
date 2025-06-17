@@ -104,3 +104,33 @@ export const updateUserProfile = async (profileData: ProfileUpdateData) => {
         throw error;
     }
 };
+
+// 건강 통계 API
+export const getHealthStatistics = async (userId: string, period: string = 'month') => {
+  const response = await axios.get(`${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}?period=${period}`);
+  return response.data;
+};
+
+// 랭킹 API
+export const getRanking = async () => {
+  const response = await axios.get(API_ENDPOINTS.RANKING);
+  return response.data;
+};
+
+// 건강 기록 API
+export const getHealthRecords = async (userId: string, period: string = 'month') => {
+  const response = await axios.get(`${API_ENDPOINTS.HEALTH_RECORDS}/${userId}?period=${period}`);
+  return response.data;
+};
+
+// 운동 세션 API
+export const getExerciseSessions = async (userId: string, startDate: string, endDate: string) => {
+  const response = await axios.get(`${API_ENDPOINTS.EXERCISE_SESSIONS}?startDate=${startDate}&endDate=${endDate}`);
+  return response.data;
+};
+
+// 식단 기록 API
+export const getMealLogs = async (userId: string, startDate: string, endDate: string) => {
+  const response = await axios.get(`${API_ENDPOINTS.MEAL_LOGS}?startDate=${startDate}&endDate=${endDate}`);
+  return response.data;
+};
