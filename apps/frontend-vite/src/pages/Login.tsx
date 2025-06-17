@@ -100,7 +100,7 @@ export default function Login() {
   
     if (provider === 'Kakao') {
       const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
-      const redirectUri = `${backendHost}/auth/kakao/callback`;
+      const redirectUri = 'http://localhost:5173/auth/kakao/callback';
   
       const kakaoAuthUrl =
         'https://kauth.kakao.com/oauth/authorize' +
