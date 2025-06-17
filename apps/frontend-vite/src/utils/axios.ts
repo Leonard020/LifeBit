@@ -3,7 +3,7 @@ import { getToken } from './auth';
 
 // axios 기본 설정
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:8001',  // FastAPI 서버 주소를 8001로 수정
+  baseURL: 'http://localhost:8080',  // Core API 서버 (Spring Boot)
   timeout: 15000,  // 타임아웃 시간 증가
   headers: {
     'Content-Type': 'application/json',
