@@ -20,6 +20,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
     
@@ -45,7 +46,16 @@ public class SecurityConfig {
                     "/api/meal-logs/**",          // 식단 기록 API
                     "/api/workouts/**"           // 운동 기록 API
                 ).permitAll()
-                .anyRequest().authenticated()
+                .requestMatchers(
+                    "/api/users/**",             // 사용자 프로필 API (인증 필요)
+                    "/api/health-statistics/**", // 건강 통계 API (인증 필요)
+                    "/api/health-records/**",    // 건강 기록 API (인증 필요)
+                    "/api/user-goals/**",        // 사용자 목표 API (인증 필요)
+                    "/api/recommendations/**",   // 추천 API (인증 필요)
+                    "/api/exercise-sessions/**", // 운동 세션 API (인증 필요)
+                    "/api/meal-logs/**"          // 식단 기록 API (인증 필요)
+                ).authenticated()
+                .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         

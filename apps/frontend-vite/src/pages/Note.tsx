@@ -6,10 +6,49 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import axios from '@/utils/axios';
+import { getUserInfo, isLoggedIn } from '@/utils/auth';
+import { useNavigate } from 'react-router-dom';
+
+// 백엔드 API 응답 타입 정의
+interface DietLogDTO {
+  id: number;
+  userId: number;
+  foodItemId: number;
+  foodName: string;
+  quantity: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  logDate: string;
+  unit: string;
+}
+
+interface DietNutritionDTO {
+  name: string;
+  target: number;
+  current: number;
+  unit: string;
+  percentage: number;
+}
+
+interface FoodItem {
+  foodItemId: number;
+  name: string;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  servingSize: number;
+}
 
 const Note = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -17,6 +56,24 @@ const Note = () => {
   const [todayScore, setTodayScore] = useState(12);
   const [hasClaimedExerciseScore, setHasClaimedExerciseScore] = useState(false);
   const [hasClaimedDietScore, setHasClaimedDietScore] = useState(false);
+  
+  // 식단 관련 상태
+  const [dailyDietLogs, setDailyDietLogs] = useState<DietLogDTO[]>([]);
+  const [dailyNutritionGoals, setDailyNutritionGoals] = useState<DietNutritionDTO[]>([]);
+  const [isLoadingDietData, setIsLoadingDietData] = useState(true);
+  const [dietError, setDietError] = useState<string | null>(null);
+  
+  // 식단 추가 관련 상태
+  const [isAddDietDialogOpen, setIsAddDietDialogOpen] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
+  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
+  const [quantity, setQuantity] = useState(100);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const navigate = useNavigate();
+
+  // Mock data for records on specific dates (유지)
   const [todayExercise, setTodayExercise] = useState([]);
 
   const recordsByDate = {
@@ -27,6 +84,7 @@ const Note = () => {
     '2025-06-08': { exercise: false, diet: true },
   };
 
+  // Exercise goals from profile (mock data) (유지)
   const exerciseGoals = {
     '가슴': 3,
     '등': 2,
@@ -47,6 +105,162 @@ const Note = () => {
     { subject: '유산소', value: 85, goal: exerciseGoals['유산소'] * 20 },
   ];
 
+  // 식단 데이터 페칭
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      navigate('/login');
+      return;
+    }
+    
+    const fetchDietData = async () => {
+      setIsLoadingDietData(true);
+      setDietError(null);
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      
+      try {
+        const userInfo = getUserInfo();
+        const userId = userInfo?.userId || 1;
+        
+        // 1. 실제 식단 기록 가져오기
+        const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
+          params: { userId }
+        });
+        
+        // 2. 실제 영양소 목표 가져오기
+        const nutritionGoalsResponse = await axios.get(`/api/diet/nutrition-goals/${formattedDate}`, {
+          params: { userId }
+        });
+        
+        setDailyDietLogs(dietLogsResponse.data);
+        setDailyNutritionGoals(nutritionGoalsResponse.data);
+
+      } catch (error) {
+        console.error("식단 데이터를 가져오는 중 오류 발생:", error);
+        setDietError("식단 데이터를 불러오는데 실패했습니다.");
+      } finally {
+        setIsLoadingDietData(false);
+      }
+    };
+
+    fetchDietData();
+  }, [selectedDate, navigate]);
+
+  // 음식 검색
+  const searchFood = async () => {
+    if (!searchKeyword.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const response = await axios.get(`/api/meals/foods/search`, {
+        params: { keyword: searchKeyword }
+      });
+      setSearchResults(response.data);
+    } catch (error) {
+      console.error("음식 검색 중 오류:", error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // 식단 기록 추가
+  const addDietRecord = async () => {
+    if (!selectedFood) return;
+    
+    try {
+      const userInfo = getUserInfo();
+      const userId = userInfo?.userId || 1;
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      
+      const request = {
+        userId: userId,
+        foodItemId: selectedFood.foodItemId,
+        foodName: selectedFood.name,
+        quantity: quantity,
+        calories: (selectedFood.calories * quantity) / 100,
+        carbs: (selectedFood.carbs * quantity) / 100,
+        protein: (selectedFood.protein * quantity) / 100,
+        fat: (selectedFood.fat * quantity) / 100,
+        logDate: formattedDate,
+        unit: "g"
+      };
+      
+      await axios.post('/api/diet/record', request);
+      
+      // 데이터 새로고침
+      const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
+        params: { userId }
+      });
+      setDailyDietLogs(dietLogsResponse.data);
+      
+      // 다이얼로그 닫기
+      setIsAddDietDialogOpen(false);
+      setSelectedFood(null);
+      setQuantity(100);
+      setSearchKeyword('');
+      setSearchResults([]);
+      
+    } catch (error) {
+      console.error("식단 기록 추가 중 오류:", error);
+    }
+  };
+
+  // 식단 기록 삭제
+  const deleteDietRecord = async (id: number) => {
+    try {
+      await axios.delete(`/api/diet/record/${id}`);
+      
+      // 데이터 새로고침
+      const userInfo = getUserInfo();
+      const userId = userInfo?.userId || 1;
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      
+      const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
+        params: { userId }
+      });
+      setDailyDietLogs(dietLogsResponse.data);
+      
+    } catch (error) {
+      console.error("식단 기록 삭제 중 오류:", error);
+    }
+  };
+
+  // 백엔드 데이터 -> UI 형식으로 변환 (nutritionData)
+  const uiNutritionData = dailyNutritionGoals.map(dto => {
+    let color = '';
+    switch (dto.name) {
+      case '탄수화물': color = '#3B4A9C'; break;
+      case '단백질': color = '#E67E22'; break;
+      case '지방': color = '#95A5A6'; break;
+      case '칼로리': color = '#8B5CF6'; break;
+      default: color = '#CCCCCC';
+    }
+    return {
+      name: dto.name,
+      value: dto.percentage,
+      goal: 100,
+      color: color,
+      calories: dto.current,
+      targetCalories: dto.target,
+    };
+  });
+
+  // 백엔드 데이터 -> UI 형식으로 변환 (todayRecords.diet)
+  const uiTodayDietRecords = dailyDietLogs.map(log => ({
+    meal: '기록',
+    food: log.foodName,
+    amount: `${log.quantity}${log.unit}`,
+    calories: log.calories,
+    time: '',
+  }));
+
+  const todayRecords = { // 기존 구조 유지
+    exercise: [
+      { name: '벤치프레스', weight: '70kg', sets: 5, reps: 8, time: '10:30' },
+      { name: '스쿼트', weight: '80kg', sets: 4, reps: 10, time: '11:00' },
+    ],
+    diet: uiTodayDietRecords
+  };
   useEffect(() => {
     const fetchExercise = async () => {
       const dateStr = selectedDate.toISOString().split("T")[0];
@@ -217,6 +431,7 @@ const Note = () => {
             </TabsTrigger>
           </TabsList>
 
+          {/* Exercise Tab - 기존 코드 유지 */}
           <TabsContent value="exercise" className="space-y-6">
             <Card className="hover-lift">
               <CardHeader>
@@ -284,7 +499,7 @@ const Note = () => {
             </Card>
           </TabsContent>
 
-          {/* Diet Tab */}
+          {/* Diet Tab - 수정된 부분 */}
           <TabsContent value="diet" className="space-y-6">
             <Card className="hover-lift">
               <CardHeader>
@@ -294,47 +509,56 @@ const Note = () => {
                 </p>
               </CardHeader>
               <CardContent>
-                {/* Updated Nutrition Progress with 4 items including calories */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {nutritionData.map((nutrient) => (
-                    <div key={nutrient.name} className="text-center">
-                      <h3 className="font-medium text-sm mb-2">{nutrient.name}</h3>
-                      <div className="relative w-20 h-20 mx-auto mb-3">
-                        <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 42 42">
-                          <circle
-                            cx="21"
-                            cy="21"
-                            r="18"
-                            fill="none"
-                            stroke="#e5e7eb"
-                            strokeWidth="4"
-                          />
-                          <circle
-                            cx="21"
-                            cy="21"
-                            r="18"
-                            fill="none"
-                            stroke={nutrient.color}
-                            strokeWidth="4"
-                            strokeDasharray={`${(nutrient.value / nutrient.goal) * 113.1}, 113.1`}
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-lg font-bold">
-                            {nutrient.name === '칼로리' ? nutrient.calories : `${nutrient.calories}g`}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {nutrient.value}%
-                          </span>
+                {isLoadingDietData ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    식단 데이터를 불러오는 중...
+                  </div>
+                ) : dietError ? (
+                  <div className="text-center py-8 text-destructive">
+                    {dietError}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {uiNutritionData.map((nutrient) => (
+                      <div key={nutrient.name} className="text-center">
+                        <h3 className="font-medium text-sm mb-2">{nutrient.name}</h3>
+                        <div className="relative w-20 h-20 mx-auto mb-3">
+                          <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 42 42">
+                            <circle
+                              cx="21"
+                              cy="21"
+                              r="18"
+                              fill="none"
+                              stroke="#e5e7eb"
+                              strokeWidth="4"
+                            />
+                            <circle
+                              cx="21"
+                              cy="21"
+                              r="18"
+                              fill="none"
+                              stroke={nutrient.color}
+                              strokeWidth="4"
+                              strokeDasharray={`${(nutrient.value / nutrient.goal) * 113.1}, 113.1`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-lg font-bold">
+                              {nutrient.name === '칼로리' ? `${Math.round(nutrient.calories)}kcal` : `${Math.round(nutrient.calories)}g`}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round(nutrient.value)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          <div>목표: {nutrient.name === '칼로리' ? `${Math.round(nutrient.targetCalories)}kcal` : `${Math.round(nutrient.targetCalories)}g`}</div>
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        <div>목표: {nutrient.name === '칼로리' ? `${nutrient.targetCalories}kcal` : `${nutrient.targetCalories}g`}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -342,20 +566,110 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 식단 기록</CardTitle>
-                {isToday(selectedDate) && todayRecords.diet.length > 0 && (
-                  <Button
-                    onClick={handleClaimDietScore}
-                    disabled={hasClaimedDietScore}
-                    className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
-                  </Button>
-                )}
+                <div className="flex space-x-2">
+                  {isToday(selectedDate) && (
+                    <Dialog open={isAddDietDialogOpen} onOpenChange={setIsAddDietDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
+                          <Plus className="h-4 w-4 mr-1" />
+                          식단 추가
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>식단 기록 추가</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="search">음식 검색</Label>
+                            <div className="flex space-x-2 mt-1">
+                              <Input
+                                id="search"
+                                value={searchKeyword}
+                                onChange={(e) => setSearchKeyword(e.target.value)}
+                                placeholder="음식명을 입력하세요"
+                                onKeyPress={(e) => e.key === 'Enter' && searchFood()}
+                              />
+                              <Button onClick={searchFood} disabled={isSearching}>
+                                <Search className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {searchResults.length > 0 && (
+                            <div>
+                              <Label>검색 결과</Label>
+                              <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
+                                {searchResults.map((food) => (
+                                  <div
+                                    key={food.foodItemId}
+                                    className={`p-2 border rounded cursor-pointer hover:bg-accent ${
+                                      selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
+                                    }`}
+                                    onClick={() => setSelectedFood(food)}
+                                  >
+                                    <div className="font-medium">{food.name}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {Math.round(food.calories)}kcal / 100g
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {selectedFood && (
+                            <div>
+                              <Label htmlFor="quantity">섭취량 (g)</Label>
+                              <Input
+                                id="quantity"
+                                type="number"
+                                value={quantity}
+                                onChange={(e) => setQuantity(Number(e.target.value))}
+                                min="1"
+                                className="mt-1"
+                              />
+                              <div className="text-sm text-muted-foreground mt-1">
+                                예상 칼로리: {Math.round((selectedFood.calories * quantity) / 100)}kcal
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="flex justify-end space-x-2">
+                            <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
+                              취소
+                            </Button>
+                            <Button onClick={addDietRecord} disabled={!selectedFood}>
+                              추가
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                  {isToday(selectedDate) && todayRecords.diet.length > 0 && (
+                    <Button
+                      onClick={handleClaimDietScore}
+                      disabled={hasClaimedDietScore}
+                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
+                      size="sm"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                {todayRecords.diet.length > 0 ? (
+                {isLoadingDietData ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    식단 기록을 불러오는 중...
+                  </div>
+                ) : dietError ? (
+                  <div className="text-center py-8 text-destructive">
+                    {dietError}
+                  </div>
+                ) : todayRecords.diet.length > 0 ? (
                   <div className="space-y-3">
                     {todayRecords.diet.map((record, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
@@ -365,14 +679,19 @@ const Note = () => {
                             <Badge variant="secondary" className="text-xs">{record.meal}</Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {record.amount} • {record.calories}kcal • {record.time}
+                            {record.amount} • {Math.round(record.calories)}kcal {record.time && `• ${record.time}`}
                           </p>
                         </div>
                         <div className="flex space-x-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8">
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive">
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => deleteDietRecord(dailyDietLogs[index].id)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

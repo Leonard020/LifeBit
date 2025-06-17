@@ -17,6 +17,9 @@ import Note from './pages/Note';
 import HealthLog from './pages/HealthLog';
 import Ranking from './pages/Ranking';
 import NotFound from './pages/NotFound';
+import SocialRedirect from './pages/SocialRedirect';
+import { AdminPage } from './pages/AdminPage';
+
 
 
 // ===================================================================
@@ -121,7 +124,10 @@ const App = () => (
           <Route path="/note" element={<Note />} />
           <Route path="/healthlog" element={<HealthLog />} />
           <Route path="/ranking" element={<Ranking />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<NotFound />} />
+          <Route path="/auth/kakao/callback" element={<SocialRedirect />} />
+
         </Routes>
       </BrowserRouter>
 

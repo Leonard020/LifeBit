@@ -12,11 +12,19 @@ DROP TYPE IF EXISTS user_role CASCADE;
 DROP TYPE IF EXISTS badge_type CASCADE;
 DROP TYPE IF EXISTS body_part_type CASCADE;
 DROP TYPE IF EXISTS meal_time_type CASCADE;
+DROP TYPE IF EXISTS input_source_type CASCADE;
+DROP TYPE IF EXISTS validation_status_type CASCADE;
+DROP TYPE IF EXISTS recognition_type CASCADE;
+DROP TYPE IF EXISTS record_type CASCADE;
 
 CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
 CREATE TYPE badge_type AS ENUM ('bronze', 'silver', 'gold', 'platinum');
 CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'abs', 'arms', 'cardio');
 CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
+CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
+CREATE TYPE validation_status_type AS ENUM ('PENDING', 'VALIDATED', 'REJECTED');
+CREATE TYPE recognition_type AS ENUM ('EXERCISE', 'MEAL');
+CREATE TYPE record_type AS ENUM ('EXERCISE', 'MEAL');
 
 -- 2. users
 DROP TABLE IF EXISTS users CASCADE;
@@ -100,8 +108,7 @@ CREATE TABLE exercise_catalog (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 7. exercise_sessions (인덱스 추가)
-DROP TABLE IF EXISTS exercise_sessions CASCADE;
+-- 7. exercise_sessions (음성 인식 및 검증 관련 필드 추가)
 DROP TABLE IF EXISTS exercise_sessions CASCADE;
 CREATE TABLE exercise_sessions (
     exercise_session_id BIGSERIAL PRIMARY KEY,
@@ -115,12 +122,18 @@ CREATE TABLE exercise_sessions (
     sets INTEGER,
     notes TEXT,
     exercise_date DATE NOT NULL,
+    input_source input_source_type,
+    confidence_score DECIMAL(4,2),
+    original_audio_path VARCHAR(255),
+    validation_status validation_status_type DEFAULT 'PENDING',
+    validation_notes TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 인덱스 추가
 CREATE INDEX idx_exercise_sessions_user_date ON exercise_sessions(user_id, exercise_date);
 CREATE INDEX idx_exercise_sessions_catalog ON exercise_sessions(exercise_catalog_id);
+CREATE INDEX idx_exercise_sessions_validation ON exercise_sessions(validation_status);
 
 -- 8. food_items
 DROP TABLE IF EXISTS food_items CASCADE;
@@ -137,8 +150,7 @@ CREATE TABLE food_items (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 9. meal_logs (인덱스 추가)
-DROP TABLE IF EXISTS meal_logs CASCADE;
+-- 9. meal_logs (음성 인식 및 검증 관련 필드 추가)
 DROP TABLE IF EXISTS meal_logs CASCADE;
 CREATE TABLE meal_logs (
     meal_log_id BIGSERIAL PRIMARY KEY,
@@ -148,26 +160,56 @@ CREATE TABLE meal_logs (
     meal_time meal_time_type NOT NULL,
     quantity DECIMAL(6,2),
     log_date DATE NOT NULL,
+    input_source input_source_type,
+    confidence_score DECIMAL(4,2),
+    original_audio_path VARCHAR(255),
+    validation_status validation_status_type DEFAULT 'PENDING',
+    validation_notes TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 인덱스 추가
 CREATE INDEX idx_meal_logs_user_date ON meal_logs(user_id, log_date);
 CREATE INDEX idx_meal_logs_food ON meal_logs(food_item_id);
+CREATE INDEX idx_meal_logs_validation ON meal_logs(validation_status);
 
--- 10. user_rankings (rank_position에 UNIQUE 제약 추가)
-DROP TABLE IF EXISTS user_rankings CASCADE;
-CREATE TABLE user_rankings (
-    user_ranking_id BIGSERIAL PRIMARY KEY,
-    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
-    user_id BIGINT UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
-    total_score INTEGER DEFAULT 0,
-    streak_days INTEGER DEFAULT 0,
-    rank_position INTEGER UNIQUE,
-    updated_at TIMESTAMP DEFAULT NOW()
+-- 10. user_ranking (랭킹 시스템 개선)
+DROP TABLE IF EXISTS user_ranking CASCADE;
+CREATE TABLE user_ranking (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    total_score INTEGER NOT NULL DEFAULT 0,
+    streak_days INTEGER NOT NULL DEFAULT 0,
+    rank_position INTEGER NOT NULL DEFAULT 0,
+    previous_rank INTEGER NOT NULL DEFAULT 0,
+    season INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
+-- 인덱스 추가
+CREATE INDEX idx_user_ranking_user_id ON user_ranking(user_id);
+CREATE INDEX idx_user_ranking_total_score ON user_ranking(total_score);
+CREATE INDEX idx_user_ranking_rank_position ON user_ranking(rank_position);
 
--- 11. achievements (badge_type을 ENUM으로 변경)
+-- 11. ranking_history (랭킹 이력 테이블)
+DROP TABLE IF EXISTS ranking_history CASCADE;
+CREATE TABLE ranking_history (
+    id BIGSERIAL PRIMARY KEY,
+    user_ranking_id BIGINT NOT NULL REFERENCES user_ranking(id) ON DELETE CASCADE,
+    total_score INTEGER NOT NULL,
+    streak_days INTEGER NOT NULL,
+    rank_position INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    period_type VARCHAR(10) NOT NULL,
+    recorded_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+-- 인덱스 추가
+CREATE INDEX idx_ranking_history_user_ranking_id ON ranking_history(user_ranking_id);
+CREATE INDEX idx_ranking_history_recorded_at ON ranking_history(recorded_at);
+CREATE INDEX idx_ranking_history_period_type ON ranking_history(period_type);
+
+-- 12. achievements (badge_type을 ENUM으로 변경)
 DROP TABLE IF EXISTS achievements CASCADE;
 CREATE TABLE achievements (
     achievement_id BIGSERIAL PRIMARY KEY,
@@ -180,7 +222,7 @@ CREATE TABLE achievements (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 12. user_achievements
+-- 13. user_achievements
 DROP TABLE IF EXISTS user_achievements CASCADE;
 CREATE TABLE user_achievements (
     user_achievement_id BIGSERIAL PRIMARY KEY,
@@ -194,7 +236,7 @@ CREATE TABLE user_achievements (
     UNIQUE(user_id, achievement_id)
 );
 
--- 13. recommendation (인덱스 추가)
+-- 14. recommendation (인덱스 추가)
 DROP TABLE IF EXISTS recommendation CASCADE;
 CREATE TABLE recommendation (
     recommendation_id BIGSERIAL PRIMARY KEY,
@@ -208,7 +250,7 @@ CREATE TABLE recommendation (
 -- 인덱스 추가
 CREATE INDEX idx_recommendation_user ON recommendation(user_id);
 
--- 14. feedback (인덱스 추가)
+-- 15. feedback (인덱스 추가)
 DROP TABLE IF EXISTS feedback CASCADE;
 CREATE TABLE feedback (
     feedback_id BIGSERIAL PRIMARY KEY,
@@ -224,7 +266,7 @@ CREATE TABLE feedback (
 CREATE INDEX idx_feedback_recommendation ON feedback(recommendation_id);
 CREATE INDEX idx_feedback_user ON feedback(user_id);
 
--- 15. policy
+-- 16. policy
 DROP TABLE IF EXISTS policy CASCADE;
 CREATE TABLE policy (
     policy_id BIGSERIAL PRIMARY KEY,
@@ -235,7 +277,7 @@ CREATE TABLE policy (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 16. log (파티셔닝 추가)
+-- 17. log (파티셔닝 추가)
 DROP TABLE IF EXISTS log CASCADE;
 CREATE TABLE log (
     log_id BIGSERIAL,
@@ -255,6 +297,106 @@ CREATE TABLE log_y2024m02 PARTITION OF log
 
 -- 인덱스 수정 (파티셔닝 컬럼 포함)
 CREATE INDEX idx_log_created_at ON log(created_at, event_type);
+
+-- 18. voice_recognition_logs (PostgreSQL 최적화)
+DROP TABLE IF EXISTS voice_recognition_logs CASCADE;
+CREATE TABLE voice_recognition_logs (
+    log_id BIGSERIAL PRIMARY KEY,
+    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    audio_file_path VARCHAR(255) CHECK (audio_file_path ~ '^[a-zA-Z0-9_\-/\.]+$'),
+    transcription_text TEXT,
+    confidence_score DECIMAL(4,2) CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    recognition_type recognition_type NOT NULL,
+    status validation_status_type DEFAULT 'PENDING',
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    processed_at TIMESTAMP
+);
+
+-- 인덱스 추가
+CREATE INDEX idx_voice_recognition_logs_user ON voice_recognition_logs(user_id);
+CREATE INDEX idx_voice_recognition_logs_status ON voice_recognition_logs(status);
+CREATE INDEX idx_voice_recognition_logs_created ON voice_recognition_logs(created_at);
+
+-- 19. validation_history (PostgreSQL 최적화)
+DROP TABLE IF EXISTS validation_history CASCADE;
+CREATE TABLE validation_history (
+    history_id BIGSERIAL PRIMARY KEY,
+    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    record_type record_type NOT NULL,
+    record_id BIGINT NOT NULL,
+    validation_status validation_status_type NOT NULL,
+    validation_notes TEXT,
+    validated_by VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 인덱스 추가
+CREATE INDEX idx_validation_history_record ON validation_history(record_type, record_id);
+CREATE INDEX idx_validation_history_user ON validation_history(user_id);
+CREATE INDEX idx_validation_history_created ON validation_history(created_at);
+
+-- 19. 트리거 함수들
+-- 검증 상태 변경 트리거 함수
+CREATE OR REPLACE FUNCTION log_validation_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.validation_status IS DISTINCT FROM NEW.validation_status THEN
+        INSERT INTO validation_history (
+            user_id,
+            record_type,
+            record_id,
+            validation_status,
+            validated_by
+        ) VALUES (
+            NEW.user_id,
+            CASE 
+                WHEN TG_TABLE_NAME = 'exercise_sessions' THEN 'EXERCISE'::record_type
+                ELSE 'MEAL'::record_type
+            END,
+            CASE 
+                WHEN TG_TABLE_NAME = 'exercise_sessions' THEN NEW.exercise_session_id
+                ELSE NEW.meal_log_id
+            END,
+            NEW.validation_status,
+            'SYSTEM'
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 음성 인식 처리 상태 트리거 함수
+CREATE OR REPLACE FUNCTION update_processed_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'PROCESSED' THEN
+        NEW.processed_at = NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 20. 트리거 생성
+-- 운동 세션 검증 트리거
+CREATE TRIGGER exercise_validation_trigger
+AFTER UPDATE ON exercise_sessions
+FOR EACH ROW
+EXECUTE FUNCTION log_validation_change();
+
+-- 식단 로그 검증 트리거
+CREATE TRIGGER meal_validation_trigger
+AFTER UPDATE ON meal_logs
+FOR EACH ROW
+EXECUTE FUNCTION log_validation_change();
+
+-- 음성 인식 상태 트리거
+CREATE TRIGGER voice_recognition_status_trigger
+BEFORE UPDATE ON voice_recognition_logs
+FOR EACH ROW
+EXECUTE FUNCTION update_processed_at();
 
 -- 트랜잭션 커밋
 COMMIT;

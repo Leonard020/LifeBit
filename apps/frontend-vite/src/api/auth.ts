@@ -21,22 +21,24 @@ export interface UserInfo {
     userId: string;
     email: string;
     nickname: string;
+    role: string;
 }
 
 // 로그인 API
 export const login = async (data: LoginData) => {
     try {
         const response = await axios.post(API_ENDPOINTS.LOGIN, data);
-        const { token, userId, email, nickname } = response.data;
+        const { token, userId, email, nickname, role } = response.data;
         
-        if (!token || !userId || !email || !nickname) {
+        if (!token || !userId || !email || !nickname || !role) {
             throw new Error('Invalid response data');
         }
 
-        const userInfo: UserInfo = {
+        const userInfo = {
             userId,
             email,
-            nickname
+            nickname,
+            role
         };
 
         // 토큰과 사용자 정보 저장
@@ -59,4 +61,26 @@ export const signUp = async (data: SignUpData) => {
 // 로그아웃 API
 export const logout = () => {
     removeToken(); // 토큰과 사용자 정보만 삭제
+};
+
+// 사용자 프로필 조회 API
+export const getUserProfile = async () => {
+    try {
+        const response = await axios.get(API_ENDPOINTS.PROFILE);
+        return response.data;
+    } catch (error) {
+        console.error('Failed to get user profile:', error);
+        throw error;
+    }
+};
+
+// 사용자 프로필 업데이트 API
+export const updateUserProfile = async (profileData: any) => {
+    try {
+        const response = await axios.put(API_ENDPOINTS.PROFILE, profileData);
+        return response.data;
+    } catch (error) {
+        console.error('Failed to update user profile:', error);
+        throw error;
+    }
 }; 
