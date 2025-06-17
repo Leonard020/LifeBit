@@ -21,22 +21,24 @@ export interface UserInfo {
     userId: string;
     email: string;
     nickname: string;
+    role: string;
 }
 
 // 로그인 API
 export const login = async (data: LoginData) => {
     try {
         const response = await axios.post(API_ENDPOINTS.LOGIN, data);
-        const { token, userId, email, nickname } = response.data;
+        const { token, userId, email, nickname, role } = response.data;
         
-        if (!token || !userId || !email || !nickname) {
+        if (!token || !userId || !email || !nickname || !role) {
             throw new Error('Invalid response data');
         }
 
-        const userInfo: UserInfo = {
+        const userInfo = {
             userId,
             email,
-            nickname
+            nickname,
+            role
         };
 
         // 토큰과 사용자 정보 저장

@@ -42,6 +42,7 @@ public class AuthController {
             response.put("userId", user.getUserId());
             response.put("email", user.getEmail());
             response.put("nickname", user.getNickname());
+            response.put("role", user.getRole().name());
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             Map<String, String> error = new HashMap<>();
@@ -70,6 +71,7 @@ public class AuthController {
             response.put("userId", user.getUserId());
             response.put("email", user.getEmail());
             response.put("nickname", user.getNickname());
+            response.put("role", user.getRole().name());
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             Map<String, String> error = new HashMap<>();

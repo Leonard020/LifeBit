@@ -4,6 +4,13 @@ import { AUTH_CONFIG } from '@/config/env';
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_info';
 
+export interface UserInfo {
+  userId: string;
+  email: string;
+  nickname: string;
+  role: string;
+}
+
 // 토큰 저장
 export const setToken = (token: string) => {
   if (token) {
@@ -27,7 +34,7 @@ export const removeToken = () => {
 };
 
 // 사용자 정보 저장
-export const setUserInfo = (user: any) => {
+export const setUserInfo = (user: UserInfo) => {
   if (user) {
     localStorage.setItem(AUTH_CONFIG.USER_KEY, JSON.stringify(user));
     // 로컬 스토리지 변경 이벤트 발생
@@ -45,6 +52,12 @@ export const getUserInfo = () => {
     console.error('Failed to parse user info:', error);
     return null;
   }
+};
+
+// 관리자 권한 확인
+export const isAdmin = () => {
+  const userInfo = getUserInfo();
+  return userInfo && userInfo.role === 'ADMIN';
 };
 
 // 로그인 상태 확인
