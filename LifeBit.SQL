@@ -100,6 +100,7 @@ CREATE TABLE exercise_catalog (
 
 -- 7. exercise_sessions (인덱스 추가)
 DROP TABLE IF EXISTS exercise_sessions CASCADE;
+DROP TABLE IF EXISTS exercise_sessions CASCADE;
 CREATE TABLE exercise_sessions (
     exercise_session_id BIGSERIAL PRIMARY KEY,
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
@@ -107,6 +108,9 @@ CREATE TABLE exercise_sessions (
     exercise_catalog_id BIGINT REFERENCES exercise_catalog(exercise_catalog_id) ON DELETE SET NULL,
     duration_minutes INTEGER,
     calories_burned INTEGER,
+    weight DECIMAL(5,2),
+    reps INTEGER,
+    sets INTEGER,
     notes TEXT,
     exercise_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
@@ -133,11 +137,13 @@ CREATE TABLE food_items (
 
 -- 9. meal_logs (인덱스 추가)
 DROP TABLE IF EXISTS meal_logs CASCADE;
+DROP TABLE IF EXISTS meal_logs CASCADE;
 CREATE TABLE meal_logs (
     meal_log_id BIGSERIAL PRIMARY KEY,
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     food_item_id BIGINT REFERENCES food_items(food_item_id) ON DELETE CASCADE,
+    meal_time VARCHAR(20) CHECK (meal_time IN ('breakfast', 'lunch', 'dinner', 'snack')),
     quantity DECIMAL(6,2),
     log_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
