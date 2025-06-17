@@ -3,7 +3,6 @@ package com.lifebit.coreapi.service;
 import com.lifebit.coreapi.dto.UserDTO;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,7 +13,6 @@ public class AdminService {
 
     private final UserRepository userRepository;
 
-    @Autowired
     public AdminService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
