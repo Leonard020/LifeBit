@@ -14,18 +14,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
     boolean existsByNickname(String nickname);
 
-    @Query(value = """
-        INSERT INTO users (email, nickname, password_hash, role, uuid, created_at, updated_at)
-        VALUES (:email, :nickname, :passwordHash, CAST(:role AS user_role), :uuid, :createdAt, :updatedAt)
-        RETURNING *
-        """, nativeQuery = true)
-    User saveWithRole(
-        @Param("email") String email,
-        @Param("nickname") String nickname,
-        @Param("passwordHash") String passwordHash,
-        @Param("role") String role,
-        @Param("uuid") UUID uuid,
-        @Param("createdAt") LocalDateTime createdAt,
-        @Param("updatedAt") LocalDateTime updatedAt
-    );
+    // 커스텀 저장 메서드 제거 - 표준 JPA save() 사용
 } 

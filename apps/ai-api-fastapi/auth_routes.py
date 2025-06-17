@@ -1,15 +1,16 @@
-
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import RedirectResponse
-import requests
-import os
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+import models
+import requests, os
 from dotenv import load_dotenv
+from auth_utils import create_access_token
+from models import UserRole  # 상단에 추가
 
 load_dotenv()
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# 환경변수
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
 KAKAO_REDIRECT_URI = os.getenv("KAKAO_REDIRECT_URI")
 
@@ -17,60 +18,145 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 
-# 카카오 OAuth 콜백
+
+# ✅ 1. 카카오 로그인 콜백
 @router.get("/kakao/callback")
-def kakao_callback(code: str):
-    token_url = "https://kauth.kakao.com/oauth/token"
-    token_data = {
-        "grant_type": "authorization_code",
-        "client_id": KAKAO_CLIENT_ID,
-        "redirect_uri": KAKAO_REDIRECT_URI,
-        "code": code
-    }
-    token_res = requests.post(token_url, data=token_data).json()
-    access_token = token_res.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="카카오 토큰 발급 실패")
+def kakao_callback(code: str, db: Session = Depends(get_db)):
+    try:
+        # 1️⃣ 카카오 토큰 요청
+        token_url = "https://kauth.kakao.com/oauth/token"
+        token_data = {
+            "grant_type": "authorization_code",
+            "client_id": KAKAO_CLIENT_ID,
+            "redirect_uri": KAKAO_REDIRECT_URI,
+            "code": code
+        }
+        token_headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
 
-    user_res = requests.get(
-        "https://kapi.kakao.com/v2/user/me",
-        headers={"Authorization": f"Bearer {access_token}"}
-    ).json()
+        token_res = requests.post(token_url, data=token_data, headers=token_headers)
 
-    kakao_id = user_res.get("id")
-    email = user_res.get("kakao_account", {}).get("email")
-    nickname = user_res.get("properties", {}).get("nickname")
+        # 🔥 디버그: 응답 로그 출력
+        print("🔍 [카카오 토큰 응답 코드]:", token_res.status_code)
+        print("🔍 [카카오 토큰 응답 본문]:", token_res.text)
 
-    print("✅ 카카오 사용자 정보:", kakao_id, email, nickname)
+        if token_res.status_code != 200:
+            raise HTTPException(status_code=400, detail="카카오 토큰 발급 실패")
 
-    # TODO: DB 저장/조회 후 JWT 발급
-    return {"provider": "kakao", "email": email, "nickname": nickname}
+        access_token = token_res.json().get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="카카오 access_token 없음")
 
-# 구글 OAuth 콜백
-@router.get("/auth/google/callback")
-def google_callback(code: str):
-    token_url = "https://oauth2.googleapis.com/token"
-    token_data = {
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "grant_type": "authorization_code"
-    }
-    token_res = requests.post(token_url, data=token_data).json()
-    access_token = token_res.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="구글 토큰 발급 실패")
+        # 2️⃣ 사용자 정보 요청
+        user_res = requests.get(
+            "https://kapi.kakao.com/v2/user/me",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        user_json = user_res.json()
+        print("📥 사용자 응답:", user_json)
 
-    userinfo = requests.get(
-        "https://www.googleapis.com/oauth2/v2/userinfo",
-        headers={"Authorization": f"Bearer {access_token}"}
-    ).json()
+        kakao_id = user_json.get("id")
+        email = user_json.get("kakao_account", {}).get("email")
+        nickname = user_json.get("properties", {}).get("nickname")
 
-    email = userinfo.get("email")
-    name = userinfo.get("name")
+        if not email:
+            raise HTTPException(status_code=400, detail="카카오 이메일 동의 필요")
 
-    print("✅ 구글 사용자 정보:", email, name)
+        if not nickname:
+            nickname = f"user_{kakao_id}"
 
-    # TODO: DB 저장/조회 후 JWT 발급
-    return {"provider": "google", "email": email, "name": name}
+        # 3️⃣ 닉네임 중복 회피
+        base_nick = nickname
+        suffix = 1
+        while db.query(models.User).filter(models.User.nickname == nickname).first():
+            nickname = f"{base_nick}_{suffix}"
+            suffix += 1
+
+        # 4️⃣ 유저 생성 or 조회
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            user = models.User(
+                email=email,
+                nickname=nickname,
+                role=UserRole.USER,
+                provider="kakao"
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        # 5️⃣ JWT 발급
+        jwt_token = create_access_token(email=email, user_id=user.user_id, role=user.role.value)
+
+        return {
+            "access_token": jwt_token,
+            "provider": "kakao",
+            "user_id": user.user_id,
+            "email": user.email,
+            "nickname": user.nickname,
+            "role": user.role.value,
+        }
+
+    except Exception as e:
+        print("🔥 카카오 로그인 오류:", e)
+        raise HTTPException(status_code=500, detail=f"카카오 로그인 실패: {e}")
+
+
+
+# ✅ 2. 구글 로그인 콜백
+@router.get("/google/callback")
+def google_callback(code: str, db: Session = Depends(get_db)):
+    try:
+        token_res = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            }
+        )
+
+        if token_res.status_code != 200:
+            raise HTTPException(status_code=400, detail="구글 토큰 발급 실패")
+
+        access_token = token_res.json().get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="구글 access_token 없음")
+
+        userinfo = requests.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"}
+        ).json()
+
+        email = userinfo.get("email")
+        name = userinfo.get("name")
+        if not email:
+            raise HTTPException(status_code=400, detail="구글 이메일 정보 없음")
+
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            user = models.User(
+                email=email,
+                nickname=name or email.split("@")[0],
+                role="USER",
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        jwt_token = create_access_token(email=email, user_id=user.user_id)
+
+        return {
+            "access_token": jwt_token,
+            "provider": "google",
+            "user_id": user.user_id,
+            "email": user.email,
+            "nickname": user.nickname,
+        }
+
+    except Exception as e:
+        print("🔥 구글 로그인 오류:", e)
+        raise HTTPException(status_code=500, detail="구글 로그인 실패")

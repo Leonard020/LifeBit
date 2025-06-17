@@ -37,6 +37,19 @@ public class JwtTokenProvider {
         return claims.getSubject();
     }
 
+    /**
+     * JWT 토큰에서 사용자 ID 추출
+     */
+    public Long getUserIdFromToken(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(jwtConfig.secretKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        return claims.get("userId", Long.class);
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder()
