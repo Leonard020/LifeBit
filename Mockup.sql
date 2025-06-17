@@ -126,14 +126,24 @@ INSERT INTO meal_logs (
  150, CURRENT_DATE, 'lunch', 'VOICE', 0.82, 'PENDING');
 
 -- 9. 사용자 랭킹 데이터
-INSERT INTO user_rankings (user_id, total_score, streak_days, rank_position) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1000, 7, 1),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'), 850, 5, 2),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'), 720, 4, 3),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'), 680, 3, 4),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'), 650, 2, 5);
+INSERT INTO user_ranking (user_id, total_score, streak_days, rank_position, previous_rank, season, is_active)
+VALUES
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1000, 7, 1, 2, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 850, 5, 2, 1, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'), 720, 4, 3, 3, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'), 680, 3, 4, 4, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'), 650, 2, 5, 5, 1, TRUE);
 
--- 10. 사용자 업적 데이터
+-- 10. 랭킹 히스토리 데이터 예시
+INSERT INTO ranking_history (user_ranking_id, total_score, streak_days, rank_position, season, period_type)
+VALUES
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'admin@lifebit.com')), 1000, 7, 1, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user1@example.com')), 850, 5, 2, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user2@example.com')), 720, 4, 3, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user3@example.com')), 680, 3, 4, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user4@example.com')), 650, 2, 5, 1, 'weekly');
+
+-- 11. 사용자 업적 데이터
 WITH achievement_ids AS (
     SELECT achievement_id, title 
     FROM achievements
@@ -155,7 +165,7 @@ INSERT INTO user_achievements (user_id, achievement_id, is_achieved, progress, a
  (SELECT achievement_id FROM achievement_ids WHERE title = '초보 운동러'), 
  true, 1, CURRENT_DATE);
 
--- 11. 추천 데이터 (ID 자동 생성)
+-- 12. 추천 데이터 (ID 자동 생성)
 WITH exercise_catalog_ids AS (
     SELECT exercise_catalog_id, name 
     FROM exercise_catalog
@@ -182,7 +192,7 @@ INSERT INTO recommendation (user_id, item_id, recommendation_data) VALUES
  '{"type": "exercise", "reason": "목표 기반 추천"}')
 RETURNING recommendation_id;
 
--- 12. 피드백 데이터
+-- 13. 피드백 데이터
 WITH recommendation_ids AS (
     SELECT recommendation_id, user_id
     FROM recommendation
@@ -204,13 +214,13 @@ INSERT INTO feedback (recommendation_id, user_id, feedback_type, feedback_data) 
  (SELECT user_id FROM users WHERE email = 'user4@example.com'), 
  'positive', '{"rating": 5, "comment": "매우 좋음"}');
 
--- 13. 정책 데이터
+-- 14. 정책 데이터
 INSERT INTO policy (policy_name, policy_data) VALUES
 ('이용약관', '{"version": "1.0", "content": "서비스 이용 약관"}'),
 ('개인정보처리방침', '{"version": "1.0", "content": "개인정보 수집 및 이용"}'),
 ('운동 가이드라인', '{"version": "1.0", "content": "안전한 운동 방법"}');
 
--- 14. 로그 데이터
+-- 15. 로그 데이터
 INSERT INTO log (event_type, event_data, created_at) VALUES
 ('USER_LOGIN', '{"user_id": 1, "ip": "127.0.0.1"}', '2024-01-01 00:00:00'),
 ('EXERCISE_COMPLETE', '{"user_id": 2, "exercise_id": 1}', '2024-01-01 00:00:00'),
@@ -218,7 +228,7 @@ INSERT INTO log (event_type, event_data, created_at) VALUES
 ('ACHIEVEMENT_UNLOCK', '{"user_id": 4, "achievement_id": 1}', '2024-01-01 00:00:00'),
 ('RECOMMENDATION_VIEW', '{"user_id": 5, "recommendation_id": 1}', '2024-01-01 00:00:00');
 
--- 15. 음성 인식 로그 데이터
+-- 16. 음성 인식 로그 데이터
 INSERT INTO voice_recognition_logs (
     user_id,
     audio_file_path,
@@ -250,7 +260,7 @@ INSERT INTO voice_recognition_logs (
  'PENDING',
  CURRENT_TIMESTAMP);
 
--- 16. 검증 히스토리 데이터
+-- 17. 검증 히스토리 데이터
 INSERT INTO validation_history (
     user_id,
     record_type,
