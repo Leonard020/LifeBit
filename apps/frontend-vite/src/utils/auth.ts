@@ -1,14 +1,10 @@
 import { AUTH_CONFIG } from '@/config/env';
 
-// 토큰 관련 상수
-const TOKEN_KEY = 'auth_token';
-const USER_KEY = 'user_info';
-
 export interface UserInfo {
   userId: string;
   email: string;
   nickname: string;
-  role: string;
+  role?: string;
 }
 
 // 토큰 저장

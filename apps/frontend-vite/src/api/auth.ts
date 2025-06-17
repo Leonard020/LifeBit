@@ -21,9 +21,6 @@ export interface UserInfo {
     userId: string;
     email: string;
     nickname: string;
-<<<<<<< Updated upstream
-    role: string;
-=======
     role?: string;
     provider?: string;
 }
@@ -33,26 +30,12 @@ export interface ProfileUpdateData {
     nickname?: string;
     password?: string;
     // 필요한 경우 다른 필드도 추가
->>>>>>> Stashed changes
 }
 
 // 로그인 API
 export const login = async (data: LoginData) => {
     try {
         const response = await axios.post(API_ENDPOINTS.LOGIN, data);
-<<<<<<< Updated upstream
-        const { token, userId, email, nickname, role } = response.data;
-        
-        if (!token || !userId || !email || !nickname || !role) {
-            throw new Error('Invalid response data');
-        }
-
-        const userInfo = {
-            userId,
-            email,
-            nickname,
-            role
-=======
         const {
             token,
             userId,
@@ -63,8 +46,7 @@ export const login = async (data: LoginData) => {
         } = response.data;
 
         if (!token || !userId || !email || !nickname) {
-            console.error('Invalid login response:', response.data);  // ✅ 어떤 필드가 문제인지 보기 쉽게
-
+            console.error('Invalid login response:', response.data);
             throw new Error('Invalid response data');
         }
 
@@ -74,7 +56,6 @@ export const login = async (data: LoginData) => {
             nickname,
             role,
             provider,
->>>>>>> Stashed changes
         };
 
         // 토큰과 사용자 정보 저장
