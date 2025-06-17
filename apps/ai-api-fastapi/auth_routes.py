@@ -6,7 +6,6 @@ import requests, os
 from dotenv import load_dotenv
 from auth_utils import create_access_token
 from models import UserRole  # 상단에 추가
-from fastapi.responses import JSONResponse
 from pathlib import Path
 
 # Load .env

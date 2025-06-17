@@ -1,14 +1,16 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import models, schemas
+import models
 from database import engine, get_db
 import openai, os, json
 from dotenv import load_dotenv
 import tempfile
-from datetime import date, datetime
 from auth_routes import router as auth_router
 from pathlib import Path
+from pydantic import BaseModel
+from typing import Optional
+from datetime import date
 
 # Load .env
 env_path = Path(__file__).parent / '.env'
@@ -124,16 +126,13 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             tmp.write(await file.read())
             temp_path = tmp.name
 
-													
-
         with open(temp_path, "rb") as f:
             transcript = openai.Audio.transcribe("whisper-1", f)
 
-															   
         user_text = transcript["text"]
-        print("🎧 Whisper 결과:", user_text)
+        print("[INFO] Whisper 결과:", user_text)
 
-        # 🔥 간단 룰베이스로 GPT 프롬프트 분기 (운동/식단 구분)
+        # 간단 룰베이스로 GPT 프롬프트 분기 (운동/식단 구분)
         if any(keyword in user_text for keyword in ["밥", "먹었", "식사", "점심", "저녁", "아침", "간식"]):
             system_prompt = DIET_EXTRACTION_PROMPT
             record_type = "diet"
@@ -151,14 +150,9 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                 ],
                 temperature=0.3
             )
-															  
-													  
-			 
-															
-																	
 
             parsed_data = json.loads(response.choices[0].message["content"])
-            print("🤖 GPT 파싱 결과:", json.dumps(parsed_data, indent=2, ensure_ascii=False))
+            print("[INFO] GPT 파싱 결과:", json.dumps(parsed_data, indent=2, ensure_ascii=False))
 
             # ✅ DB 저장로직
             if record_type == "exercise":
@@ -194,7 +188,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             return {"status": "error", "message": "GPT 기능 비활성화됨"}
 
     except Exception as e:
-        print("❌ [ERROR]", str(e))
+        print("[ERROR]", str(e))
         db.rollback()
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
 
