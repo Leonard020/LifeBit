@@ -7,7 +7,7 @@ const USER_KEY = 'user_info';
 // 토큰 저장
 export const setToken = (token: string) => {
   if (token) {
-    localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_KEY, token);
     // 로컬 스토리지 변경 이벤트 발생
     window.dispatchEvent(new Event('storage'));
   }
@@ -15,21 +15,21 @@ export const setToken = (token: string) => {
 
 // 토큰 가져오기
 export const getToken = () => {
-  return localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY);
 };
 
 // 토큰 삭제
 export const removeToken = () => {
-  localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
-  localStorage.removeItem(AUTH_CONFIG.USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
   // 로컬 스토리지 변경 이벤트 발생
   window.dispatchEvent(new Event('storage'));
 };
 
 // 사용자 정보 저장
-export const setUserInfo = (user: any) => {
+export const setUserInfo = (user: Record<string, unknown>) => {
   if (user) {
-    localStorage.setItem(AUTH_CONFIG.USER_KEY, JSON.stringify(user));
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
     // 로컬 스토리지 변경 이벤트 발생
     window.dispatchEvent(new Event('storage'));
   }
@@ -37,7 +37,7 @@ export const setUserInfo = (user: any) => {
 
 // 사용자 정보 가져오기
 export const getUserInfo = () => {
-  const userStr = localStorage.getItem(AUTH_CONFIG.USER_KEY);
+  const userStr = localStorage.getItem(USER_KEY);
   if (!userStr) return null;
   try {
     return JSON.parse(userStr);

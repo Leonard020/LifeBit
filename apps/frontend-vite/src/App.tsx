@@ -49,18 +49,21 @@ const ServerStatus = () => {
         setCoreStatus({ status: 'Error', color: 'red' });
       });
 
-    // 2. AI API (FastAPI) 상태 확인
-    axios.get(`${AI_API_URL}/`)
-      .then(response => {
-        if (response.data.status === 'OK') {
-          setAiStatus({ status: 'OK', color: 'limegreen' });
-        } else {
-          setAiStatus({ status: 'WARN', color: 'orange' });
-        }
-      })
-      .catch(() => {
-        setAiStatus({ status: 'Error', color: 'red' });
-      });
+    // 2. AI API (FastAPI) 상태 확인 - 현재 개발 중
+    // axios.get(`${AI_API_URL}/`)
+    //   .then(response => {
+    //     if (response.data.status === 'OK') {
+    //       setAiStatus({ status: 'OK', color: 'limegreen' });
+    //     } else {
+    //       setAiStatus({ status: 'WARN', color: 'orange' });
+    //     }
+    //   })
+    //   .catch(() => {
+    //     setAiStatus({ status: 'Error', color: 'red' });
+    //   });
+    
+    // AI 기능 개발 중 상태 표시
+    setAiStatus({ status: 'In Development', color: 'orange' });
   }, []); // 컴포넌트가 처음 마운트될 때 한 번만 실행
 
   // 상태 표시기 스타일

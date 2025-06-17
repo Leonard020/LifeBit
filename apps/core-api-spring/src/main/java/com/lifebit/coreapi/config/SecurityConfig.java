@@ -31,7 +31,9 @@ public class SecurityConfig {
                     "/api/auth/**", 
                     "/actuator/**", 
                     "/",
-                    "/api/health/**"             // 헬스체크 API
+                    "/api/health/**",            // 헬스체크 API
+                    "/api/health-statistics/ranking",  // 임시: 랭킹 API 공개 접근
+                    "/api/test/**"               // 테스트 API 공개 접근
                 ).permitAll()
                 .requestMatchers(
                     "/api/users/**",             // 사용자 프로필 API (인증 필요)

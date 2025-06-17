@@ -39,6 +39,7 @@ public class User {
     private String gender;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "role", columnDefinition = "varchar(20)")
     private UserRole role;
 
     private LocalDateTime createdAt;

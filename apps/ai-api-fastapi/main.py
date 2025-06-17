@@ -98,3 +98,8 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         print("❌ [ERROR] 전체 처리 실패:", str(e))  # 💥 이 로그 꼭 확인!
         db.rollback()
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
+
+# 서버 실행
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

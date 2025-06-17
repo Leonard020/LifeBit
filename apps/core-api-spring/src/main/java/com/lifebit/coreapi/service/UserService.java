@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,6 +20,7 @@ import java.util.Map;
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EntityManager entityManager;
 
     @Transactional
     public User signUp(SignUpRequest request) {
@@ -28,13 +31,17 @@ public class UserService {
             throw new RuntimeException("이미 사용 중인 닉네임입니다.");
         }
 
-        User user = new User();
-        user.setEmail(request.getEmail());
-        user.setNickname(request.getNickname());
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        // @PrePersist에서 uuid, role, timestamps 자동 설정됨
+        // PostgreSQL enum 타입 문제를 해결하기 위해 네이티브 쿼리 사용
+        String sql = "INSERT INTO users (uuid, email, nickname, password_hash, role, created_at, updated_at) " +
+                    "VALUES (gen_random_uuid(), :email, :nickname, :passwordHash, 'USER'::user_role, NOW(), NOW()) " +
+                    "RETURNING user_id, uuid, email, nickname, password_hash, height, weight, age, gender, role, created_at, updated_at";
         
-        return userRepository.save(user);
+        Query query = entityManager.createNativeQuery(sql, User.class);
+        query.setParameter("email", request.getEmail());
+        query.setParameter("nickname", request.getNickname());
+        query.setParameter("passwordHash", passwordEncoder.encode(request.getPassword()));
+        
+        return (User) query.getSingleResult();
     }
 
     @Transactional(readOnly = true)
