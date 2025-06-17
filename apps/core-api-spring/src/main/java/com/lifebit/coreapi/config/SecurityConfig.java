@@ -44,7 +44,7 @@ public class SecurityConfig {
                     "/api/exercise-sessions/**", // 운동 세션 API (인증 필요)
                     "/api/meal-logs/**"          // 식단 기록 API (인증 필요)
                 ).authenticated()
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         

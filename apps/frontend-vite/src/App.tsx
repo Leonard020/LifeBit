@@ -18,6 +18,7 @@ import HealthLog from './pages/HealthLog';
 import Ranking from './pages/Ranking';
 import NotFound from './pages/NotFound';
 import SocialRedirect from './pages/SocialRedirect';
+import { AdminPage } from './pages/AdminPage';
 
 
 
