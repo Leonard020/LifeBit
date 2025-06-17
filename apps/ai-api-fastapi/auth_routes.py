@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from database import get_db
 import models
@@ -234,9 +234,17 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
             print("[DEBUG] Creating new user for Google login")
+            # 닉네임 중복 처리
+            base_nick = name or email.split("@")[0]
+            nickname = base_nick
+            suffix = 1
+            while db.query(models.User).filter(models.User.nickname == nickname).first():
+                nickname = f"{base_nick}_{suffix}"
+                suffix += 1
+
             user = models.User(
                 email=email,
-                nickname=name or email.split("@")[0],
+                nickname=nickname,
                 role=UserRole.USER,
                 provider="google"
             )
@@ -263,11 +271,11 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         print("[DEBUG] Login successful for user:", user.email)
         return {
             "access_token": jwt_token,
-            "provider": "google",
-            "user_id": user.user_id,
+            "user_id": str(user.user_id),
             "email": user.email,
             "nickname": user.nickname,
-            "role": user.role.value
+            "role": user.role.value,
+            "provider": user.provider or "local"
         }
 
     except HTTPException as he:

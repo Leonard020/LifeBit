@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { login, LoginData } from '@/api/auth';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/AuthContext';
+import { setToken, setUserInfo } from '@/utils/auth';
 import axios from 'axios';
 
 const loginSchema = z.object({
@@ -50,10 +51,16 @@ export default function Login() {
       };
 
       const res = await login(loginData);
-      const { access_token, nickname } = res;
+      const { access_token, nickname, user_id, role, email } = res;
 
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('nickname', nickname);
+      setToken(access_token);
+      setUserInfo({
+        userId: user_id,
+        email: email,
+        nickname: nickname,
+        role: role
+      });
+      
       setIsLoggedIn(true);
       setNickname(nickname);
 
