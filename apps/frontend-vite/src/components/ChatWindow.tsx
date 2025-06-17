@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send, Dumbbell, Utensils, Mic, MicOff } from 'lucide-react';
+import { Send, Dumbbell, Utensils, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { sendChatMessage } from '../api/chatApi';
 
 // Speech Recognition 타입 정의
 interface SpeechRecognitionEvent extends Event {
@@ -70,6 +71,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   // Speech Recognition 관련 상태와 ref
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // Speech Recognition 초기화
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -123,7 +127,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const addMessage = (type: 'user' | 'ai', content: string) => {
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
       content,
       timestamp: new Date()
@@ -210,46 +214,52 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    addMessage('user', inputValue);
-    
-    if (isAwaitingConfirmation) {
-      if (inputValue.includes('네') || inputValue.includes('예') || inputValue.includes('저장')) {
-        if (pendingRecord && onRecordSubmit) {
-          onRecordSubmit(pendingRecord.type, pendingRecord.content);
-        }
-        addMessage('ai', "기록이 완료되었습니다! 꾸준한 관리가 멋져요. 💪");
-        setIsAwaitingConfirmation(false);
-        setPendingRecord(null);
-        setCurrentRecordType(null);
-      } else {
-        addMessage('ai', "기록을 취소했습니다. 다시 입력해주세요.");
-        setIsAwaitingConfirmation(false);
-        setPendingRecord(null);
-      }
-    } else if (currentRecordType) {
-      const analysis = analyzeInput(inputValue, currentRecordType);
+    try {
+      setIsProcessing(true);
       
-      if (analysis.type === 'incomplete') {
-        const missingInfo = analysis.missingFields?.join(', ');
-        addMessage('ai', `입력해주신 내용에서 ${missingInfo} 정보가 누락되었습니다. 추가로 입력해주세요.`);
-      } else {
-        // 완전한 정보가 있을 때 확인 요청
-        const summary = currentRecordType === 'exercise' 
-          ? "운동 기록을 정리하면 다음과 같습니다:"
-          : "식단 기록을 정리하면 다음과 같습니다:";
+      // 사용자 메시지 추가
+      addMessage('user', inputValue);
+      
+      // 대화 기록에 사용자 메시지 추가
+      const updatedHistory = [
+        ...conversationHistory,
+        { role: 'user', content: inputValue }
+      ];
+      
+      // API 호출
+      const response = await sendChatMessage(inputValue, conversationHistory);
+      
+      if (response.status === 'success') {
+        // AI 응답 추가
+        addMessage('ai', response.message);
         
-        addMessage('ai', `${summary}\n"${inputValue}"\n\n이렇게 저장할까요? (네/아니요)`);
-        setIsAwaitingConfirmation(true);
-        setPendingRecord({ type: currentRecordType, content: inputValue });
+        // 대화 기록 업데이트
+        setConversationHistory([
+          ...updatedHistory,
+          { role: 'assistant', content: response.message }
+        ]);
+      } else {
+        toast({
+          title: "오류 발생",
+          description: response.message,
+          variant: "destructive",
+        });
       }
-    } else {
-      addMessage('ai', "안녕하세요! 운동 기록이나 식단 기록을 위해 위의 뱃지를 클릭해주세요.");
+      
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast({
+        title: "대화 처리 실패",
+        description: "메시지를 처리하는 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+      setInputValue('');
     }
-
-    setInputValue('');
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -305,10 +315,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
             </div>
           ) : (
             <div className="space-y-4">
+            {/* 전체 메시지 리스트를 순회하면서 렌더링 */}
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {/* 사용자 메시지면 오른쪽, AI 메시지면 왼쪽 */}
                   <div className={`flex items-start space-x-2 max-w-[80%] ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                    {/* 말풍선 내부: 아바타 + 메시지내용*/}
+
+                    {/* 아바타 영역 */}
                     <Avatar className="w-8 h-8 flex-shrink-0">
+                      {/* AI일 경우 AI 아이콘, 사용자는 "나" 표시 */}
                       {message.type === 'ai' ? (
                         <div className="w-full h-full gradient-bg rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-bold">AI</span>
@@ -346,8 +362,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
               placeholder="메시지를 입력하세요..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
               className="flex-1"
+              disabled={isProcessing}
             />
             
             {/* 동적 버튼 전환 */}
@@ -369,10 +386,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
               // 텍스트가 있을 때: 전송 버튼
               <Button 
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || isProcessing}
                 className="gradient-bg hover:opacity-90 transition-opacity"
               >
-                <Send className="w-4 h-4" />
+                {isProcessing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </Button>
             )}
           </div>

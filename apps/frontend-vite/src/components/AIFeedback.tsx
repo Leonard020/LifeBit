@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,7 +88,7 @@ export const AIFeedbackComponent: React.FC<AIFeedbackProps> = ({
             <p className="text-sm font-medium text-orange-700">📝 누락된 정보:</p>
             <div className="flex flex-wrap gap-2">
               {aiFeedback.missingFields.map((field, index) => (
-                <Badge key={index} variant="outline" className="text-orange-700 border-orange-300">
+                <Badge key={`missing-field-${index}`} variant="outline" className="text-orange-700 border-orange-300">
                   {field}
                 </Badge>
               ))}
