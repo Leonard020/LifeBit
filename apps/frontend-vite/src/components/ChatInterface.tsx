@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,7 +82,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       <p className="text-xs font-medium text-muted-foreground">💡 제안사항:</p>
                       <ul className="text-xs text-muted-foreground space-y-1">
                         {aiFeedback.suggestions.map((suggestion, index) => (
-                          <li key={index} className="flex items-start">
+                          <li key={`suggestion-${index}`} className="flex items-start">
                             <span className="mr-2">•</span>
                             <span>{suggestion}</span>
                           </li>
