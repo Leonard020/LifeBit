@@ -34,7 +34,6 @@ public class DietService {
     private final FoodItemRepository foodItemRepository;
     private final UserRepository userRepository;
     private final UserGoalRepository userGoalRepository;
-    private final ExerciseSessionRepository exerciseSessionRepository;
 
     public List<DietLogDTO> getDailyDietRecords(Long userId, LocalDate date) {
         User user = userRepository.findById(userId)

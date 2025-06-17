@@ -4,7 +4,6 @@ import com.lifebit.coreapi.entity.MealLog;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.service.MealService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
