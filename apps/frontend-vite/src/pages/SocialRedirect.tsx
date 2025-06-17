@@ -11,7 +11,7 @@ export default function SocialRedirect() {
   const { setIsLoggedIn, setNickname } = useAuth();
 
   const code = searchParams.get('code');
-  const provider = searchParams.get('provider'); // ✅ URL 쿼리에서 정확히 추출
+  const provider = searchParams.get('provider');
 
   useEffect(() => {
     const fetchToken = async () => {
@@ -29,11 +29,36 @@ export default function SocialRedirect() {
           throw new Error('지원하지 않는 소셜 로그인 방식입니다.');
         }
 
-        const res = await axios.get(url);
-        const { access_token, nickname } = res.data;
+        const res = await axios.get(url, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+          validateStatus: function (status) {
+            return status >= 200 && status < 500;
+          }
+        });
+
+        console.log('Social login response:', res);
+
+        if (res.status >= 400) {
+          const errorMessage = res.data?.detail || '인증 처리 중 오류가 발생했습니다.';
+          console.error('Social login error:', errorMessage);
+          throw new Error(errorMessage);
+        }
+
+        if (!res.data || !res.data.access_token) {
+          console.error('No access token in response:', res.data);
+          throw new Error('인증 토큰을 받지 못했습니다.');
+        }
+
+        const { access_token, nickname, role } = res.data;
+        console.log('Login successful:', { nickname, role });
 
         localStorage.setItem('access_token', access_token);
         localStorage.setItem('nickname', nickname);
+        localStorage.setItem('role', role);
         setIsLoggedIn(true);
         setNickname(nickname);
 
@@ -43,11 +68,13 @@ export default function SocialRedirect() {
         });
 
         navigate('/');
-      } catch (err) {
+      } catch (err: any) {
         console.error('소셜 로그인 오류:', err);
+        const errorMessage = err.response?.data?.detail || err.message || '알 수 없는 오류가 발생했습니다.';
+        
         toast({
           title: '로그인 실패',
-          description: `${provider || '소셜'} 인증 중 문제가 발생했습니다.`,
+          description: errorMessage,
           variant: 'destructive',
         });
         navigate('/login');
@@ -55,15 +82,20 @@ export default function SocialRedirect() {
     };
 
     fetchToken();
-  }, [code, provider]);
+  }, [code, provider, navigate, toast, setIsLoggedIn, setNickname]);
 
   return (
-    <div className="p-4">
-      {provider === 'google'
-        ? 'Google 로그인 처리 중입니다...'
-        : provider === 'kakao'
-        ? 'Kakao 로그인 처리 중입니다...'
-        : '소셜 로그인 처리 중입니다...'}
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <h2 className="text-2xl font-semibold mb-4">
+          {provider === 'google'
+            ? 'Google 로그인 처리 중입니다...'
+            : provider === 'kakao'
+            ? 'Kakao 로그인 처리 중입니다...'
+            : '소셜 로그인 처리 중입니다...'}
+        </h2>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+      </div>
     </div>
   );
 }

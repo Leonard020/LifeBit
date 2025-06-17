@@ -3,10 +3,16 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/lifebit_db
+    url: jdbc:postgresql://localhost:5432/lifebit_db?stringtype=unspecified
     username: lifebit_user
     password: lifebit_password
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -14,6 +20,18 @@ spring:
     properties:
       hibernate:
         '[format_sql]': true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        globally_quoted_identifiers: true
+        globally_quoted_identifiers_skip_column_definitions: true
+        connection:
+          provider_disables_autocommit: false
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+    open-in-view: false
 
 springdoc:
   default-consumes-media-type: application/json

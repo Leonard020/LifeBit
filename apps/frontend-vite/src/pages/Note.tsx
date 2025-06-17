@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -255,10 +255,7 @@ const Note = () => {
   }));
 
   const todayRecords = { // 기존 구조 유지
-    exercise: [
-      { name: '벤치프레스', weight: '70kg', sets: 5, reps: 8, time: '10:30' },
-      { name: '스쿼트', weight: '80kg', sets: 4, reps: 10, time: '11:00' },
-    ],
+    exercise: todayExercise,
     diet: uiTodayDietRecords
   };
   useEffect(() => {
@@ -352,16 +349,6 @@ const Note = () => {
     { name: '칼로리', value: 92.5, goal: 100, color: '#8B5CF6', calories: 1850, targetCalories: 2000 },
   ];
   
-
-  const todayRecords = {
-    diet: [
-      { meal: '아침', food: '바나나', amount: '1개', calories: 105, time: '08:00' },
-      { meal: '아침', food: '그릭요거트', amount: '200g', calories: 130, time: '08:00' },
-      { meal: '점심', food: '닭가슴살 샐러드', amount: '1인분', calories: 350, time: '12:30' },
-    ]
-  };
-
-
 
   return (
     <Layout>
@@ -591,7 +578,21 @@ const Note = () => {
                                 onKeyPress={(e) => e.key === 'Enter' && searchFood()}
                               />
                               <Button onClick={searchFood} disabled={isSearching}>
-                                <Search className="h-4 w-4" />
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="h-4 w-4"
+                                >
+                                  <circle cx="11" cy="11" r="8" />
+                                  <path d="m21 21-4.3-4.3" />
+                                </svg>
                               </Button>
                             </div>
                           </div>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from sqlalchemy.orm import Session
 from database import get_db
 import models
@@ -6,23 +6,42 @@ import requests, os
 from dotenv import load_dotenv
 from auth_utils import create_access_token
 from models import UserRole  # 상단에 추가
+from fastapi.responses import JSONResponse
+from pathlib import Path
 
-load_dotenv()
+# Load .env
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
+# 환경 변수 로드 확인
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
 KAKAO_REDIRECT_URI = os.getenv("KAKAO_REDIRECT_URI")
-
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 
+# 환경 변수 검증
+if not all([KAKAO_CLIENT_ID, KAKAO_REDIRECT_URI, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI]):
+    print("[WARN] Some environment variables are not set:")
+    print(f"[WARN] KAKAO_CLIENT_ID: {KAKAO_CLIENT_ID}")
+    print(f"[WARN] KAKAO_REDIRECT_URI: {KAKAO_REDIRECT_URI}")
+    print(f"[WARN] GOOGLE_CLIENT_ID: {GOOGLE_CLIENT_ID}")
+    print(f"[WARN] GOOGLE_CLIENT_SECRET: {GOOGLE_CLIENT_SECRET}")
+    print(f"[WARN] GOOGLE_REDIRECT_URI: {GOOGLE_REDIRECT_URI}")
+
 
 # ✅ 1. 카카오 로그인 콜백
 @router.get("/kakao/callback")
-def kakao_callback(code: str, db: Session = Depends(get_db)):
+async def kakao_callback(code: str, db: Session = Depends(get_db)):
     try:
+        if not code:
+            raise HTTPException(
+                status_code=400,
+                detail="Authorization code is required"
+            )
+
         # 1️⃣ 카카오 토큰 요청
         token_url = "https://kauth.kakao.com/oauth/token"
         token_data = {
@@ -35,33 +54,48 @@ def kakao_callback(code: str, db: Session = Depends(get_db)):
             "Content-Type": "application/x-www-form-urlencoded"
         }
 
+        print("[DEBUG] Kakao token request data:", token_data)
         token_res = requests.post(token_url, data=token_data, headers=token_headers)
-
-        # 🔥 디버그: 응답 로그 출력
-        print("🔍 [카카오 토큰 응답 코드]:", token_res.status_code)
-        print("🔍 [카카오 토큰 응답 본문]:", token_res.text)
+        print("[DEBUG] Kakao token response status:", token_res.status_code)
+        print("[DEBUG] Kakao token response body:", token_res.text)
 
         if token_res.status_code != 200:
-            raise HTTPException(status_code=400, detail="카카오 토큰 발급 실패")
+            raise HTTPException(
+                status_code=400,
+                detail=f"카카오 토큰 발급 실패: {token_res.text}"
+            )
 
-        access_token = token_res.json().get("access_token")
+        token_json = token_res.json()
+        access_token = token_json.get("access_token")
         if not access_token:
-            raise HTTPException(status_code=400, detail="카카오 access_token 없음")
+            raise HTTPException(
+                status_code=400,
+                detail="카카오 access_token 없음"
+            )
 
         # 2️⃣ 사용자 정보 요청
         user_res = requests.get(
             "https://kapi.kakao.com/v2/user/me",
             headers={"Authorization": f"Bearer {access_token}"}
         )
-        user_json = user_res.json()
-        print("📥 사용자 응답:", user_json)
+        print("🔍 카카오 사용자 정보 응답:", user_res.text)
 
+        if user_res.status_code != 200:
+            raise HTTPException(
+                status_code=400,
+                detail="카카오 사용자 정보 조회 실패"
+            )
+
+        user_json = user_res.json()
         kakao_id = user_json.get("id")
         email = user_json.get("kakao_account", {}).get("email")
         nickname = user_json.get("properties", {}).get("nickname")
 
         if not email:
-            raise HTTPException(status_code=400, detail="카카오 이메일 동의 필요")
+            raise HTTPException(
+                status_code=400,
+                detail="카카오 이메일 동의 필요"
+            )
 
         if not nickname:
             nickname = f"user_{kakao_id}"
@@ -83,11 +117,23 @@ def kakao_callback(code: str, db: Session = Depends(get_db)):
                 provider="kakao"
             )
             db.add(user)
-            db.commit()
-            db.refresh(user)
+            try:
+                db.commit()
+                db.refresh(user)
+            except Exception as e:
+                db.rollback()
+                print("🔥 DB 저장 오류:", str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail="사용자 정보 저장 실패"
+                )
 
         # 5️⃣ JWT 발급
-        jwt_token = create_access_token(email=email, user_id=user.user_id, role=user.role.value)
+        jwt_token = create_access_token(
+            email=email,
+            user_id=user.user_id,
+            role=user.role.value
+        )
 
         return {
             "access_token": jwt_token,
@@ -95,75 +141,144 @@ def kakao_callback(code: str, db: Session = Depends(get_db)):
             "user_id": user.user_id,
             "email": user.email,
             "nickname": user.nickname,
-            "role": user.role.value,
+            "role": user.role.value
         }
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        print("🔥 카카오 로그인 오류:", e)
-        raise HTTPException(status_code=500, detail=f"카카오 로그인 실패: {e}")
+        print("🔥 카카오 로그인 오류:", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"카카오 로그인 실패: {str(e)}"
+        )
 
 
 
 # ✅ 2. 구글 로그인 콜백
 @router.get("/google/callback")
-def google_callback(code: str, db: Session = Depends(get_db)):
+async def google_callback(code: str, db: Session = Depends(get_db)):
     try:
-        token_res = requests.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "code": code,
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": GOOGLE_REDIRECT_URI,
-                "grant_type": "authorization_code",
-            }
-        )
+        print("[DEBUG] Google callback received with code:", code)
+        
+        if not code:
+            print("[ERROR] No authorization code provided")
+            raise HTTPException(
+                status_code=400,
+                detail="Authorization code is required"
+            )
 
-        print("🔍 구글 토큰 요청 status:", token_res.status_code)
-        print("🔍 구글 토큰 요청 body:", token_res.text)
+        # Google OAuth 토큰 요청
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "grant_type": "authorization_code",
+        }
+
+        print("[DEBUG] Google token request data:", token_data)
+        
+        token_res = requests.post(token_url, data=token_data)
+        print("[DEBUG] Google token response status:", token_res.status_code)
+        print("[DEBUG] Google token response body:", token_res.text)
 
         if token_res.status_code != 200:
-            raise HTTPException(status_code=400, detail=f"구글 토큰 발급 실패: {token_res.text}")
+            print("[ERROR] Failed to get Google token:", token_res.text)
+            raise HTTPException(
+                status_code=400,
+                detail=f"구글 토큰 발급 실패: {token_res.text}"
+            )
 
-        access_token = token_res.json().get("access_token")
+        token_json = token_res.json()
+        access_token = token_json.get("access_token")
+        
         if not access_token:
-            raise HTTPException(status_code=400, detail="구글 access_token 없음")
+            print("[ERROR] No access token in Google response")
+            raise HTTPException(
+                status_code=400,
+                detail="구글 access_token 없음"
+            )
 
-        userinfo = requests.get(
-            "https://www.googleapis.com/oauth2/v2/userinfo",
+        # 사용자 정보 요청
+        userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+        userinfo_res = requests.get(
+            userinfo_url,
             headers={"Authorization": f"Bearer {access_token}"}
-        ).json()
+        )
+        
+        print("[DEBUG] Google user info response:", userinfo_res.text)
+        
+        if userinfo_res.status_code != 200:
+            print("[ERROR] Failed to get Google user info:", userinfo_res.text)
+            raise HTTPException(
+                status_code=400,
+                detail="구글 사용자 정보 조회 실패"
+            )
 
+        userinfo = userinfo_res.json()
         email = userinfo.get("email")
         name = userinfo.get("name")
-        if not email:
-            raise HTTPException(status_code=400, detail="구글 이메일 정보 없음")
 
+        if not email:
+            print("[ERROR] No email in Google user info")
+            raise HTTPException(
+                status_code=400,
+                detail="구글 이메일 정보 없음"
+            )
+
+        print("[DEBUG] Google user info:", {"email": email, "name": name})
+
+        # 사용자 생성 또는 조회
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
+            print("[DEBUG] Creating new user for Google login")
             user = models.User(
                 email=email,
                 nickname=name or email.split("@")[0],
                 role=UserRole.USER,
-                provider="google" 
+                provider="google"
             )
             db.add(user)
-            db.commit()
-            db.refresh(user)
+            try:
+                db.commit()
+                db.refresh(user)
+                print("[DEBUG] New user created successfully")
+            except Exception as e:
+                db.rollback()
+                print("[ERROR] Failed to create user:", str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail="사용자 정보 저장 실패"
+                )
 
-        jwt_token = create_access_token(email=email, user_id=user.user_id, role=user.role.value)
+        # JWT 토큰 생성
+        jwt_token = create_access_token(
+            email=email,
+            user_id=user.user_id,
+            role=user.role.value
+        )
 
+        print("[DEBUG] Login successful for user:", user.email)
         return {
             "access_token": jwt_token,
             "provider": "google",
             "user_id": user.user_id,
             "email": user.email,
             "nickname": user.nickname,
+            "role": user.role.value
         }
 
+    except HTTPException as he:
+        print("[ERROR] HTTP Exception:", str(he))
+        raise he
     except Exception as e:
-        print("🔥 구글 로그인 오류:", e)
-        raise HTTPException(status_code=500, detail="구글 로그인 실패")
+        print("[ERROR] Unexpected error:", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"구글 로그인 실패: {str(e)}"
+        )
     
 
 @router.post("/login")

@@ -36,9 +36,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Claims claims = tokenProvider.getAllClaimsFromToken(jwt);
                 String role = claims.get("role", String.class);
                 String authority = "ROLE_USER";
-                if ("ADMIN".equals(role)) {
-                    authority = "ROLE_ADMIN";
+                
+                // Ensure role matches the user_role ENUM type
+                if (role != null) {
+                    switch (role.toUpperCase()) {
+                        case "ADMIN":
+                            authority = "ROLE_ADMIN";
+                            break;
+                        case "USER":
+                            authority = "ROLE_USER";
+                            break;
+                        default:
+                            logger.warn("Invalid role value in JWT: {}", role);
+                            authority = "ROLE_USER";
+                    }
                 }
+                
                 logger.info("JWT role claim: {} | Setting authority: {}", role, authority);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     email, null, List.of(new SimpleGrantedAuthority(authority))

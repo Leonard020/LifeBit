@@ -1,16 +1,11 @@
 package com.lifebit.coreapi.entity;
 
 public enum UserRole {
-    ADMIN("ADMIN"),
-    USER("USER");
+    ADMIN,
+    USER;
 
-    private final String value;
-
-    UserRole(String value) {
-        this.value = value;
-    }
-
-    public String getValue() {
-        return value;
+    @Override
+    public String toString() {
+        return name();
     }
 } 
