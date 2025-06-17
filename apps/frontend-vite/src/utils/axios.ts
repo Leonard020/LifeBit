@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getToken } from './auth';
 
 // axios 기본 설정
 const axiosInstance = axios.create({

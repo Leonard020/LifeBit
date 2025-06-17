@@ -37,7 +37,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.debug("Processing request: {} with JWT: {}", requestURI, jwt != null ? "Present" : "None");
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                String email = tokenProvider.getEmailFromToken(jwt);
                 Long userId = tokenProvider.getUserIdFromToken(jwt);
                 Claims claims = tokenProvider.getAllClaimsFromToken(jwt);
                 String role = claims.get("role", String.class);

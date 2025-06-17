@@ -3,7 +3,7 @@
 import jwt
 from datetime import datetime, timedelta
 import os
-from typing import Optional, Dict
+from typing import Dict
 
 # ✅ 환경변수 불러오기 (.env 사용 시)
 JWT_SECRET = os.getenv("JWT_SECRET", "defaultSecretKey12345678901234567890")

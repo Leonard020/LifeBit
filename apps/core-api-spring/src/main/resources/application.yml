@@ -23,14 +23,14 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           lob:
-            non_contextual_creation: true
-        globally_quoted_identifiers: true
-        globally_quoted_identifiers_skip_column_definitions: true
+            '[non_contextual_creation]': true
+        '[globally_quoted_identifiers]': true
+        '[globally_quoted_identifiers_skip_column_definitions]': true
         connection:
-          provider_disables_autocommit: false
-        order_inserts: true
-        order_updates: true
-        batch_versioned_data: true
+          '[provider_disables_autocommit]': false
+        '[order_inserts]': true
+        '[order_updates]': true
+        '[batch_versioned_data]': true
     open-in-view: false
 
 springdoc:

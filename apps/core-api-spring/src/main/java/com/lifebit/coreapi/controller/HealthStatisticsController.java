@@ -1,6 +1,5 @@
 package com.lifebit.coreapi.controller;
 
-import com.lifebit.coreapi.service.UserService;
 import com.lifebit.coreapi.service.AchievementService;
 import com.lifebit.coreapi.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,6 @@ import java.util.Map;
 @Slf4j
 public class HealthStatisticsController {
     
-    private final UserService userService;
     private final AchievementService achievementService;
     private final JwtTokenProvider jwtTokenProvider;
 
