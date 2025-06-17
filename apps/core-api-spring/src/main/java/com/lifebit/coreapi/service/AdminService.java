@@ -33,4 +33,8 @@ public class AdminService {
             user.getRole().name()
         );
     }
+
+    public void deleteUserById(Long userId) {
+        userRepository.deleteById(userId);
+    }
 } 
