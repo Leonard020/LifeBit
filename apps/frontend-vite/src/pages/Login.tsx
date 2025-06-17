@@ -79,30 +79,39 @@ export default function Login() {
   };
 
   const handleSocialLogin = (provider: string) => {
+    const backendHost = import.meta.env.VITE_BACKEND_HOST;
+  
     if (provider === 'Google') {
       const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      const redirectUri = 'http://localhost:8001/api/auth/google/callback';
-
-      window.location.href =
+      const redirectUri = `${backendHost}/auth/google/callback`;
+  
+      const googleAuthUrl =
         'https://accounts.google.com/o/oauth2/v2/auth' +
         '?response_type=code' +
         `&client_id=${googleClientId}` +
         `&redirect_uri=${redirectUri}` +
-        '&scope=openid%20email%20profile';
-    } else if (provider === 'Kakao') {
+        '&scope=openid%20email%20profile' +
+        '&access_type=offline' +  // refresh_token 발급
+        '&prompt=consent';        // 매번 로그인
+  
+      console.log('✅ [Google] 리디렉션:', googleAuthUrl);
+      window.location.href = googleAuthUrl;
+    }
+  
+    if (provider === 'Kakao') {
       const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
-      const redirectUri = 'http://localhost:8001/api/auth/kakao/callback';
-
-      console.log("✅ Kakao Client ID:", kakaoClientId);
-
-      window.location.href =
+      const redirectUri = `${backendHost}/auth/kakao/callback`;
+  
+      const kakaoAuthUrl =
         'https://kauth.kakao.com/oauth/authorize' +
         '?response_type=code' +
         `&client_id=${kakaoClientId}` +
         `&redirect_uri=${redirectUri}`;
+  
+      console.log('✅ [Kakao] 리디렉션:', kakaoAuthUrl);
+      window.location.href = kakaoAuthUrl;
     }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
