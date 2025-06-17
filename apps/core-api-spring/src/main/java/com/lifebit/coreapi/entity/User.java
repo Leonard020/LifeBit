@@ -38,22 +38,15 @@ public class User {
     @Column(length = 10)
     private String gender;
 
-    @Enumerated(EnumType.STRING)
-    private UserRole role;
+    @Convert(converter = UserRoleConverter.class)
+    @Column(name = "role", nullable = false)
+    private UserRole role = UserRole.USER;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     public User(Long userId) {
         this.userId = userId;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        this.uuid = UUID.randomUUID();
-        this.role = UserRole.USER;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate

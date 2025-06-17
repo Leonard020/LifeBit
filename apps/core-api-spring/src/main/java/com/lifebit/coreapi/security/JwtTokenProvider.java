@@ -20,7 +20,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
                 .setSubject(user.getEmail())
                 .claim("userId", user.getUserId())
-                .claim("role", user.getRole())
+                .claim("role", user.getRole().name())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(jwtConfig.secretKey())
@@ -60,5 +60,13 @@ public class JwtTokenProvider {
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+    }
+
+    public Claims getAllClaimsFromToken(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(jwtConfig.secretKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 } 

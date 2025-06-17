@@ -13,7 +13,8 @@ const axiosInstance = axios.create({
 // 요청 인터셉터
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
+    console.log('JWT Token:', token ? `${token.substring(0, 20)}...` : 'No token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

@@ -8,30 +8,41 @@ from dotenv import load_dotenv
 import tempfile
 from datetime import date, datetime
 from auth_routes import router as auth_router
-from typing import Optional
-from pydantic import BaseModel
+from pathlib import Path
 
+# Load .env
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
-# .env 로드 및 API 키 세팅
-load_dotenv()
+# 환경 변수 로드 확인
+print("[ENV] Environment variables loaded:")
+print(f"[ENV] KAKAO_CLIENT_ID: {os.getenv('KAKAO_CLIENT_ID')}")
+print(f"[ENV] GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
+print(f"[ENV] KAKAO_REDIRECT_URI: {os.getenv('KAKAO_REDIRECT_URI')}")
+print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
-											 
-app.include_router(auth_router)
-
-USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
-
-
 # CORS 설정
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 환경에서는 모든 origin 허용
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
+
+# 라우터 등록
+app.include_router(auth_router, prefix="/api/auth")
 
 # DB 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -102,8 +113,9 @@ class ChatRequest(BaseModel):
 def health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
 
+USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
 
-# 음성파일 → Whisper → GPT → 데이터 파싱 → DB 저장
+# 음성 업로드 → Whisper + GPT + 기록 저장
 @app.post("/api/py/voice")
 async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
@@ -184,49 +196,9 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
     except Exception as e:
         print("❌ [ERROR]", str(e))
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
 
-@app.post("/api/chat")
-async def chat_with_ai(request: ChatRequest):
-    try:
-        if not USE_GPT:
-            return {
-                "status": "error",
-                "message": "GPT 기능이 비활성화되어 있습니다. .env 파일의 USE_GPT를 True로 설정해주세요.",
-                "type": "chat"
-            }
-
-        # 대화 히스토리 구성
-        messages = [
-            {"role": "system", "content": CHAT_SYSTEM_PROMPT}
-        ]
-        
-        # 이전 대화 기록 추가
-        for msg in request.conversation_history:
-            messages.append(msg)
-        
-        # 현재 메시지 추가
-        messages.append({"role": "user", "content": request.message})
-        
-        # GPT API 호출
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            temperature=0.7
-        )
-        
-        ai_message = response.choices[0].message["content"]
-        
-        return {
-            "status": "success",
-            "message": ai_message,
-            "type": "chat"
-        }
-        
-    except Exception as e:
-        print("❌ [Chat Error]", str(e))
-        return {
-            "status": "error",
-            "message": f"채팅 처리 중 오류가 발생했습니다: {str(e)}",
-            "type": "chat"
-        }
+# 서버 실행
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
