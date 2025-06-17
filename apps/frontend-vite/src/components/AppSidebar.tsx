@@ -18,6 +18,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+
+
+
 export const AppSidebar = () => {
   const navItems = [
     { to: '/note', icon: FileText, label: '노트' },
