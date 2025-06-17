@@ -11,10 +11,20 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 DROP TYPE IF EXISTS user_role CASCADE;
 DROP TYPE IF EXISTS badge_type CASCADE;
 DROP TYPE IF EXISTS body_part_type CASCADE;
+DROP TYPE IF EXISTS meal_time_type CASCADE;
+DROP TYPE IF EXISTS input_source_type CASCADE;
+DROP TYPE IF EXISTS validation_status_type CASCADE;
+DROP TYPE IF EXISTS recognition_type CASCADE;
+DROP TYPE IF EXISTS record_type CASCADE;
 
 CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
 CREATE TYPE badge_type AS ENUM ('bronze', 'silver', 'gold', 'platinum');
 CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'abs', 'arms', 'cardio');
+CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
+CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
+CREATE TYPE validation_status_type AS ENUM ('PENDING', 'VALIDATED', 'REJECTED');
+CREATE TYPE recognition_type AS ENUM ('EXERCISE', 'MEAL');
+CREATE TYPE record_type AS ENUM ('EXERCISE', 'MEAL');
 
 -- 2. users
 DROP TABLE IF EXISTS users CASCADE;
@@ -98,7 +108,7 @@ CREATE TABLE exercise_catalog (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 7. exercise_sessions (인덱스 추가)
+-- 7. exercise_sessions (음성 인식 및 검증 관련 필드 추가)
 DROP TABLE IF EXISTS exercise_sessions CASCADE;
 CREATE TABLE exercise_sessions (
     exercise_session_id BIGSERIAL PRIMARY KEY,
@@ -107,14 +117,23 @@ CREATE TABLE exercise_sessions (
     exercise_catalog_id BIGINT REFERENCES exercise_catalog(exercise_catalog_id) ON DELETE SET NULL,
     duration_minutes INTEGER,
     calories_burned INTEGER,
+    weight DECIMAL(5,2),
+    reps INTEGER,
+    sets INTEGER,
     notes TEXT,
     exercise_date DATE NOT NULL,
+    input_source input_source_type,
+    confidence_score DECIMAL(4,2),
+    original_audio_path VARCHAR(255),
+    validation_status validation_status_type DEFAULT 'PENDING',
+    validation_notes TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 인덱스 추가
 CREATE INDEX idx_exercise_sessions_user_date ON exercise_sessions(user_id, exercise_date);
 CREATE INDEX idx_exercise_sessions_catalog ON exercise_sessions(exercise_catalog_id);
+CREATE INDEX idx_exercise_sessions_validation ON exercise_sessions(validation_status);
 
 -- 8. food_items
 DROP TABLE IF EXISTS food_items CASCADE;
@@ -131,21 +150,28 @@ CREATE TABLE food_items (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 9. meal_logs (인덱스 추가)
+-- 9. meal_logs (음성 인식 및 검증 관련 필드 추가)
 DROP TABLE IF EXISTS meal_logs CASCADE;
 CREATE TABLE meal_logs (
     meal_log_id BIGSERIAL PRIMARY KEY,
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     food_item_id BIGINT REFERENCES food_items(food_item_id) ON DELETE CASCADE,
+    meal_time meal_time_type NOT NULL,
     quantity DECIMAL(6,2),
     log_date DATE NOT NULL,
+    input_source input_source_type,
+    confidence_score DECIMAL(4,2),
+    original_audio_path VARCHAR(255),
+    validation_status validation_status_type DEFAULT 'PENDING',
+    validation_notes TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 인덱스 추가
 CREATE INDEX idx_meal_logs_user_date ON meal_logs(user_id, log_date);
 CREATE INDEX idx_meal_logs_food ON meal_logs(food_item_id);
+CREATE INDEX idx_meal_logs_validation ON meal_logs(validation_status);
 
 -- 10. user_rankings (rank_position에 UNIQUE 제약 추가)
 DROP TABLE IF EXISTS user_rankings CASCADE;
@@ -247,6 +273,106 @@ CREATE TABLE log_y2024m02 PARTITION OF log
 
 -- 인덱스 수정 (파티셔닝 컬럼 포함)
 CREATE INDEX idx_log_created_at ON log(created_at, event_type);
+
+-- 17. voice_recognition_logs (PostgreSQL 최적화)
+DROP TABLE IF EXISTS voice_recognition_logs CASCADE;
+CREATE TABLE voice_recognition_logs (
+    log_id BIGSERIAL PRIMARY KEY,
+    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    audio_file_path VARCHAR(255) CHECK (audio_file_path ~ '^[a-zA-Z0-9_\-/\.]+$'),
+    transcription_text TEXT,
+    confidence_score DECIMAL(4,2) CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    recognition_type recognition_type NOT NULL,
+    status validation_status_type DEFAULT 'PENDING',
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    processed_at TIMESTAMP
+);
+
+-- 인덱스 추가
+CREATE INDEX idx_voice_recognition_logs_user ON voice_recognition_logs(user_id);
+CREATE INDEX idx_voice_recognition_logs_status ON voice_recognition_logs(status);
+CREATE INDEX idx_voice_recognition_logs_created ON voice_recognition_logs(created_at);
+
+-- 18. validation_history (PostgreSQL 최적화)
+DROP TABLE IF EXISTS validation_history CASCADE;
+CREATE TABLE validation_history (
+    history_id BIGSERIAL PRIMARY KEY,
+    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    record_type record_type NOT NULL,
+    record_id BIGINT NOT NULL,
+    validation_status validation_status_type NOT NULL,
+    validation_notes TEXT,
+    validated_by VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 인덱스 추가
+CREATE INDEX idx_validation_history_record ON validation_history(record_type, record_id);
+CREATE INDEX idx_validation_history_user ON validation_history(user_id);
+CREATE INDEX idx_validation_history_created ON validation_history(created_at);
+
+-- 19. 트리거 함수들
+-- 검증 상태 변경 트리거 함수
+CREATE OR REPLACE FUNCTION log_validation_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.validation_status IS DISTINCT FROM NEW.validation_status THEN
+        INSERT INTO validation_history (
+            user_id,
+            record_type,
+            record_id,
+            validation_status,
+            validated_by
+        ) VALUES (
+            NEW.user_id,
+            CASE 
+                WHEN TG_TABLE_NAME = 'exercise_sessions' THEN 'EXERCISE'::record_type
+                ELSE 'MEAL'::record_type
+            END,
+            CASE 
+                WHEN TG_TABLE_NAME = 'exercise_sessions' THEN NEW.exercise_session_id
+                ELSE NEW.meal_log_id
+            END,
+            NEW.validation_status,
+            'SYSTEM'
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 음성 인식 처리 상태 트리거 함수
+CREATE OR REPLACE FUNCTION update_processed_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'PROCESSED' THEN
+        NEW.processed_at = NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 20. 트리거 생성
+-- 운동 세션 검증 트리거
+CREATE TRIGGER exercise_validation_trigger
+AFTER UPDATE ON exercise_sessions
+FOR EACH ROW
+EXECUTE FUNCTION log_validation_change();
+
+-- 식단 로그 검증 트리거
+CREATE TRIGGER meal_validation_trigger
+AFTER UPDATE ON meal_logs
+FOR EACH ROW
+EXECUTE FUNCTION log_validation_change();
+
+-- 음성 인식 상태 트리거
+CREATE TRIGGER voice_recognition_status_trigger
+BEFORE UPDATE ON voice_recognition_logs
+FOR EACH ROW
+EXECUTE FUNCTION update_processed_at();
 
 -- 트랜잭션 커밋
 COMMIT;
