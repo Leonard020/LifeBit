@@ -78,7 +78,7 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
             "https://kapi.kakao.com/v2/user/me",
             headers={"Authorization": f"Bearer {access_token}"}
         )
-        print("🔍 카카오 사용자 정보 응답:", user_res.text)
+        print("[DEBUG] 카카오 사용자 정보 응답:", user_res.text)
 
         if user_res.status_code != 200:
             raise HTTPException(
@@ -122,7 +122,7 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
                 db.refresh(user)
             except Exception as e:
                 db.rollback()
-                print("🔥 DB 저장 오류:", str(e))
+                print("[ERROR] DB 저장 오류:", str(e))
                 raise HTTPException(
                     status_code=500,
                     detail="사용자 정보 저장 실패"
@@ -147,7 +147,7 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
     except HTTPException as he:
         raise he
     except Exception as e:
-        print("🔥 카카오 로그인 오류:", str(e))
+        print("[ERROR] 카카오 로그인 오류:", str(e))
         raise HTTPException(
             status_code=500,
             detail=f"카카오 로그인 실패: {str(e)}"
