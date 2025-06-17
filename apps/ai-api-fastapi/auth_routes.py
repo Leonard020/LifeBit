@@ -9,7 +9,7 @@ from models import UserRole  # 상단에 추가
 
 load_dotenv()
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
 KAKAO_REDIRECT_URI = os.getenv("KAKAO_REDIRECT_URI")
@@ -119,8 +119,11 @@ def google_callback(code: str, db: Session = Depends(get_db)):
             }
         )
 
+        print("🔍 구글 토큰 요청 status:", token_res.status_code)
+        print("🔍 구글 토큰 요청 body:", token_res.text)
+
         if token_res.status_code != 200:
-            raise HTTPException(status_code=400, detail="구글 토큰 발급 실패")
+            raise HTTPException(status_code=400, detail=f"구글 토큰 발급 실패: {token_res.text}")
 
         access_token = token_res.json().get("access_token")
         if not access_token:
@@ -141,13 +144,14 @@ def google_callback(code: str, db: Session = Depends(get_db)):
             user = models.User(
                 email=email,
                 nickname=name or email.split("@")[0],
-                role="USER",
+                role=UserRole.USER,
+                provider="google" 
             )
             db.add(user)
             db.commit()
             db.refresh(user)
 
-        jwt_token = create_access_token(email=email, user_id=user.user_id)
+        jwt_token = create_access_token(email=email, user_id=user.user_id, role=user.role.value)
 
         return {
             "access_token": jwt_token,
@@ -160,3 +164,28 @@ def google_callback(code: str, db: Session = Depends(get_db)):
     except Exception as e:
         print("🔥 구글 로그인 오류:", e)
         raise HTTPException(status_code=500, detail="구글 로그인 실패")
+    
+
+@router.post("/login")
+def login_user(data: dict, db: Session = Depends(get_db)):
+    email = data.get("email")
+    password = data.get("password")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="존재하지 않는 이메일입니다.")
+    
+    # ⚠️ 실제 서비스에서는 비밀번호 해시 비교 필요
+    if user.password != password:
+        raise HTTPException(status_code=400, detail="비밀번호가 일치하지 않습니다.")
+
+    jwt_token = create_access_token(email=user.email, user_id=user.user_id, role=user.role.value)
+
+    return {
+        "access_token": jwt_token,
+        "user_id": user.user_id,
+        "email": user.email,
+        "nickname": user.nickname,
+        "role": user.role.value,
+        "provider": user.provider or "local"
+    }
