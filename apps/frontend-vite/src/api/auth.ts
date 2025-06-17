@@ -21,29 +21,51 @@ export interface UserInfo {
     userId: string;
     email: string;
     nickname: string;
+    role?: string;
+    provider?: string;
+}
+
+// 프로필 업데이트 타입 정의
+export interface ProfileUpdateData {
+    nickname?: string;
+    password?: string;
+    // 필요한 경우 다른 필드도 추가
 }
 
 // 로그인 API
 export const login = async (data: LoginData) => {
     try {
         const response = await axios.post(API_ENDPOINTS.LOGIN, data);
-        const { token, userId, email, nickname } = response.data;
-        
+        const {
+            token,
+            userId,
+            email,
+            nickname,
+            role,
+            provider
+        } = response.data;
+
         if (!token || !userId || !email || !nickname) {
+            console.error('Invalid login response:', response.data);
             throw new Error('Invalid response data');
         }
 
         const userInfo: UserInfo = {
-            userId,
+            userId: userId.toString(),
             email,
-            nickname
+            nickname,
+            role,
+            provider,
         };
 
         // 토큰과 사용자 정보 저장
         setToken(token);
         setUserInfo(userInfo);
-        
-        return response.data;
+
+        return {
+            access_token: token,
+            nickname
+        };
     } catch (error) {
         console.error('Login failed:', error);
         throw error;
@@ -73,15 +95,14 @@ export const getUserProfile = async () => {
 };
 
 // 사용자 프로필 업데이트 API
-export const updateUserProfile = async (profileData: {
-  nickname?: string;
-  height?: number;
-  weight?: number;
-  age?: number;
-  gender?: string;
-}) => {
-  const response = await axios.put(API_ENDPOINTS.PROFILE, profileData);
-  return response.data;
+export const updateUserProfile = async (profileData: ProfileUpdateData) => {
+    try {
+        const response = await axios.put(API_ENDPOINTS.PROFILE, profileData);
+        return response.data;
+    } catch (error) {
+        console.error('Failed to update user profile:', error);
+        throw error;
+    }
 };
 
 // 건강 통계 API
@@ -112,4 +133,4 @@ export const getExerciseSessions = async (userId: string, startDate: string, end
 export const getMealLogs = async (userId: string, startDate: string, endDate: string) => {
   const response = await axios.get(`${API_ENDPOINTS.MEAL_LOGS}?startDate=${startDate}&endDate=${endDate}`);
   return response.data;
-}; 
+};

@@ -13,6 +13,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.lang.NonNull;
+import io.jsonwebtoken.Claims;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -22,6 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider tokenProvider;
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
@@ -35,13 +39,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 String email = tokenProvider.getEmailFromToken(jwt);
                 Long userId = tokenProvider.getUserIdFromToken(jwt);
-                log.debug("JWT validation successful for email: {} with userId: {}", email, userId);
+                Claims claims = tokenProvider.getAllClaimsFromToken(jwt);
+                String role = claims.get("role", String.class);
+                String authority = "ROLE_USER";
+                if ("ADMIN".equals(role)) {
+                    authority = "ROLE_ADMIN";
+                }
+                log.debug("JWT validation successful for email: {} with userId: {} and role: {}", email, userId, role);
+                logger.info("JWT role claim: {} | Setting authority: {}", role, authority);
 
-                // 사용자 ID를 principal로 설정
+                // 사용자 ID를 principal로 설정하되, 역할 기반 권한도 함께 설정
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    userId.toString(), null, List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                    userId.toString(), null, List.of(new SimpleGrantedAuthority(authority))
                 );
-
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } else if (StringUtils.hasText(jwt)) {
                 log.warn("JWT validation failed for request: {}", requestURI);
