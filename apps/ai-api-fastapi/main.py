@@ -8,28 +8,41 @@ from dotenv import load_dotenv
 import tempfile
 from datetime import date
 from auth_routes import router as auth_router
-
+from pathlib import Path
 
 # Load .env
-load_dotenv()
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# 환경 변수 로드 확인
+print("[ENV] Environment variables loaded:")
+print(f"[ENV] KAKAO_CLIENT_ID: {os.getenv('KAKAO_CLIENT_ID')}")
+print(f"[ENV] GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
+print(f"[ENV] KAKAO_REDIRECT_URI: {os.getenv('KAKAO_REDIRECT_URI')}")
+print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
-from auth_routes import router as auth_router
-app.include_router(auth_router)
-
-USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
-
-
 # CORS 설정
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
+
+# 라우터 등록
+app.include_router(auth_router, prefix="/api/auth")
 
 # DB 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -38,6 +51,8 @@ models.Base.metadata.create_all(bind=engine)
 @app.get("/")
 def health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
+
+USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
 
 # 음성 업로드 → Whisper + GPT + 기록 저장
 @app.post("/api/py/voice")
@@ -98,3 +113,8 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         print("❌ [ERROR] 전체 처리 실패:", str(e))  # 💥 이 로그 꼭 확인!
         db.rollback()
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
+
+# 서버 실행
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

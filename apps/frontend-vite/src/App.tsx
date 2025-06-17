@@ -18,8 +18,8 @@ import HealthLog from './pages/HealthLog';
 import Ranking from './pages/Ranking';
 import NotFound from './pages/NotFound';
 import SocialRedirect from './pages/SocialRedirect';
+import { AuthProvider } from './AuthContext'; // ← 이 줄 추가
 import { AdminPage } from './pages/AdminPage';
-
 
 
 // ===================================================================
@@ -50,7 +50,7 @@ const ServerStatus = () => {
         setCoreStatus({ status: 'Error', color: 'red' });
       });
 
-    // 2. AI API (FastAPI) 상태 확인
+    // 2. AI API (FastAPI) 상태 확인 - 현재 개발 중
     axios.get(`${AI_API_URL}/`)
       .then(response => {
         if (response.data.status === 'OK') {
@@ -62,6 +62,7 @@ const ServerStatus = () => {
       .catch(() => {
         setAiStatus({ status: 'Error', color: 'red' });
       });
+
   }, []); // 컴포넌트가 처음 마운트될 때 한 번만 실행
 
   // 상태 표시기 스타일
@@ -111,6 +112,7 @@ const ServerStatus = () => {
 const queryClient = new QueryClient();
 
 const App = () => (
+  <AuthProvider>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -126,7 +128,7 @@ const App = () => (
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<NotFound />} />
-          <Route path="/auth/kakao/callback" element={<SocialRedirect />} />
+          <Route path="/auth/social-redirect" element={<SocialRedirect />} />
 
         </Routes>
       </BrowserRouter>
@@ -138,6 +140,7 @@ const App = () => (
 
     </TooltipProvider>
   </QueryClientProvider>
+  </AuthProvider>
 );
 
 export default App;

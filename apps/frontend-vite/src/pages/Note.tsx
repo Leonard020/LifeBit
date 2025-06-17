@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from '@/utils/axios';
@@ -74,6 +74,8 @@ const Note = () => {
   const navigate = useNavigate();
 
   // Mock data for records on specific dates (유지)
+  const [todayExercise, setTodayExercise] = useState([]);
+
   const recordsByDate = {
     '2025-06-12': { exercise: true, diet: true },
     '2025-06-11': { exercise: true, diet: false },
@@ -93,7 +95,7 @@ const Note = () => {
     '유산소': 5,
   };
 
-  const exerciseData = [ // (유지)
+  const exerciseData = [
     { subject: '가슴', value: 80, goal: exerciseGoals['가슴'] * 20 },
     { subject: '등', value: 65, goal: exerciseGoals['등'] * 20 },
     { subject: '하체', value: 90, goal: exerciseGoals['하체'] * 20 },
@@ -253,12 +255,26 @@ const Note = () => {
   }));
 
   const todayRecords = { // 기존 구조 유지
-    exercise: [
-      { name: '벤치프레스', weight: '70kg', sets: 5, reps: 8, time: '10:30' },
-      { name: '스쿼트', weight: '80kg', sets: 4, reps: 10, time: '11:00' },
-    ],
+    exercise: todayExercise,
     diet: uiTodayDietRecords
   };
+  useEffect(() => {
+    const fetchExercise = async () => {
+      const dateStr = selectedDate.toISOString().split("T")[0];
+      try {
+        const res = await fetch(`http://localhost:8080/api/workouts?date=${dateStr}`);
+        if (!res.ok) throw new Error("운동 기록 불러오기 실패");
+
+        const data = await res.json();
+        setTodayExercise(data);
+      } catch (err) {
+        console.error(err);
+        setTodayExercise([]);
+      }
+    };
+
+    fetchExercise();
+  }, [selectedDate]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
@@ -290,7 +306,7 @@ const Note = () => {
   const customDayContent = (date: Date) => {
     const records = hasRecordOnDate(date);
     const hasBothRecords = records && records.exercise && records.diet;
-    
+
     return (
       <div className="relative w-full h-full flex flex-col items-center justify-center">
         <span className={hasBothRecords ? "gradient-text font-medium" : ""}>{date.getDate()}</span>
@@ -326,6 +342,14 @@ const Note = () => {
     return date.toDateString() === today.toDateString();
   };
 
+  const nutritionData = [
+    { name: '탄수화물', value: 80, goal: 100, color: '#3B4A9C', calories: 180, targetCalories: 200 },
+    { name: '단백질', value: 75, goal: 100, color: '#E67E22', calories: 95, targetCalories: 120 },
+    { name: '지방', value: 60, goal: 100, color: '#95A5A6', calories: 45, targetCalories: 60 },
+    { name: '칼로리', value: 92.5, goal: 100, color: '#8B5CF6', calories: 1850, targetCalories: 2000 },
+  ];
+  
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -335,7 +359,7 @@ const Note = () => {
               <Button variant="ghost" size="icon" onClick={() => changeDate(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              
+
               <div className="text-center flex-1 mx-4">
                 <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                   <PopoverTrigger asChild>
@@ -354,21 +378,14 @@ const Note = () => {
                       components={{
                         Day: ({ date, ...props }) => (
                           <div className="relative">
-                            <button
-                              {...props}
-                              className={cn(
-                                "h-9 w-9 p-0 font-normal relative"
-                              )}
-                            >
-                              {customDayContent(date)}
-                            </button>
+                            <button {...props} className={cn("h-9 w-9 p-0 font-normal relative")}>{customDayContent(date)}</button>
                           </div>
                         )
                       }}
                     />
                   </PopoverContent>
                 </Popover>
-                
+
                 <div className="flex items-center justify-center space-x-4 text-sm mt-1">
                   <div className="flex items-center space-x-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -381,7 +398,7 @@ const Note = () => {
                   <Badge variant="outline" className="text-xs">+{todayScore}점</Badge>
                 </div>
               </div>
-              
+
               <Button variant="ghost" size="icon" onClick={() => changeDate(1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -389,7 +406,6 @@ const Note = () => {
           </CardContent>
         </Card>
 
-        {/* Main Content Tabs */}
         <Tabs defaultValue="exercise" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="exercise" className="flex items-center space-x-2">
@@ -407,9 +423,7 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader>
                 <CardTitle>운동 부위별 목표</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  붉은 선은 목표치를 나타냅니다
-                </p>
+                <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
@@ -417,22 +431,8 @@ const Note = () => {
                     <RadarChart data={exerciseData}>
                       <PolarGrid />
                       <PolarAngleAxis dataKey="subject" className="text-sm" />
-                      <Radar
-                        name="현재 운동량"
-                        dataKey="value"
-                        stroke="#8B5CF6"
-                        fill="#8B5CF6"
-                        fillOpacity={0.3}
-                        strokeWidth={2}
-                      />
-                      <Radar
-                        name="목표치"
-                        dataKey="goal"
-                        stroke="#EF4444"
-                        fill="transparent"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                      />
+                      <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
+                      <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
@@ -442,22 +442,17 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                {isToday(selectedDate) && todayRecords.exercise.length > 0 && (
-                  <Button
-                    onClick={handleClaimExerciseScore}
-                    disabled={hasClaimedExerciseScore}
-                    className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                    size="sm"
-                  >
+                {isToday(selectedDate) && todayExercise.length > 0 && (
+                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
                     <Plus className="h-4 w-4 mr-1" />
                     {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
                   </Button>
                 )}
               </CardHeader>
               <CardContent>
-                {todayRecords.exercise.length > 0 ? (
+                {todayExercise.length > 0 ? (
                   <div className="space-y-3">
-                    {todayRecords.exercise.map((record, index) => (
+                    {todayExercise.map((record, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-1">
@@ -480,16 +475,12 @@ const Note = () => {
                     ))}
                     {isToday(selectedDate) && !hasClaimedExerciseScore && (
                       <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">
-                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
-                        </p>
+                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    아직 운동 기록이 없습니다.
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
                 )}
               </CardContent>
             </Card>
@@ -587,7 +578,21 @@ const Note = () => {
                                 onKeyPress={(e) => e.key === 'Enter' && searchFood()}
                               />
                               <Button onClick={searchFood} disabled={isSearching}>
-                                <Search className="h-4 w-4" />
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="h-4 w-4"
+                                >
+                                  <circle cx="11" cy="11" r="8" />
+                                  <path d="m21 21-4.3-4.3" />
+                                </svg>
                               </Button>
                             </div>
                           </div>
