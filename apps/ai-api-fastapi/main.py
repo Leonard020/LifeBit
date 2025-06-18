@@ -12,6 +12,9 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import date
 
+# 새로 추가: 차트 분석 서비스 import
+from analytics_service import HealthAnalyticsService
+
 # Load .env
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -48,6 +51,9 @@ app.include_router(auth_router, prefix="/api/auth")
 
 # DB 테이블 생성
 models.Base.metadata.create_all(bind=engine)
+
+# 차트 분석 서비스 인스턴스 생성
+analytics_service = HealthAnalyticsService()
 
 # 🚩 [운동 기록 추출 프롬프트]
 EXERCISE_EXTRACTION_PROMPT = """
@@ -110,10 +116,113 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: Optional[list] = []
 
+# 차트 분석 요청을 위한 스키마
+class AnalyticsRequest(BaseModel):
+    user_id: int
+    period: str = "month"  # day, week, month, year
+
 # 헬스 체크 엔드포인트
 @app.get("/")
 def health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
+
+# 🚀 새로 추가: 건강 데이터 종합 분석 엔드포인트
+@app.post("/api/py/analytics/health-report")
+async def generate_health_analytics_report(request: AnalyticsRequest):
+    """사용자의 건강 데이터를 종합 분석하여 차트와 인사이트를 제공"""
+    try:
+        print(f"[INFO] 건강 분석 요청 - 사용자 ID: {request.user_id}, 기간: {request.period}")
+        
+        # 종합 분석 리포트 생성
+        report = await analytics_service.generate_comprehensive_report(
+            user_id=request.user_id,
+            period=request.period
+        )
+        
+        if report['status'] == 'error':
+            raise HTTPException(
+                status_code=500, 
+                detail=f"분석 실패: {report.get('message', '알 수 없는 오류')}"
+            )
+        
+        print(f"[INFO] 분석 완료 - 건강기록: {report['data_summary']['health_records_count']}개, "
+              f"운동세션: {report['data_summary']['exercise_sessions_count']}개")
+        
+        return {
+            "status": "success",
+            "message": "건강 데이터 분석이 완료되었습니다.",
+            "report": report
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] 건강 분석 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"건강 분석 중 오류가 발생했습니다: {str(e)}"
+        )
+
+# 🚀 체중 트렌드 분석 엔드포인트
+@app.post("/api/py/analytics/weight-trends")
+async def analyze_weight_trends_endpoint(request: AnalyticsRequest):
+    """체중 변화 트렌드만 분석"""
+    try:
+        data = await analytics_service.fetch_health_data(request.user_id, request.period)
+        analysis = analytics_service.analyze_weight_trends(data['health_records'])
+        
+        return {
+            "status": "success",
+            "analysis": analysis,
+            "chart": analytics_service.generate_weight_chart(data['health_records'], analysis)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] 체중 분석 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 🚀 운동 패턴 분석 엔드포인트
+@app.post("/api/py/analytics/exercise-patterns")
+async def analyze_exercise_patterns_endpoint(request: AnalyticsRequest):
+    """운동 패턴만 분석"""
+    try:
+        data = await analytics_service.fetch_health_data(request.user_id, request.period)
+        analysis = analytics_service.analyze_exercise_patterns(data['exercise_sessions'])
+        
+        return {
+            "status": "success",
+            "analysis": analysis,
+            "chart": analytics_service.generate_exercise_chart(data['exercise_sessions'], analysis)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] 운동 분석 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 🚀 AI 기반 건강 조언 엔드포인트
+@app.post("/api/py/analytics/ai-insights")
+async def get_ai_health_insights(request: AnalyticsRequest):
+    """AI 기반 개인화된 건강 조언 생성"""
+    try:
+        data = await analytics_service.fetch_health_data(request.user_id, request.period)
+        
+        weight_analysis = analytics_service.analyze_weight_trends(data['health_records'])
+        bmi_analysis = analytics_service.analyze_bmi_health_status(data['health_records'])
+        exercise_analysis = analytics_service.analyze_exercise_patterns(data['exercise_sessions'])
+        
+        insights = analytics_service.generate_ai_insights(weight_analysis, bmi_analysis, exercise_analysis)
+        
+        return {
+            "status": "success",
+            "insights": insights,
+            "analysis_summary": {
+                "weight": weight_analysis,
+                "bmi": bmi_analysis,
+                "exercise": exercise_analysis
+            }
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] AI 인사이트 생성 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 USE_GPT = os.getenv("USE_GPT", "False").lower() == "true"
 

@@ -132,92 +132,237 @@ export interface FeedbackData {
 // API 함수들 (백엔드와 통신하는 함수들)
 // ============================================================================
 
-// API 호출을 위한 헬퍼 함수 - axios 인스턴스 사용으로 변경
-const apiCall = async (endpoint: string, options: { method?: string; data?: unknown } = {}) => {
-  const { method = 'GET', data } = options;
+// ============================================================================
+// 에러 처리 관련 타입 및 유틸리티
+// ============================================================================
+
+export interface ApiError {
+  code: string;
+  message: string;
+  details?: string;
+  status?: number;
+}
+
+export interface ApiResponse<T> {
+  data?: T;
+  error?: ApiError;
+  success: boolean;
+}
+
+// 에러 코드별 사용자 친화적 메시지
+const ERROR_MESSAGES: Record<string, string> = {
+  AUTH_REQUIRED: '로그인이 필요합니다. 다시 로그인해주세요.',
+  USER_NOT_FOUND: '사용자 정보를 찾을 수 없습니다.',
+  TEMPORARY_ERROR: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+  SERVER_ERROR: '서버 오류가 발생했습니다. 관리자에게 문의해주세요.',
+  NETWORK_ERROR: '네트워크 연결을 확인해주세요.',
+  TIMEOUT_ERROR: '요청 시간이 초과되었습니다. 다시 시도해주세요.',
+  VALIDATION_ERROR: '입력 정보를 확인해주세요.',
+  PERMISSION_DENIED: '접근 권한이 없습니다.',
+  DATA_NOT_FOUND: '요청한 데이터를 찾을 수 없습니다.',
+  RATE_LIMIT_EXCEEDED: '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.'
+};
+
+// API 호출을 위한 강화된 헬퍼 함수
+const apiCall = async <T = unknown>(
+  endpoint: string, 
+  options: { method?: string; data?: unknown; retries?: number } = {}
+): Promise<ApiResponse<T>> => {
+  const { method = 'GET', data, retries = 2 } = options;
   
-  try {
-    const response = await axiosInstance({
-      url: endpoint,
-      method,
-      data,
-    });
-    
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = error as { response?: { status?: number; statusText?: string }; message?: string };
-    console.error('🚨 API Call Error:', {
-      endpoint,
-      method,
-      status: axiosError.response?.status,
-      message: axiosError.message
-    });
-    throw new Error(`API 호출 실패: ${axiosError.response?.status || 'Unknown'} ${axiosError.response?.statusText || axiosError.message}`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await axiosInstance({
+        url: endpoint,
+        method,
+        data,
+        timeout: 10000, // 10초 타임아웃
+      });
+      
+      // 백엔드에서 error 필드가 있는 경우 (fallback 응답)
+      if (response.data?.error) {
+        const errorCode = response.data?.errorCode || 'UNKNOWN_ERROR';
+        return {
+          data: response.data,
+          error: {
+            code: errorCode,
+            message: ERROR_MESSAGES[errorCode] || response.data.error,
+            details: response.data.error,
+            status: response.status
+          },
+          success: false
+        };
+      }
+      
+      return {
+        data: response.data,
+        success: true
+      };
+      
+    } catch (error: unknown) {
+      const axiosError = error as { 
+        response?: { status?: number; statusText?: string; data?: { message?: string } }; 
+        message?: string;
+        code?: string;
+      };
+      
+      // 마지막 시도가 아니면 재시도
+      if (attempt < retries) {
+        console.warn(`🔄 API 재시도 (${attempt + 1}/${retries + 1}): ${endpoint}`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // 지수 백오프
+        continue;
+      }
+      
+      // 상세한 에러 분류
+      let errorCode = 'UNKNOWN_ERROR';
+      let errorMessage = '알 수 없는 오류가 발생했습니다.';
+      
+      if (axiosError.code === 'ECONNABORTED' || axiosError.message?.includes('timeout')) {
+        errorCode = 'TIMEOUT_ERROR';
+      } else if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'NETWORK_ERROR') {
+        errorCode = 'NETWORK_ERROR';
+      } else if (axiosError.response?.status) {
+        const status = axiosError.response.status;
+        if (status === 401) errorCode = 'AUTH_REQUIRED';
+        else if (status === 403) errorCode = 'PERMISSION_DENIED';
+        else if (status === 404) errorCode = 'DATA_NOT_FOUND';
+        else if (status === 422) errorCode = 'VALIDATION_ERROR';
+        else if (status === 429) errorCode = 'RATE_LIMIT_EXCEEDED';
+        else if (status >= 500) errorCode = 'SERVER_ERROR';
+      }
+      
+      errorMessage = ERROR_MESSAGES[errorCode] || errorMessage;
+      
+      console.error('🚨 API Call Error:', {
+        endpoint,
+        method,
+        attempt: attempt + 1,
+        status: axiosError.response?.status,
+        code: errorCode,
+        message: axiosError.message
+      });
+      
+      return {
+        error: {
+          code: errorCode,
+          message: errorMessage,
+          details: axiosError.response?.data?.message || axiosError.message,
+          status: axiosError.response?.status
+        },
+        success: false
+      };
+    }
   }
+  
+  // 이 지점에 도달하면 안 됨
+  return {
+    error: {
+      code: 'UNKNOWN_ERROR',
+      message: '예상치 못한 오류가 발생했습니다.'
+    },
+    success: false
+  };
 };
 
 // 건강 기록 관련 API 함수들
 export const healthApi = {
   // 건강 기록 조회
-  getHealthRecords: async (userId: string, period: string = 'month'): Promise<HealthRecord[]> => {
-    return apiCall(`/api/health-records/${userId}?period=${period}`);
+  getHealthRecords: async (userId: string, period: string = 'month'): Promise<ApiResponse<HealthRecord[]>> => {
+    return apiCall<HealthRecord[]>(`/api/health-records/${userId}?period=${period}`);
   },
 
   // 건강 기록 생성
-  createHealthRecord: async (data: CreateHealthRecordData): Promise<HealthRecord> => {
-    return apiCall('/api/health-records', {
+  createHealthRecord: async (data: CreateHealthRecordData): Promise<ApiResponse<HealthRecord>> => {
+    return apiCall<HealthRecord>('/api/health-records', {
       method: 'POST',
       data,
     });
   },
 
   // 사용자 목표 조회
-  getUserGoals: async (userId: string): Promise<UserGoal> => {
-    return apiCall(`/api/user-goals/${userId}`);
+  getUserGoals: async (userId: string): Promise<ApiResponse<UserGoal>> => {
+    console.log('🎯 [getUserGoals] 요청 시작:', { userId });
+    
+    // 토큰 확인
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.warn('🚨 [getUserGoals] 토큰이 없습니다.');
+      return {
+        error: {
+          code: 'AUTH_REQUIRED',
+          message: '로그인이 필요합니다.'
+        },
+        success: false
+      };
+    }
+    
+    console.log('🔑 [getUserGoals] 토큰 확인됨:', token.substring(0, 20) + '...');
+    
+    try {
+      const result = await apiCall<UserGoal>(`/api/user-goals/${userId}`);
+      console.log('✅ [getUserGoals] 응답 성공:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ [getUserGoals] 요청 실패:', error);
+      
+      // 403 오류인 경우 특별 처리
+      if (error && typeof error === 'object' && 'status' in error && error.status === 403) {
+        return {
+          error: {
+            code: 'PERMISSION_DENIED',
+            message: '사용자 목표에 접근할 권한이 없습니다. 로그인을 다시 시도해주세요.',
+            status: 403
+          },
+          success: false
+        };
+      }
+      
+      throw error;
+    }
   },
 
   // 사용자 목표 업데이트
-  updateUserGoals: async (userId: string, data: UpdateGoalData): Promise<UserGoal> => {
-    return apiCall(`/api/user-goals/${userId}`, {
+  updateUserGoals: async (userId: string, data: UpdateGoalData): Promise<ApiResponse<UserGoal>> => {
+    return apiCall<UserGoal>(`/api/user-goals/${userId}`, {
       method: 'PUT',
       data,
     });
   },
 
   // 운동 세션 조회
-  getExerciseSessions: async (userId: string, period: string = 'month'): Promise<ExerciseSession[]> => {
-    return apiCall(`/api/exercise-sessions/${userId}?period=${period}`);
+  getExerciseSessions: async (userId: string, period: string = 'month'): Promise<ApiResponse<ExerciseSession[]>> => {
+    return apiCall<ExerciseSession[]>(`/api/exercise-sessions/${userId}?period=${period}`);
   },
 
   // 운동 세션 생성
-  createExerciseSession: async (data: CreateExerciseData): Promise<ExerciseSession> => {
-    return apiCall('/api/exercise-sessions', {
+  createExerciseSession: async (data: CreateExerciseData): Promise<ApiResponse<ExerciseSession>> => {
+    return apiCall<ExerciseSession>('/api/exercise-sessions', {
       method: 'POST',
       data,
     });
   },
 
   // 식단 기록 조회
-  getMealLogs: async (userId: string, period: string = 'month'): Promise<MealLog[]> => {
-    return apiCall(`/api/meal-logs/${userId}?period=${period}`);
+  getMealLogs: async (userId: string, period: string = 'month'): Promise<ApiResponse<MealLog[]>> => {
+    return apiCall<MealLog[]>(`/api/meal-logs/${userId}?period=${period}`);
   },
 
   // 식단 기록 생성
-  createMealLog: async (data: CreateMealData): Promise<MealLog> => {
-    return apiCall('/api/meal-logs', {
+  createMealLog: async (data: CreateMealData): Promise<ApiResponse<MealLog>> => {
+    return apiCall<MealLog>('/api/meal-logs', {
       method: 'POST',
       data,
     });
   },
 
   // 건강 통계 조회
-  getHealthStatistics: async (userId: string, period: string = 'month'): Promise<HealthStatistics> => {
-    return apiCall(`/api/health-statistics/${userId}?period=${period}`);
+  getHealthStatistics: async (userId: string, period: string = 'month'): Promise<ApiResponse<HealthStatistics>> => {
+    return apiCall<HealthStatistics>(`/api/health-statistics/${userId}?period=${period}`);
   },
 
   // 추천 조회
-  getRecommendations: async (userId: string): Promise<Recommendation[]> => {
-    return apiCall(`/api/recommendations/${userId}`);
+  getRecommendations: async (userId: string): Promise<ApiResponse<Recommendation[]>> => {
+    return apiCall<Recommendation[]>(`/api/recommendations/${userId}`);
   },
 
   // 피드백 제출

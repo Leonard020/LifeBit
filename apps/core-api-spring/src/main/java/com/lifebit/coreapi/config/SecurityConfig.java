@@ -35,7 +35,8 @@ public class SecurityConfig {
                     "/api/public/**", 
                     "/swagger-ui/**", 
                     "/v3/api-docs/**", 
-                    "/actuator/**"
+                    "/actuator/**",
+                    "/ws/**"  // WebSocket 경로 허용
                 ).permitAll()
                 .anyRequest().authenticated()  // ✅ 보안 유지: 모든 건강 API는 인증 필요
             )

@@ -31,7 +31,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setIsLoggedIn, setNickname } = useAuth();
+  const { setIsLoggedIn, setNickname, setUser } = useAuth();
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -54,15 +54,17 @@ export default function Login() {
       const { access_token, nickname, user_id, role, email } = res;
 
       setToken(access_token);
-      setUserInfo({
+      const userInfo = {
         userId: user_id,
         email: email,
         nickname: nickname,
         role: role
-      });
+      };
+      setUserInfo(userInfo);
       
       setIsLoggedIn(true);
       setNickname(nickname);
+      setUser(userInfo);
 
       toast({
         title: '로그인 성공',

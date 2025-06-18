@@ -1,8 +1,8 @@
 import React from 'react';
 
 interface PeriodSelectorProps {
-  selectedPeriod: 'day' | 'week' | 'month' | 'year';
-  onPeriodChange: (period: 'day' | 'week' | 'month' | 'year') => void;
+  selectedPeriod: 'day' | 'week' | 'month';
+  onPeriodChange: (period: 'day' | 'week' | 'month') => void;
 }
 
 export const PeriodSelector: React.FC<PeriodSelectorProps> = ({
@@ -13,7 +13,6 @@ export const PeriodSelector: React.FC<PeriodSelectorProps> = ({
     { value: 'day', label: '일', icon: '📅' },
     { value: 'week', label: '주', icon: '📊' },
     { value: 'month', label: '월', icon: '📈' },
-    { value: 'year', label: '년', icon: '📋' },
   ] as const;
 
   return (

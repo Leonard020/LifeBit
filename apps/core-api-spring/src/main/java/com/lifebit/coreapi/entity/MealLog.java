@@ -31,14 +31,14 @@ public class MealLog {
     @Column(name = "log_date", nullable = false)
     private LocalDate logDate;
     
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MealTimeTypeConverter.class)
     @Column(name = "meal_time", nullable = false)
     private MealTimeType mealTime;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = InputSourceTypeConverter.class)
     @Column(name = "input_source")
     private InputSourceType inputSource;
     
@@ -48,7 +48,7 @@ public class MealLog {
     @Column(name = "original_audio_path")
     private String originalAudioPath;
     
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = ValidationStatusTypeConverter.class)
     @Column(name = "validation_status")
     private ValidationStatusType validationStatus;
     
