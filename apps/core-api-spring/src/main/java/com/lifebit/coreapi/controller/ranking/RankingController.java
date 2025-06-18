@@ -16,7 +16,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RankingController {
     private final RankingService rankingService;
-    private final RankingScoreService rankingScoreService;
     private final RankingRewardService rankingRewardService;
     private final RankingNotificationService rankingNotificationService;
 

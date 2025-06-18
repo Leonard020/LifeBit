@@ -11,7 +11,6 @@ import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserRepository;
 import com.lifebit.coreapi.repository.UserGoalRepository;
-import com.lifebit.coreapi.repository.ExerciseSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -131,7 +130,7 @@ public class DietService {
         mealLog.setUser(user);
         mealLog.setFoodItem(foodItem);
         mealLog.setQuantity(BigDecimal.valueOf(request.getQuantity()));
-        mealLog.setLogDate(LocalDate.parse(request.getLogDate()));
+        mealLog.setLogDate(LocalDate.parse(request.getLogDate()).atStartOfDay());
         mealLog.setCreatedAt(LocalDateTime.now());
 
         MealLog savedMealLog = mealLogRepository.save(mealLog);

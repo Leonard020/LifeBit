@@ -8,14 +8,14 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- 1. ENUM 타입들
-DROP TYPE IF EXISTS user_role CASCADE;
-DROP TYPE IF EXISTS badge_type CASCADE;
-DROP TYPE IF EXISTS body_part_type CASCADE;
-DROP TYPE IF EXISTS meal_time_type CASCADE;
-DROP TYPE IF EXISTS input_source_type CASCADE;
-DROP TYPE IF EXISTS validation_status_type CASCADE;
-DROP TYPE IF EXISTS recognition_type CASCADE;
-DROP TYPE IF EXISTS record_type CASCADE;
+DROP TYPE IF EXISTS user_role;
+DROP TYPE IF EXISTS badge_type;
+DROP TYPE IF EXISTS body_part_type;
+DROP TYPE IF EXISTS meal_time_type;
+DROP TYPE IF EXISTS input_source_type;
+DROP TYPE IF EXISTS validation_status_type;
+DROP TYPE IF EXISTS recognition_type;
+DROP TYPE IF EXISTS record_type;
 
 CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
 CREATE TYPE badge_type AS ENUM ('bronze', 'silver', 'gold', 'platinum');
@@ -149,7 +149,7 @@ CREATE TABLE meal_logs (
     food_item_id BIGINT REFERENCES food_items(food_item_id) ON DELETE CASCADE,
     meal_time meal_time_type NOT NULL,
     quantity DECIMAL(6,2),
-    log_date DATE NOT NULL,
+    log_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     input_source input_source_type,
     confidence_score DECIMAL(4,2),
     original_audio_path VARCHAR(255),

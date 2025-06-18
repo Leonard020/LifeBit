@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -27,10 +26,31 @@ public class MealLog {
     private FoodItem foodItem;
     
     private BigDecimal quantity;
-    private LocalDate logDate;
     
-    @Column(nullable = false)
-    private LocalDateTime mealTime;
+    @Column(name = "log_date", nullable = false)
+    private LocalDateTime logDate;
     
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meal_time", nullable = false)
+    private MealTimeType mealTime;
+    
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "input_source")
+    private InputSourceType inputSource;
+    
+    @Column(name = "confidence_score")
+    private BigDecimal confidenceScore;
+    
+    @Column(name = "original_audio_path")
+    private String originalAudioPath;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "validation_status")
+    private ValidationStatusType validationStatus;
+    
+    @Column(name = "validation_notes")
+    private String validationNotes;
 } 

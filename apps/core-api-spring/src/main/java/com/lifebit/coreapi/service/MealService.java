@@ -2,6 +2,7 @@ package com.lifebit.coreapi.service;
 
 import com.lifebit.coreapi.entity.FoodItem;
 import com.lifebit.coreapi.entity.MealLog;
+import com.lifebit.coreapi.entity.MealTimeType;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
@@ -33,8 +34,8 @@ public class MealService {
         mealLog.setUser(new User(userId));
         mealLog.setFoodItem(foodItem);
         mealLog.setQuantity(quantity);
-        mealLog.setLogDate(LocalDate.now());
-        mealLog.setMealTime(LocalDateTime.now());
+        mealLog.setLogDate(LocalDate.now().atStartOfDay());
+        mealLog.setMealTime(MealTimeType.lunch);
         mealLog.setCreatedAt(LocalDateTime.now());
 
         return mealLogRepository.save(mealLog);

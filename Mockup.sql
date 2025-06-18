@@ -2,14 +2,27 @@
 ROLLBACK;
 
 -- 기존 데이터 정리
-TRUNCATE TABLE users CASCADE;
-TRUNCATE TABLE exercise_catalog CASCADE;
-TRUNCATE TABLE food_items CASCADE;
-TRUNCATE TABLE achievements CASCADE;
-TRUNCATE TABLE recommendation CASCADE;
-TRUNCATE TABLE voice_recognition_logs CASCADE;
-TRUNCATE TABLE validation_history CASCADE;
-TRUNCATE TABLE workout CASCADE;
+BEGIN;
+    DELETE FROM users CASCADE;
+    DELETE FROM exercise_catalog CASCADE;
+    DELETE FROM food_items CASCADE;
+    DELETE FROM achievements CASCADE;
+    DELETE FROM recommendation CASCADE;
+    DELETE FROM voice_recognition_logs CASCADE;
+    DELETE FROM validation_history CASCADE;
+    DELETE FROM workout CASCADE;
+    DELETE FROM daily_workout_logs CASCADE;
+    DELETE FROM user_goals CASCADE;
+    DELETE FROM health_records CASCADE;
+    DELETE FROM exercise_sessions CASCADE;
+    DELETE FROM meal_logs CASCADE;
+    DELETE FROM user_ranking CASCADE;
+    DELETE FROM ranking_history CASCADE;
+    DELETE FROM user_achievements CASCADE;
+    DELETE FROM feedback CASCADE;
+    DELETE FROM policy CASCADE;
+    DELETE FROM log CASCADE;
+COMMIT;
 
 -- 더미 데이터 삽입
 BEGIN;
@@ -112,19 +125,19 @@ INSERT INTO meal_logs (
 ) VALUES
 ((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 
  (SELECT food_item_id FROM food_item_ids WHERE name = '닭가슴살'), 
- 200, CURRENT_DATE, 'breakfast', 'TYPING', NULL, 'VALIDATED'),
+ 200, CURRENT_TIMESTAMP, 'breakfast', 'TYPING', NULL, 'VALIDATED'),
 ((SELECT user_id FROM users WHERE email = 'user1@example.com'), 
  (SELECT food_item_id FROM food_item_ids WHERE name = '현미밥'), 
- 300, CURRENT_DATE, 'lunch', 'VOICE', 0.88, 'VALIDATED'),
+ 300, CURRENT_TIMESTAMP, 'lunch', 'VOICE', 0.88, 'VALIDATED'),
 ((SELECT user_id FROM users WHERE email = 'user2@example.com'), 
  (SELECT food_item_id FROM food_item_ids WHERE name = '바나나'), 
- 120, CURRENT_DATE, 'dinner', 'VOICE', 0.95, 'VALIDATED'),
+ 120, CURRENT_TIMESTAMP, 'dinner', 'VOICE', 0.95, 'VALIDATED'),
 ((SELECT user_id FROM users WHERE email = 'user3@example.com'), 
  (SELECT food_item_id FROM food_item_ids WHERE name = '계란'), 
- 100, CURRENT_DATE, 'breakfast', 'TYPING', NULL, 'VALIDATED'),
+ 100, CURRENT_TIMESTAMP, 'breakfast', 'TYPING', NULL, 'VALIDATED'),
 ((SELECT user_id FROM users WHERE email = 'user4@example.com'), 
  (SELECT food_item_id FROM food_item_ids WHERE name = '연어'), 
- 150, CURRENT_DATE, 'lunch', 'VOICE', 0.82, 'PENDING');
+ 150, CURRENT_TIMESTAMP, 'lunch', 'VOICE', 0.82, 'PENDING');
 
 -- 9. 사용자 랭킹 데이터
 INSERT INTO user_ranking (user_id, total_score, streak_days, rank_position, previous_rank, season, is_active)
