@@ -149,7 +149,7 @@ CREATE TABLE meal_logs (
     food_item_id BIGINT REFERENCES food_items(food_item_id) ON DELETE CASCADE,
     meal_time meal_time_type NOT NULL,
     quantity DECIMAL(6,2),
-    log_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    log_date DATE NOT NULL DEFAULT CURRENT_DATE,
     input_source input_source_type,
     confidence_score DECIMAL(4,2),
     original_audio_path VARCHAR(255),
