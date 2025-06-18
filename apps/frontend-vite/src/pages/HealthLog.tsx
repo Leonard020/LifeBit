@@ -1,17 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { StatisticsCharts } from '../components/health/StatisticsCharts';
+import { PythonAnalyticsCharts } from '../components/health/PythonAnalyticsCharts';
+import { EnhancedHealthDashboard } from '../components/health/EnhancedHealthDashboard';
 import { RecommendationPanel } from '../components/health/RecommendationPanel';
 import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
+import { RecordTypeSelector } from '../components/RecordTypeSelector';
+import { ChatInterface } from '../components/ChatInterface';
+import { VoiceInput } from '../components/VoiceInput';
+import { StructuredDataPreview } from '../components/StructuredDataPreview';
+import { AIFeedbackComponent } from '../components/AIFeedback';
+import { useAuth } from '../AuthContext';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { 
+  BarChart3, 
+  MessageSquare, 
+  Mic, 
+  Activity,
+  TrendingUp,
+  Brain,
+  Zap,
+  Smartphone,
+  Heart
+} from 'lucide-react';
 import { useHealthRealtime } from '../api/healthApi';
 import { getHealthStatistics } from '@/api/auth';
 import { getToken, getUserInfo, isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { Layout } from '@/components/Layout';
-
-
+import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
+import ErrorBoundary from '../components/ErrorBoundary';
+import { AuthContext } from '../AuthContext';
+import { WeightTrendChart } from '../components/health/WeightTrendChart';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -29,16 +54,34 @@ interface HealthStatistics {
 }
 
 const HealthLog: React.FC = () => {
-  // 기간 선택 상태 (일/주/월/년)
-  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const { user } = useAuth();
+  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('month');
+  const [recordType, setRecordType] = useState<'exercise' | 'diet'>('exercise');
+  const [showChat, setShowChat] = useState(false);
+  const [showVoiceInput, setShowVoiceInput] = useState(false);
+  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
+  const [showAIFeedback, setShowAIFeedback] = useState(false);
+  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
   const [healthStats, setHealthStats] = useState<HealthStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // 사용자 정보 가져오기
-  const userInfo = getUserInfo();
-  const userId = userInfo?.userId || '3'; // 기본값으로 3 사용
+  const userId = useMemo(() => {
+    return user?.id ? parseInt(user.id.toString()) : 1;
+  }, [user?.id]);
+
+  const handleVoiceResult = useCallback((result: Record<string, unknown>) => {
+    console.log('음성 처리 결과:', result);
+    setParsedData(result);
+    setShowVoiceInput(false);
+    setShowAIFeedback(true);
+  }, []);
+
+  const handleCloseAIFeedback = useCallback(() => {
+    setShowAIFeedback(false);
+    setParsedData(null);
+  }, []);
 
   // 인증 상태 확인
   useEffect(() => {
@@ -52,7 +95,13 @@ const HealthLog: React.FC = () => {
   }, [navigate]);
 
   // 실시간 업데이트 구독
-  useHealthRealtime(userId || '');
+  useHealthRealtime(userId.toString());
+  
+  // 실시간 업데이트 기능
+  const { isConnected, refreshData, requestNotificationPermission } = useRealTimeUpdates({
+    userId: userId.toString(),
+    enabled: !!userId
+  });
 
   useEffect(() => {
     const fetchHealthData = async () => {
@@ -88,190 +137,226 @@ const HealthLog: React.FC = () => {
     }
   }, [userId, selectedPeriod, navigate]);
 
-
-
-  if (!userId) {
-    return null; // 리다이렉트 중
+  if (!user) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-center">로그인이 필요합니다</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-center text-gray-600">
+                건강 로그를 확인하려면 로그인해주세요.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
   }
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gray-50">
-
-
-        {/* 헤더 섹션 */}
-        <div className="bg-white shadow-sm border-b">
-          <div className="container mx-auto px-4 py-6">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="container mx-auto px-4 py-6 md:py-8">
+          {/* 헤더 */}
+          <div className="mb-6 md:mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">건강 로그</h1>
-                <p className="text-gray-600 mt-1 text-sm md:text-base">
-                  실시간 건강 데이터와 AI 추천을 확인하세요
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
+                  <Activity className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
+                  건강 로그
+                </h1>
+                <p className="text-sm md:text-base text-gray-600 mt-1">
+                  나의 건강 데이터를 한눈에 확인하고 분석해보세요
                 </p>
               </div>
               
-              <div className="flex items-center gap-4">
-                {/* 기간 선택기 */}
-                <div className="flex-shrink-0">
-                  <PeriodSelector 
-                    selectedPeriod={selectedPeriod}
-                    onPeriodChange={setSelectedPeriod}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  사용자 ID: {userId}
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowChat(!showChat)}
+                  className="flex items-center gap-1"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  AI 채팅
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowVoiceInput(true)}
+                  className="flex items-center gap-1"
+                >
+                  <Mic className="h-4 w-4" />
+                  음성 입력
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* 기간 선택 */}
+          <div className="mb-6">
+            <PeriodSelector
+              selectedPeriod={selectedPeriod}
+              onPeriodChange={setSelectedPeriod}
+            />
+          </div>
+
+          {/* 차트 분석 탭 */}
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'enhanced' | 'react' | 'python')} className="mb-6">
+            <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+              <TabsTrigger value="enhanced" className="flex items-center gap-2">
+                <Smartphone className="h-4 w-4" />
+                향상된 UI
+                <Badge variant="secondary" className="text-xs ml-1">
+                  NEW
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="react" className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                기본 차트
+              </TabsTrigger>
+              <TabsTrigger value="python" className="flex items-center gap-2">
+                <Brain className="h-4 w-4" />
+                AI 고급 분석
+                <Badge variant="secondary" className="text-xs ml-1">
+                  Python
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* 향상된 UI 탭 */}
+            <TabsContent value="enhanced" className="mt-6">
+              <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
+                <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 rounded-lg p-3">
+                  <Heart className="h-4 w-4" />
+                  <span className="font-medium">사용자 제공 UI를 반영한 향상된 건강 대시보드</span>
+                </div>
+              </div>
+              
+              <ErrorBoundary>
+                <EnhancedHealthDashboard 
+                  userId={userId.toString()} 
+                  period={selectedPeriod}
+                />
+              </ErrorBoundary>
+            </TabsContent>
+
+            <TabsContent value="react" className="mt-6">
+              {/* 기존 React 차트 */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+                {/* 왼쪽: 통계 차트 (모바일에서는 전체 너비, 데스크톱에서는 2/3) */}
+                <div className="xl:col-span-2">
+                  <ErrorBoundary>
+                    <StatisticsCharts 
+                      userId={userId.toString()} 
+                      period={selectedPeriod}
+                    />
+                  </ErrorBoundary>
+                </div>
+                
+                {/* 오른쪽: 추천 패널 (모바일에서는 전체 너비, 데스크톱에서는 1/3) */}
+                <div className="xl:col-span-1">
+                  <ErrorBoundary>
+                    <RecommendationPanel 
+                      userId={userId.toString()}
+                    />
+                  </ErrorBoundary>
+                </div>
+              </div>
+              
+              {/* 하단: 목표 진행률 */}
+              <div>
+                <ErrorBoundary>
+                  <GoalProgress 
+                    userId={userId.toString()}
+                    period={selectedPeriod}
                   />
+                </ErrorBoundary>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="python" className="mt-6">
+              {/* Python AI 분석 차트 */}
+              <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
+                <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg p-3">
+                  <Zap className="h-4 w-4" />
+                  <span className="font-medium">Python 기반 고급 데이터 분석 및 AI 인사이트</span>
+                </div>
+              </div>
+              
+              <ErrorBoundary>
+                <PythonAnalyticsCharts 
+                  userId={userId.toString()} 
+                  period={selectedPeriod}
+                />
+              </ErrorBoundary>
+            </TabsContent>
+          </Tabs>
+
+          {/* 채팅 인터페이스 */}
+          {showChat && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg w-full max-w-2xl h-96 flex flex-col">
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h3 className="text-lg font-semibold">AI 건강 상담</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowChat(false)}
+                  >
+                    ✕
+                  </Button>
+                </div>
+                <div className="flex-1">
+                  <ChatInterface userId={userId.toString()} />
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* 음성 입력 */}
+          {showVoiceInput && (
+            <VoiceInput
+              onResult={handleVoiceResult}
+              onClose={() => setShowVoiceInput(false)}
+            />
+          )}
+
+          {/* AI 피드백 */}
+          {showAIFeedback && parsedData && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg w-full max-w-2xl max-h-96 overflow-y-auto">
+                <AIFeedbackComponent
+                  aiFeedback={{
+                    type: 'success',
+                    message: '데이터가 성공적으로 처리되었습니다.',
+                    suggestions: []
+                  }}
+                  clarificationInput=""
+                  setClarificationInput={() => {}}
+                  onClarificationSubmit={() => {}}
+                  onSaveRecord={() => {}}
+                  structuredData={parsedData}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 구조화된 데이터 미리보기 */}
+          {parsedData && (
+            <div className="mt-6">
+              <StructuredDataPreview data={parsedData} />
+            </div>
+          )}
         </div>
-
-        {/* 로딩 상태 */}
-        {loading && (
-          <div className="container mx-auto px-4 py-8">
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2 text-gray-600">건강 데이터를 불러오는 중...</span>
-            </div>
-          </div>
-        )}
-
-        {/* 에러 상태 */}
-        {error && (
-          <div className="container mx-auto px-4 py-8">
-            <div className="text-center">
-              <p className="text-red-500 mb-4">{error}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors"
-              >
-                다시 시도
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 데이터 없음 상태 */}
-        {!loading && !error && !healthStats && (
-          <div className="container mx-auto px-4 py-8">
-            <div className="text-center">
-              <p className="text-gray-600">건강 데이터가 없습니다.</p>
-            </div>
-          </div>
-        )}
-
-        {/* 메인 콘텐츠 */}
-        {!loading && !error && healthStats && (
-          <div className="container mx-auto px-4 py-6 md:py-8">
-            {/* 상단 요약 카드들 */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
-              <SummaryCard
-                title="현재 체중"
-                value={`${healthStats.currentWeight}kg`}
-                change={`${healthStats.weightChange >= 0 ? '+' : ''}${healthStats.weightChange}kg`}
-                changeType={healthStats.weightChange > 0 ? 'increase' : healthStats.weightChange < 0 ? 'decrease' : 'success'}
-                icon="⚖️"
-              />
-              <SummaryCard
-                title="BMI"
-                value={healthStats.currentBMI.toString()}
-                change={`${healthStats.bmiChange >= 0 ? '+' : ''}${healthStats.bmiChange}`}
-                changeType={healthStats.bmiChange > 0 ? 'increase' : healthStats.bmiChange < 0 ? 'decrease' : 'success'}
-                icon="📊"
-              />
-              <SummaryCard
-                title="주간 운동"
-                value={`${healthStats.weeklyWorkouts}회`}
-                change={healthStats.weeklyWorkouts >= healthStats.workoutGoal ? '목표 달성' : `${healthStats.workoutGoal - healthStats.weeklyWorkouts}회 부족`}
-                changeType={healthStats.weeklyWorkouts >= healthStats.workoutGoal ? 'success' : 'increase'}
-                icon="🏃‍♂️"
-              />
-              <SummaryCard
-                title="목표 달성률"
-                value={`${healthStats.goalAchievementRate}%`}
-                change={`${healthStats.goalChange >= 0 ? '+' : ''}${healthStats.goalChange}%`}
-                changeType={healthStats.goalChange > 0 ? 'increase' : healthStats.goalChange < 0 ? 'decrease' : 'success'}
-                icon="🎯"
-              />
-            </div>
-
-            {/* 메인 대시보드 */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-              {/* 왼쪽: 통계 차트 (모바일에서는 전체 너비, 데스크톱에서는 2/3) */}
-              <div className="xl:col-span-2">
-                <StatisticsCharts 
-                  userId={userId} 
-                  period={selectedPeriod}
-                />
-              </div>
-              
-              {/* 오른쪽: 추천 패널 (모바일에서는 전체 너비, 데스크톱에서는 1/3) */}
-              <div className="xl:col-span-1">
-                <RecommendationPanel 
-                  userId={userId}
-                />
-              </div>
-            </div>
-            
-            {/* 하단: 목표 진행률 */}
-            <div>
-              <GoalProgress 
-                userId={userId}
-                period={selectedPeriod}
-              />
-            </div>
-          </div>
-        )}
       </div>
     </Layout>
-  );
-};
-
-// 요약 카드 컴포넌트
-interface SummaryCardProps {
-  title: string;
-  value: string;
-  change: string;
-  changeType: 'increase' | 'decrease' | 'success';
-  icon: string;
-}
-
-const SummaryCard: React.FC<SummaryCardProps> = ({
-  title,
-  value,
-  change,
-  changeType,
-  icon,
-}) => {
-  const getChangeColor = () => {
-    switch (changeType) {
-      case 'increase': return 'text-red-500';
-      case 'decrease': return 'text-blue-500';
-      case 'success': return 'text-green-500';
-      default: return 'text-gray-500';
-    }
-  };
-
-  const getChangeIcon = () => {
-    switch (changeType) {
-      case 'increase': return '↗️';
-      case 'decrease': return '↘️';
-      case 'success': return '✅';
-      default: return '➖';
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm border p-3 md:p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs md:text-sm font-medium text-gray-600 truncate">{title}</h3>
-        <span className="text-lg md:text-xl">{icon}</span>
-      </div>
-      <div className="space-y-1">
-        <p className="text-lg md:text-2xl font-bold text-gray-900 truncate">{value}</p>
-        <p className={`text-xs md:text-sm font-medium flex items-center ${getChangeColor()}`}>
-          <span className="mr-1">{getChangeIcon()}</span>
-          <span className="truncate">{change}</span>
-        </p>
-      </div>
-    </div>
   );
 };
 

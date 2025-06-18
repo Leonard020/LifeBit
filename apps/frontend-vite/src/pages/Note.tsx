@@ -290,8 +290,27 @@ const Note = () => {
     const fetchExercise = async () => {
       const dateStr = selectedDate.toISOString().split("T")[0];
       try {
-        const res = await fetch(`http://localhost:8080/api/workouts?date=${dateStr}`);
-        if (!res.ok) throw new Error("운동 기록 불러오기 실패");
+        // 인증 토큰 가져오기
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.warn('인증 토큰이 없습니다.');
+          setTodayExercise([]);
+          return;
+        }
+
+        const res = await fetch(`http://localhost:8080/api/workouts?date=${dateStr}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!res.ok) {
+          if (res.status === 403) {
+            console.warn('인증이 필요합니다.');
+          }
+          throw new Error("운동 기록 불러오기 실패");
+        }
 
         const data = await res.json();
         setTodayExercise(data);

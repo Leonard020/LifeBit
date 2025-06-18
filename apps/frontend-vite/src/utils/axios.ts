@@ -1,9 +1,11 @@
 import axios from 'axios';
 import { getToken } from './auth';
+import { API_CONFIG } from '../config/env';
+
 // axios 기본 설정
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:8080',  // Core API 서버 (Spring Boot)
-  timeout: 15000,  // 타임아웃 시간 증가
+  baseURL: API_CONFIG.BASE_URL,  // ✅ 환경변수 우선 사용 (http://localhost:8080)
+  timeout: API_CONFIG.TIMEOUT,   // ✅ 설정 파일에서 관리
   headers: {
     'Content-Type': 'application/json',
   },

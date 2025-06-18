@@ -51,6 +51,106 @@ public class ExerciseService {
     }
 
     public List<ExerciseCatalog> getExercisesByBodyPart(String bodyPart) {
-        return exerciseCatalogRepository.findByBodyPart(bodyPart);
+        // String을 BodyPartType으로 변환
+        try {
+            com.lifebit.coreapi.entity.BodyPartType bodyPartType = 
+                com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPart.toUpperCase());
+            return exerciseCatalogRepository.findByBodyPart(bodyPartType);
+        } catch (IllegalArgumentException e) {
+            // 잘못된 bodyPart 값인 경우 빈 리스트 반환
+            return List.of();
+        }
+    }
+
+    /**
+     * 사용자의 최근 운동 세션 조회 (기간별)
+     */
+    public List<ExerciseSession> getRecentExerciseSessions(Long userId, String period) {
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate;
+        
+        // 기간에 따른 시작 날짜 계산
+        switch (period.toLowerCase()) {
+            case "day":
+                startDate = endDate.minusDays(1);
+                break;
+            case "week":
+                startDate = endDate.minusDays(7);
+                break;
+            case "month":
+                startDate = endDate.minusMonths(1);
+                break;
+            case "year":
+                startDate = endDate.minusYears(1);
+                break;
+            default:
+                startDate = endDate.minusMonths(1); // 기본값: 1개월
+        }
+        
+        User user = new User(userId);
+        return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+            user, startDate, endDate);
+    }
+
+    /**
+     * 사용자의 최근 N일간 운동 세션 조회
+     */
+    public List<ExerciseSession> getRecentExerciseSessions(Long userId, int days) {
+        LocalDate startDate = LocalDate.now().minusDays(days);
+        LocalDate endDate = LocalDate.now();
+        User user = new User(userId);
+        return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+            user, startDate, endDate);
+    }
+
+    /**
+     * 최근 7일간 운동 횟수 조회
+     */
+    public int getWeeklyExerciseCount(Long userId) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        return sessions.size();
+    }
+
+    /**
+     * 최근 7일간 총 칼로리 소모량 조회
+     */
+    public int getWeeklyCaloriesBurned(Long userId) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        return sessions.stream()
+            .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
+            .sum();
+    }
+
+    /**
+     * 현재 연속 운동 일수 계산
+     */
+    public int getCurrentStreak(Long userId) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 365); // 최근 1년
+        if (sessions.isEmpty()) {
+            return 0;
+        }
+
+        int streak = 0;
+        LocalDate currentDate = LocalDate.now();
+        
+        // 오늘부터 역순으로 연속 운동 일수 계산
+        for (ExerciseSession session : sessions) {
+            if (session.getExerciseDate().equals(currentDate)) {
+                streak++;
+                currentDate = currentDate.minusDays(1);
+            } else if (session.getExerciseDate().isBefore(currentDate)) {
+                break; // 연속이 끊어짐
+            }
+        }
+        
+        return streak;
+    }
+
+    /**
+     * 총 운동 일수 조회
+     */
+    public int getTotalWorkoutDays(Long userId) {
+        User user = new User(userId);
+        return (int) exerciseSessionRepository.countDistinctExerciseDateByUser(user);
     }
 } 

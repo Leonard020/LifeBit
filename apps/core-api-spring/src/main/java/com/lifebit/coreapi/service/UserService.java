@@ -42,7 +42,7 @@ public class UserService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = false)
     public User login(LoginRequest request) {
         try {
             User user = userRepository.findByEmail(request.getEmail())
@@ -51,6 +51,9 @@ public class UserService {
             if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
                 throw new RuntimeException("비밀번호가 일치하지 않습니다.");
             }
+
+            user.setLastVisited(java.time.LocalDateTime.now());
+            userRepository.save(user);
 
             return user;
         } catch (Exception e) {
