@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send, Dumbbell, Utensils, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sendChatMessage } from '../api/chatApi';
+import { saveExerciseRecord } from '../api/healthApi';
 
 // Speech Recognition 타입 정의
 interface SpeechRecognitionEvent extends Event {
@@ -58,6 +59,17 @@ interface ChatWindowProps {
   onRecordSubmit?: (type: 'exercise' | 'diet', content: string) => void;
 }
 
+interface ExerciseState {
+  exercise?: string;
+  category?: string;
+  subcategory?: string;
+  time_period?: string;
+  weight?: number;
+  sets?: number;
+  reps?: number;
+  duration_min?: number;
+}
+
 export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -73,6 +85,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [exerciseState, setExerciseState] = useState<ExerciseState>({});
+  const [validationStep, setValidationStep] = useState<string | null>(null);
 
   // Speech Recognition 초기화
   useEffect(() => {
@@ -251,6 +266,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const handleExerciseClick = () => {
     setCurrentRecordType('exercise');
+    setExerciseState({});
+    setValidationStep(null);
     addMessage('ai', "운동을 기록하시려 하시는군요! 예시로 '스쿼트 30kg 3세트 10회했어요'와 같이 입력해주세요");
   };
 
@@ -295,41 +312,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
     try {
       setIsProcessing(true);
-      
-      // 사용자 메시지 추가
       addMessage('user', inputValue);
-      
-      // 대화 기록에 사용자 메시지 추가
-      const updatedHistory = [
-        ...conversationHistory,
-        { role: 'user', content: inputValue }
-      ];
-      
-      // API 호출
-      const response = await sendChatMessage(inputValue, conversationHistory);
-      
-      if (response.status === 'success') {
-        // AI 응답 추가
-        addMessage('ai', response.message);
-        
-        // 대화 기록 업데이트
-        setConversationHistory([
-          ...updatedHistory,
-          { role: 'assistant', content: response.message }
-        ]);
+
+      if (currentRecordType === 'exercise') {
+        await handleExerciseInput(inputValue);
       } else {
-        toast({
-          title: "오류 발생",
-          description: response.message,
-          variant: "destructive",
-        });
+        // 기존 일반 채팅 처리 로직
+        const response = await sendChatMessage(inputValue, conversationHistory);
+        if (response.status === 'success') {
+          addMessage('ai', response.message);
+          setConversationHistory([
+            ...conversationHistory,
+            { role: 'user', content: inputValue },
+            { role: 'assistant', content: response.message }
+          ]);
+        }
       }
-      
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error('Message processing error:', error);
       toast({
-        title: "대화 처리 실패",
-        description: "메시지를 처리하는 중 오류가 발생했습니다.",
+        title: "처리 오류",
+        description: "메시지 처리 중 오류가 발생했습니다.",
         variant: "destructive",
       });
     } finally {
@@ -355,6 +358,119 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   // 입력 텍스트가 있는지 확인
   const hasInputText = inputValue.trim().length > 0;
+
+  const handleExerciseInput = async (input: string) => {
+    try {
+      // 1. 초기 분석
+      const response = await sendChatMessage(input, [
+        { role: "system", content: "운동 기록을 분석하여 JSON 형태로 변환합니다." },
+        { role: "user", content: input }
+      ]);
+
+      if (response.status === 'success') {
+        let parsedData;
+        try {
+          // JSON 문자열 추출 시도
+          const jsonMatch = response.message.match(/```json\n([\s\S]*?)\n```/);
+          if (jsonMatch && jsonMatch[1]) {
+            parsedData = JSON.parse(jsonMatch[1].trim());
+          } else {
+            // JSON 형식이 아닌 경우 메시지 그대로 표시
+            addMessage('ai', response.message);
+            return;
+          }
+        } catch (parseError) {
+          console.error('JSON 파싱 오류:', parseError);
+          addMessage('ai', response.message);
+          return;
+        }
+
+        setExerciseState(prev => ({ ...prev, ...parsedData }));
+        
+        // 2. 검증 단계
+        const validationResponse = await sendChatMessage(JSON.stringify(parsedData), [
+          { role: "system", content: "운동 기록의 누락된 정보를 확인합니다." }
+        ]);
+
+        if (validationResponse.status === 'success') {
+          let validation;
+          try {
+            // 검증 결과가 JSON 형식인 경우
+            validation = typeof validationResponse.message === 'string' 
+              ? JSON.parse(validationResponse.message)
+              : validationResponse.message;
+          } catch (error) {
+            // JSON 파싱 실패 시 메시지 그대로 표시
+            addMessage('ai', validationResponse.message);
+            return;
+          }
+
+          if (validation.status === 'incomplete') {
+            setValidationStep(validation.missing_field);
+            addMessage('ai', validation.question);
+          } else {
+            // 모든 정보가 있는 경우 확인 메시지 표시
+            const confirmationMessage = formatConfirmationMessage(parsedData);
+            addMessage('ai', confirmationMessage);
+            setIsAwaitingConfirmation(true);
+            setPendingRecord({ type: 'exercise', content: JSON.stringify(parsedData) });
+          }
+        } else {
+          addMessage('ai', '운동 기록 검증 중 오류가 발생했습니다.');
+        }
+      } else {
+        addMessage('ai', response.message || '운동 기록 처리 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Exercise input processing error:', error);
+      addMessage('ai', '죄송합니다. 운동 기록 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 확인 메시지 포맷팅 함수 추가
+  const formatConfirmationMessage = (data: ExerciseState): string => {
+    let message = '다음과 같이 운동을 기록하시겠습니까?\n\n';
+    
+    if (data.category === '근력운동') {
+      message += `🏋️‍♂️ ${data.exercise}\n`;
+      message += `- 무게: ${data.weight}kg\n`;
+      message += `- 세트: ${data.sets}세트\n`;
+      message += `- 횟수: ${data.reps}회\n`;
+    } else {
+      message += `🏃‍♂️ ${data.exercise}\n`;
+      message += `- 시간: ${data.duration_min}분\n`;
+    }
+    
+    message += `- 시간대: ${data.time_period || '미지정'}\n\n`;
+    message += '확인하시면 "네", 수정이 필요하시면 "아니오"를 입력해주세요.';
+    
+    return message;
+  };
+
+  const handleConfirmation = async (confirmed: boolean) => {
+    if (confirmed && pendingRecord) {
+      try {
+        if (pendingRecord.type === 'exercise') {
+          const exerciseData = JSON.parse(pendingRecord.content);
+          await saveExerciseRecord(exerciseData);
+          addMessage('ai', '운동 기록이 저장되었습니다! 다른 운동을 기록하시겠습니까?');
+        }
+        setExerciseState({});
+        setValidationStep(null);
+        setIsAwaitingConfirmation(false);
+        setPendingRecord(null);
+      } catch (error) {
+        console.error('Save error:', error);
+        addMessage('ai', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
+      }
+    } else {
+      addMessage('ai', '기록을 취소했습니다. 다시 입력해주세요.');
+      setExerciseState({});
+      setValidationStep(null);
+      setIsAwaitingConfirmation(false);
+      setPendingRecord(null);
+    }
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-200px)] max-w-4xl mx-auto">

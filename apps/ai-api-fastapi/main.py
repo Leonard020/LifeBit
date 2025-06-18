@@ -93,6 +93,57 @@ EXERCISE_EXTRACTION_PROMPT = """
 8. 사용자에게는 JSON 형태로 출력하지 않고 문장 형태로 출력합니다.
 """
 
+# 운동 기록 검증 프롬프트
+EXERCISE_VALIDATION_PROMPT = """
+당신은 운동 기록 검증 도우미입니다. 사용자의 운동 기록이 완전한지 확인하고, 부족한 정보가 있다면 순차적으로 질문해야 합니다.
+
+필수 정보:
+1. 운동명 (exercise)
+2. 대분류 (category): 근력운동 or 유산소운동
+3. 중분류 (subcategory): 근력운동일 경우 가슴, 등, 하체, 복근, 팔, 어깨 중 선택
+4. 시간대 (time_period): 아침, 점심, 오후, 저녁, 야간
+5. 세부정보:
+   - 근력운동: 무게(kg), 세트 수, 반복 횟수
+   - 유산소운동: 총 운동 시간(분)
+
+규칙:
+1. 한 번에 하나의 정보만 요청합니다.
+2. 이미 제공된 정보는 다시 묻지 않습니다.
+3. 질문은 간단명료하게 합니다.
+4. 마지막에는 전체 정보를 요약하여 확인을 요청합니다.
+
+출력 형식:
+{
+  "status": "incomplete" | "complete",
+  "missing_field": "exercise" | "category" | "subcategory" | "time_period" | "weight" | "sets" | "reps" | "duration",
+  "question": "다음 질문",
+  "collected_data": {
+    // 지금까지 수집된 데이터
+  }
+}
+"""
+
+# 운동 기록 확인 프롬프트
+EXERCISE_CONFIRMATION_PROMPT = """
+당신은 운동 기록 요약 도우미입니다. 수집된 운동 정보를 사용자가 이해하기 쉽게 정리하여 보여주어야 합니다.
+
+
+출력 형식:
+확인을 위한 문구를 한 줄 출력
+
+운동명: {exercise}
+대분류: {category}
+중분류: {subcategory}
+시간대: {time_period}
+무게: {weight}kg
+세트: {sets}세트
+횟수: {reps}회
+운동시간: {duration_min}분
+
+확인하시면 '네', 수정이 필요하시면 '아니오'를 입력해주세요.
+"""
+
+
 # 🚩 [식단 기록 추출 프롬프트]
 DIET_EXTRACTION_PROMPT = """
 당신은 LifeBit의 AI 어시스턴트입니다. 
@@ -258,6 +309,7 @@ async def chat(request: ChatRequest):
             status_code=500,
             detail=f"채팅 처리 중 오류가 발생했습니다: {str(e)}"
         )
+
 
 # 서버 실행
 if __name__ == "__main__":
