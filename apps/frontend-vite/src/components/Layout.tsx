@@ -46,6 +46,8 @@ const WebHeader = () => {
       title: '로그아웃',
       description: '성공적으로 로그아웃되었습니다.',
     });
+
+    window.location.href = '/login'
   };
 
   const toggleDarkMode = () => {
