@@ -24,7 +24,7 @@ public class WeeklyWorkoutStatsService {
         Map<String, Integer> counter = new HashMap<>();
 
         for (DailyWorkoutLog log : logs) {
-            String bodyPart = log.getExerciseCatalog().getBodyPart(); // ex: 가슴, 하체
+            String bodyPart = log.getExerciseCatalog().getBodyPart().name(); // enum을 String으로 변환
             counter.put(bodyPart, counter.getOrDefault(bodyPart, 0) + 1);
         }
 

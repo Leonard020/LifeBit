@@ -15,7 +15,7 @@ spring:
       max-lifetime: 1200000
   jpa:
     hibernate:
-      ddl-auto: none  # 실무 표준: Flyway가 스키마 관리
+      ddl-auto: create  # 개발용: JPA가 테이블 자동 생성
     show-sql: false  # 운영에서는 기본적으로 비활성화
     properties:
       hibernate:
@@ -31,9 +31,9 @@ spring:
         '[batch_versioned_data]': true
     open-in-view: false
   
-  # Flyway 마이그레이션 설정
+  # Flyway 마이그레이션 설정 (임시 비활성화)
   flyway:
-    enabled: true
+    enabled: false  # JPA가 테이블을 생성하도록 임시 비활성화
     baseline-on-migrate: true
     validate-on-migrate: true
     locations: classpath:db/migration
