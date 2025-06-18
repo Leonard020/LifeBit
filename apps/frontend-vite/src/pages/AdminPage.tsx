@@ -21,12 +21,15 @@ interface User {
   email: string;
   nickname: string;
   role: string;
+  createdAt?: string;
+  lastVisited?: string;
 }
 
 export const AdminPage = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' } | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -98,6 +101,50 @@ export const AdminPage = () => {
     }
   };
 
+  // Always keep admin on top, and sort non-admins by lastVisited desc by default
+  const adminUsers = users.filter(u => u.role === 'ADMIN');
+  const nonAdminUsers = users.filter(u => u.role !== 'ADMIN');
+  let sortedUsers: User[];
+  if (sortConfig) {
+    sortedUsers = [...nonAdminUsers];
+    sortedUsers.sort((a, b) => {
+      const { key, direction } = sortConfig;
+      // For date fields, compare as numbers
+      if (key === 'createdAt' || key === 'lastVisited') {
+        const aTime = a[key] ? new Date(a[key] as string).getTime() : 0;
+        const bTime = b[key] ? new Date(b[key] as string).getTime() : 0;
+        if (aTime < bTime) return direction === 'asc' ? -1 : 1;
+        if (aTime > bTime) return direction === 'asc' ? 1 : -1;
+        return 0;
+      }
+      // For string fields
+      const aValue = a[key] ?? '';
+      const bValue = b[key] ?? '';
+      if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  } else {
+    sortedUsers = [...nonAdminUsers].sort((a, b) => {
+      const aTime = a.lastVisited ? new Date(a.lastVisited).getTime() : 0;
+      const bTime = b.lastVisited ? new Date(b.lastVisited).getTime() : 0;
+      if (aTime === 0 && bTime === 0) return 0;
+      if (aTime === 0) return 1;
+      if (bTime === 0) return -1;
+      return bTime - aTime;
+    });
+  }
+  const finalUsers = [...adminUsers, ...sortedUsers];
+
+  const handleSort = (key: keyof User) => {
+    setSortConfig((prev) => {
+      if (prev && prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
   return (
     <Layout>
       <div className="container mx-auto py-8">
@@ -109,21 +156,35 @@ export const AdminPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>사용자 ID</TableHead>
-                  <TableHead>이메일</TableHead>
-                  <TableHead>닉네임</TableHead>
+                  <TableHead onClick={() => handleSort('id')} style={{ cursor: 'pointer' }}>
+                    사용자 ID{sortConfig?.key === 'id' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('email')} style={{ cursor: 'pointer' }}>
+                    이메일{sortConfig?.key === 'email' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('nickname')} style={{ cursor: 'pointer' }}>
+                    닉네임{sortConfig?.key === 'nickname' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </TableHead>
                   {/* <TableHead>비밀번호</TableHead> */}
+                  <TableHead onClick={() => handleSort('createdAt')} style={{ cursor: 'pointer' }}>
+                    생성 날짜{sortConfig?.key === 'createdAt' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('lastVisited')} style={{ cursor: 'pointer' }}>
+                    마지막 접속 일시{sortConfig?.key === 'lastVisited' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </TableHead>
                   <TableHead>권한</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {finalUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>{user.id}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.nickname}</TableCell>
                     {/* <TableCell>{user.password}</TableCell> */}
+                    <TableCell>{user.createdAt ? new Date(user.createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
+                    <TableCell>{user.lastVisited ? new Date(user.lastVisited).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
                     <TableCell>{user.role}</TableCell>
                     <TableCell>
                       {user.role === 'USER' && (

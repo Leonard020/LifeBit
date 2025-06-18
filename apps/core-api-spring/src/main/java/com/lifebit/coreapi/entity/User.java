@@ -45,8 +45,13 @@ public class User {
     @Column(name = "role", nullable = false)
     private UserRole role = UserRole.USER;
 
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "last_visited")
+    private LocalDateTime lastVisited;
 
     public User(Long userId) {
         this.userId = userId;

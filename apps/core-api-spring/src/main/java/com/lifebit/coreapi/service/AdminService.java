@@ -30,7 +30,9 @@ public class AdminService {
             user.getPasswordHash(),
             user.getEmail(),
             user.getNickname(),
-            user.getRole().name()
+            user.getRole().name(),
+            user.getCreatedAt(),
+            user.getLastVisited()
         );
     }
 
