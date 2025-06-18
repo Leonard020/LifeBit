@@ -97,9 +97,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         recognitionRef.current.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
           setIsRecording(false);
+          
+          let errorMessage = "음성 인식 중 오류가 발생했습니다.";
+          
+          switch (event.error) {
+            case 'not-allowed':
+            case 'permission-denied':
+              errorMessage = "마이크 사용 권한이 필요합니다. 브라우저 설정에서 마이크 권한을 허용해주세요.";
+              // 권한 요청 다이얼로그 표시
+              requestMicrophonePermission();
+              break;
+            case 'no-speech':
+              errorMessage = "음성이 감지되지 않았습니다. 다시 시도해주세요.";
+              break;
+            case 'audio-capture':
+              errorMessage = "마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.";
+              break;
+            case 'network':
+              errorMessage = "네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.";
+              break;
+            default:
+              errorMessage = "음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.";
+          }
+          
           toast({
             title: "음성 인식 오류",
-            description: "음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.",
+            description: errorMessage,
             variant: "destructive",
           });
         };
@@ -116,6 +139,64 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       }
     };
   }, [toast]);
+
+  // 마이크 권한 요청 함수
+  const requestMicrophonePermission = async () => {
+    try {
+      // 사용 가능한 오디오 장치 확인
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioDevices = devices.filter(device => device.kind === 'audioinput');
+      
+      if (audioDevices.length === 0) {
+        toast({
+          title: "마이크 장치 없음",
+          description: "마이크가 연결되어 있지 않습니다. 마이크를 연결해주세요.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 마이크 권한 요청
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      // 스트림 해제
+      stream.getTracks().forEach(track => track.stop());
+      
+      toast({
+        title: "마이크 권한 허용됨",
+        description: "이제 음성 인식을 사용할 수 있습니다.",
+      });
+    } catch (error) {
+      console.error('Microphone permission error:', error);
+      let errorMessage = "마이크 권한을 얻을 수 없습니다.";
+      
+      if (error instanceof DOMException) {
+        switch (error.name) {
+          case 'NotFoundError':
+            errorMessage = "마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.";
+            break;
+          case 'NotAllowedError':
+            errorMessage = "마이크 사용 권한이 거부되었습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.";
+            break;
+          case 'NotReadableError':
+            errorMessage = "마이크에 접근할 수 없습니다. 다른 프로그램이 마이크를 사용 중일 수 있습니다.";
+            break;
+        }
+      }
+      
+      toast({
+        title: "마이크 권한 오류",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -178,39 +259,34 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     addMessage('ai', "식단을 기록하시려 하시는군요! 예시를 들어 '아침에 바나나 1개, 계란 2개 먹었어요'와 같이 입력해주세요");
   };
 
-  const handleVoiceToggle = () => {
+  const handleVoiceToggle = async () => {
     if (!recognitionRef.current) {
       toast({
-        title: "음성 인식 불가",
+        title: "음성 인식 지원 안됨",
         description: "이 브라우저는 음성 인식을 지원하지 않습니다.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!isRecording) {
-      try {
-        recognitionRef.current.start();
+    try {
+      if (!isRecording) {
+        // 마이크 권한 확인 및 요청
+        await requestMicrophonePermission();
+        
         setIsRecording(true);
+        recognitionRef.current.start();
         toast({
           title: "음성 인식 시작",
-          description: "말씀해 주세요...",
+          description: "말씀해주세요...",
         });
-      } catch (error) {
-        console.error('Speech recognition start error:', error);
-        toast({
-          title: "음성 인식 오류",
-          description: "음성 인식을 시작할 수 없습니다. 다시 시도해주세요.",
-          variant: "destructive",
-        });
-      }
-    } else {
-      try {
+      } else {
         recognitionRef.current.stop();
         setIsRecording(false);
-      } catch (error) {
-        console.error('Speech recognition stop error:', error);
       }
+    } catch (error) {
+      console.error('Voice toggle error:', error);
+      setIsRecording(false);
     }
   };
 
