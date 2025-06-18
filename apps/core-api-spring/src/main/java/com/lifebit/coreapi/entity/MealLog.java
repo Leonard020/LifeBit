@@ -28,5 +28,9 @@ public class MealLog {
     
     private BigDecimal quantity;
     private LocalDate logDate;
+    
+    @Column(nullable = false)
+    private LocalDateTime mealTime;
+    
     private LocalDateTime createdAt;
 } 
