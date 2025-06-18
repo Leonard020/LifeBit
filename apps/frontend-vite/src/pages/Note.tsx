@@ -56,13 +56,13 @@ const Note = () => {
   const [todayScore, setTodayScore] = useState(12);
   const [hasClaimedExerciseScore, setHasClaimedExerciseScore] = useState(false);
   const [hasClaimedDietScore, setHasClaimedDietScore] = useState(false);
-  
+
   // 식단 관련 상태
   const [dailyDietLogs, setDailyDietLogs] = useState<DietLogDTO[]>([]);
   const [dailyNutritionGoals, setDailyNutritionGoals] = useState<DietNutritionDTO[]>([]);
   const [isLoadingDietData, setIsLoadingDietData] = useState(true);
   const [dietError, setDietError] = useState<string | null>(null);
-  
+
   // 식단 추가 관련 상태
   const [isAddDietDialogOpen, setIsAddDietDialogOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -70,6 +70,8 @@ const Note = () => {
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [quantity, setQuantity] = useState(100);
   const [isSearching, setIsSearching] = useState(false);
+  const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
   const navigate = useNavigate();
 
@@ -95,15 +97,41 @@ const Note = () => {
     '유산소': 5,
   };
 
-  const exerciseData = [
-    { subject: '가슴', value: 80, goal: exerciseGoals['가슴'] * 20 },
-    { subject: '등', value: 65, goal: exerciseGoals['등'] * 20 },
-    { subject: '하체', value: 90, goal: exerciseGoals['하체'] * 20 },
-    { subject: '어깨', value: 70, goal: exerciseGoals['어깨'] * 20 },
-    { subject: '복근', value: 60, goal: exerciseGoals['복근'] * 20 },
-    { subject: '팔', value: 75, goal: exerciseGoals['팔'] * 20 },
-    { subject: '유산소', value: 85, goal: exerciseGoals['유산소'] * 20 },
-  ];
+  // 운동데이터터
+  useEffect(() => {
+    const fetchWeeklySummary = async () => {
+      setIsLoadingSummary(true);
+      try {
+        const userInfo = getUserInfo();
+        const userId = userInfo?.userId || 1;
+
+        const today = new Date();
+        const day = today.getDay(); // 0(일) ~ 6(토)
+        const diffToMonday = (day === 0 ? -6 : 1) - day;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() + diffToMonday);
+        const weekStart = monday.toISOString().split("T")[0];
+
+        const res = await axios.get('/api/weekly-workouts/summary', {
+          params: { userId, weekStart }
+        });
+
+        setWeeklySummary(res.data);
+      } catch (err) {
+        console.error("주간 운동 집계 불러오기 실패:", err);
+      } finally {
+        setIsLoadingSummary(false);
+      }
+    };
+
+    fetchWeeklySummary();
+  }, []);
+
+  const exerciseData = Object.entries(exerciseGoals).map(([part, goal]) => ({
+    subject: part,
+    value: (weeklySummary[part] || 0) * 20, // 1회 = 20%
+    goal: goal * 20,
+  }));
 
   // 식단 데이터 페칭
   useEffect(() => {
@@ -111,26 +139,26 @@ const Note = () => {
       navigate('/login');
       return;
     }
-    
+
     const fetchDietData = async () => {
       setIsLoadingDietData(true);
       setDietError(null);
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
+
       try {
         const userInfo = getUserInfo();
         const userId = userInfo?.userId || 1;
-        
+
         // 1. 실제 식단 기록 가져오기
         const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
           params: { userId }
         });
-        
+
         // 2. 실제 영양소 목표 가져오기
         const nutritionGoalsResponse = await axios.get(`/api/diet/nutrition-goals/${formattedDate}`, {
           params: { userId }
         });
-        
+
         setDailyDietLogs(dietLogsResponse.data);
         setDailyNutritionGoals(nutritionGoalsResponse.data);
 
@@ -148,7 +176,7 @@ const Note = () => {
   // 음식 검색
   const searchFood = async () => {
     if (!searchKeyword.trim()) return;
-    
+
     setIsSearching(true);
     try {
       const response = await axios.get(`/api/meals/foods/search`, {
@@ -166,12 +194,12 @@ const Note = () => {
   // 식단 기록 추가
   const addDietRecord = async () => {
     if (!selectedFood) return;
-    
+
     try {
       const userInfo = getUserInfo();
       const userId = userInfo?.userId || 1;
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
+
       const request = {
         userId: userId,
         foodItemId: selectedFood.foodItemId,
@@ -184,22 +212,22 @@ const Note = () => {
         logDate: formattedDate,
         unit: "g"
       };
-      
+
       await axios.post('/api/diet/record', request);
-      
+
       // 데이터 새로고침
       const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
         params: { userId }
       });
       setDailyDietLogs(dietLogsResponse.data);
-      
+
       // 다이얼로그 닫기
       setIsAddDietDialogOpen(false);
       setSelectedFood(null);
       setQuantity(100);
       setSearchKeyword('');
       setSearchResults([]);
-      
+
     } catch (error) {
       console.error("식단 기록 추가 중 오류:", error);
     }
@@ -209,17 +237,17 @@ const Note = () => {
   const deleteDietRecord = async (id: number) => {
     try {
       await axios.delete(`/api/diet/record/${id}`);
-      
+
       // 데이터 새로고침
       const userInfo = getUserInfo();
       const userId = userInfo?.userId || 1;
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
+
       const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
         params: { userId }
       });
       setDailyDietLogs(dietLogsResponse.data);
-      
+
     } catch (error) {
       console.error("식단 기록 삭제 중 오류:", error);
     }
@@ -348,7 +376,7 @@ const Note = () => {
     { name: '지방', value: 60, goal: 100, color: '#95A5A6', calories: 45, targetCalories: 60 },
     { name: '칼로리', value: 92.5, goal: 100, color: '#8B5CF6', calories: 1850, targetCalories: 2000 },
   ];
-  
+
 
   return (
     <Layout>
@@ -426,16 +454,22 @@ const Note = () => {
                 <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={exerciseData}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" className="text-sm" />
-                      <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
-                      <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
+                {isLoadingSummary ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    운동 집계 데이터를 불러오는 중...
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart data={exerciseData}>
+                        <PolarGrid />
+                        <PolarAngleAxis dataKey="subject" className="text-sm" />
+                        <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
+                        <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -596,7 +630,7 @@ const Note = () => {
                               </Button>
                             </div>
                           </div>
-                          
+
                           {searchResults.length > 0 && (
                             <div>
                               <Label>검색 결과</Label>
@@ -604,9 +638,8 @@ const Note = () => {
                                 {searchResults.map((food) => (
                                   <div
                                     key={food.foodItemId}
-                                    className={`p-2 border rounded cursor-pointer hover:bg-accent ${
-                                      selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
-                                    }`}
+                                    className={`p-2 border rounded cursor-pointer hover:bg-accent ${selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
+                                      }`}
                                     onClick={() => setSelectedFood(food)}
                                   >
                                     <div className="font-medium">{food.name}</div>
@@ -618,7 +651,7 @@ const Note = () => {
                               </div>
                             </div>
                           )}
-                          
+
                           {selectedFood && (
                             <div>
                               <Label htmlFor="quantity">섭취량 (g)</Label>
@@ -635,7 +668,7 @@ const Note = () => {
                               </div>
                             </div>
                           )}
-                          
+
                           <div className="flex justify-end space-x-2">
                             <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
                               취소
@@ -687,9 +720,9 @@ const Note = () => {
                           <Button size="icon" variant="ghost" className="h-8 w-8">
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             className="h-8 w-8 text-destructive"
                             onClick={() => deleteDietRecord(dailyDietLogs[index].id)}
                           >
