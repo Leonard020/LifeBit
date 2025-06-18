@@ -18,9 +18,10 @@ export const API_ENDPOINTS = {
 // API 기본 설정
 export const API_CONFIG = {
     BASE_URL: import.meta.env.VITE_CORE_API_URL || 'http://localhost:8080',
+    AI_API_URL: import.meta.env.VITE_AI_API_URL || 'http://localhost:8001',
     TIMEOUT: 10000,
     AI_URL: import.meta.env.VITE_AI_API_URL || 'http://localhost:8001',
-};
+} as const;
 
 // 인증 관련 설정
 export const AUTH_CONFIG = {

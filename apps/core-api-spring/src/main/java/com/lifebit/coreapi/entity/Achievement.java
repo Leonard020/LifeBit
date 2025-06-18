@@ -27,7 +27,7 @@ public class Achievement {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = BadgeTypeConverter.class)
     @Column(name = "badge_type", nullable = false)
     private BadgeType badgeType;
 

@@ -1,6 +1,13 @@
 package com.lifebit.coreapi.controller;
 
 import com.lifebit.coreapi.service.AchievementService;
+import com.lifebit.coreapi.service.UserService;
+import com.lifebit.coreapi.service.HealthRecordService;
+import com.lifebit.coreapi.service.ExerciseService;
+import com.lifebit.coreapi.service.UserGoalService;
+import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.entity.HealthRecord;
+import com.lifebit.coreapi.entity.UserGoal;
 import com.lifebit.coreapi.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,15 +19,21 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/health-statistics")
 @RequiredArgsConstructor
 @Slf4j
 public class HealthStatisticsController {
-    
+
     private final AchievementService achievementService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final UserService userService;
+    private final HealthRecordService healthRecordService;
+    private final ExerciseService exerciseService;
+    private final UserGoalService userGoalService;
 
     /**
      * JWT 토큰에서 사용자 ID 추출
@@ -34,36 +47,150 @@ public class HealthStatisticsController {
         throw new RuntimeException("JWT token not found");
     }
 
+    /**
+     * 오류 발생 시 안전한 기본값 생성
+     */
+    private Map<String, Object> createFallbackStatistics(Long userId) {
+        Map<String, Object> fallbackStatistics = new HashMap<>();
+        fallbackStatistics.put("currentWeight", 70.0);
+        fallbackStatistics.put("weightChange", 0.0);
+        fallbackStatistics.put("currentBMI", 22.5);
+        fallbackStatistics.put("bmiChange", 0.0);
+        fallbackStatistics.put("weeklyWorkouts", 0);
+        fallbackStatistics.put("workoutGoal", 3);
+        fallbackStatistics.put("goalAchievementRate", 0);
+        fallbackStatistics.put("goalChange", 0);
+        fallbackStatistics.put("totalCaloriesBurned", 0);
+        fallbackStatistics.put("averageDailyCalories", 0);
+        fallbackStatistics.put("streak", 0);
+        fallbackStatistics.put("totalWorkoutDays", 0);
+        fallbackStatistics.put("userId", userId);
+        fallbackStatistics.put("dataStatus", "fallback");
+        return fallbackStatistics;
+    }
+
     @GetMapping("/{userId}")
     public ResponseEntity<Map<String, Object>> getHealthStatistics(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "month") String period,
             HttpServletRequest request) {
         
-        // 토큰에서 사용자 ID 추출하여 권한 확인
-        Long tokenUserId = getUserIdFromToken(request);
-        
-        // 건강 통계 데이터 반환
-        Map<String, Object> statistics = Map.of(
-            "currentWeight", 70.5,
-            "weightChange", -0.2,
-            "currentBMI", 22.1,
-            "bmiChange", -0.1,
-            "weeklyWorkouts", 3,
-            "workoutGoal", 3,
-            "goalAchievementRate", 85,
-            "goalChange", 5
-        );
-        
-        // 추가 통계 정보
-        statistics = new java.util.HashMap<>(statistics);
-        statistics.put("totalCaloriesBurned", 1250);
-        statistics.put("averageDailyCalories", 178);
-        statistics.put("streak", 12);
-        statistics.put("totalWorkoutDays", 45);
-        statistics.put("userId", tokenUserId); // 실제 사용자 ID 추가
-        
-        return ResponseEntity.ok(statistics);
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 실제 사용자 정보 조회
+            User user = userService.getUserById(tokenUserId);
+            
+            // 사용자 기본 정보에서 체중과 키 가져오기
+            BigDecimal currentWeight = user.getWeight() != null ? user.getWeight() : BigDecimal.valueOf(70.0);
+            BigDecimal currentHeight = user.getHeight() != null ? user.getHeight() : BigDecimal.valueOf(170.0);
+            
+            // BMI 계산
+            BigDecimal currentBMI = BigDecimal.ZERO;
+            if (currentHeight.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal heightInMeters = currentHeight.divide(BigDecimal.valueOf(100));
+                currentBMI = currentWeight.divide(heightInMeters.multiply(heightInMeters), 2, BigDecimal.ROUND_HALF_UP);
+            }
+            
+            // ✅ 실제 데이터 조회로 교체
+            
+            // 1. 사용자 목표 조회 (기본값 사용)
+            UserGoal userGoal = userGoalService.getUserGoalOrDefault(tokenUserId);
+            int workoutGoal = userGoal.getWeeklyWorkoutTarget();
+            
+            // 2. 최근 7일간 운동 세션 조회
+            int weeklyWorkouts = exerciseService.getWeeklyExerciseCount(tokenUserId);
+            
+            // 3. 목표 달성률 계산
+            int goalAchievementRate = workoutGoal > 0 ? (weeklyWorkouts * 100 / workoutGoal) : 0;
+            int goalChange = goalAchievementRate - 85; // 이전 주 대비 변화 (임시)
+            
+            // 4. 총 칼로리 소모량 (최근 7일)
+            int totalCaloriesBurned = exerciseService.getWeeklyCaloriesBurned(tokenUserId);
+            int averageDailyCalories = totalCaloriesBurned / 7;
+            
+            // 5. 연속 운동 일수 계산
+            int streak = exerciseService.getCurrentStreak(tokenUserId);
+            
+            // 6. 총 운동 일수
+            int totalWorkoutDays = exerciseService.getTotalWorkoutDays(tokenUserId);
+            
+            // 7. 체중과 BMI 변화 계산 (최근 2개 기록 비교)
+            List<HealthRecord> recentRecords = healthRecordService.getRecentHealthRecords(tokenUserId, 30);
+            BigDecimal weightChange = BigDecimal.ZERO;
+            BigDecimal bmiChange = BigDecimal.ZERO;
+            
+            if (recentRecords.size() >= 2) {
+                HealthRecord latest = recentRecords.get(0);
+                HealthRecord previous = recentRecords.get(1);
+                
+                if (latest.getWeight() != null && previous.getWeight() != null) {
+                    weightChange = latest.getWeight().subtract(previous.getWeight());
+                }
+                if (latest.getBmi() != null && previous.getBmi() != null) {
+                    bmiChange = latest.getBmi().subtract(previous.getBmi());
+                }
+                
+                // 최신 건강 기록이 있으면 그 값을 사용
+                if (latest.getWeight() != null) {
+                    currentWeight = latest.getWeight();
+                }
+                if (latest.getBmi() != null) {
+                    currentBMI = latest.getBmi();
+                }
+            }
+            
+            // 건강 통계 데이터 구성
+            Map<String, Object> statistics = new HashMap<>();
+            statistics.put("currentWeight", currentWeight.doubleValue());
+            statistics.put("weightChange", weightChange.doubleValue());
+            statistics.put("currentBMI", currentBMI.doubleValue());
+            statistics.put("bmiChange", bmiChange.doubleValue());
+            statistics.put("weeklyWorkouts", weeklyWorkouts);
+            statistics.put("workoutGoal", workoutGoal);
+            statistics.put("goalAchievementRate", goalAchievementRate);
+            statistics.put("goalChange", goalChange);
+            statistics.put("totalCaloriesBurned", totalCaloriesBurned);
+            statistics.put("averageDailyCalories", averageDailyCalories);
+            statistics.put("streak", streak);
+            statistics.put("totalWorkoutDays", totalWorkoutDays);
+            statistics.put("userId", tokenUserId);
+            
+            log.info("건강 통계 조회 완료 - 사용자: {}, 현재 체중: {}kg, BMI: {}", 
+                tokenUserId, currentWeight, currentBMI);
+            
+            return ResponseEntity.ok(statistics);
+            
+        } catch (RuntimeException e) {
+            log.error("건강 통계 조회 중 비즈니스 로직 오류 발생 - 사용자: {}, 오류: {}", userId, e.getMessage());
+            
+            // 구체적인 오류 메시지와 함께 안전한 기본값 반환
+            Map<String, Object> fallbackStatistics = createFallbackStatistics(userId);
+            
+            if (e.getMessage().contains("JWT")) {
+                fallbackStatistics.put("error", "인증이 필요합니다. 다시 로그인해주세요.");
+                fallbackStatistics.put("errorCode", "AUTH_REQUIRED");
+            } else if (e.getMessage().contains("User")) {
+                fallbackStatistics.put("error", "사용자 정보를 찾을 수 없습니다.");
+                fallbackStatistics.put("errorCode", "USER_NOT_FOUND");
+            } else {
+                fallbackStatistics.put("error", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+                fallbackStatistics.put("errorCode", "TEMPORARY_ERROR");
+            }
+            
+            return ResponseEntity.ok(fallbackStatistics);
+            
+        } catch (Exception e) {
+            log.error("건강 통계 조회 중 예상치 못한 오류 발생 - 사용자: {}", userId, e);
+            
+            // 예상치 못한 오류에 대한 안전한 응답
+            Map<String, Object> fallbackStatistics = createFallbackStatistics(userId);
+            fallbackStatistics.put("error", "서버 오류가 발생했습니다. 관리자에게 문의해주세요.");
+            fallbackStatistics.put("errorCode", "SERVER_ERROR");
+            
+            return ResponseEntity.ok(fallbackStatistics);
+        }
     }
 
     @GetMapping("/ranking")

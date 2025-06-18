@@ -1,0 +1,16 @@
+# 운영 환경 설정
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none  # 운영 환경에서는 스키마 변경 금지
+    show-sql: false  # 운영에서는 SQL 로깅 비활성화
+    properties:
+      hibernate:
+        '[format_sql]': false
+
+# 운영용 보안 설정
+logging:
+  level:
+    com.lifebit: INFO
+    org.hibernate.SQL: WARN
+    root: WARN 

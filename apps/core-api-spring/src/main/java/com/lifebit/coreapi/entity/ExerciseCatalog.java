@@ -19,8 +19,9 @@ public class ExerciseCatalog {
     @Column(nullable = false)
     private String name;
     
-    @Column(length = 50)
-    private String bodyPart;
+    @Convert(converter = BodyPartTypeConverter.class)
+    @Column(name = "body_part", nullable = false)
+    private BodyPartType bodyPart;
     
     @Column(columnDefinition = "TEXT")
     private String description;
