@@ -24,6 +24,6 @@ export const API_CONFIG = {
 
 // 인증 관련 설정
 export const AUTH_CONFIG = {
-    TOKEN_KEY: 'auth_token',
-    USER_KEY: 'user_info',
+    TOKEN_KEY: 'access_token',  // ✅ 기존 로그인에서 사용하는 키와 통일
+    USER_KEY: 'userInfo',       // ✅ 기존 사용자 정보 키와 통일
 }; 

@@ -7,14 +7,12 @@ export interface UserInfo {
   role?: string;
 }
 
-// 로컬 스토리지 키 상수
-const TOKEN_KEY = AUTH_CONFIG.TOKEN_KEY;
-const USER_KEY = AUTH_CONFIG.USER_KEY;
+// ✅ AUTH_CONFIG에서 토큰 키 통일 관리
 
 // 토큰 저장
 export const setToken = (token: string) => {
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(AUTH_CONFIG.TOKEN_KEY, token);
     // 로컬 스토리지 변경 이벤트 발생
     window.dispatchEvent(new Event('storage'));
   }
@@ -22,13 +20,13 @@ export const setToken = (token: string) => {
 
 // 토큰 가져오기
 export const getToken = () => {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
 };
 
 // 토큰 삭제
 export const removeToken = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+  localStorage.removeItem(AUTH_CONFIG.USER_KEY);
   // 로컬 스토리지 변경 이벤트 발생
   window.dispatchEvent(new Event('storage'));
 };
@@ -36,7 +34,7 @@ export const removeToken = () => {
 // 사용자 정보 저장
 export const setUserInfo = (user: UserInfo) => {
   if (user) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    localStorage.setItem(AUTH_CONFIG.USER_KEY, JSON.stringify(user));
     // 로컬 스토리지 변경 이벤트 발생
     window.dispatchEvent(new Event('storage'));
   }
@@ -44,7 +42,7 @@ export const setUserInfo = (user: UserInfo) => {
 
 // 사용자 정보 가져오기
 export const getUserInfo = () => {
-  const userStr = localStorage.getItem(USER_KEY);
+  const userStr = localStorage.getItem(AUTH_CONFIG.USER_KEY);
   if (!userStr) return null;
   try {
     return JSON.parse(userStr);

@@ -14,26 +14,39 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = getToken();
-    console.log('JWT Token:', token ? `${token.substring(0, 20)}...` : 'No token');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
 // 응답 인터셉터
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   (error) => {
+    console.error('API Response Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      method: error.config?.method?.toUpperCase(),
+      message: error.message
+    });
+
     if (error.code === 'ECONNREFUSED') {
       console.error('서버 연결 실패. 서버가 실행 중인지 확인해주세요.');
     } else if (error.response?.status === 401) {
+      console.warn('401 Unauthorized - 로그인 페이지로 리다이렉트');
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      console.warn('403 Forbidden - 권한 없음 또는 토큰 문제');
     }
     return Promise.reject(error);
   }

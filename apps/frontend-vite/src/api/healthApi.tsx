@@ -1,5 +1,7 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import axiosInstance from '@/utils/axios';
 // import { supabase } from '../lib/supabase'; // TODO: Supabase 설정 후 주석 해제
 
 // ============================================================================
@@ -130,24 +132,28 @@ export interface FeedbackData {
 // API 함수들 (백엔드와 통신하는 함수들)
 // ============================================================================
 
-// 기본 API URL 설정
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
-// API 호출을 위한 헬퍼 함수
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  });
-
-  if (!response.ok) {
-    throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
+// API 호출을 위한 헬퍼 함수 - axios 인스턴스 사용으로 변경
+const apiCall = async (endpoint: string, options: { method?: string; data?: unknown } = {}) => {
+  const { method = 'GET', data } = options;
+  
+  try {
+    const response = await axiosInstance({
+      url: endpoint,
+      method,
+      data,
+    });
+    
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { status?: number; statusText?: string }; message?: string };
+    console.error('🚨 API Call Error:', {
+      endpoint,
+      method,
+      status: axiosError.response?.status,
+      message: axiosError.message
+    });
+    throw new Error(`API 호출 실패: ${axiosError.response?.status || 'Unknown'} ${axiosError.response?.statusText || axiosError.message}`);
   }
-
-  return response.json();
 };
 
 // 건강 기록 관련 API 함수들
@@ -161,7 +167,7 @@ export const healthApi = {
   createHealthRecord: async (data: CreateHealthRecordData): Promise<HealthRecord> => {
     return apiCall('/api/health-records', {
       method: 'POST',
-      body: JSON.stringify(data),
+      data,
     });
   },
 
@@ -174,7 +180,7 @@ export const healthApi = {
   updateUserGoals: async (userId: string, data: UpdateGoalData): Promise<UserGoal> => {
     return apiCall(`/api/user-goals/${userId}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      data,
     });
   },
 
@@ -187,7 +193,7 @@ export const healthApi = {
   createExerciseSession: async (data: CreateExerciseData): Promise<ExerciseSession> => {
     return apiCall('/api/exercise-sessions', {
       method: 'POST',
-      body: JSON.stringify(data),
+      data,
     });
   },
 
@@ -200,7 +206,7 @@ export const healthApi = {
   createMealLog: async (data: CreateMealData): Promise<MealLog> => {
     return apiCall('/api/meal-logs', {
       method: 'POST',
-      body: JSON.stringify(data),
+      data,
     });
   },
 
@@ -218,7 +224,7 @@ export const healthApi = {
   submitFeedback: async (recommendationId: string, feedback: FeedbackData): Promise<void> => {
     return apiCall(`/api/recommendations/${recommendationId}/feedback`, {
       method: 'POST',
-      body: JSON.stringify(feedback),
+      data: feedback,
     });
   },
 
@@ -504,5 +510,10 @@ export const formatTime = (minutes: number): string => {
 export const formatCalories = (calories: number): string => {
   return `${calories.toLocaleString()} kcal`;
 };
+
+console.log('=== 토큰 상태 확인 ===');
+console.log('access_token:', localStorage.getItem('access_token'));
+console.log('userInfo:', localStorage.getItem('userInfo'));
+console.log('모든 localStorage 키:', Object.keys(localStorage));
 
 export default healthApi; 
