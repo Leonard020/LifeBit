@@ -34,7 +34,7 @@ public class MealService {
         mealLog.setUser(new User(userId));
         mealLog.setFoodItem(foodItem);
         mealLog.setQuantity(quantity);
-        mealLog.setLogDate(LocalDate.now().atStartOfDay());
+        mealLog.setLogDate(LocalDate.now());
         mealLog.setMealTime(MealTimeType.lunch);
         mealLog.setCreatedAt(LocalDateTime.now());
 

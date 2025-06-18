@@ -130,7 +130,7 @@ public class DietService {
         mealLog.setUser(user);
         mealLog.setFoodItem(foodItem);
         mealLog.setQuantity(BigDecimal.valueOf(request.getQuantity()));
-        mealLog.setLogDate(LocalDate.parse(request.getLogDate()).atStartOfDay());
+        mealLog.setLogDate(LocalDate.parse(request.getLogDate()));
         mealLog.setCreatedAt(LocalDateTime.now());
 
         MealLog savedMealLog = mealLogRepository.save(mealLog);

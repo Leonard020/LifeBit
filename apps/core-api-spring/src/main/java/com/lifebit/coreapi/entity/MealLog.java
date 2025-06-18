@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -28,7 +29,7 @@ public class MealLog {
     private BigDecimal quantity;
     
     @Column(name = "log_date", nullable = false)
-    private LocalDateTime logDate;
+    private LocalDate logDate;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "meal_time", nullable = false)
