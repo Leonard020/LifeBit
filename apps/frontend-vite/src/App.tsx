@@ -69,7 +69,7 @@ const ServerStatus = () => {
   const statusIndicatorStyle: React.CSSProperties = {
     position: 'fixed',
     bottom: '20px',
-    right: '20px',
+    left: '20px',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     backdropFilter: 'blur(5px)',
     color: 'white',

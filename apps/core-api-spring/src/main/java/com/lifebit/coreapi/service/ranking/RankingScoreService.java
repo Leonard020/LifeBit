@@ -1,6 +1,5 @@
 package com.lifebit.coreapi.service.ranking;
 
-import com.lifebit.coreapi.constant.ranking.RankingConstants;
 import com.lifebit.coreapi.entity.UserRanking;
 import com.lifebit.coreapi.entity.enums.PeriodType;
 import com.lifebit.coreapi.exception.ranking.RankingNotFoundException;
