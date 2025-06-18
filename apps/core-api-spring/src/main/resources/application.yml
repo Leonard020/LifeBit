@@ -19,7 +19,6 @@ spring:
     show-sql: false  # 운영에서는 기본적으로 비활성화
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           lob:
             '[non_contextual_creation]': true

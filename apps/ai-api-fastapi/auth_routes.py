@@ -159,7 +159,7 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
 @router.get("/google/callback")
 async def google_callback(code: str, db: Session = Depends(get_db)):
     try:
-        print("[DEBUG] Google callback received with code:", code)
+        print("[DEBUG] Google callback received with code:", code[:20] + "..." if code else "None")
         
         if not code:
             print("[ERROR] No authorization code provided")
@@ -178,17 +178,26 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             "grant_type": "authorization_code",
         }
 
-        print("[DEBUG] Google token request data:", token_data)
+        print("[DEBUG] Google token request data:", {k: v[:20] + "..." if k == "code" else v for k, v in token_data.items()})
         
         token_res = requests.post(token_url, data=token_data)
         print("[DEBUG] Google token response status:", token_res.status_code)
         print("[DEBUG] Google token response body:", token_res.text)
 
         if token_res.status_code != 200:
-            print("[ERROR] Failed to get Google token:", token_res.text)
+            error_detail = token_res.text
+            print("[ERROR] Failed to get Google token:", error_detail)
+            
+            # invalid_grant 오류에 대한 특별 처리
+            if "invalid_grant" in error_detail:
+                raise HTTPException(
+                    status_code=400,
+                    detail="인증 코드가 만료되었거나 이미 사용되었습니다. 다시 로그인해주세요."
+                )
+            
             raise HTTPException(
                 status_code=400,
-                detail=f"구글 토큰 발급 실패: {token_res.text}"
+                detail=f"구글 토큰 발급 실패: {error_detail}"
             )
 
         token_json = token_res.json()
@@ -208,6 +217,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             headers={"Authorization": f"Bearer {access_token}"}
         )
         
+        print("[DEBUG] Google user info response status:", userinfo_res.status_code)
         print("[DEBUG] Google user info response:", userinfo_res.text)
         
         if userinfo_res.status_code != 200:

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { getToken } from '@/utils/auth';
 
 interface UseRealTimeUpdatesProps {
   userId: string;
@@ -19,29 +20,48 @@ export const useRealTimeUpdates = ({ userId, enabled = true }: UseRealTimeUpdate
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
+  const hasShownInitialNotification = useRef(false);
 
   const connect = useCallback(() => {
-    if (!enabled || !userId) return;
+    if (!enabled || !userId) {
+      console.log('🔗 [useRealTimeUpdates] 연결 시도:', { enabled, userId });
+      return;
+    }
 
     try {
-      // WebSocket 연결 설정 (실제 환경에서는 환경변수로 URL 관리)
+      // JWT 토큰 가져오기
+      const token = getToken();
+      if (!token) {
+        console.warn('JWT 토큰이 없어 WebSocket 연결을 건너뜁니다.');
+        return;
+      }
+
+      console.log('🔗 [useRealTimeUpdates] WebSocket 연결 시도:', { userId, tokenLength: token.length });
+
+      // WebSocket 연결 설정 (JWT 토큰 포함)
       const wsUrl = process.env.NODE_ENV === 'production' 
-        ? `wss://${window.location.host}/ws/health/${userId}`
-        : `ws://localhost:8080/ws/health/${userId}`;
+        ? `wss://${window.location.host}/ws/health/${userId}?token=${encodeURIComponent(token)}`
+        : `ws://localhost:8080/ws/health/${userId}?token=${encodeURIComponent(token)}`;
       
-      console.log('🔗 WebSocket 연결 시도:', wsUrl);
+      console.log('🔗 [useRealTimeUpdates] WebSocket URL:', wsUrl);
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
         console.log('📡 실시간 업데이트 연결됨');
         reconnectAttempts.current = 0;
         
-        // 연결 성공 시 사용자에게 알림
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('LifeBit', {
-            body: '실시간 업데이트가 활성화되었습니다.',
-            icon: '/favicon.ico'
-          });
+        // 최초 연결 시에만 알림 표시
+        if (!hasShownInitialNotification.current) {
+          hasShownInitialNotification.current = true;
+          
+          // 사용자에게 알림
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('LifeBit', {
+              body: '실시간 업데이트가 활성화되었습니다.',
+              icon: '/favicon.ico',
+              tag: 'websocket-connection' // 중복 알림 방지
+            });
+          }
         }
       };
 
@@ -99,13 +119,14 @@ export const useRealTimeUpdates = ({ userId, enabled = true }: UseRealTimeUpdate
 
       wsRef.current.onerror = (error) => {
         console.error('WebSocket 오류:', error);
+        // 오류가 발생해도 연결 시도는 계속됨
       };
 
       wsRef.current.onclose = (event) => {
         console.log('📡 실시간 업데이트 연결 종료:', event.code, event.reason);
         
-        // 비정상 종료인 경우 재연결 시도
-        if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
+        // 정상 종료가 아닌 경우에만 재연결 시도
+        if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000); // 지수 백오프
           console.log(`🔄 ${delay}ms 후 재연결 시도... (${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
           
@@ -113,6 +134,9 @@ export const useRealTimeUpdates = ({ userId, enabled = true }: UseRealTimeUpdate
             reconnectAttempts.current++;
             connect();
           }, delay);
+        } else if (event.code === 1000 || event.code === 1001) {
+          console.log('정상적인 연결 종료');
+          reconnectAttempts.current = 0; // 정상 종료 시 재시도 카운터 리셋
         }
       };
 
@@ -155,8 +179,10 @@ export const useRealTimeUpdates = ({ userId, enabled = true }: UseRealTimeUpdate
   }, []);
 
   useEffect(() => {
-    // 알림 권한 요청
-    requestNotificationPermission();
+    // 알림 권한 요청 (한 번만)
+    if (!hasShownInitialNotification.current) {
+      requestNotificationPermission();
+    }
     
     // WebSocket 연결
     connect();

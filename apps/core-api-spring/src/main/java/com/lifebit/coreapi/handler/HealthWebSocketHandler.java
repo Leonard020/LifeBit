@@ -1,7 +1,10 @@
 package com.lifebit.coreapi.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lifebit.coreapi.security.JwtTokenProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -22,24 +25,35 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
     // 사용자별 WebSocket 세션 저장
     private final Map<String, WebSocketSession> userSessions = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        String userId = extractUserIdFromSession(session);
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) throws Exception {
+        // JWT 토큰 검증
+        String userId = validateAndExtractUserId(session);
         if (userId != null) {
             userSessions.put(userId, session);
             log.info("🔗 WebSocket 연결 성공 - 사용자 ID: {}, 세션 ID: {}", userId, session.getId());
             
-            // 연결 성공 메시지 전송
-            sendWelcomeMessage(session, userId);
+            // 연결 성공 메시지 전송 (안전하게 처리)
+            try {
+                // 환영 메시지는 선택적으로 전송 (클라이언트에서 요청할 때만)
+                // sendWelcomeMessage(session, userId);
+                log.info("✅ WebSocket 연결 완료 - 사용자 ID: {}", userId);
+            } catch (Exception e) {
+                log.warn("환영 메시지 전송 실패 (연결은 유지됨) - 사용자 ID: {}, 오류: {}", userId, e.getMessage());
+                // 환영 메시지 전송 실패는 연결 종료의 이유가 되지 않음
+            }
         } else {
-            log.warn("⚠️ 유효하지 않은 사용자 ID - 연결 종료");
-            session.close(CloseStatus.BAD_DATA);
+            log.warn("⚠️ 인증 실패 - 연결 종료");
+            session.close(CloseStatus.POLICY_VIOLATION);
         }
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) throws Exception {
         String userId = extractUserIdFromSession(session);
         if (userId != null) {
             userSessions.remove(userId);
@@ -48,7 +62,7 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+    public void handleTransportError(@NonNull WebSocketSession session, @NonNull Throwable exception) throws Exception {
         String userId = extractUserIdFromSession(session);
         log.error("🚨 WebSocket 전송 오류 - 사용자 ID: {}, 오류: {}", userId, exception.getMessage());
         
@@ -58,7 +72,7 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) throws Exception {
         String userId = extractUserIdFromSession(session);
         log.info("📨 메시지 수신 - 사용자 ID: {}, 메시지: {}", userId, message.getPayload());
         
@@ -118,6 +132,12 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
      */
     private void sendWelcomeMessage(WebSocketSession session, String userId) {
         try {
+            // 세션이 여전히 열려있는지 확인
+            if (session == null || !session.isOpen()) {
+                log.warn("세션이 닫혀있어 환영 메시지를 전송할 수 없습니다. 사용자 ID: {}", userId);
+                return;
+            }
+            
             WelcomeMessage welcome = WelcomeMessage.builder()
                     .message("LifeBit 실시간 업데이트에 연결되었습니다.")
                     .userId(userId)
@@ -126,8 +146,11 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
             
             String jsonMessage = objectMapper.writeValueAsString(welcome);
             sendMessage(session, jsonMessage);
+            
+            log.info("✅ 환영 메시지 전송 성공 - 사용자 ID: {}", userId);
         } catch (Exception e) {
             log.error("🚨 환영 메시지 전송 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage());
+            // 오류가 발생해도 연결은 유지
         }
     }
 
@@ -135,18 +158,102 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
      * WebSocket 세션에 메시지 전송
      */
     private void sendMessage(WebSocketSession session, String message) throws IOException {
-        if (session.isOpen()) {
-            session.sendMessage(new TextMessage(message));
+        if (session != null && session.isOpen()) {
+            try {
+                session.sendMessage(new TextMessage(message));
+            } catch (IOException e) {
+                log.warn("메시지 전송 중 연결이 끊어짐 - 세션 ID: {}, 오류: {}", session.getId(), e.getMessage());
+                throw e;
+            }
+        } else {
+            log.warn("세션이 닫혀있어 메시지를 전송할 수 없습니다.");
+            throw new IOException("WebSocket session is closed");
         }
     }
 
     /**
-     * WebSocket 세션에서 사용자 ID 추출
-     * URL 패턴: /ws/health/{userId}
+     * JWT 토큰 검증 및 사용자 ID 추출
      */
-    private String extractUserIdFromSession(WebSocketSession session) {
+    private String validateAndExtractUserId(WebSocketSession session) {
         try {
+            // URI null 체크
+            if (session == null || session.getUri() == null) {
+                log.warn("WebSocket 세션 또는 URI가 null입니다.");
+                return null;
+            }
+            
+            log.info("🔍 WebSocket 연결 검증 시작 - URI: {}", session.getUri());
+            
+            // URL에서 토큰 파라미터 추출
+            String query = session.getUri().getQuery();
+            if (query == null || !query.contains("token=")) {
+                log.warn("JWT 토큰이 없습니다. Query: {}", query);
+                return null;
+            }
+            
+            String token = query.substring(query.indexOf("token=") + 6);
+            if (token.contains("&")) {
+                token = token.substring(0, token.indexOf("&"));
+            }
+            
+            log.info("🔑 토큰 추출 완료 - 길이: {}", token.length());
+            
+            // JWT 토큰 검증
+            if (!jwtTokenProvider.validateToken(token)) {
+                log.warn("유효하지 않은 JWT 토큰입니다.");
+                return null;
+            }
+            
+            // 토큰에서 사용자 ID 추출
+            Long userIdLong = jwtTokenProvider.getUserIdFromToken(token);
+            if (userIdLong == null) {
+                log.warn("토큰에서 사용자 ID를 추출할 수 없습니다.");
+                return null;
+            }
+            String userId = userIdLong.toString();
+            
+            log.info("👤 토큰에서 사용자 ID 추출: {}", userId);
+            
+            // URL 경로의 사용자 ID와 토큰의 사용자 ID 일치 확인
+            String pathUserId = extractUserIdFromPath(session);
+            log.info("🛣️ 경로에서 사용자 ID 추출: {}", pathUserId);
+            
+            if (pathUserId == null) {
+                log.warn("경로에서 사용자 ID를 추출할 수 없습니다.");
+                return null;
+            }
+            
+            if (!userId.equals(pathUserId)) {
+                log.warn("경로의 사용자 ID({})와 토큰의 사용자 ID({})가 일치하지 않습니다.", pathUserId, userId);
+                return null;
+            }
+            
+            log.info("✅ 사용자 ID 검증 성공: {}", userId);
+            return userId;
+            
+        } catch (Exception e) {
+            log.error("JWT 토큰 검증 중 오류 발생: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * URL 경로에서 사용자 ID 추출
+     */
+    private String extractUserIdFromPath(WebSocketSession session) {
+        try {
+            // URI null 체크
+            if (session == null || session.getUri() == null) {
+                log.warn("WebSocket 세션 또는 URI가 null입니다.");
+                return null;
+            }
+            
             String path = session.getUri().getPath();
+            if (path == null) {
+                log.warn("WebSocket 세션 경로가 null입니다.");
+                return null;
+            }
+            
             String[] pathSegments = path.split("/");
             
             // /ws/health/{userId} 패턴에서 userId 추출
@@ -154,9 +261,26 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
                 return pathSegments[3];
             }
         } catch (Exception e) {
-            log.error("🚨 사용자 ID 추출 실패: {}", e.getMessage());
+            log.error("경로에서 사용자 ID 추출 실패: {}", e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * WebSocket 세션에서 사용자 ID 추출 (기존 메서드 - 하위 호환성 유지)
+     */
+    private String extractUserIdFromSession(WebSocketSession session) {
+        try {
+            // URI null 체크
+            if (session.getUri() == null) {
+                log.warn("WebSocket 세션 URI가 null입니다.");
+                return null;
+            }
+            return extractUserIdFromPath(session);
+        } catch (Exception e) {
+            log.error("세션에서 사용자 ID 추출 실패: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**

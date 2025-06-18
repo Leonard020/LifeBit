@@ -5,7 +5,6 @@ import { EnhancedHealthDashboard } from '../components/health/EnhancedHealthDash
 import { RecommendationPanel } from '../components/health/RecommendationPanel';
 import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
-import { RecordTypeSelector } from '../components/RecordTypeSelector';
 import { ChatInterface } from '../components/ChatInterface';
 import { VoiceInput } from '../components/VoiceInput';
 import { StructuredDataPreview } from '../components/StructuredDataPreview';
@@ -26,17 +25,13 @@ import {
   Smartphone,
   Heart
 } from 'lucide-react';
-import { useHealthRealtime } from '../api/healthApi';
 import { getHealthStatistics } from '@/api/auth';
-import { getToken, getUserInfo, isLoggedIn } from '@/utils/auth';
+import { getToken, getUserInfo, isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
-import { AuthContext } from '../AuthContext';
-import { WeightTrendChart } from '../components/health/WeightTrendChart';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -67,9 +62,36 @@ const HealthLog: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // ChatInterface 상태
+  const [chatInputText, setChatInputText] = useState('');
+  const [chatIsRecording, setChatIsRecording] = useState(false);
+  const [chatIsProcessing, setChatIsProcessing] = useState(false);
+  const [chatNetworkError, setChatNetworkError] = useState(false);
+  const [chatAiFeedback, setChatAiFeedback] = useState<any>(null);
+  const [chatClarificationInput, setChatClarificationInput] = useState('');
+  const [chatStructuredData, setChatStructuredData] = useState<any>(null);
+
+  // VoiceInput 상태
+  const [voiceInputText, setVoiceInputText] = useState('');
+  const [voiceIsRecording, setVoiceIsRecording] = useState(false);
+  const [voiceIsProcessing, setVoiceIsProcessing] = useState(false);
+  const [voiceNetworkError, setVoiceNetworkError] = useState(false);
+
+  // 토큰에서 올바른 사용자 ID 가져오기
   const userId = useMemo(() => {
-    return user?.id ? parseInt(user.id.toString()) : 1;
-  }, [user?.id]);
+    const tokenUserId = getUserIdFromToken();
+    console.log('🔍 [HealthLog] 토큰에서 사용자 ID:', tokenUserId);
+    console.log('🔍 [HealthLog] user 객체:', user);
+    
+    if (tokenUserId) {
+      console.log('✅ [HealthLog] 토큰에서 사용자 ID 사용:', tokenUserId);
+      return tokenUserId;
+    }
+    // 토큰에서 가져올 수 없는 경우 user 객체에서 가져오기
+    const userUserId = user?.userId ? parseInt(user.userId) : null;
+    console.log('🔍 [HealthLog] user 객체에서 사용자 ID:', userUserId);
+    return userUserId;
+  }, [user?.userId]);
 
   const handleVoiceResult = useCallback((result: Record<string, unknown>) => {
     console.log('음성 처리 결과:', result);
@@ -94,12 +116,34 @@ const HealthLog: React.FC = () => {
     }
   }, [navigate]);
 
-  // 실시간 업데이트 구독
-  useHealthRealtime(userId.toString());
-  
+  // 사용자 정보가 로드되는 동안 로딩 표시
+  if (!user || !userId) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-center">
+                {!user ? '로그인이 필요합니다' : '사용자 정보 로딩 중...'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-center text-gray-600">
+                {!user 
+                  ? '건강 로그를 확인하려면 로그인해주세요.'
+                  : '사용자 정보를 불러오는 중입니다.'
+                }
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
   // 실시간 업데이트 기능
   const { isConnected, refreshData, requestNotificationPermission } = useRealTimeUpdates({
-    userId: userId.toString(),
+    userId: userId?.toString() || '',
     enabled: !!userId
   });
 
@@ -116,7 +160,7 @@ const HealthLog: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        const data = await getHealthStatistics(userId, selectedPeriod);
+        const data = await getHealthStatistics(userId.toString(), selectedPeriod);
         setHealthStats(data);
       } catch (error) {
         console.error('Failed to fetch health statistics:', error);
@@ -136,25 +180,6 @@ const HealthLog: React.FC = () => {
       fetchHealthData();
     }
   }, [userId, selectedPeriod, navigate]);
-
-  if (!user) {
-    return (
-      <Layout>
-        <div className="min-h-screen flex items-center justify-center">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="text-center">로그인이 필요합니다</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center text-gray-600">
-                건강 로그를 확인하려면 로그인해주세요.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
-  }
 
   return (
     <Layout>
@@ -176,6 +201,13 @@ const HealthLog: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="text-xs">
                   사용자 ID: {userId}
+                </Badge>
+                <Badge 
+                  variant={isConnected ? "default" : "secondary"} 
+                  className="text-xs flex items-center gap-1"
+                >
+                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                  {isConnected ? '실시간 연결됨' : '연결 중...'}
                 </Badge>
                 <Button
                   variant="outline"
@@ -241,7 +273,7 @@ const HealthLog: React.FC = () => {
               
               <ErrorBoundary>
                 <EnhancedHealthDashboard 
-                  userId={userId.toString()} 
+                  userId={userId?.toString() || ''} 
                   period={selectedPeriod}
                 />
               </ErrorBoundary>
@@ -254,7 +286,7 @@ const HealthLog: React.FC = () => {
                 <div className="xl:col-span-2">
                   <ErrorBoundary>
                     <StatisticsCharts 
-                      userId={userId.toString()} 
+                      userId={userId?.toString() || ''} 
                       period={selectedPeriod}
                     />
                   </ErrorBoundary>
@@ -264,7 +296,7 @@ const HealthLog: React.FC = () => {
                 <div className="xl:col-span-1">
                   <ErrorBoundary>
                     <RecommendationPanel 
-                      userId={userId.toString()}
+                      userId={userId?.toString() || ''}
                     />
                   </ErrorBoundary>
                 </div>
@@ -274,7 +306,7 @@ const HealthLog: React.FC = () => {
               <div>
                 <ErrorBoundary>
                   <GoalProgress 
-                    userId={userId.toString()}
+                    userId={userId?.toString() || ''}
                     period={selectedPeriod}
                   />
                 </ErrorBoundary>
@@ -292,7 +324,7 @@ const HealthLog: React.FC = () => {
               
               <ErrorBoundary>
                 <PythonAnalyticsCharts 
-                  userId={userId.toString()} 
+                  userId={userId || 0} 
                   period={selectedPeriod}
                 />
               </ErrorBoundary>
@@ -314,7 +346,23 @@ const HealthLog: React.FC = () => {
                   </Button>
                 </div>
                 <div className="flex-1">
-                  <ChatInterface userId={userId.toString()} />
+                  <ChatInterface 
+                    recordType={recordType}
+                    inputText={chatInputText}
+                    setInputText={setChatInputText}
+                    isRecording={chatIsRecording}
+                    isProcessing={chatIsProcessing}
+                    networkError={chatNetworkError}
+                    onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
+                    onSendMessage={() => {}}
+                    onRetry={() => setChatNetworkError(false)}
+                    aiFeedback={chatAiFeedback}
+                    clarificationInput={chatClarificationInput}
+                    setClarificationInput={setChatClarificationInput}
+                    onClarificationSubmit={() => {}}
+                    onSaveRecord={() => {}}
+                    structuredData={chatStructuredData}
+                  />
                 </div>
               </div>
             </div>
@@ -323,8 +371,15 @@ const HealthLog: React.FC = () => {
           {/* 음성 입력 */}
           {showVoiceInput && (
             <VoiceInput
-              onResult={handleVoiceResult}
-              onClose={() => setShowVoiceInput(false)}
+              recordType={recordType}
+              inputText={voiceInputText}
+              setInputText={setVoiceInputText}
+              isRecording={voiceIsRecording}
+              isProcessing={voiceIsProcessing}
+              networkError={voiceNetworkError}
+              onVoiceToggle={() => setVoiceIsRecording(!voiceIsRecording)}
+              onAnalyze={() => handleVoiceResult({ type: 'exercise', data: voiceInputText })}
+              onRetry={() => setVoiceNetworkError(false)}
             />
           )}
 
@@ -351,7 +406,10 @@ const HealthLog: React.FC = () => {
           {/* 구조화된 데이터 미리보기 */}
           {parsedData && (
             <div className="mt-6">
-              <StructuredDataPreview data={parsedData} />
+              <StructuredDataPreview 
+                structuredData={parsedData} 
+                isSuccess={true}
+              />
             </div>
           )}
         </div>

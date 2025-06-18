@@ -23,14 +23,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const token = getToken();
     const userInfo = getUserInfo();
     
+    console.log('🔍 [AuthContext] 초기화:', { token: !!token, userInfo });
+    
     if (token && userInfo) {
       setIsLoggedIn(true);
       setNickname(userInfo.nickname || '');
       setUser(userInfo);
+      console.log('✅ [AuthContext] 사용자 정보 로드됨:', userInfo);
     } else {
       setIsLoggedIn(false);
       setNickname('');
       setUser(null);
+      console.log('❌ [AuthContext] 사용자 정보 없음');
     }
   }, []);
 
@@ -40,14 +44,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const token = getToken();
       const userInfo = getUserInfo();
       
+      console.log('🔄 [AuthContext] 스토리지 변경 감지:', { token: !!token, userInfo });
+      
       if (token && userInfo) {
         setIsLoggedIn(true);
         setNickname(userInfo.nickname || '');
         setUser(userInfo);
+        console.log('✅ [AuthContext] 스토리지에서 사용자 정보 업데이트:', userInfo);
       } else {
         setIsLoggedIn(false);
         setNickname('');
         setUser(null);
+        console.log('❌ [AuthContext] 스토리지에서 사용자 정보 제거');
       }
     };
 
@@ -55,8 +63,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
+  // setUser 함수 래핑하여 로그 추가
+  const setUserWithLog = (user: any) => {
+    console.log('🔧 [AuthContext] setUser 호출:', user);
+    setUser(user);
+  };
+
   return (
-    <AuthContext.Provider value={{ isLoggedIn, nickname, user, setIsLoggedIn, setNickname, setUser }}>
+    <AuthContext.Provider value={{ isLoggedIn, nickname, user, setIsLoggedIn, setNickname, setUser: setUserWithLog }}>
       {children}
     </AuthContext.Provider>
   );
