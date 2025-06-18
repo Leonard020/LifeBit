@@ -1,6 +1,5 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
 import axiosInstance from '@/utils/axios';
 // import { supabase } from '../lib/supabase'; // TODO: Supabase 설정 후 주석 해제
 
