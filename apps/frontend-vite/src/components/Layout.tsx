@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
+import { removeToken } from '@/utils/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -33,13 +34,12 @@ interface LayoutProps {
 
 const WebHeader = () => {
   const { toast } = useToast();
-  const { isLoggedIn, nickname, setIsLoggedIn, setNickname } = useAuth();
+  const { isLoggedIn, nickname, isLoading, setIsLoggedIn, setNickname } = useAuth();
   const { open: sidebarOpen } = useSidebar();
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('nickname');
+    removeToken(); // 모든 토큰과 사용자 정보 삭제
     setIsLoggedIn(false);
     setNickname('');
     toast({
@@ -76,7 +76,9 @@ const WebHeader = () => {
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            {isLoggedIn ? (
+            {isLoading ? (
+              <div className="w-20 h-10 bg-muted animate-pulse rounded-md"></div>
+            ) : isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="hover-lift">
@@ -131,7 +133,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isMobile = useIsMobile();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isNavVisible, setIsNavVisible] = useState(true);
-  const { isLoggedIn, setIsLoggedIn } = useAuth();
+  const { isLoggedIn, isLoading, setIsLoggedIn, setNickname } = useAuth();
+  const { toast } = useToast();
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -185,7 +188,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            {isLoggedIn ? (
+            {isLoading ? (
+              <div className="w-20 h-10 bg-muted animate-pulse rounded-md"></div>
+            ) : isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="hover-lift">
@@ -205,7 +210,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       관리자페이지
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsLoggedIn(false)}>
+                  <DropdownMenuItem onClick={() => {
+                    removeToken(); // 모든 토큰과 사용자 정보 삭제
+                    setIsLoggedIn(false);
+                    setNickname('');
+                    toast({
+                      title: '로그아웃',
+                      description: '성공적으로 로그아웃되었습니다.',
+                    });
+                  }}>
                     로그아웃
                   </DropdownMenuItem>
                 </DropdownMenuContent>

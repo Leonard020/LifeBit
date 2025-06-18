@@ -61,6 +61,10 @@ export default function Login() {
         role: role
       });
       
+      // AuthContext에서 nickname을 별도로 확인하므로 localStorage에 직접 저장
+      localStorage.setItem('nickname', nickname);
+      localStorage.setItem('role', role);
+      
       setIsLoggedIn(true);
       setNickname(nickname);
 

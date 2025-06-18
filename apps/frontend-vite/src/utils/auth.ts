@@ -27,6 +27,8 @@ export const getToken = () => {
 export const removeToken = () => {
   localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
   localStorage.removeItem(AUTH_CONFIG.USER_KEY);
+  localStorage.removeItem('nickname');
+  localStorage.removeItem('role');
   // 로컬 스토리지 변경 이벤트 발생
   window.dispatchEvent(new Event('storage'));
 };
