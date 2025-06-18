@@ -8,8 +8,8 @@ export interface UserInfo {
 }
 
 // 로컬 스토리지 키 상수
-const TOKEN_KEY = 'access_token';
-const USER_KEY = 'userInfo';
+const TOKEN_KEY = AUTH_CONFIG.TOKEN_KEY;
+const USER_KEY = AUTH_CONFIG.USER_KEY;
 
 // 토큰 저장
 export const setToken = (token: string) => {

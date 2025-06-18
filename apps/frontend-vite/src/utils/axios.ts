@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { getToken } from './auth';
-
 // axios 기본 설정
 const axiosInstance = axios.create({
   baseURL: 'http://localhost:8080',  // Core API 서버 (Spring Boot)

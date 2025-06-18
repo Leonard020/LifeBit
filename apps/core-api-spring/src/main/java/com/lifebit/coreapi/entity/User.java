@@ -28,7 +28,10 @@ public class User {
     @Column(name = "password_hash")
     private String passwordHash;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "provider")
+    private String provider;
+
+    @Column(name = "nickname", unique = true, nullable = false)
     private String nickname;
 
     private BigDecimal height;

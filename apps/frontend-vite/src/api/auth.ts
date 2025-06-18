@@ -69,7 +69,11 @@ export const login = async (data: LoginData) => {
 
         return {
             access_token,
-            nickname
+            user_id,
+            email,
+            nickname,
+            role,
+            provider
         };
     } catch (error) {
         console.error('Login failed:', error);
