@@ -15,7 +15,7 @@ spring:
       max-lifetime: 1200000
   jpa:
     hibernate:
-      ddl-auto: create  # 개발용: JPA가 테이블 자동 생성
+      ddl-auto: update  # 기존 데이터 보존하면서 스키마 업데이트
     show-sql: false  # 운영에서는 기본적으로 비활성화
     properties:
       hibernate:
