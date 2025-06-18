@@ -34,6 +34,7 @@ public class MealService {
         mealLog.setFoodItem(foodItem);
         mealLog.setQuantity(quantity);
         mealLog.setLogDate(LocalDate.now());
+        mealLog.setMealTime(LocalDateTime.now());
         mealLog.setCreatedAt(LocalDateTime.now());
 
         return mealLogRepository.save(mealLog);
