@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
-import { removeToken } from '@/utils/auth';
+import { isAdmin } from '@/utils/auth'; // <-- Add this import
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -46,6 +46,8 @@ const WebHeader = () => {
       title: '로그아웃',
       description: '성공적으로 로그아웃되었습니다.',
     });
+
+    window.location.href = '/login'
   };
 
   const toggleDarkMode = () => {
@@ -95,12 +97,14 @@ const WebHeader = () => {
                       마이페이지
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/admin" className="flex items-center">
-                      <User className="mr-2 h-4 w-4" />
-                      관리자페이지
-                    </Link>
-                  </DropdownMenuItem>
+                  {isAdmin() && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="flex items-center">
+                        <User className="mr-2 h-4 w-4" />
+                        관리자페이지
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={handleLogout}>
                     로그아웃
                   </DropdownMenuItem>
@@ -204,21 +208,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       마이페이지
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/admin" className="flex items-center">
-                      <User className="mr-2 h-4 w-4" />
-                      관리자페이지
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    removeToken(); // 모든 토큰과 사용자 정보 삭제
-                    setIsLoggedIn(false);
-                    setNickname('');
-                    toast({
-                      title: '로그아웃',
-                      description: '성공적으로 로그아웃되었습니다.',
-                    });
-                  }}>
+                  {isAdmin() && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="flex items-center">
+                        <User className="mr-2 h-4 w-4" />
+                        관리자페이지
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => setIsLoggedIn(false)}>
                     로그아웃
                   </DropdownMenuItem>
                 </DropdownMenuContent>

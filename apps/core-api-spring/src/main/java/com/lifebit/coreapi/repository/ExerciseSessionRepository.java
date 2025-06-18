@@ -24,4 +24,7 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
     List<Object[]> findExerciseCountByDateRange(@Param("user") User user, 
                                                @Param("startDate") LocalDate startDate, 
                                                @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COUNT(DISTINCT es.exerciseDate) FROM ExerciseSession es WHERE es.user = :user")
+    long countDistinctExerciseDateByUser(@Param("user") User user);
 } 
