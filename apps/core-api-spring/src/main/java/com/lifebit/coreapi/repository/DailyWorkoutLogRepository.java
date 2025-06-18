@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface DailyWorkoutLogRepository extends JpaRepository<DailyWorkoutLog, Long> {
     List<DailyWorkoutLog> findByWorkoutDateAndUserId(LocalDate workoutDate, Long userId);
+    List<DailyWorkoutLog> findByUserIdAndWorkoutDateBetween(Long userId, LocalDate start, LocalDate end);
 }
+
