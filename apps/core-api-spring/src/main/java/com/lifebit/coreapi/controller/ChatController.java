@@ -1,8 +1,12 @@
 package com.lifebit.coreapi.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -11,20 +15,23 @@ import java.util.HashMap;
 @RequiredArgsConstructor
 public class ChatController {
 
+    private final RestTemplate restTemplate;
+    
+    @Value("${ai.api.url:http://localhost:8001}")
+    private String aiApiUrl;
+
     @PostMapping
     public ResponseEntity<?> handleChatMessage(@RequestBody Map<String, Object> request) {
         try {
-            String message = (String) request.get("message");
-            @SuppressWarnings("unchecked")
-            var conversationHistory = (java.util.List<Map<String, String>>) request.get("conversation_history");
+            // FastAPI로 요청 전달
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                aiApiUrl + "/api/chat",
+                HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(request),
+                new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
 
-            // TODO: 실제 AI 처리 로직 구현
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("message", "메시지를 받았습니다: " + message);
-            response.put("type", "chat");
-
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(response.getBody());
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("status", "error");

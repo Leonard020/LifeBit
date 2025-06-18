@@ -192,6 +192,45 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         db.rollback()
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
 
+# 채팅 엔드포인트
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    try:
+        if not request.message:
+            raise HTTPException(status_code=400, detail="메시지가 비어있습니다.")
+
+        # GPT 호출
+        if USE_GPT:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+                    *request.conversation_history,
+                    {"role": "user", "content": request.message}
+                ],
+                temperature=0.7
+            )
+
+            ai_response = response.choices[0].message["content"]
+            return {
+                "status": "success",
+                "message": ai_response,
+                "type": "chat"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "GPT 기능이 비활성화되어 있습니다.",
+                "type": "chat"
+            }
+
+    except Exception as e:
+        print("[ERROR] Chat error:", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"채팅 처리 중 오류가 발생했습니다: {str(e)}"
+        )
+
 # 서버 실행
 if __name__ == "__main__":
     import uvicorn
