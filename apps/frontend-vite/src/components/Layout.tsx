@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
-import { isAdmin } from '@/utils/auth'; // <-- Add this import
+import { isAdmin, removeToken } from '@/utils/auth'; // ✅ removeToken 추가
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,7 +34,7 @@ interface LayoutProps {
 
 const WebHeader = () => {
   const { toast } = useToast();
-  const { isLoggedIn, nickname, isLoading, setIsLoggedIn, setNickname } = useAuth();
+  const { isLoggedIn, nickname, setIsLoggedIn, setNickname } = useAuth();
   const { open: sidebarOpen } = useSidebar();
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -78,9 +78,7 @@ const WebHeader = () => {
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            {isLoading ? (
-              <div className="w-20 h-10 bg-muted animate-pulse rounded-md"></div>
-            ) : isLoggedIn ? (
+            {isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="hover-lift">
@@ -137,7 +135,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isMobile = useIsMobile();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isNavVisible, setIsNavVisible] = useState(true);
-  const { isLoggedIn, isLoading, setIsLoggedIn, setNickname } = useAuth();
+  const { isLoggedIn, setIsLoggedIn, setNickname } = useAuth();
   const { toast } = useToast();
 
   const toggleDarkMode = () => {
@@ -192,9 +190,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            {isLoading ? (
-              <div className="w-20 h-10 bg-muted animate-pulse rounded-md"></div>
-            ) : isLoggedIn ? (
+            {isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="hover-lift">
