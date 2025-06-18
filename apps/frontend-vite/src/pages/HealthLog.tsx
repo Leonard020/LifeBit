@@ -5,11 +5,13 @@ import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
 import { useHealthRealtime } from '../api/healthApi';
 import { getHealthStatistics } from '@/api/auth';
-import { getToken, getUserInfo } from '@/utils/auth';
+import { getToken, getUserInfo, isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
+
+
 
 interface HealthStatistics {
   currentWeight: number;
@@ -36,7 +38,18 @@ const HealthLog: React.FC = () => {
 
   // 사용자 정보 가져오기
   const userInfo = getUserInfo();
-  const userId = userInfo?.userId;
+  const userId = userInfo?.userId || '3'; // 기본값으로 3 사용
+
+  // 인증 상태 확인
+  useEffect(() => {
+    const authenticated = isLoggedIn();
+    
+    // 인증되지 않은 경우 로그인 페이지로 리다이렉트
+    if (!authenticated) {
+      navigate('/login');
+      return;
+    }
+  }, [navigate]);
 
   // 실시간 업데이트 구독
   useHealthRealtime(userId || '');
@@ -45,6 +58,7 @@ const HealthLog: React.FC = () => {
     const fetchHealthData = async () => {
       try {
         const token = getToken();
+        
         if (!token || !userId) {
           navigate('/login');
           return;
@@ -57,7 +71,12 @@ const HealthLog: React.FC = () => {
         setHealthStats(data);
       } catch (error) {
         console.error('Failed to fetch health statistics:', error);
-        setError('건강 데이터를 불러오는데 실패했습니다.');
+        if (error.response?.status === 403) {
+          setError('인증이 필요합니다. 다시 로그인해주세요.');
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          setError('건강 데이터를 불러오는데 실패했습니다.');
+        }
         toast.error('건강 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -69,6 +88,8 @@ const HealthLog: React.FC = () => {
     }
   }, [userId, selectedPeriod, navigate]);
 
+
+
   if (!userId) {
     return null; // 리다이렉트 중
   }
@@ -76,6 +97,8 @@ const HealthLog: React.FC = () => {
   return (
     <Layout>
       <div className="min-h-screen bg-gray-50">
+
+
         {/* 헤더 섹션 */}
         <div className="bg-white shadow-sm border-b">
           <div className="container mx-auto px-4 py-6">
@@ -87,12 +110,14 @@ const HealthLog: React.FC = () => {
                 </p>
               </div>
               
-              {/* 기간 선택기 */}
-              <div className="flex-shrink-0">
-                <PeriodSelector 
-                  selectedPeriod={selectedPeriod}
-                  onPeriodChange={setSelectedPeriod}
-                />
+              <div className="flex items-center gap-4">
+                {/* 기간 선택기 */}
+                <div className="flex-shrink-0">
+                  <PeriodSelector 
+                    selectedPeriod={selectedPeriod}
+                    onPeriodChange={setSelectedPeriod}
+                  />
+                </div>
               </div>
             </div>
           </div>

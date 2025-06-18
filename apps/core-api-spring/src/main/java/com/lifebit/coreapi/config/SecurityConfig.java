@@ -30,8 +30,14 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/api/public/**", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-                .anyRequest().authenticated()
+                .requestMatchers(
+                    "/api/auth/**", 
+                    "/api/public/**", 
+                    "/swagger-ui/**", 
+                    "/v3/api-docs/**", 
+                    "/actuator/**"
+                ).permitAll()
+                .anyRequest().authenticated()  // ✅ 보안 유지: 모든 건강 API는 인증 필요
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
