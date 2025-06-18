@@ -8,6 +8,11 @@ export const API_ENDPOINTS = {
     SIGNUP: '/api/auth/signup',
     PROFILE: '/api/users/profile',
     HEALTH_LOG: '/api/health-log',
+    HEALTH_STATISTICS: '/api/health-statistics',
+    RANKING: '/api/health-statistics/ranking',
+    HEALTH_RECORDS: '/api/health-statistics/health-records',
+    EXERCISE_SESSIONS: '/api/exercises/history',
+    MEAL_LOGS: '/api/meals/history'
 };
 
 // API 기본 설정

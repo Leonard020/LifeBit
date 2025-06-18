@@ -42,6 +42,7 @@ public class AuthController {
             response.put("userId", user.getUserId());
             response.put("email", user.getEmail());
             response.put("nickname", user.getNickname());
+            response.put("role", user.getRole().name());
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             Map<String, String> error = new HashMap<>();
@@ -66,10 +67,12 @@ public class AuthController {
             String token = tokenProvider.generateToken(user);
             
             Map<String, Object> response = new HashMap<>();
-            response.put("token", token);
-            response.put("userId", user.getUserId());
+            response.put("access_token", token);
+            response.put("user_id", user.getUserId().toString());
             response.put("email", user.getEmail());
             response.put("nickname", user.getNickname());
+            response.put("role", user.getRole().name());
+            response.put("provider", user.getProvider() != null ? user.getProvider() : "local");
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             Map<String, String> error = new HashMap<>();

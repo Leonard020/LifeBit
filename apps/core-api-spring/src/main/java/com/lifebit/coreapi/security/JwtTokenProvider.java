@@ -20,7 +20,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
                 .setSubject(user.getEmail())
                 .claim("userId", user.getUserId())
-                .claim("role", user.getRole())
+                .claim("role", user.getRole().name())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(jwtConfig.secretKey())
@@ -37,6 +37,19 @@ public class JwtTokenProvider {
         return claims.getSubject();
     }
 
+    /**
+     * JWT 토큰에서 사용자 ID 추출
+     */
+    public Long getUserIdFromToken(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(jwtConfig.secretKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        return claims.get("userId", Long.class);
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder()
@@ -47,5 +60,13 @@ public class JwtTokenProvider {
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+    }
+
+    public Claims getAllClaimsFromToken(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(jwtConfig.secretKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 } 

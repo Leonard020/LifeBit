@@ -3,6 +3,8 @@ package com.lifebit.coreapi.repository;
 import com.lifebit.coreapi.entity.MealLog;
 import com.lifebit.coreapi.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
@@ -15,4 +17,15 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     List<MealLog> findByUserOrderByLogDateDesc(User user);
     List<MealLog> findByUserAndLogDateBetweenOrderByLogDateDesc(
         User user, LocalDate startDate, LocalDate endDate);
+    List<MealLog> findByUserAndLogDateOrderByCreatedAtDesc(User user, LocalDate logDate);
+    
+    @Query("SELECT ml FROM MealLog ml WHERE ml.user = :user AND ml.logDate = :logDate ORDER BY ml.createdAt DESC")
+    List<MealLog> findDailyMealLogs(@Param("user") User user, @Param("logDate") LocalDate logDate);
+    
+    @Query("SELECT ml.logDate as date, COUNT(ml) as count FROM MealLog ml " +
+           "WHERE ml.user = :user AND ml.logDate BETWEEN :startDate AND :endDate " +
+           "GROUP BY ml.logDate")
+    List<Object[]> findDietCountByDateRange(@Param("user") User user, 
+                                           @Param("startDate") LocalDate startDate, 
+                                           @Param("endDate") LocalDate endDate);
 } 

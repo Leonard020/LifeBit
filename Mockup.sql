@@ -7,6 +7,9 @@ TRUNCATE TABLE exercise_catalog CASCADE;
 TRUNCATE TABLE food_items CASCADE;
 TRUNCATE TABLE achievements CASCADE;
 TRUNCATE TABLE recommendation CASCADE;
+TRUNCATE TABLE voice_recognition_logs CASCADE;
+TRUNCATE TABLE validation_history CASCADE;
+TRUNCATE TABLE workout CASCADE;
 
 -- 더미 데이터 삽입
 BEGIN;
@@ -25,7 +28,8 @@ INSERT INTO exercise_catalog (name, body_part, description, intensity) VALUES
 ('스쿼트', 'legs', '하체 운동의 기본', 'high'),
 ('데드리프트', 'back', '등과 하체를 동시에 운동', 'high'),
 ('플랭크', 'abs', '코어 강화 운동', 'medium'),
-('풀업', 'back', '등 근육 강화 운동', 'high');
+('풀업', 'back', '등 근육 강화 운동', 'high')
+RETURNING exercise_catalog_id;
 
 -- 3. 음식 아이템 데이터 (ID 자동 생성)
 INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein, fat) VALUES
@@ -33,14 +37,16 @@ INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein,
 ('F002', '현미밥', 200, 220, 45, 4, 1),
 ('F003', '바나나', 120, 105, 27, 1.3, 0.3),
 ('F004', '계란', 50, 70, 0.6, 6, 5),
-('F005', '연어', 100, 208, 0, 22, 13);
+('F005', '연어', 100, 208, 0, 22, 13)
+RETURNING food_item_id;
 
 -- 4. 업적 데이터 (ID 자동 생성)
 INSERT INTO achievements (title, description, badge_type, target_days) VALUES
 ('초보 운동러', '첫 운동 완료', 'bronze', 1),
 ('열심히 하는 사람', '7일 연속 운동', 'silver', 7),
 ('운동 마니아', '30일 연속 운동', 'gold', 30),
-('운동의 달인', '100일 연속 운동', 'platinum', 100);
+('운동의 달인', '100일 연속 운동', 'platinum', 100)
+RETURNING achievement_id;
 
 -- 5. 사용자 목표 데이터
 INSERT INTO user_goals (user_id, weekly_workout_target, daily_carbs_target, daily_protein_target, daily_fat_target) VALUES
@@ -58,66 +64,416 @@ INSERT INTO health_records (user_id, weight, height, record_date) VALUES
 ((SELECT user_id FROM users WHERE email = 'user3@example.com'), 55.0, 165.0, CURRENT_DATE),
 ((SELECT user_id FROM users WHERE email = 'user4@example.com'), 72.0, 178.0, CURRENT_DATE);
 
--- 7. 운동 세션 데이터
-INSERT INTO exercise_sessions (user_id, exercise_catalog_id, duration_minutes, calories_burned, exercise_date) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1, 45, 300, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'), 2, 30, 250, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'), 3, 40, 280, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'), 4, 20, 150, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'), 5, 35, 270, CURRENT_DATE);
+-- 7. 운동 세션 데이터 (음성 인식 및 검증 관련 필드 추가)
+WITH exercise_catalog_ids AS (
+    SELECT exercise_catalog_id, name 
+    FROM exercise_catalog
+)
+INSERT INTO exercise_sessions (
+    user_id, 
+    exercise_catalog_id, 
+    duration_minutes, 
+    calories_burned, 
+    exercise_date,
+    input_source,
+    confidence_score,
+    validation_status
+) VALUES
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'), 
+ 45, 300, CURRENT_DATE, 'TYPING', NULL, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'), 
+ 30, 250, CURRENT_DATE, 'VOICE', 0.85, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'), 
+ 40, 280, CURRENT_DATE, 'VOICE', 0.92, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'), 
+ 20, 150, CURRENT_DATE, 'TYPING', NULL, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'), 
+ 35, 270, CURRENT_DATE, 'VOICE', 0.78, 'PENDING');
 
--- 8. 식사 기록 데이터
-INSERT INTO meal_logs (user_id, food_item_id, quantity, log_date) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1, 200, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'), 2, 300, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'), 3, 120, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'), 4, 100, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'), 5, 150, CURRENT_DATE);
+-- 8. 식사 기록 데이터 (음성 인식 및 검증 관련 필드 추가)
+WITH food_item_ids AS (
+    SELECT food_item_id, name 
+    FROM food_items
+)
+INSERT INTO meal_logs (
+    user_id, 
+    food_item_id, 
+    quantity, 
+    log_date, 
+    meal_time,
+    input_source,
+    confidence_score,
+    validation_status
+) VALUES
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '닭가슴살'), 
+ 200, CURRENT_DATE, 'breakfast', 'TYPING', NULL, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '현미밥'), 
+ 300, CURRENT_DATE, 'lunch', 'VOICE', 0.88, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '바나나'), 
+ 120, CURRENT_DATE, 'dinner', 'VOICE', 0.95, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '계란'), 
+ 100, CURRENT_DATE, 'breakfast', 'TYPING', NULL, 'VALIDATED'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '연어'), 
+ 150, CURRENT_DATE, 'lunch', 'VOICE', 0.82, 'PENDING');
 
 -- 9. 사용자 랭킹 데이터
-INSERT INTO user_rankings (user_id, total_score, streak_days, rank_position) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1000, 7, 1),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'), 850, 5, 2),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'), 720, 4, 3),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'), 680, 3, 4),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'), 650, 2, 5);
+INSERT INTO user_ranking (user_id, total_score, streak_days, rank_position, previous_rank, season, is_active)
+VALUES
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1000, 7, 1, 2, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 850, 5, 2, 1, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'), 720, 4, 3, 3, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'), 680, 3, 4, 4, 1, TRUE),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'), 650, 2, 5, 5, 1, TRUE);
 
--- 10. 사용자 업적 데이터
+-- 10. 랭킹 히스토리 데이터 예시
+INSERT INTO ranking_history (user_ranking_id, total_score, streak_days, rank_position, season, period_type)
+VALUES
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'admin@lifebit.com')), 1000, 7, 1, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user1@example.com')), 850, 5, 2, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user2@example.com')), 720, 4, 3, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user3@example.com')), 680, 3, 4, 1, 'weekly'),
+((SELECT id FROM user_ranking WHERE user_id = (SELECT user_id FROM users WHERE email = 'user4@example.com')), 650, 2, 5, 1, 'weekly');
+
+-- 11. 사용자 업적 데이터
+WITH achievement_ids AS (
+    SELECT achievement_id, title 
+    FROM achievements
+)
 INSERT INTO user_achievements (user_id, achievement_id, is_achieved, progress, achieved_date) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1, true, 1, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'), 2, true, 7, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'), 3, false, 15, NULL),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'), 4, false, 5, NULL),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'), 1, true, 1, CURRENT_DATE);
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 
+ (SELECT achievement_id FROM achievement_ids WHERE title = '초보 운동러'), 
+ true, 1, CURRENT_DATE),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 
+ (SELECT achievement_id FROM achievement_ids WHERE title = '열심히 하는 사람'), 
+ true, 7, CURRENT_DATE),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'), 
+ (SELECT achievement_id FROM achievement_ids WHERE title = '운동 마니아'), 
+ false, 15, NULL),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'), 
+ (SELECT achievement_id FROM achievement_ids WHERE title = '운동의 달인'), 
+ false, 5, NULL),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'), 
+ (SELECT achievement_id FROM achievement_ids WHERE title = '초보 운동러'), 
+ true, 1, CURRENT_DATE);
 
--- 11. 추천 데이터 (ID 자동 생성)
+-- 12. 추천 데이터 (ID 자동 생성)
+WITH exercise_catalog_ids AS (
+    SELECT exercise_catalog_id, name 
+    FROM exercise_catalog
+),
+food_item_ids AS (
+    SELECT food_item_id, name 
+    FROM food_items
+)
 INSERT INTO recommendation (user_id, item_id, recommendation_data) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 1, '{"type": "exercise", "reason": "사용자의 운동 패턴 분석"}'),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'), 2, '{"type": "diet", "reason": "영양소 균형 분석"}'),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'), 3, '{"type": "exercise", "reason": "체력 수준 기반"}'),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'), 4, '{"type": "diet", "reason": "식단 패턴 분석"}'),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'), 5, '{"type": "exercise", "reason": "목표 기반 추천"}');
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'), 
+ '{"type": "exercise", "reason": "사용자의 운동 패턴 분석"}'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '현미밥'), 
+ '{"type": "diet", "reason": "영양소 균형 분석"}'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'), 
+ '{"type": "exercise", "reason": "체력 수준 기반"}'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'), 
+ (SELECT food_item_id FROM food_item_ids WHERE name = '닭가슴살'), 
+ '{"type": "diet", "reason": "식단 패턴 분석"}'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'), 
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'), 
+ '{"type": "exercise", "reason": "목표 기반 추천"}')
+RETURNING recommendation_id;
 
--- 12. 피드백 데이터
+-- 13. 피드백 데이터
+WITH recommendation_ids AS (
+    SELECT recommendation_id, user_id
+    FROM recommendation
+)
 INSERT INTO feedback (recommendation_id, user_id, feedback_type, feedback_data) VALUES
-(1, (SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 'positive', '{"rating": 5, "comment": "매우 만족"}'),
-(2, (SELECT user_id FROM users WHERE email = 'user1@example.com'), 'positive', '{"rating": 4, "comment": "좋았음"}'),
-(3, (SELECT user_id FROM users WHERE email = 'user2@example.com'), 'neutral', '{"rating": 3, "comment": "보통"}'),
-(4, (SELECT user_id FROM users WHERE email = 'user3@example.com'), 'positive', '{"rating": 4, "comment": "도움이 됨"}'),
-(5, (SELECT user_id FROM users WHERE email = 'user4@example.com'), 'positive', '{"rating": 5, "comment": "매우 좋음"}');
+((SELECT recommendation_id FROM recommendation_ids WHERE user_id = (SELECT user_id FROM users WHERE email = 'admin@lifebit.com')), 
+ (SELECT user_id FROM users WHERE email = 'admin@lifebit.com'), 
+ 'positive', '{"rating": 5, "comment": "매우 만족"}'),
+((SELECT recommendation_id FROM recommendation_ids WHERE user_id = (SELECT user_id FROM users WHERE email = 'user1@example.com')), 
+ (SELECT user_id FROM users WHERE email = 'user1@example.com'), 
+ 'positive', '{"rating": 4, "comment": "좋았음"}'),
+((SELECT recommendation_id FROM recommendation_ids WHERE user_id = (SELECT user_id FROM users WHERE email = 'user2@example.com')), 
+ (SELECT user_id FROM users WHERE email = 'user2@example.com'), 
+ 'neutral', '{"rating": 3, "comment": "보통"}'),
+((SELECT recommendation_id FROM recommendation_ids WHERE user_id = (SELECT user_id FROM users WHERE email = 'user3@example.com')), 
+ (SELECT user_id FROM users WHERE email = 'user3@example.com'), 
+ 'positive', '{"rating": 4, "comment": "도움이 됨"}'),
+((SELECT recommendation_id FROM recommendation_ids WHERE user_id = (SELECT user_id FROM users WHERE email = 'user4@example.com')), 
+ (SELECT user_id FROM users WHERE email = 'user4@example.com'), 
+ 'positive', '{"rating": 5, "comment": "매우 좋음"}');
 
--- 13. 정책 데이터
+-- 14. 정책 데이터
 INSERT INTO policy (policy_name, policy_data) VALUES
 ('이용약관', '{"version": "1.0", "content": "서비스 이용 약관"}'),
 ('개인정보처리방침', '{"version": "1.0", "content": "개인정보 수집 및 이용"}'),
 ('운동 가이드라인', '{"version": "1.0", "content": "안전한 운동 방법"}');
 
--- 14. 로그 데이터
+-- 15. 로그 데이터
 INSERT INTO log (event_type, event_data, created_at) VALUES
 ('USER_LOGIN', '{"user_id": 1, "ip": "127.0.0.1"}', '2024-01-01 00:00:00'),
 ('EXERCISE_COMPLETE', '{"user_id": 2, "exercise_id": 1}', '2024-01-01 00:00:00'),
 ('MEAL_LOG', '{"user_id": 3, "food_id": 1}', '2024-01-01 00:00:00'),
 ('ACHIEVEMENT_UNLOCK', '{"user_id": 4, "achievement_id": 1}', '2024-01-01 00:00:00'),
 ('RECOMMENDATION_VIEW', '{"user_id": 5, "recommendation_id": 1}', '2024-01-01 00:00:00');
+
+-- 16. 음성 인식 로그 데이터
+INSERT INTO voice_recognition_logs (
+    user_id,
+    audio_file_path,
+    transcription_text,
+    confidence_score,
+    recognition_type,
+    status,
+    created_at
+) VALUES
+((SELECT user_id FROM users WHERE email = 'user1@example.com'), 
+ '/audio/user1_exercise_001.mp3',
+ '30분 동안 스쿼트 3세트 12회씩 했어요',
+ 0.85,
+ 'EXERCISE',
+ 'VALIDATED',
+ CURRENT_TIMESTAMP),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ '/audio/user2_meal_001.mp3',
+ '점심에 현미밥 300g 먹었어요',
+ 0.92,
+ 'MEAL',
+ 'VALIDATED',
+ CURRENT_TIMESTAMP),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ '/audio/user4_exercise_002.mp3',
+ '35분 동안 플랭크 운동했어요',
+ 0.78,
+ 'EXERCISE',
+ 'PENDING',
+ CURRENT_TIMESTAMP);
+
+-- 17. 검증 히스토리 데이터
+INSERT INTO validation_history (
+    user_id,
+    record_type,
+    record_id,
+    validation_status,
+    validated_by,
+    created_at
+) VALUES
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ 'EXERCISE',
+ (SELECT exercise_session_id FROM exercise_sessions WHERE user_id = (SELECT user_id FROM users WHERE email = 'user1@example.com')),
+ 'VALIDATED',
+ 'SYSTEM',
+ CURRENT_TIMESTAMP),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ 'MEAL',
+ (SELECT meal_log_id FROM meal_logs WHERE user_id = (SELECT user_id FROM users WHERE email = 'user2@example.com')),
+ 'VALIDATED',
+ 'SYSTEM',
+ CURRENT_TIMESTAMP),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ 'EXERCISE',
+ (SELECT exercise_session_id FROM exercise_sessions WHERE user_id = (SELECT user_id FROM users WHERE email = 'user4@example.com')),
+ 'PENDING',
+ 'SYSTEM',
+ CURRENT_TIMESTAMP);
+
+-- 18. workout 데이터 추가
+INSERT INTO workout (
+    user_id,
+    date,
+    exercise_name,
+    type,
+    duration,
+    reps,
+    sets,
+    weight,
+    calories_burned
+) VALUES
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ CURRENT_DATE,
+ '벤치프레스',
+ 'chest',
+ 45,
+ 12,
+ 3,
+ 80.0,
+ 300),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ CURRENT_DATE,
+ '스쿼트',
+ 'legs',
+ 30,
+ 15,
+ 4,
+ 100.0,
+ 250),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ CURRENT_DATE,
+ '데드리프트',
+ 'back',
+ 40,
+ 10,
+ 3,
+ 120.0,
+ 280),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ CURRENT_DATE,
+ '플랭크',
+ 'abs',
+ 20,
+ 1,
+ 3,
+ 0.0,
+ 150),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ CURRENT_DATE,
+ '풀업',
+ 'back',
+ 35,
+ 8,
+ 4,
+ 0.0,
+ 270);
+
+-- 19. daily_workout_logs 데이터 추가
+WITH exercise_catalog_ids AS (
+    SELECT exercise_catalog_id, name 
+    FROM exercise_catalog
+)
+INSERT INTO daily_workout_logs (
+    user_id,
+    exercise_catalog_id,
+    duration_minutes,
+    sets,
+    reps,
+    weight,
+    workout_date
+) VALUES
+-- 관리자 일주일 운동 기록
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 45, 3, 12, 80.0, CURRENT_DATE - INTERVAL '6 days'),
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'),
+ 50, 4, 8, 120.0, CURRENT_DATE - INTERVAL '5 days'),
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'),
+ 40, 4, 10, 0.0, CURRENT_DATE - INTERVAL '4 days'),
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 45, 3, 12, 82.5, CURRENT_DATE - INTERVAL '3 days'),
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 40, 4, 10, 100.0, CURRENT_DATE - INTERVAL '2 days'),
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 30, 3, 1, 0.0, CURRENT_DATE - INTERVAL '1 day'),
+((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 45, 3, 12, 85.0, CURRENT_DATE),
+
+-- 홍길동 일주일 운동 기록
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 30, 4, 15, 100.0, CURRENT_DATE - INTERVAL '6 days'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 25, 3, 1, 0.0, CURRENT_DATE - INTERVAL '5 days'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 35, 4, 12, 105.0, CURRENT_DATE - INTERVAL '4 days'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 40, 3, 10, 60.0, CURRENT_DATE - INTERVAL '3 days'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 30, 4, 15, 107.5, CURRENT_DATE - INTERVAL '2 days'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'),
+ 30, 3, 8, 0.0, CURRENT_DATE - INTERVAL '1 day'),
+((SELECT user_id FROM users WHERE email = 'user1@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 35, 4, 12, 110.0, CURRENT_DATE),
+
+-- 김철수 일주일 운동 기록
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'),
+ 40, 3, 10, 120.0, CURRENT_DATE - INTERVAL '6 days'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 45, 3, 8, 70.0, CURRENT_DATE - INTERVAL '5 days'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'),
+ 45, 4, 8, 125.0, CURRENT_DATE - INTERVAL '4 days'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 35, 3, 12, 90.0, CURRENT_DATE - INTERVAL '3 days'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'),
+ 40, 3, 10, 130.0, CURRENT_DATE - INTERVAL '2 days'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 25, 3, 1, 0.0, CURRENT_DATE - INTERVAL '1 day'),
+((SELECT user_id FROM users WHERE email = 'user2@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '데드리프트'),
+ 45, 4, 8, 135.0, CURRENT_DATE),
+
+-- 이영희 일주일 운동 기록
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 20, 3, 1, 0.0, CURRENT_DATE - INTERVAL '6 days'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 25, 3, 10, 40.0, CURRENT_DATE - INTERVAL '5 days'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 25, 3, 1, 0.0, CURRENT_DATE - INTERVAL '4 days'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 30, 3, 8, 30.0, CURRENT_DATE - INTERVAL '3 days'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 30, 3, 1, 0.0, CURRENT_DATE - INTERVAL '2 days'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 30, 3, 12, 45.0, CURRENT_DATE - INTERVAL '1 day'),
+((SELECT user_id FROM users WHERE email = 'user3@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 25, 3, 1, 0.0, CURRENT_DATE),
+
+-- 박지민 일주일 운동 기록
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'),
+ 35, 4, 8, 0.0, CURRENT_DATE - INTERVAL '6 days'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '플랭크'),
+ 25, 3, 1, 0.0, CURRENT_DATE - INTERVAL '5 days'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'),
+ 40, 4, 10, 0.0, CURRENT_DATE - INTERVAL '4 days'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '스쿼트'),
+ 30, 3, 12, 60.0, CURRENT_DATE - INTERVAL '3 days'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'),
+ 35, 4, 8, 0.0, CURRENT_DATE - INTERVAL '2 days'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '벤치프레스'),
+ 35, 3, 8, 40.0, CURRENT_DATE - INTERVAL '1 day'),
+((SELECT user_id FROM users WHERE email = 'user4@example.com'),
+ (SELECT exercise_catalog_id FROM exercise_catalog_ids WHERE name = '풀업'),
+ 40, 4, 10, 0.0, CURRENT_DATE);
 
 COMMIT; 

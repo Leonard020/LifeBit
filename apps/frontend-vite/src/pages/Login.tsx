@@ -16,7 +16,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/use-toast';
 import { login, LoginData } from '@/api/auth';
 import { Separator } from '@/components/ui/separator';
-
+import { useAuth } from '@/AuthContext';
+import { setToken, setUserInfo } from '@/utils/auth';
 import axios from 'axios';
 
 const loginSchema = z.object({
@@ -30,6 +31,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { setIsLoggedIn, setNickname } = useAuth();
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -48,11 +50,25 @@ export default function Login() {
         rememberMe: values.rememberMe,
       };
 
-      await login(loginData);
+      const res = await login(loginData);
+      const { access_token, nickname, user_id, role, email } = res;
+
+      setToken(access_token);
+      setUserInfo({
+        userId: user_id,
+        email: email,
+        nickname: nickname,
+        role: role
+      });
+      
+      setIsLoggedIn(true);
+      setNickname(nickname);
+
       toast({
         title: '로그인 성공',
-        description: '환영합니다!',
+        description: `${nickname}님 환영합니다!`,
       });
+
       navigate('/');
     } catch (error: unknown) {
       console.error('Login failed:', error);
@@ -79,11 +95,15 @@ export default function Login() {
   };
 
   const handleSocialLogin = (provider: string) => {
-    const backendHost = import.meta.env.VITE_BACKEND_HOST;
+    const normalizedProvider = provider.toLowerCase();
   
-    if (provider === 'Google') {
+    if (normalizedProvider === 'google') {
       const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      const redirectUri = `${backendHost}/auth/google/callback`;
+      if (!googleClientId) {
+        console.error('❗ 구글 클라이언트 ID가 설정되지 않았습니다.');
+        return;
+      }
+      const redirectUri = 'http://localhost:5173/auth/social-redirect?provider=google';
   
       const googleAuthUrl =
         'https://accounts.google.com/o/oauth2/v2/auth' +
@@ -91,16 +111,19 @@ export default function Login() {
         `&client_id=${googleClientId}` +
         `&redirect_uri=${redirectUri}` +
         '&scope=openid%20email%20profile' +
-        '&access_type=offline' +  // refresh_token 발급
-        '&prompt=consent';        // 매번 로그인
+        '&access_type=offline' +
+        '&prompt=consent';
   
-      console.log('✅ [Google] 리디렉션:', googleAuthUrl);
       window.location.href = googleAuthUrl;
     }
   
-    if (provider === 'Kakao') {
+    if (normalizedProvider === 'kakao') {
       const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
-      const redirectUri = 'http://localhost:5173/auth/kakao/callback';
+      if (!kakaoClientId) {
+        console.error('❗ 카카오 클라이언트 ID가 설정되지 않았습니다.');
+        return;
+      }
+      const redirectUri = 'http://localhost:5173/auth/social-redirect?provider=kakao';
   
       const kakaoAuthUrl =
         'https://kauth.kakao.com/oauth/authorize' +
@@ -108,10 +131,10 @@ export default function Login() {
         `&client_id=${kakaoClientId}` +
         `&redirect_uri=${redirectUri}`;
   
-      console.log('✅ [Kakao] 리디렉션:', kakaoAuthUrl);
       window.location.href = kakaoAuthUrl;
     }
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
@@ -168,14 +191,13 @@ export default function Login() {
                     </FormControl>
                     <label
                       htmlFor="rememberMe"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="text-sm font-medium leading-none"
                     >
                       로그인 상태 유지
                     </label>
                   </FormItem>
                 )}
               />
-
               <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
                 비밀번호 찾기
               </Link>
@@ -223,6 +245,7 @@ export default function Login() {
             카카오로 계속하기
           </Button>
         </div>
+
         <p className="text-center text-sm">
           계정이 없으신가요?{' '}
           <Link to="/signup" className="font-medium text-primary hover:underline">
