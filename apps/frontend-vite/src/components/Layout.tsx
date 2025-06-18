@@ -142,11 +142,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setIsNavVisible(!isNavVisible);
   };
 
+  // ✅ 이미지에 맞게 메뉴 순서 변경: 노트 → 프로필 → 랭킹 → 건강로그
   const navigationItems = [
     { path: '/note', icon: FileText, label: '노트' },
-    { path: '/healthlog', icon: BarChart3, label: '헬스로그' },
-    { path: '/ranking', icon: Trophy, label: '랭킹' },
     { path: '/profile', icon: User, label: '프로필' },
+    { path: '/ranking', icon: Trophy, label: '랭킹' },
+    { path: '/healthlog', icon: BarChart3, label: '건강로그' },
   ];
 
   if (!isMobile) {
@@ -231,6 +232,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <button
           onClick={toggleNavVisibility}
+          title={isNavVisible ? "네비게이션 숨기기" : "네비게이션 보이기"}
           className="w-12 h-12 rounded-full shadow-lg bg-gradient-to-br from-teal-400 to-blue-500 hover:from-teal-500 hover:to-blue-600 text-white border-4 border-white transition-all duration-300 ease-in-out transform hover:scale-110 flex items-center justify-center"
         >
           <div
