@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Mic, MicOff, Send, Loader2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Message } from '@/api/chatApi';
 
 interface AIFeedback {
-  type: 'success' | 'incomplete' | 'clarification' | 'error';
+  type: 'success' | 'incomplete' | 'clarification' | 'error' | 'initial';
   message: string;
   suggestions?: string[];
   missingFields?: string[];
@@ -28,6 +31,7 @@ interface ChatInterfaceProps {
   onClarificationSubmit: () => void;
   onSaveRecord: () => void;
   structuredData: any;
+  conversationHistory: Message[];
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -41,163 +45,165 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   onRetry,
   aiFeedback,
+  clarificationInput,
+  setClarificationInput,
+  onClarificationSubmit,
   onSaveRecord,
-  structuredData
+  structuredData,
+  conversationHistory
 }) => {
-  const getFeedbackIcon = (type: string) => {
-    switch (type) {
-      case 'success':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-600" />;
-      default:
-        return <Sparkles className="h-4 w-4 text-blue-600" />;
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversationHistory, aiFeedback]);
+
+  // 운동/식단 기록 버튼이 클릭되지 않은 경우 안내 메시지 표시
+  if (!recordType) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="mb-4 text-gray-600">
+          <p className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</p>
+          <p>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSendMessage();
     }
   };
 
-  // 입력 텍스트가 있는지 확인
-  const hasInputText = inputText.trim().length > 0;
-
   return (
-    <div className="space-y-4">
-      {/* AI Coaching Section - KakaoTalk Style Chat */}
-      {aiFeedback && (
-        <div className="space-y-3">
-          {/* AI Message */}
-          <div className="flex justify-start">
-            <div className="flex items-start space-x-2 max-w-[80%]">
-              {/* AI Avatar */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-blue-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm font-bold">AI</span>
-              </div>
-              
-              {/* Message Content */}
-              <div className="space-y-1">
-                <div className="text-xs text-muted-foreground font-medium">손진우(ict)</div>
-                <div className="bg-white border rounded-lg p-3 shadow-sm relative">
-                  <p className="text-sm leading-relaxed text-gray-800">{aiFeedback.message}</p>
-                  
-                  {aiFeedback.suggestions && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">💡 제안사항:</p>
-                      <ul className="text-xs text-muted-foreground space-y-1">
-                        {aiFeedback.suggestions.map((suggestion, index) => (
-                          <li key={`suggestion-${index}`} className="flex items-start">
-                            <span className="mr-2">•</span>
-                            <span>{suggestion}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  
-                  {aiFeedback.missingFields && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs font-medium text-orange-700">📝 누락된 정보:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {aiFeedback.missingFields.map((field, index) => (
-                          <Badge key={index} variant="outline" className="text-xs text-orange-700 border-orange-300">
-                            {field}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground">오후 5:43</div>
-              </div>
+    <div className="flex flex-col h-[600px] bg-white rounded-lg shadow-lg">
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Conversation History */}
+        {conversationHistory.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${
+              message.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
+          >
+            <div
+              className={`max-w-[80%] rounded-lg p-3 ${
+                message.role === 'user'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-900'
+              }`}
+            >
+              {message.content}
             </div>
           </div>
+        ))}
 
-          {/* Success Action */}
-          {aiFeedback.type === 'success' && structuredData && (
-            <div className="flex justify-center mt-4">
-              <Button 
-                onClick={onSaveRecord}
-                className="gradient-bg hover:opacity-90 transition-opacity rounded-full px-6"
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                기록 저장하기
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Input Section */}
-      <Card className="animate-slide-up" style={{animationDelay: '0.4s'}}>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-lg">
-            <span>
-              {recordType === 'exercise' ? '운동' : '식단'} 기록
-            </span>
-            <Badge variant="secondary" className="text-xs">
-              {recordType === 'exercise' ? '운동' : '식단'}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <Textarea
-              placeholder={
-                recordType === 'exercise'
-                  ? "예: 벤치프레스 60kg 5세트 8회 했어요"
-                  : "예: 아침에 바나나 1개, 계란 2개 먹었어요"
-              }
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              className="min-h-[80px] resize-none"
-              disabled={isProcessing}
-            />
-            
-            {/* 단일 버튼 - 텍스트 입력 상태에 따라 변경 */}
-            <div className="flex justify-center">
-              {!hasInputText ? (
-                // 텍스트가 없을 때: 마이크 버튼
-                <Button
-                  size="icon"
-                  variant={isRecording ? 'default' : 'ghost'}
-                  className={`h-12 w-12 rounded-full ${
-                    isRecording 
-                      ? 'bg-gradient-to-br from-teal-400 to-blue-500 text-white animate-pulse' 
-                      : 'hover:bg-gradient-to-br hover:from-teal-400 hover:to-blue-500 hover:text-white'
-                  }`}
-                  onClick={onVoiceToggle}
-                  disabled={isProcessing}
-                >
-                  {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                </Button>
-              ) : (
-                // 텍스트가 있을 때: 전송 버튼
-                <Button 
-                  onClick={onSendMessage}
-                  disabled={isProcessing}
-                  className="rounded-full h-12 w-12 gradient-bg hover:opacity-90 transition-opacity p-0"
-                  size="icon"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
-                  )}
-                </Button>
+        {/* Current AI Feedback */}
+        {aiFeedback && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] bg-gray-100 rounded-lg p-3 text-gray-900">
+              {aiFeedback.message}
+              
+              {/* Suggestions */}
+              {aiFeedback.suggestions && showSuggestions && (
+                <div className="mt-2 space-y-2">
+                  {aiFeedback.suggestions.map((suggestion: string, index: number) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      className="mr-2 text-sm"
+                      onClick={() => {
+                        setInputText(suggestion);
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
               )}
             </div>
           </div>
-          
-          {networkError && (
-            <div className="flex justify-center">
-              <Button 
+        )}
+
+        {/* Network Error */}
+        {networkError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              네트워크 오류가 발생했습니다.{' '}
+              <Button
+                variant="link"
+                className="text-white underline p-0 h-auto"
                 onClick={onRetry}
-                variant="outline"
-                disabled={isProcessing}
               >
-                재시도
+                다시 시도
               </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Structured Data Preview */}
+        {structuredData && (
+          <div className="bg-gray-50 rounded-lg p-4 mt-4">
+            <h3 className="font-medium mb-2">
+              {recordType === 'exercise' ? '운동 기록' : '식단 기록'} 미리보기
+            </h3>
+            <pre className="text-sm whitespace-pre-wrap">
+              {JSON.stringify(structuredData, null, 2)}
+            </pre>
+            {aiFeedback?.type === 'success' && !aiFeedback?.missingFields?.length && (
+              <Button
+                className="mt-4 bg-green-600 hover:bg-green-700"
+                onClick={onSaveRecord}
+              >
+                저장하기
+              </Button>
+            )}
+          </div>
+        )}
+
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="border-t p-4">
+        <div className="flex gap-2">
+          <Input
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={`${
+              recordType === 'exercise' ? '운동을' : '식단을'
+            } 자유롭게 입력하세요...`}
+            disabled={isProcessing}
+            className="flex-1"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onVoiceToggle}
+            disabled={isProcessing}
+          >
+            <Mic className={isRecording ? 'text-red-500' : ''} />
+          </Button>
+          <Button
+            onClick={onSendMessage}
+            disabled={!inputText.trim() || isProcessing}
+          >
+            {isProcessing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

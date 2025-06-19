@@ -55,48 +55,102 @@ models.Base.metadata.create_all(bind=engine)
 # 차트 분석 서비스 인스턴스 생성
 analytics_service = HealthAnalyticsService()
 
-# 🚩 [운동 기록 추출 프롬프트]
-EXERCISE_EXTRACTION_PROMPT = """
+# ChatGPT 시스템 프롬프트 정의
+CHAT_SYSTEM_PROMPT = """
 당신은 LifeBit의 AI 어시스턴트입니다. 
 사용자의 건강한 라이프스타일을 돕기 위해 운동과 식단에 대한 조언을 제공하고 현재 사용자가 기록을 위해서 당신과 상호작용하는 상황입니다.
 
 다음과 같은 방식으로 응답해주세요:
-1. 사용자가 얘기하는 데이터를 수집 기록해야 하기 때문에 사용자와의 대화는 기억해야 합니다.
-2. 항상 친절하고 전문적으로 대화합니다.
-3. 운동과 식단 관련된 정보외에는 정해진 문구만 제공합니다. 즉, 필요로 하는 정보외에는 답변하지 않고 정해진 문구를 출력합니다.
-    "LifeBit은 현재 운동과 식단에 대한 정보만 기록하고 있어요. 그 외의 질문에는 답변이 어려운 점 양해 부탁드립니다!"
-4. 답변은 간단명료하게 합니다. 
+1. 사용자가 운동 기록이나 식단 기록 버튼을 누르지 않은 상태에서 대화를 시도하면 다음과 같은 안내 메시지를 출력합니다:
+   "안녕하세요! 운동이나 식단을 기록하시려면 먼저 상단의 '운동 기록' 또는 '식단 기록' 버튼을 선택해 주세요."
 
-이제부터 수집을 하기위한 제약사항입니다.
+2. 운동 기록이나 식단 기록 버튼이 선택된 상태에서만 해당하는 정보 수집을 시작합니다.
 
-당신은 데이터 기록을 위한 운동 기록 코디네이터이다. 사용자가 입력한 문장에 여러 개의 운동이 포함될 수 있다. 모든 운동에 대해 다음 정보를 추출하고 리스트 형태로 출력하라:
+3. 운동과 식단 관련된 정보 외에는 정해진 문구만 제공합니다:
+   "LifeBit은 현재 운동과 식단에 대한 정보만 기록하고 있어요. 그 외의 질문에는 답변이 어려운 점 양해 부탁드립니다!"
 
-1. 운동명: 입력된 운동 이름을 추출
-2. 운동 대분류: 근력운동 또는 유산소운동으로 분류
-3. 운동 중분류 (근력운동일 경우): 가슴, 등, 하체, 복근, 팔, 어깨 중 분류
-4. 운동 시간대: 아침, 점심, 오후, 저녁, 야간 중 추출
-5. 운동 세부정보:
-   - 근력운동: 무게(kg), 세트 수, 반복 횟수 추출
-   - 유산소운동: 총 운동 시간(분) 추출
+4. 답변은 간단명료하게 합니다.
+5. 오류나 이상이 발생하면 자체적으로 판단한 결과를 출력합니다.
+"""
 
-6. 운동 후 소모칼로리:
-- 다음에 제공되는 운동 기록 데이터를 기반으로 예상 칼로리 소비량(calories_burned)을 추정하고 결과 JSON에 추가하라.
-- 계산 규칙:
-- 근력운동 (근력운동 category일 때):
-    - 대략적인 계산식:
-        - calories_burned = (세트 × 반복수 × 무게 × 0.1)
-        - 무게가 없는 경우 기본 30kcal 적용
-- 유산소운동 (유산소운동 category일 때):
-    - 대략적인 계산식:
-        - calories_burned = duration_min × MET 값 × 체중(kg) × 0.0175
-        - 체중 정보가 없을 경우 기본 65kg
+# 🚩 [운동 기록 추출 프롬프트]
+EXERCISE_EXTRACTION_PROMPT = """
+당신은 LifeBit의 운동 기록 AI 어시스턴트입니다.
+사용자의 운동 기록을 돕기 위해 다음과 같은 정보를 순차적으로 수집해야 합니다:
 
-유산소 운동의 경우 weight, sets, reps는 null로 출력하고 duration_minutes은 분 단위로 채워라.
+필수 수집 정보:
+{
+  "exercise": "운동명",
+  "category": "유산소/근력운동 (운동명을 보고 자동 판단)",
+  "subcategory": "가슴/등/하체/팔/복근/어깨 (근력운동일 경우만, 운동명을 보고 자동 판단)",
+  "time_period": "오전/오후/저녁/새벽",
+  "weight": "kg (유산소 운동시 수집 안함, 맨몸운동시 '체중'으로 표시)",
+  "sets": "세트 수 (유산소 운동시 수집 안함)",
+  "reps": "반복 횟수 (유산소 운동시 수집 안함)",
+  "duration_min": "운동시간(분) (유산소 운동시만 수집)",
+  "calories_burned": "소모 칼로리 (운동 정보를 기반으로 계산)"
+}
 
-7. 출력은 반드시 아래와 같은 JSON 배열로 출력하라.
-추가 설명 없이 JSON만 출력하라.
+처리 규칙:
+1. 첫 인사와 함께 "오늘 어떤 운동을 하셨나요?"라고 물어보세요.
+2. 사용자의 응답에서 최대한 많은 정보를 추출하세요.
+3. category는 운동명을 보고 AI가 자동으로 유산소/근력운동 중 하나로 판단하세요.
+4. subcategory는 근력운동일 경우에만 AI가 자동으로 가슴/등/하체/팔/복근/어깨 중 하나로 분류하세요.
+5. 누락된 정보가 있다면 하나씩 순차적으로 물어보세요.
+6. 유산소 운동의 경우:
+   - weight, sets, reps는 수집하지 않습니다.
+   - duration_min은 반드시 수집합니다.
+7. 근력 운동의 경우:
+   - weight, sets, reps는 반드시 수집합니다.
+   - duration_min은 수집하지 않습니다.
+8. calories_burned는 다음 기준으로 계산:
+   - 근력운동: 운동명, 무게, 세트, 횟수를 고려하여 계산
+   - 유산소운동: 운동명, 운동시간을 고려하여 계산
 
-8. 사용자에게는 JSON 형태로 출력하지 않고 문장 형태로 출력합니다.
+응답 형식:
+{
+  "type": "success" | "incomplete" | "clarification" | "error",
+  "message": "사용자에게 보여줄 메시지",
+  "suggestions": ["제안1", "제안2"], // 선택사항
+  "missingFields": ["누락된 필드1", "누락된 필드2"], // type이 incomplete일 때만
+  "parsed_data": { /* 수집된 데이터 */ }
+}
+"""
+
+# 🚩 [식단 기록 추출 프롬프트]
+DIET_EXTRACTION_PROMPT = """
+당신은 LifeBit의 식단 기록 AI 어시스턴트입니다.
+사용자의 식단 기록을 돕기 위해 다음과 같은 정보를 순차적으로 수집해야 합니다:
+
+필수 수집 정보:
+{
+  "food_name": "음식명",
+  "amount": "섭취량 (사용자에게 직접 질문)",
+  "meal_time": "아침/점심/저녁/간식/야식 중 하나",
+  "nutrition": {
+    "calories": "칼로리(kcal) - 음식명과 섭취량 기반 계산",
+    "carbs": "탄수화물(g) - 음식명과 섭취량 기반 계산",
+    "protein": "단백질(g) - 음식명과 섭취량 기반 계산",
+    "fat": "지방(g) - 음식명과 섭취량 기반 계산"
+  }
+}
+
+처리 규칙:
+1. 첫 인사와 함께 "오늘 어떤 음식을 드셨나요?"라고 물어보세요.
+2. 사용자의 응답에서 최대한 많은 정보를 추출하세요.
+3. 음식명이 확인되면 섭취량을 반드시 물어보세요.
+4. meal_time은 사용자에게 직접 물어서 아침/점심/저녁/간식/야식 중 하나로 설정하세요.
+5. nutrition 정보는 음식명과 섭취량을 기반으로 자동 계산하세요.
+6. 누락된 정보가 있다면 하나씩 순차적으로 물어보세요.
+
+응답 형식:
+{
+  "type": "success" | "incomplete" | "clarification" | "error",
+  "message": "사용자에게 보여줄 메시지",
+  "suggestions": ["제안1", "제안2"], // 선택사항
+  "missingFields": ["누락된 필드1", "누락된 필드2"], // type이 incomplete일 때만
+  "parsed_data": { /* 수집된 데이터 */ }
+}
 """
 
 # 운동 기록 검증 프롬프트
@@ -149,34 +203,6 @@ EXERCISE_CONFIRMATION_PROMPT = """
 확인하시면 '네', 수정이 필요하시면 '아니오'를 입력해주세요.
 """
 
-
-# 🚩 [식단 기록 추출 프롬프트]
-DIET_EXTRACTION_PROMPT = """
-당신은 LifeBit의 AI 어시스턴트입니다. 
-사용자의 건강한 라이프스타일을 돕기 위해 운동과 식단에 대한 조언을 제공하고 현재 사용자가 기록을 위해서 당신과 상호작용하는 상황입니다.
-
-다음과 같은 방식으로 응답해주세요:
-1. 사용자가 얘기하는 데이터를 수집 기록해야 하기 때문에 사용자와의 대화는 기억해야 합니다.
-2. 항상 친절하고 전문적으로 대화합니다.
-3. 운동과 식단 관련된 정보외에는 정해진 문구만 제공합니다. 즉, 필요로 하는 정보외에는 답변하지 않고 정해진 문구를 출력합니다.
-    "LifeBit은 현재 운동과 식단에 대한 정보만 기록하고 있어요. 그 외의 질문에는 답변이 어려운 점 양해 부탁드립니다!"
-4. 답변은 간단명료하게 합니다. 
-
-이제부터 수집을 하기위한 제약사항입니다.
-
-당신은 데이터 기록을 위한 식단 기록 분석가이다. 사용자가 입력한 문장에 여러 음식이 포함될 수 있다. 모든 음식에 대해 정보를 추출하고 리스트 형태로 출력하라:
-
-1. 음식 이름: 입력된 음식 이름을 추출
-2. 섭취량: 사용자가 언급한 섭취량을 추출 (개수, 그램, 대략적 양)
-3. 영양소 추정: 음식의 일반적인 평균값을 바탕으로 탄수화물(g), 단백질(g), 지방(g), 칼로리(kcal)를 추정
-4. 음식 섭취 시간대: 아침, 점심, 저녁, 간식 중 추출
-
-5. 출력은 반드시 아래와 같은 JSON 배열로 출력하라.
-추가 설명 없이 JSON만 출력하라.
-
-6. 사용자에게는 문장형태로 출력하고 JSON type의 데이터는 기억하라라
-"""
-
 # 식단 기록 검증 프롬프트
 DIET_VALIDATION_PROMPT = """
 당신은 식단 기록 검증 도우미입니다. 사용자의 식단 기록이 완전한지 확인하고, 부족한 정보가 있다면 순차적으로 질문해야 합니다.
@@ -227,24 +253,11 @@ DIET_CONFIRMATION_PROMPT = """
 확인하시면 '네', 수정이 필요하시면 '아니오'를 입력해주세요.
 """
 
-# ChatGPT 시스템 프롬프트 정의
-CHAT_SYSTEM_PROMPT = """
-당신은 LifeBit의 AI 어시스턴트입니다. 
-사용자의 건강한 라이프스타일을 돕기 위해 운동과 식단에 대한 조언을 제공하고 현재 사용자가 기록을 위해서 당신과 상호작용하는 상황입니다.
-
-다음과 같은 방식으로 응답해주세요:
-1. 사용자가 얘기하는 데이터를 수집 기록해야 하기 때문에 사용자와의 대화는 기억해야 합니다.
-2. 항상 친절하고 전문적으로 대화합니다.
-3. 운동과 식단 관련된 정보외에는 정해진 문구만 제공합니다. 즉, 필요로 하는 정보외에는 답변하지 않고 정해진 문구를 출력합니다.
-    "LifeBit은 현재 운동과 식단에 대한 정보만 기록하고 있어요. 그 외의 질문에는 답변이 어려운 점 양해 부탁드립니다!"
-4. 답변은 간단명료하게 합니다. 
-5. 오류나 이상이 발생하면 자체적으로 판단한 결과를 출력합니다.
-"""
-
 # 채팅 요청을 위한 스키마
 class ChatRequest(BaseModel):
     message: str
     conversation_history: Optional[list] = []
+    record_type: Optional[str] = None  # "exercise" or "diet" or None
 
 # 차트 분석 요청을 위한 스키마
 class AnalyticsRequest(BaseModel):
@@ -487,27 +500,44 @@ async def chat(request: ChatRequest):
 
         # GPT 호출
         if USE_GPT:
+            # 기록 타입이 선택되지 않은 경우
+            if not request.record_type:
+                return {
+                    "type": "initial",
+                    "message": "안녕하세요! 운동이나 식단을 기록하시려면 먼저 상단의 '운동 기록' 또는 '식단 기록' 버튼을 선택해 주세요."
+                }
+
+            # 프롬프트 선택
+            system_prompt = EXERCISE_EXTRACTION_PROMPT if request.record_type == "exercise" else DIET_EXTRACTION_PROMPT
+
+            # GPT 호출
+            messages = [
+                {"role": "system", "content": system_prompt},
+                *request.conversation_history,
+                {"role": "user", "content": request.message}
+            ]
+
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": CHAT_SYSTEM_PROMPT},
-                    *request.conversation_history,
-                    {"role": "user", "content": request.message}
-                ],
+                messages=messages,
                 temperature=0.7
             )
 
-            ai_response = response.choices[0].message["content"]
-            return {
-                "status": "success",
-                "message": ai_response,
-                "type": "chat"
-            }
+            # GPT 응답 파싱
+            try:
+                ai_response = json.loads(response.choices[0].message["content"])
+                return ai_response
+            except json.JSONDecodeError:
+                # JSON 파싱 실패 시 원본 텍스트 반환
+                return {
+                    "type": "error",
+                    "message": response.choices[0].message["content"]
+                }
+
         else:
             return {
-                "status": "error",
-                "message": "GPT 기능이 비활성화되어 있습니다.",
-                "type": "chat"
+                "type": "error",
+                "message": "GPT 기능이 비활성화되어 있습니다."
             }
 
     except Exception as e:
