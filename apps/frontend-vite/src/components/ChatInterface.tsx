@@ -1,19 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Mic, MicOff, Send, Loader2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Message } from '@/api/chatApi';
-
-interface AIFeedback {
-  type: 'success' | 'incomplete' | 'clarification' | 'error' | 'initial';
-  message: string;
-  suggestions?: string[];
-  missingFields?: string[];
-}
+import { Mic, MicOff, Send, Loader2, AlertCircle } from 'lucide-react';
+import { Message, ChatResponse } from '@/api/chatApi';
 
 interface ChatInterfaceProps {
   recordType: 'exercise' | 'diet';
@@ -25,12 +15,9 @@ interface ChatInterfaceProps {
   onVoiceToggle: () => void;
   onSendMessage: () => void;
   onRetry: () => void;
-  aiFeedback: AIFeedback | null;
-  clarificationInput: string;
-  setClarificationInput: (input: string) => void;
-  onClarificationSubmit: () => void;
+  aiFeedback: ChatResponse | null;
   onSaveRecord: () => void;
-  structuredData: any;
+  structuredData: ChatResponse['parsed_data'] | null;
   conversationHistory: Message[];
 }
 
@@ -45,9 +32,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   onRetry,
   aiFeedback,
-  clarificationInput,
-  setClarificationInput,
-  onClarificationSubmit,
   onSaveRecord,
   structuredData,
   conversationHistory
@@ -59,14 +43,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversationHistory, aiFeedback]);
 
-  // 운동/식단 기록 버튼이 클릭되지 않은 경우 안내 메시지 표시
   if (!recordType) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
-        <div className="mb-4 text-gray-600">
-          <p className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</p>
-          <p>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</p>
-        </div>
+        <p className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</p>
+        <p>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</p>
       </div>
     );
   }
@@ -78,23 +59,33 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  // Merge AI feedback at start of history
+  const mergedHistory: Message[] = [
+    ...(aiFeedback ? [{ role: 'assistant' as const, content: aiFeedback.message }] : []),
+    ...conversationHistory
+  ];
+
   return (
     <div className="flex flex-col h-[600px] bg-white rounded-lg shadow-lg">
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Conversation History */}
-        {conversationHistory.map((message, index) => (
+        {/* 인사말(초기 aiFeedback)만 맨 위에 고정 */}
+        {aiFeedback?.type === 'initial' && aiFeedback.message && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-lg p-3 whitespace-pre-line bg-gray-100 text-gray-900">
+              {aiFeedback.message}
+            </div>
+          </div>
+        )}
+        {/* 실제 대화 내역 */}
+        {conversationHistory.map((message, idx) => (
           <div
-            key={index}
-            className={`flex ${
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+            key={idx}
+            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-lg p-3 ${
-                message.role === 'user'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-900'
+              className={`max-w-[80%] rounded-lg p-3 whitespace-pre-line ${
+                message.role === 'user' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-900'
               }`}
             >
               {message.content}
@@ -102,53 +93,34 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         ))}
 
-        {/* Current AI Feedback */}
-        {aiFeedback && (
+        {aiFeedback?.suggestions?.length > 0 && showSuggestions && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] bg-gray-100 rounded-lg p-3 text-gray-900">
-              {aiFeedback.message}
-              
-              {/* Suggestions */}
-              {aiFeedback.suggestions && showSuggestions && (
-                <div className="mt-2 space-y-2">
-                  {aiFeedback.suggestions.map((suggestion: string, index: number) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      className="mr-2 text-sm"
-                      onClick={() => {
-                        setInputText(suggestion);
-                        setShowSuggestions(false);
-                      }}
-                    >
-                      {suggestion}
-                    </Button>
-                  ))}
-                </div>
-              )}
+            <div className="max-w-[80%] bg-gray-100 rounded-lg p-3">
+              {aiFeedback.suggestions.map((suggestion, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setInputText(suggestion);
+                    setShowSuggestions(false);
+                  }}
+                >{suggestion}</Button>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Network Error */}
         {networkError && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               네트워크 오류가 발생했습니다.{' '}
-              <Button
-                variant="link"
-                className="text-white underline p-0 h-auto"
-                onClick={onRetry}
-              >
-                다시 시도
-              </Button>
+              <Button variant="link" onClick={onRetry}>다시 시도</Button>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Structured Data Preview */}
         {structuredData && (
           <div className="bg-gray-50 rounded-lg p-4 mt-4">
             <h3 className="font-medium mb-2">
@@ -157,13 +129,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <pre className="text-sm whitespace-pre-wrap">
               {JSON.stringify(structuredData, null, 2)}
             </pre>
-            {aiFeedback?.type === 'success' && !aiFeedback?.missingFields?.length && (
-              <Button
-                className="mt-4 bg-green-600 hover:bg-green-700"
-                onClick={onSaveRecord}
-              >
-                저장하기
-              </Button>
+            {aiFeedback?.type === 'success' && !aiFeedback.missingFields?.length && (
+              <Button className="mt-4" onClick={onSaveRecord}>저장하기</Button>
             )}
           </div>
         )}
@@ -172,39 +139,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       {/* Input Area */}
-      <div className="border-t p-4">
-        <div className="flex gap-2">
-          <Input
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={`${
-              recordType === 'exercise' ? '운동을' : '식단을'
-            } 자유롭게 입력하세요...`}
-            disabled={isProcessing}
-            className="flex-1"
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onVoiceToggle}
-            disabled={isProcessing}
-          >
-            <Mic className={isRecording ? 'text-red-500' : ''} />
+      <div className="border-t p-4 flex items-center gap-2">
+        <Input
+          value={inputText}
+          onChange={e => setInputText(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder={`${recordType === 'exercise' ? '운동을' : '식단을'} 자유롭게 입력하세요...`}
+          disabled={isProcessing}
+          className="flex-1"
+        />
+        {inputText.trim() === '' ? (
+          <Button variant="outline" size="icon" onClick={onVoiceToggle} disabled={isProcessing}>
+            {isRecording ? <Mic className="text-red-500" /> : <MicOff />}
           </Button>
-          <Button
-            onClick={onSendMessage}
-            disabled={!inputText.trim() || isProcessing}
-          >
-            {isProcessing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+        ) : (
+          <Button onClick={onSendMessage} disabled={isProcessing} className="gradient-bg hover:opacity-90 transition-opacity">
+            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
-        </div>
+        )}
       </div>
     </div>
   );
 };
-

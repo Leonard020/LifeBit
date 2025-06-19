@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Activity, Heart } from 'lucide-react';
 import { ChatInterface } from '@/components/ChatInterface';
-import { sendChatMessage, Message } from '@/api/chatApi';
+import { sendChatMessage, Message, ChatResponse } from '@/api/chatApi';
 
 const Index = () => {
   const { toast } = useToast();
@@ -14,9 +14,10 @@ const Index = () => {
   const [chatIsRecording, setChatIsRecording] = useState(false);
   const [chatIsProcessing, setChatIsProcessing] = useState(false);
   const [chatNetworkError, setChatNetworkError] = useState(false);
-  const [chatAiFeedback, setChatAiFeedback] = useState<any>(null);
-  const [chatStructuredData, setChatStructuredData] = useState<any>(null);
+  const [chatAiFeedback, setChatAiFeedback] = useState<ChatResponse | null>(null);
+  const [chatStructuredData, setChatStructuredData] = useState<ChatResponse['parsed_data'] | null>(null);
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
+  const [chatStep, setChatStep] = useState<'extraction' | 'validation' | 'confirmation'>('extraction');
 
   const handleSendMessage = async () => {
     if (!chatInputText.trim() || !recordType) return;
@@ -25,55 +26,55 @@ const Index = () => {
       setChatIsProcessing(true);
       setChatNetworkError(false);
 
-      // 현재 대화 추가
+      // 기존 히스토리에 사용자 메시지 추가
       const updatedHistory: Message[] = [
         ...conversationHistory,
-        { role: 'user' as const, content: chatInputText }
+        { role: 'user', content: chatInputText }
       ];
 
-      const response = await sendChatMessage(chatInputText, updatedHistory, recordType);
-      
-      // AI 응답 추가
+      // 백엔드(Main.py)에 정의된 프롬프트를 사용하도록, 프론트엔드에서는 히스토리와 chatStep만 전달
+      const response = await sendChatMessage(
+        chatInputText,
+        updatedHistory,
+        recordType,
+        chatStep
+      );
+
+      // AI 응답을 히스토리에 추가
       const newHistory: Message[] = [
         ...updatedHistory,
-        { role: 'assistant' as const, content: response.message }
+        { role: 'assistant', content: response.message }
       ];
       setConversationHistory(newHistory);
-      
-      setChatAiFeedback({
-        type: response.type,
-        message: response.message,
-        suggestions: response.suggestions,
-        missingFields: response.missingFields
-      });
+      setChatAiFeedback(response);
+      if (response.parsed_data) setChatStructuredData(response.parsed_data);
 
-      if (response.parsed_data) {
-        setChatStructuredData(response.parsed_data);
-      }
-      
-      // 성공적으로 모든 정보가 수집된 경우에만 입력창 초기화
-      if (response.type === 'success' && !response.missingFields?.length) {
-        setChatInputText('');
+      // 다음 단계 전환 로직
+      if (response.missingFields?.length) {
+        setChatStep('validation');
+      } else if (chatStep === 'extraction') {
+        setChatStep('confirmation');
       }
     } catch (error) {
       console.error('Failed to process message:', error);
       setChatNetworkError(true);
       toast({
-        title: "오류 발생",
-        description: "메시지 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
-        variant: "destructive",
+        title: '오류 발생',
+        description: '메시지 처리 중 오류가 발생했습니다. 다시 시도해주세요.',
+        variant: 'destructive'
       });
     } finally {
       setChatIsProcessing(false);
+      setChatInputText('');
     }
   };
 
   const handleRecordSubmit = (type: 'exercise' | 'diet', content: string) => {
     toast({
-      title: "기록 완료",
-      description: `${type === 'exercise' ? '운동' : '식단'} 기록이 저장되었습니다.`,
+      title: '기록 완료',
+      description: `${type === 'exercise' ? '운동' : '식단'} 기록이 저장되었습니다.`
     });
-    
+
     // 초기화
     setChatInputText('');
     setChatAiFeedback(null);
@@ -81,12 +82,12 @@ const Index = () => {
     setShowChat(false);
     setRecordType(null);
     setConversationHistory([]);
+    setChatStep('extraction');
   };
 
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
-        {/* Welcome Section */}
         <div className="text-center mb-8 animate-fade-in">
           <h1 className="text-2xl font-bold mb-4 text-foreground">
             AI와 함께하는 건강 관리
@@ -96,7 +97,6 @@ const Index = () => {
           </p>
         </div>
 
-        {/* Record Type Buttons */}
         <div className="flex justify-center gap-4 mb-8">
           <Button
             variant={recordType === 'exercise' ? 'default' : 'outline'}
@@ -107,10 +107,8 @@ const Index = () => {
               setChatInputText('');
               setChatStructuredData(null);
               setConversationHistory([]);
-              setChatAiFeedback({
-                type: 'initial',
-                message: '안녕하세요! 오늘 어떤 운동을 하셨나요?'
-              });
+              setChatAiFeedback({ type: 'initial', message: '안녕하세요! 오늘 어떤 운동을 하셨나요?' });
+              setChatStep('extraction');
             }}
             className={`flex items-center gap-2 ${
               recordType === 'exercise' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''
@@ -128,10 +126,8 @@ const Index = () => {
               setChatInputText('');
               setChatStructuredData(null);
               setConversationHistory([]);
-              setChatAiFeedback({
-                type: 'initial',
-                message: '안녕하세요! 오늘 어떤 음식을 드셨나요?'
-              });
+              setChatAiFeedback({ type: 'initial', message: '안녕하세요! 오늘 어떤 음식을 드셨나요?' });
+              setChatStep('extraction');
             }}
             className={`flex items-center gap-2 ${
               recordType === 'diet' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''
@@ -142,7 +138,6 @@ const Index = () => {
           </Button>
         </div>
 
-        {/* Chat Interface */}
         {showChat && recordType ? (
           <ChatInterface
             recordType={recordType}
@@ -153,15 +148,12 @@ const Index = () => {
             networkError={chatNetworkError}
             onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
             onSendMessage={handleSendMessage}
-            onRetry={() => {
-              setChatNetworkError(false);
-              handleSendMessage();
-            }}
+            onRetry={() => { setChatNetworkError(false); handleSendMessage(); }}
             aiFeedback={chatAiFeedback}
             clarificationInput={''}
             setClarificationInput={() => {}}
             onClarificationSubmit={() => {}}
-            onSaveRecord={() => handleRecordSubmit(recordType, chatInputText)}
+            onSaveRecord={() => handleRecordSubmit(recordType!, chatInputText)}
             structuredData={chatStructuredData}
             conversationHistory={conversationHistory}
           />
