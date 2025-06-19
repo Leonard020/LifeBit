@@ -298,7 +298,7 @@ const Note = () => {
           return;
         }
 
-        const res = await fetch(`http://localhost:8080/api/workouts?date=${dateStr}`, {
+        const res = await fetch(`/api/exercise-sessions/daily?date=${dateStr}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
