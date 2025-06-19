@@ -156,11 +156,8 @@ export const AdminPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead onClick={() => handleSort('id')} style={{ cursor: 'pointer' }}>
-                    사용자 ID{sortConfig?.key === 'id' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </TableHead>
                   <TableHead onClick={() => handleSort('email')} style={{ cursor: 'pointer' }}>
-                    이메일{sortConfig?.key === 'email' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                    사용자 ID{sortConfig?.key === 'email' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
                   </TableHead>
                   <TableHead onClick={() => handleSort('nickname')} style={{ cursor: 'pointer' }}>
                     닉네임{sortConfig?.key === 'nickname' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
@@ -179,7 +176,6 @@ export const AdminPage = () => {
               <TableBody>
                 {finalUsers.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell>{user.id}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.nickname}</TableCell>
                     {/* <TableCell>{user.password}</TableCell> */}
