@@ -91,6 +91,11 @@ const Note = () => {
   // ✅ 토큰을 맨 처음에 한 번만 가져와서 저장
   const [authToken, setAuthToken] = useState<string | null>(null);
 
+  // 1. 기록 날짜 상태 추가
+  const [dietRecordedDates, setDietRecordedDates] = useState<string[]>([]);
+  const [exerciseRecordedDates, setExerciseRecordedDates] = useState<string[]>([]);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+
   // ✅ 인증 토큰을 맨 처음에 가져오기
   useEffect(() => {
     const token = getToken();
@@ -101,13 +106,30 @@ const Note = () => {
     setAuthToken(token);
   }, [navigate]);
 
-  const recordsByDate = {
-    '2025-06-12': { exercise: true, diet: true },
-    '2025-06-11': { exercise: true, diet: false },
-    '2025-06-10': { exercise: false, diet: true },
-    '2025-06-09': { exercise: true, diet: true },
-    '2025-06-08': { exercise: false, diet: true },
-  };
+  // 2. 달력 월이 바뀔 때마다 기록 날짜 fetch
+  useEffect(() => {
+    const userId = getUserIdFromToken() || 1;
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth() + 1;
+    const token = getToken();
+    if (!token) return;
+
+    // 식단 기록 날짜
+    axios.get(`/api/diet/calendar-records/${year}/${month}`, {
+      params: { userId },
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(res => {
+      setDietRecordedDates(Object.keys(res.data));
+    });
+
+    // 운동 기록 날짜
+    axios.get(`/api/exercise-sessions/${userId}`, {
+      params: { period: 'month' },
+      headers: { 'Authorization': `Bearer ${token}` }
+    }).then(res => {
+      setExerciseRecordedDates(res.data.map(item => item.exercise_date));
+    });
+  }, [calendarMonth]);
 
   // Exercise goals from profile (mock data) (유지)
   const exerciseGoals = {
@@ -409,35 +431,76 @@ const Note = () => {
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(date);
+      setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1)); // ensure calendarMonth is in sync
       setIsCalendarOpen(false);
     }
   };
 
+  // 3. 실제 기록 기반으로 점 표시
   const hasRecordOnDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return recordsByDate[dateStr];
+    return {
+      exercise: exerciseRecordedDates.includes(dateStr),
+      diet: dietRecordedDates.includes(dateStr)
+    };
   };
 
+  // 4. 기존 recordsByDate mock 데이터 삭제
+  // (recordsByDate 관련 코드 모두 제거)
+
+  // 5. Calendar에 onMonthChange 핸들러 추가 및 customDayContent 수정
   const customDayContent = (date: Date) => {
     const records = hasRecordOnDate(date);
     const hasBothRecords = records && records.exercise && records.diet;
-
+  
+    // 점 스타일: 크게, 색상별
+    const dotStyle = {
+      width: '14px',
+      height: '14px',
+      borderRadius: '50%',
+      marginTop: '6px',
+      display: 'inline-block',
+    };
+  
+    let dot = null;
+    if (hasBothRecords) {
+      dot = (
+        <span
+          style={{
+            ...dotStyle,
+            background: 'linear-gradient(90deg, #22c55e 50%, #3b82f6 50%)', // green + blue
+            boxShadow: '0 0 0 2px #a78bfa', // 보라색 외곽
+          }}
+        />
+      );
+    } else if (records.exercise) {
+      dot = (
+        <span
+          style={{
+            ...dotStyle,
+            background: '#22c55e', // green-500
+            boxShadow: '0 0 0 2px #22c55e44',
+          }}
+        />
+      );
+    } else if (records.diet) {
+      dot = (
+        <span
+          style={{
+            ...dotStyle,
+            background: '#3b82f6', // blue-500
+            boxShadow: '0 0 0 2px #3b82f644',
+          }}
+        />
+      );
+    }
+  
     return (
-      <div className="relative w-full h-full flex flex-col items-center justify-center">
-        <span className={hasBothRecords ? "gradient-text font-medium" : ""}>{date.getDate()}</span>
-        {records && (
-          <div className="absolute -bottom-1 flex space-x-0.5">
-            {records.exercise && !hasBothRecords && (
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-            )}
-            {records.diet && !hasBothRecords && (
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-            )}
-            {hasBothRecords && (
-              <div className="w-2 h-1.5 rounded-full gradient-bg"></div>
-            )}
-          </div>
-        )}
+      <div className="flex flex-col items-center justify-center min-h-[44px]">
+        <span className={hasBothRecords ? "gradient-text font-medium" : ""}>
+          {date.getDate()}
+        </span>
+        {dot}
       </div>
     );
   };
@@ -519,6 +582,28 @@ const Note = () => {
     }
   };
 
+  // 점(●) 표시용 modifiers와 classNames 추가
+  function parseDateString(dateStr: string) {
+    // 'yyyy-MM-dd' -> Date 객체
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const dietDates = dietRecordedDates.map(parseDateString);
+  const exerciseDates = exerciseRecordedDates.map(parseDateString);
+  const bothDates = dietDates.filter(date => exerciseDates.some(ed => ed.getTime() === date.getTime()));
+  const dietOnlyDates = dietDates.filter(date => !exerciseDates.some(ed => ed.getTime() === date.getTime()));
+  const exerciseOnlyDates = exerciseDates.filter(date => !dietDates.some(dd => dd.getTime() === date.getTime()));
+  const modifiers = {
+    both: bothDates,
+    diet: dietOnlyDates,
+    exercise: exerciseOnlyDates,
+  };
+  const modifiersClassNames = {
+    both: 'calendar-dot-both',
+    diet: 'calendar-dot-diet',
+    exercise: 'calendar-dot-exercise',
+  };
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -542,15 +627,12 @@ const Note = () => {
                       mode="single"
                       selected={selectedDate}
                       onSelect={handleDateSelect}
+                      onMonthChange={setCalendarMonth}
                       initialFocus
                       className={cn("p-3 pointer-events-auto")}
-                      components={{
-                        Day: ({ date, ...props }) => (
-                          <div className="relative">
-                            <button {...props} className={cn("h-9 w-9 p-0 font-normal relative")}>{customDayContent(date)}</button>
-                          </div>
-                        )
-                      }}
+                      modifiers={modifiers}
+                      modifiersClassNames={modifiersClassNames}
+                      dayContent={customDayContent}
                     />
                   </PopoverContent>
                 </Popover>
