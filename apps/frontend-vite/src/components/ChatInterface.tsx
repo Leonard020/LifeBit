@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Mic, MicOff, Send, Loader2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Message } from '@/api/chatApi';
+import { Message, ChatResponse } from '@/api/chatApi';
 
 interface AIFeedback {
   type: 'success' | 'incomplete' | 'clarification' | 'error' | 'initial';
@@ -25,12 +25,12 @@ interface ChatInterfaceProps {
   onVoiceToggle: () => void;
   onSendMessage: () => void;
   onRetry: () => void;
-  aiFeedback: AIFeedback | null;
+  aiFeedback: ChatResponse | null;
   clarificationInput: string;
   setClarificationInput: (input: string) => void;
   onClarificationSubmit: () => void;
   onSaveRecord: () => void;
-  structuredData: any;
+  structuredData: ChatResponse['parsed_data'] | null;
   conversationHistory: Message[];
 }
 
@@ -105,11 +105,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {/* Current AI Feedback */}
         {aiFeedback && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] bg-gray-100 rounded-lg p-3 text-gray-900">
+           <div className="max-w-[80%] bg-gray-100 rounded-lg p-3 text-gray-900 whitespace-pre-line">
+
               {aiFeedback.message}
               
               {/* Suggestions */}
-              {aiFeedback.suggestions && showSuggestions && (
+              {aiFeedback?.suggestions?.length > 0 && showSuggestions && (
                 <div className="mt-2 space-y-2">
                   {aiFeedback.suggestions.map((suggestion: string, index: number) => (
                     <Button

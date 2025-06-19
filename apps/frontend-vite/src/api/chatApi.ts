@@ -1,25 +1,27 @@
-import axios from 'axios';
 import axiosInstance from '@/utils/axios';
-import { removeToken } from '@/utils/auth';
-import { API_CONFIG } from '@/config/env';
+import { AxiosError } from 'axios';
 
-// AI API 전용 axios 인스턴스 생성
-const aiAxiosInstance = axios.create({
-  baseURL: API_CONFIG.AI_API_URL,
-  timeout: API_CONFIG.TIMEOUT,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: false
-});
+// 대화 메시지 타입
+export interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
 
-interface ChatResponse {
-  type: 'success' | 'incomplete' | 'clarification' | 'error' | 'initial';
+// 요청 바디 타입 정의
+interface ChatRequestBody {
+  message: string;
+  conversation_history: Message[];
+  record_type: 'exercise' | 'diet';
+  chat_step?: 'extraction' | 'validation' | 'confirmation';
+}
+
+// API 응답 타입
+export interface ChatResponse {
+  type: 'initial' | 'success' | 'incomplete' | 'clarification' | 'error';
   message: string;
   suggestions?: string[];
   missingFields?: string[];
   parsed_data?: {
-    // 운동 기록 데이터
     exercise?: string;
     category?: string;
     subcategory?: string;
@@ -29,8 +31,6 @@ interface ChatResponse {
     reps?: number;
     duration_min?: number;
     calories_burned?: number;
-    
-    // 식단 기록 데이터
     food_name?: string;
     amount?: string;
     meal_time?: string;
@@ -43,60 +43,36 @@ interface ChatResponse {
   };
 }
 
-export interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
+/**
+ * 챗 메시지를 전송하고 응답을 반환합니다.
+ * @param message - 사용자 입력 텍스트
+ * @param conversationHistory - 전체 대화 기록
+ * @param recordType - 'exercise' | 'diet'
+ * @param chatStep - 'extraction' | 'validation' | 'confirmation'
+ */
 export const sendChatMessage = async (
-  message: string, 
+  message: string,
   conversationHistory: Message[],
-  recordType: 'exercise' | 'diet' | null = null
+  recordType: 'exercise' | 'diet',
+  chatStep?: 'extraction' | 'validation' | 'confirmation'
 ): Promise<ChatResponse> => {
   try {
-    console.log('Sending chat message:', { message, conversationHistory, recordType });
-    const response = await aiAxiosInstance.post('/api/chat', {
+    const body: ChatRequestBody = {
       message,
       conversation_history: conversationHistory,
-      record_type: recordType
-    });
-    console.log('API Response:', response.data);
-    
-    if (!response.data) {
-      throw new Error('No data received from API');
-    }
-    
-    return response.data;
-  } catch (error: any) {
-    console.error('Chat API Error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
-    
-    return {
-      type: 'error',
-      message: error.response?.data?.message || '메시지 전송 중 오류가 발생했습니다.'
-    };
-  }
-};
-
-export const processUserInput = async (
-  recordType: 'exercise' | 'diet',
-  input: string,
-  chatStep: ChatStep = 'extraction'
-): Promise<ChatResponse> => {
-  try {
-    const response = await aiAxiosInstance.post('/api/chat', {
-      message: input,
       record_type: recordType,
-      chat_step: chatStep
-    });
+      ...(chatStep && { chat_step: chatStep }),
+    };
 
+    const response = await axiosInstance.post<ChatResponse>('/api/chat', body);
     return response.data;
   } catch (error) {
-    console.error('Chat API Error:', error);
-    throw error;
+    let errorMessage = '메시지 전송 중 오류가 발생했습니다.';
+    if (error instanceof AxiosError) {
+      errorMessage = error.response?.data?.message || error.message;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    return { type: 'error', message: errorMessage };
   }
-}; 
+};
