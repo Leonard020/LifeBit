@@ -1,16 +1,86 @@
 import { Layout } from '@/components/Layout';
-import { ChatWindow } from '@/components/ChatWindow';
 import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Activity, Heart } from 'lucide-react';
+import { ChatInterface } from '@/components/ChatInterface';
+import { sendChatMessage, Message } from '@/api/chatApi';
 
 const Index = () => {
   const { toast } = useToast();
+  const [recordType, setRecordType] = useState<'exercise' | 'diet' | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  const [chatInputText, setChatInputText] = useState('');
+  const [chatIsRecording, setChatIsRecording] = useState(false);
+  const [chatIsProcessing, setChatIsProcessing] = useState(false);
+  const [chatNetworkError, setChatNetworkError] = useState(false);
+  const [chatAiFeedback, setChatAiFeedback] = useState<any>(null);
+  const [chatStructuredData, setChatStructuredData] = useState<any>(null);
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
+
+  const handleSendMessage = async () => {
+    if (!chatInputText.trim() || !recordType) return;
+
+    try {
+      setChatIsProcessing(true);
+      setChatNetworkError(false);
+
+      // 현재 대화 추가
+      const updatedHistory: Message[] = [
+        ...conversationHistory,
+        { role: 'user' as const, content: chatInputText }
+      ];
+
+      const response = await sendChatMessage(chatInputText, updatedHistory, recordType);
+      
+      // AI 응답 추가
+      const newHistory: Message[] = [
+        ...updatedHistory,
+        { role: 'assistant' as const, content: response.message }
+      ];
+      setConversationHistory(newHistory);
+      
+      setChatAiFeedback({
+        type: response.type,
+        message: response.message,
+        suggestions: response.suggestions,
+        missingFields: response.missingFields
+      });
+
+      if (response.parsed_data) {
+        setChatStructuredData(response.parsed_data);
+      }
+      
+      // 성공적으로 모든 정보가 수집된 경우에만 입력창 초기화
+      if (response.type === 'success' && !response.missingFields?.length) {
+        setChatInputText('');
+      }
+    } catch (error) {
+      console.error('Failed to process message:', error);
+      setChatNetworkError(true);
+      toast({
+        title: "오류 발생",
+        description: "메시지 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
+        variant: "destructive",
+      });
+    } finally {
+      setChatIsProcessing(false);
+    }
+  };
 
   const handleRecordSubmit = (type: 'exercise' | 'diet', content: string) => {
-    // 기록 처리 로직
     toast({
       title: "기록 완료",
       description: `${type === 'exercise' ? '운동' : '식단'} 기록이 저장되었습니다.`,
     });
+    
+    // 초기화
+    setChatInputText('');
+    setChatAiFeedback(null);
+    setChatStructuredData(null);
+    setShowChat(false);
+    setRecordType(null);
+    setConversationHistory([]);
   };
 
   return (
@@ -26,8 +96,81 @@ const Index = () => {
           </p>
         </div>
 
+        {/* Record Type Buttons */}
+        <div className="flex justify-center gap-4 mb-8">
+          <Button
+            variant={recordType === 'exercise' ? 'default' : 'outline'}
+            size="lg"
+            onClick={() => {
+              setRecordType('exercise');
+              setShowChat(true);
+              setChatInputText('');
+              setChatStructuredData(null);
+              setConversationHistory([]);
+              setChatAiFeedback({
+                type: 'initial',
+                message: '안녕하세요! 오늘 어떤 운동을 하셨나요?'
+              });
+            }}
+            className={`flex items-center gap-2 ${
+              recordType === 'exercise' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''
+            }`}
+          >
+            <Activity className="h-5 w-5" />
+            운동 기록
+          </Button>
+          <Button
+            variant={recordType === 'diet' ? 'default' : 'outline'}
+            size="lg"
+            onClick={() => {
+              setRecordType('diet');
+              setShowChat(true);
+              setChatInputText('');
+              setChatStructuredData(null);
+              setConversationHistory([]);
+              setChatAiFeedback({
+                type: 'initial',
+                message: '안녕하세요! 오늘 어떤 음식을 드셨나요?'
+              });
+            }}
+            className={`flex items-center gap-2 ${
+              recordType === 'diet' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''
+            }`}
+          >
+            <Heart className="h-5 w-5" />
+            식단 기록
+          </Button>
+        </div>
+
         {/* Chat Interface */}
-        <ChatWindow onRecordSubmit={handleRecordSubmit} />
+        {showChat && recordType ? (
+          <ChatInterface
+            recordType={recordType}
+            inputText={chatInputText}
+            setInputText={setChatInputText}
+            isRecording={chatIsRecording}
+            isProcessing={chatIsProcessing}
+            networkError={chatNetworkError}
+            onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
+            onSendMessage={handleSendMessage}
+            onRetry={() => {
+              setChatNetworkError(false);
+              handleSendMessage();
+            }}
+            aiFeedback={chatAiFeedback}
+            clarificationInput={''}
+            setClarificationInput={() => {}}
+            onClarificationSubmit={() => {}}
+            onSaveRecord={() => handleRecordSubmit(recordType, chatInputText)}
+            structuredData={chatStructuredData}
+            conversationHistory={conversationHistory}
+          />
+        ) : (
+          <div className="text-center text-gray-600 p-8 bg-gray-50 rounded-lg">
+            <p className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</p>
+            <p>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</p>
+          </div>
+        )}
       </div>
     </Layout>
   );
