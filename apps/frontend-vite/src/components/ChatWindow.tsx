@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { sendChatMessage } from '../api/chatApi';
 import { saveExerciseRecord } from '../api/healthApi';
 
+
+
 // Speech Recognition 타입 정의
 interface SpeechRecognitionEvent extends Event {
   results: {
@@ -89,6 +91,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       timestamp: new Date()
     }
   ]);
+
   const [inputValue, setInputValue] = useState('');
   const [currentRecordType, setCurrentRecordType] = useState<'exercise' | 'diet' | null>(null);
   const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
@@ -244,7 +247,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, newMessage]);
+    if (type === 'user') {
+      setInputValue(''); // 입력창 초기화
+    }
   };
+
 
   const analyzeInput = (input: string, type: 'exercise' | 'diet') => {
     // 간단한 분석 로직 (실제로는 더 복잡한 AI 분석이 필요)
@@ -281,9 +288,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const handleExerciseClick = () => {
     setCurrentRecordType('exercise');
-    setExerciseState({});
-    setValidationStep(null);
-    addMessage('ai', "운동을 기록하시려 하시는군요! 예시로 '스쿼트 30kg 3세트 10회했어요'와 같이 입력해주세요");
+    setIntroMessage("운동을 기록하시려 하시는군요! 예시로 '스쿼트 30kg 3세트 10회했어요'와 같이 입력해주세요");
   };
 
   const handleDietClick = () => {
@@ -426,15 +431,16 @@ const handleExerciseInput = async (input: string) => {
   // 메시지 전송 처리 함수
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
-
+  
     try {
       setIsProcessing(true);
       const userMessage = inputValue.trim();
       
       // 사용자 메시지를 먼저 대화창에 추가
       addMessage('user', userMessage);
+      setIntroMessage(null); // ⬅️ 인사말은 이제 숨긴다
       updateConversationHistory('user', userMessage);
-
+  
       if (currentRecordType === 'exercise') {
         if (currentStep === 'validation') {
           await handleValidationResponse(userMessage);
@@ -449,12 +455,13 @@ const handleExerciseInput = async (input: string) => {
         const response = await sendChatMessage(
           userMessage, 
           [
-          ...conversationHistory,
-          { role: "system", content: "식단 기록을 분석하여 JSON 형태로 변환합니다." }],
+            ...conversationHistory,
+            { role: "system", content: "식단 기록을 분석하여 JSON 형태로 변환합니다." }
+          ],
           currentRecordType!,  // 'diet'
-          'extraction'         // 최초 추출 단계
+          'extraction'
         );
-        
+  
         if (response && response.message) {
           addMessage('ai', response.message);
           updateConversationHistory('assistant', response.message);
@@ -464,11 +471,11 @@ const handleExerciseInput = async (input: string) => {
         const response = await sendChatMessage(
           userMessage, 
           conversationHistory,
-          currentRecordType!,  // 'exercise' 또는 'diet'
-          'extraction'         // 또는 현재 단계 변수(currentStep)를 넣어도 됩니다
+          currentRecordType!,
+          'extraction'
         );
         console.log('Chat response:', response);
-        
+  
         if (response && response.message) {
           addMessage('ai', response.message);
           updateConversationHistory('assistant', response.message);
@@ -489,7 +496,7 @@ const handleExerciseInput = async (input: string) => {
       setInputValue('');
     }
   };
-
+  
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

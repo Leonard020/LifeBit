@@ -55,11 +55,6 @@ const Index = () => {
       } else if (chatStep === 'extraction') {
         setChatStep('confirmation');
       }
-
-      // 확인 단계 완료 시 입력 초기화
-      if (chatStep === 'confirmation' && response.type === 'success') {
-        setChatInputText('');
-      }
     } catch (error) {
       console.error('Failed to process message:', error);
       setChatNetworkError(true);
@@ -70,6 +65,7 @@ const Index = () => {
       });
     } finally {
       setChatIsProcessing(false);
+      setChatInputText('');
     }
   };
 
