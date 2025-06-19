@@ -54,4 +54,29 @@ public class MealService {
         return foodItemRepository.findByFoodCode(foodCode)
             .orElseThrow(() -> new EntityNotFoundException("Food item not found"));
     }
+
+    @Transactional
+    public FoodItem findOrCreateFoodItem(String name, BigDecimal calories, BigDecimal carbs, BigDecimal protein, BigDecimal fat) {
+        List<FoodItem> existingItems = foodItemRepository.findByNameContainingIgnoreCase(name);
+        
+        if (!existingItems.isEmpty()) {
+            for (FoodItem item : existingItems) {
+                if (item.getName().equalsIgnoreCase(name)) {
+                    return item;
+                }
+            }
+        }
+        
+        FoodItem newFoodItem = new FoodItem();
+        newFoodItem.setUuid(UUID.randomUUID());
+        newFoodItem.setName(name);
+        newFoodItem.setCalories(calories);
+        newFoodItem.setCarbs(carbs);
+        newFoodItem.setProtein(protein);
+        newFoodItem.setFat(fat);
+        newFoodItem.setServingSize(BigDecimal.valueOf(100));
+        newFoodItem.setCreatedAt(LocalDateTime.now());
+        
+        return foodItemRepository.save(newFoodItem);
+    }
 } 

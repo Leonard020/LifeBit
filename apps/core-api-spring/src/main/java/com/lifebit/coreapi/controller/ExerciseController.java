@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/exercises")
@@ -58,5 +59,15 @@ public class ExerciseController {
     public ResponseEntity<List<ExerciseCatalog>> getExercisesByBodyPart(
             @PathVariable String bodyPart) {
         return ResponseEntity.ok(exerciseService.getExercisesByBodyPart(bodyPart));
+    }
+
+    @PostMapping("/find-or-create")
+    public ResponseEntity<ExerciseCatalog> findOrCreateExercise(@RequestBody Map<String, Object> request) {
+        String name = (String) request.get("name");
+        String bodyPart = (String) request.get("bodyPart");
+        String description = (String) request.get("description");
+        
+        ExerciseCatalog exercise = exerciseService.findOrCreateExercise(name, bodyPart, description);
+        return ResponseEntity.ok(exercise);
     }
 } 

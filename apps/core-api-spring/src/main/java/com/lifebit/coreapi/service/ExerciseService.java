@@ -153,4 +153,42 @@ public class ExerciseService {
         User user = new User(userId);
         return (int) exerciseSessionRepository.countDistinctExerciseDateByUser(user);
     }
+
+    /**
+     * 운동 카탈로그 찾기 또는 생성 메서드 추가
+     */
+    @Transactional
+    public ExerciseCatalog findOrCreateExercise(String name, String bodyPart, String description) {
+        // 먼저 기존 운동 검색
+        List<ExerciseCatalog> existingExercises = exerciseCatalogRepository.findByNameContainingIgnoreCase(name);
+        
+        if (!existingExercises.isEmpty()) {
+            // 정확히 일치하는 이름이 있는지 확인
+            for (ExerciseCatalog exercise : existingExercises) {
+                if (exercise.getName().equalsIgnoreCase(name)) {
+                    return exercise;
+                }
+            }
+        }
+        
+        // 새로운 운동 카탈로그 생성
+        ExerciseCatalog newExercise = new ExerciseCatalog();
+        newExercise.setUuid(java.util.UUID.randomUUID());
+        newExercise.setName(name);
+        
+        // bodyPart를 BodyPartType으로 변환
+        try {
+            com.lifebit.coreapi.entity.BodyPartType bodyPartType = 
+                com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPart.toUpperCase());
+            newExercise.setBodyPart(bodyPartType);
+        } catch (IllegalArgumentException e) {
+            // 기본값 설정
+            newExercise.setBodyPart(com.lifebit.coreapi.entity.BodyPartType.cardio);
+        }
+        
+        newExercise.setDescription(description);
+        newExercise.setCreatedAt(LocalDateTime.now());
+        
+        return exerciseCatalogRepository.save(newExercise);
+    }
 } 

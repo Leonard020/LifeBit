@@ -139,6 +139,41 @@ interface ExerciseState {
   duration_min?: number;
 }
 
+// 식단 기록 관련 타입
+export interface MealLog {
+  meal_log_id: number;
+  uuid: string;
+  user_id: number;
+  food_item_id: number;
+  quantity: number;
+  log_date: string;
+  created_at: string;
+}
+
+// 식단 기록 요청 타입
+export interface DietRecordRequest {
+  food_name: string;
+  amount: string;
+  meal_time: string;
+  nutrition: {
+    calories: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+  };
+}
+
+// 운동 기록 요청 타입  
+export interface ExerciseRecordRequest {
+  exercise_name: string;
+  category: string;
+  target?: string;
+  sets?: number;
+  reps?: number;
+  duration_min?: number;
+  calories_burned?: number;
+}
+
 // ============================================================================
 // API 함수들 (백엔드와 통신하는 함수들)
 // ============================================================================
@@ -508,6 +543,61 @@ export const healthApi = {
       },
     };
   },
+
+  // 식단 기록 저장 API
+  saveDietRecord: async (dietData: DietRecordRequest): Promise<MealLog> => {
+    try {
+      // 1. 먼저 음식 정보를 검색하거나 생성
+      const foodResponse = await axiosInstance.post('/api/foods/find-or-create', {
+        name: dietData.food_name,
+        calories: dietData.nutrition.calories,
+        carbs: dietData.nutrition.carbs,
+        protein: dietData.nutrition.protein,
+        fat: dietData.nutrition.fat
+      });
+
+      // 2. 식단 로그 저장
+      const mealResponse = await axiosInstance.post('/api/meals/record', {
+        foodItemId: foodResponse.data.food_item_id,
+        quantity: parseFloat(dietData.amount) || 1.0,
+        mealTime: dietData.meal_time
+      });
+
+      return mealResponse.data;
+    } catch (error) {
+      console.error('Diet record save error:', error);
+      throw error;
+    }
+  },
+
+  // 운동 기록 저장 API 개선
+  saveExerciseRecord: async (exerciseData: ExerciseRecordRequest): Promise<any> => {
+    try {
+      // 1. 먼저 운동 카탈로그를 검색하거나 생성
+      const catalogResponse = await axiosInstance.post('/api/exercises/find-or-create', {
+        name: exerciseData.exercise_name,
+        bodyPart: exerciseData.target,
+        description: `${exerciseData.category} 운동`
+      });
+
+      // 2. 운동 세션 저장
+      const sessionResponse = await axiosInstance.post('/api/exercises/record', {
+        catalogId: catalogResponse.data.exercise_catalog_id,
+        durationMinutes: exerciseData.duration_min,
+        caloriesBurned: exerciseData.calories_burned,
+        weight: exerciseData.sets && exerciseData.reps ? 
+          (exerciseData.sets * exerciseData.reps * 0.5) : null, // 임시 계산
+        sets: exerciseData.sets,
+        reps: exerciseData.reps,
+        notes: `${exerciseData.category} 운동`
+      });
+
+      return sessionResponse.data;
+    } catch (error) {
+      console.error('Exercise record save error:', error);
+      throw error;
+    }
+  },
 };
 
 // ============================================================================
@@ -794,111 +884,6 @@ if (token) {
   console.log('Token expires at:', new Date(payload.exp * 1000));
   console.log('Current time:', new Date());
 }
-
-// saveExerciseRecord 함수 수정
-export const saveExerciseRecord = async (exerciseData: ExerciseState): Promise<ExerciseSession> => {
-  try {
-    // 사용자 정보 가져오기
-    const userInfo = localStorage.getItem('userInfo');
-    const userId = userInfo ? JSON.parse(userInfo).userId : null;
-
-    if (!userId) {
-      throw new Error('사용자 정보를 찾을 수 없습니다.');
-    }
-
-    // 1. 운동 카탈로그 검색
-    const catalogResponse = await apiCall<{ exerciseCatalogId: number; name: string }[]>('/api/exercises/search', {
-      method: 'GET',
-      params: { keyword: exerciseData.exercise || '알 수 없는 운동' }
-    });
-
-    let catalogId;
-    
-    // 2. 카탈로그 생성 또는 검색
-    if (catalogResponse.success && catalogResponse.data && Array.isArray(catalogResponse.data) && catalogResponse.data.length > 0) {
-      catalogId = catalogResponse.data[0].exerciseCatalogId;
-    } else {
-      // 새로운 운동 종목 생성
-      const newCatalogResponse = await apiCall<{ exerciseCatalogId: number }>('/api/exercises/catalog', {
-        method: 'POST',
-        data: {
-          name: exerciseData.exercise || '알 수 없는 운동',
-          bodyPart: exerciseData.subcategory || '기타',
-          description: `${exerciseData.category || '기타'} - ${exerciseData.subcategory || '기타'}`
-        }
-      });
-      
-      if (newCatalogResponse.success && newCatalogResponse.data) {
-        catalogId = newCatalogResponse.data.exerciseCatalogId;
-      } else {
-        throw new Error('운동 카탈로그 생성에 실패했습니다.');
-      }
-    }
-
-    // 3. 운동 세션 생성
-    const sessionData: CreateExerciseData = {
-      user_id: userId,
-      exercise_catalog_id: catalogId,
-      duration_minutes: exerciseData.duration_min || calculateDurationMinutes(exerciseData),
-      calories_burned: calculateCalories(exerciseData),
-      notes: formatExerciseNotes(exerciseData),
-      exercise_date: new Date().toISOString().split('T')[0]
-    };
-
-    const response = await apiCall<ExerciseSession>('/api/exercises/record', {
-      method: 'POST',
-      data: sessionData
-    });
-
-    if (response.success && response.data) {
-      return response.data;
-    } else {
-      throw new Error(response.error?.message || '운동 세션 생성에 실패했습니다.');
-    }
-  } catch (error) {
-    console.error('Exercise record save error:', error);
-    throw new Error('운동 기록 저장 중 오류가 발생했습니다.');
-  }
-};
-
-// 헬퍼 함수들 수정
-const calculateDurationMinutes = (exerciseData: ExerciseState): number => {
-  if (exerciseData.duration_min && exerciseData.duration_min > 0) {
-    return exerciseData.duration_min;
-  }
-  // 근력운동의 경우 세트당 약 2분으로 계산
-  if (exerciseData.category === '근력운동' && exerciseData.sets) {
-    return exerciseData.sets * 2;
-  }
-  return 30; // 기본값
-};
-
-const formatExerciseNotes = (exerciseData: ExerciseState): string => {
-  if (exerciseData.category === '근력운동') {
-    const weight = exerciseData.weight || 0;
-    const sets = exerciseData.sets || 0;
-    const reps = exerciseData.reps || 0;
-    return `${weight}kg x ${sets}세트 x ${reps}회 (${exerciseData.time_period || '시간 미지정'})`;
-  }
-  const duration = exerciseData.duration_min || calculateDurationMinutes(exerciseData);
-  return `${duration}분 ${exerciseData.category || '운동'} (${exerciseData.time_period || '시간 미지정'})`;
-};
-
-const calculateCalories = (exerciseData: ExerciseState): number => {
-  if (exerciseData.category === '유산소운동') {
-    const duration = exerciseData.duration_min || 30;
-    // 유산소 운동은 분당 8칼로리로 계산 (간단한 추정)
-    return Math.round(duration * 8);
-  }
-  
-  // 근력운동 칼로리 계산
-  const weight = exerciseData.weight || 0;
-  const sets = exerciseData.sets || 0;
-  const reps = exerciseData.reps || 0;
-  // 무게 * 세트 * 횟수 * 0.1의 공식으로 간단히 추정
-  const baseCalories = weight * sets * reps * 0.1;
-  return Math.round(Math.max(baseCalories, 50)); // 최소 50칼로리 보장
-};
 
 // 🔧 사용자 ID 안전하게 가져오기 헬퍼 함수
 const getCurrentUserId = (): string | null => {

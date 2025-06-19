@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,9 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send, Dumbbell, Utensils, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sendChatMessage } from '../api/chatApi';
-import { saveExerciseRecord } from '../api/healthApi';
-
-
+import { healthApi } from '../api/healthApi';
 
 // Speech Recognition 타입 정의
 interface SpeechRecognitionEvent extends Event {
@@ -71,16 +68,93 @@ interface ExerciseState {
   duration_min?: number;
 }
 
-interface ChatResponse {
-  status: 'success' | 'error';
-  message: string;
-  parsed_data?: {
-    exercise: string;
-    category: string;
-    target?: string;
-    explanation: string;
+// 식단 상태 인터페이스 추가
+interface DietState {
+  food_name?: string;
+  amount?: string;
+  meal_time?: string;
+  nutrition?: {
+    calories: number;
+    carbs: number;
+    protein: number;
+    fat: number;
   };
 }
+
+interface ChatResponse {
+  status: 'success' | 'error';
+  type: 'success' | 'error' | 'incomplete';
+  message: string;
+  parsed_data?: {
+    exercise?: string;
+    category?: string;
+    target?: string;
+    subcategory?: string;
+    sets?: number;
+    reps?: number;
+    duration_min?: number;
+    calories_burned?: number;
+    food_name?: string;
+    amount?: string;
+    meal_time?: string;
+    nutrition?: {
+      calories: number;
+      carbs: number;
+      protein: number;
+      fat: number;
+    };
+  };
+}
+
+// 식단 저장 함수 추가
+const saveDietRecord = async (dietData: any) => {
+  try {
+    // healthApi에서 가져온 함수 사용
+    const response = await fetch('/api/foods/find-or-create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        name: dietData.food_name,
+        calories: dietData.nutrition?.calories || 0,
+        carbs: dietData.nutrition?.carbs || 0,
+        protein: dietData.nutrition?.protein || 0,
+        fat: dietData.nutrition?.fat || 0
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('음식 정보 저장 실패');
+    }
+
+    const foodItem = await response.json();
+
+    // 식단 로그 저장
+    const mealResponse = await fetch('/api/meals/record', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        foodItemId: foodItem.food_item_id,
+        quantity: parseFloat(dietData.amount) || 1.0,
+        mealTime: dietData.meal_time || 'lunch'
+      })
+    });
+
+    if (!mealResponse.ok) {
+      throw new Error('식단 기록 저장 실패');
+    }
+
+    return await mealResponse.json();
+  } catch (error) {
+    console.error('Diet record save error:', error);
+    throw error;
+  }
+};
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const [messages, setMessages] = useState<Message[]>([
@@ -101,7 +175,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const [currentStep, setCurrentStep] = useState<'input' | 'validation' | 'confirmation'>('input');
   const [validationStep, setValidationStep] = useState<string | null>(null);
   const [exerciseState, setExerciseState] = useState<ExerciseState>({});
-  const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
+  const [dietState, setDietState] = useState<DietState>({}); // 식단 상태 추가
+  const [conversationHistory, setConversationHistory] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [introMessage, setIntroMessage] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -288,12 +364,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   const handleExerciseClick = () => {
     setCurrentRecordType('exercise');
-    setIntroMessage("운동을 기록하시려 하시는군요! 예시로 '스쿼트 30kg 3세트 10회했어요'와 같이 입력해주세요");
+    setCurrentStep('input');
+    setExerciseState({});
+    setValidationStep(null);
+    setIsAwaitingConfirmation(false);
+    setPendingRecord(null);
+    addMessage('ai', "운동을 기록하시려 하시는군요! 예시로 '스쿼트 30kg 3세트 10회 했어요' 또는 '런닝머신으로 30분 뛰었어요'와 같이 입력해주세요.");
   };
 
   const handleDietClick = () => {
     setCurrentRecordType('diet');
-    addMessage('ai', "식단을 기록하시려 하시는군요! 예시를 들어 '아침에 바나나 1개, 계란 2개 먹었어요'와 같이 입력해주세요");
+    setCurrentStep('input');
+    setDietState({});
+    setValidationStep(null);
+    setIsAwaitingConfirmation(false);
+    setPendingRecord(null);
+    addMessage('ai', "식단을 기록하시려 하시는군요! 예시를 들어 '아침에 바나나 1개, 계란 2개 먹었어요' 또는 '점심에 볶음밥 1인분 먹었어요'와 같이 입력해주세요.");
   };
 
   const handleVoiceToggle = async () => {
@@ -328,104 +414,289 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   };
 
   // 대화 기록 업데이트 함수
-  const updateConversationHistory = (role: string, content: string) => {
-    setConversationHistory(prev => [...prev, { role, content }]);
+  const updateConversationHistory = (role: 'user' | 'assistant', content: string) => {
+    setConversationHistory(prev => [
+      ...prev,
+      { role, content }
+    ]);
   };
 
   // 운동 입력 처리 함수
-
-      // 사용자 메시지는 handleSendMessage에서 이미 추가되었으므로 여기서는 제거
-      
-      // 운동 분석 요청
-
-
-// handleExerciseInput 내…
-const handleExerciseInput = async (input: string) => {
-  try {
-    setIsProcessing(true);
-
-    // 1) sendChatMessage 시그니처에 맞춰 인자 4개 전달
-    const response = await sendChatMessage(
-      input,
-      [
-        ...conversationHistory,
-        { role: 'assistant', content: '운동 기록을 분석하여 JSON 형태로 변환합니다.' }
-      ],
-      currentRecordType!,
-      'extraction'
-    );
-
-    // 2) response.status → response.type 으로 변경
-    if (response.type === 'success') {
-      if (response.message) {
-        addMessage('ai', response.message.replace(/<EOL>/g, '\n'));
-        updateConversationHistory('assistant', response.message);
-      }
-
-      if (response.parsed_data) {
-        // 3) parsed_data.target → parsed_data.subcategory 으로 필드명 일치
-        setExerciseState({
-          exercise: response.parsed_data.exercise!,
-          category: response.parsed_data.category!,
-          target: response.parsed_data.subcategory
-        });
-
-        setCurrentStep('validation');
-        if (response.parsed_data.category === 'strength') {
-          setValidationStep('sets_reps');
-        } else {
-          setValidationStep('duration');
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Exercise input processing error:', error);
-    addMessage('ai', '죄송합니다. 운동 기록 처리 중 오류가 발생했습니다.');
-  } finally {
-    setIsProcessing(false);
-  }
-};
-
-
-
-  // 검증 단계 처리 함수
-  const handleValidationResponse = async (input: string) => {
+  const handleExerciseInput = async (input: string) => {
     try {
       setIsProcessing(true);
-      // 사용자 메시지는 handleSendMessage에서 이미 추가되었으므로 여기서는 제거
+      console.log('🏋️ Starting exercise input processing:', input);
 
-      const updatedExerciseState = { ...exerciseState };
-      
-      if (validationStep === 'sets_reps') {
-        // 세트와 횟수 파싱
-        const numbers = input.match(/\d+/g);
-        if (numbers && numbers.length >= 2) {
-          updatedExerciseState.sets = parseInt(numbers[0]);
-          updatedExerciseState.reps = parseInt(numbers[1]);
+      const response = await sendChatMessage(
+        input,
+        [
+          ...conversationHistory,
+          { role: 'assistant', content: '운동 기록을 분석하여 JSON 형태로 변환합니다.' }
+        ],
+        currentRecordType!,
+        'extraction'
+      );
+
+      console.log('🤖 AI Response:', response);
+
+      if (response.type === 'success') {
+        console.log('✅ Success response received');
+        
+        if (response.message) {
+          addMessage('ai', response.message.replace(/<EOL>/g, '\n'));
+          updateConversationHistory('assistant', response.message);
         }
-      } else if (validationStep === 'duration') {
-        // 시간 파싱
-        const minutes = input.match(/\d+/);
-        if (minutes) {
-          updatedExerciseState.duration_min = parseInt(minutes[0]);
+
+        if (response.parsed_data) {
+          console.log('📊 Parsed data:', response.parsed_data);
+          
+          // 운동 상태 업데이트
+          const newExerciseState = {
+            exercise: response.parsed_data.exercise!,
+            category: response.parsed_data.category!,
+            target: response.parsed_data.subcategory,
+            sets: response.parsed_data.sets,
+            reps: response.parsed_data.reps,
+            duration_min: response.parsed_data.duration_min
+          };
+          
+          console.log('🔄 New exercise state:', newExerciseState);
+          setExerciseState(newExerciseState);
+
+          // 필요한 정보가 부족한지 확인
+          const missingInfo = checkMissingExerciseInfo(newExerciseState);
+          console.log('❓ Missing info:', missingInfo);
+          
+          if (missingInfo.length > 0) {
+            // validation 단계로 이동
+            console.log('📝 Moving to validation step for:', missingInfo[0]);
+            setCurrentStep('validation');
+            setValidationStep(missingInfo[0]);
+            askForMissingInfo(missingInfo[0], newExerciseState);
+          } else {
+            // 모든 정보가 있으면 바로 확인 단계로
+            console.log('✅ All info complete, moving to confirmation');
+            setCurrentStep('confirmation');
+            const confirmationMessage = formatConfirmationMessage(newExerciseState);
+            addMessage('ai', confirmationMessage);
+            setPendingRecord({ type: 'exercise', content: JSON.stringify(newExerciseState) });
+            setIsAwaitingConfirmation(true);
+          }
         }
+      } else if (response.type === 'incomplete') {
+        console.log('⚠️ Incomplete response');
+        // 정보가 부족한 경우
+        addMessage('ai', response.message || '추가 정보가 필요합니다. 더 자세히 입력해주세요.');
+        // 계속 입력을 받기 위해 상태 유지
+      } else {
+        console.log('❌ Unknown response type:', response.type);
+        addMessage('ai', '운동 정보를 파악하지 못했습니다. 다시 입력해주세요.\n\n예시: "스쿼트 60kg 3세트 10회 했어요" 또는 "런닝머신으로 30분 뛰었어요"');
       }
-
-      setExerciseState(updatedExerciseState);
-      setCurrentStep('confirmation');
-      
-      // 확인 메시지 표시
-      const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
-      addMessage('ai', confirmationMessage);
-      updateConversationHistory('assistant', confirmationMessage);
-      setIsAwaitingConfirmation(true);
-      setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
     } catch (error) {
-      console.error('Validation response error:', error);
-      addMessage('ai', '죄송합니다. 검증 처리 중 오류가 발생했습니다.');
+      console.error('❌ Exercise input processing error:', error);
+      addMessage('ai', '죄송합니다. 운동 기록 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // 부족한 운동 정보 확인 함수
+  const checkMissingExerciseInfo = (exerciseState: ExerciseState): string[] => {
+    const missing: string[] = [];
+    
+    if (exerciseState.category === 'strength') {
+      if (!exerciseState.sets) missing.push('sets');
+      if (!exerciseState.reps) missing.push('reps');
+    } else if (exerciseState.category === 'cardio') {
+      if (!exerciseState.duration_min) missing.push('duration');
+    }
+    
+    return missing;
+  };
+
+  // 부족한 정보에 대한 질문 생성
+  const askForMissingInfo = (missingType: string, exerciseState: ExerciseState) => {
+    let question = '';
+    
+    switch (missingType) {
+      case 'sets':
+        question = `${exerciseState.exercise} 운동을 몇 세트 하셨나요?`;
+        break;
+      case 'reps':
+        question = `한 세트당 몇 회씩 하셨나요?`;
+        break;
+      case 'duration':
+        question = `${exerciseState.exercise} 운동을 몇 분간 하셨나요?`;
+        break;
+      default:
+        question = '추가 정보가 필요합니다. 다시 입력해주세요.';
+    }
+    
+    addMessage('ai', question);
+    updateConversationHistory('assistant', question);
+  };
+
+  // 검증 단계 처리 함수 수정
+  const handleValidationResponse = async (input: string) => {
+    try {
+      setIsProcessing(true);
+      console.log('🔍 Validation processing:', { input, validationStep, exerciseState });
+
+      const updatedExerciseState = { ...exerciseState };
+      let processed = false;
+      
+      if (validationStep === 'sets') {
+        const sets = parseInt(input.match(/\d+/)?.[0] || '0');
+        console.log('📊 Extracted sets:', sets);
+        
+        if (sets > 0) {
+          updatedExerciseState.sets = sets;
+          setExerciseState(updatedExerciseState);
+          processed = true;
+          
+          // 다음 필요한 정보 확인
+          const missingInfo = checkMissingExerciseInfo(updatedExerciseState);
+          console.log('❓ Next missing info:', missingInfo);
+          
+          if (missingInfo.length > 0) {
+            setValidationStep(missingInfo[0]);
+            askForMissingInfo(missingInfo[0], updatedExerciseState);
+          } else {
+            // 모든 정보 수집 완료, 확인 단계로
+            console.log('✅ All validation complete, moving to confirmation');
+            setCurrentStep('confirmation');
+            const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+            addMessage('ai', confirmationMessage);
+            setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+            setIsAwaitingConfirmation(true);
+          }
+        } else {
+          addMessage('ai', '올바른 세트 수를 입력해주세요. (예: 3)');
+        }
+      } else if (validationStep === 'reps') {
+        const reps = parseInt(input.match(/\d+/)?.[0] || '0');
+        console.log('📊 Extracted reps:', reps);
+        
+        if (reps > 0) {
+          updatedExerciseState.reps = reps;
+          setExerciseState(updatedExerciseState);
+          processed = true;
+          
+          // 모든 정보 수집 완료, 확인 단계로
+          console.log('✅ Reps validation complete, moving to confirmation');
+          setCurrentStep('confirmation');
+          const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+          addMessage('ai', confirmationMessage);
+          setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+          setIsAwaitingConfirmation(true);
+        } else {
+          addMessage('ai', '올바른 횟수를 입력해주세요. (예: 10)');
+        }
+      } else if (validationStep === 'duration') {
+        const duration = parseInt(input.match(/\d+/)?.[0] || '0');
+        console.log('📊 Extracted duration:', duration);
+        
+        if (duration > 0) {
+          updatedExerciseState.duration_min = duration;
+          setExerciseState(updatedExerciseState);
+          processed = true;
+          
+          // 확인 단계로
+          console.log('✅ Duration validation complete, moving to confirmation');
+          setCurrentStep('confirmation');
+          const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+          addMessage('ai', confirmationMessage);
+          setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+          setIsAwaitingConfirmation(true);
+        } else {
+          addMessage('ai', '올바른 시간을 입력해주세요. (예: 30)');
+        }
+      } else {
+        console.log('❌ Unknown validation step:', validationStep);
+        addMessage('ai', '알 수 없는 검증 단계입니다. 처음부터 다시 입력해주세요.');
+        setCurrentStep('input');
+        setValidationStep(null);
+      }
+      
+      console.log('🔄 Validation result:', { processed, updatedExerciseState });
+      
+    } catch (error) {
+      console.error('❌ Validation response error:', error);
+      addMessage('ai', '죄송합니다. 정보 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 식단 입력 처리 함수 추가
+  const handleDietInput = async (input: string) => {
+    try {
+      setIsProcessing(true);
+
+      const response = await sendChatMessage(
+        input,
+        [
+          ...conversationHistory,
+          { role: 'assistant', content: '식단 기록을 분석하여 JSON 형태로 변환합니다.' }
+        ],
+        currentRecordType!,
+        'extraction'
+      );
+
+      if (response.type === 'success') {
+        if (response.message) {
+          addMessage('ai', response.message.replace(/<EOL>/g, '\n'));
+          updateConversationHistory('assistant', response.message);
+        }
+
+        if (response.parsed_data) {
+          setDietState({
+            food_name: response.parsed_data.food_name!,
+            amount: response.parsed_data.amount!,
+            meal_time: response.parsed_data.meal_time!,
+            nutrition: response.parsed_data.nutrition
+          });
+
+          setCurrentStep('confirmation');
+          // 식단 확인 메시지 표시
+          const confirmationMessage = formatDietConfirmationMessage({
+            food_name: response.parsed_data.food_name!,
+            amount: response.parsed_data.amount!,
+            meal_time: response.parsed_data.meal_time!,
+            nutrition: response.parsed_data.nutrition
+          });
+          addMessage('ai', confirmationMessage);
+          setPendingRecord({ type: 'diet', content: JSON.stringify(response.parsed_data) });
+          setIsAwaitingConfirmation(true);
+        }
+      }
+    } catch (error) {
+      console.error('Diet input processing error:', error);
+      addMessage('ai', '죄송합니다. 식단 기록 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 식단 확인 메시지 포맷팅 함수 추가
+  const formatDietConfirmationMessage = (data: DietState): string => {
+    let message = '다음과 같이 식단을 기록하시겠습니까?\n\n';
+    
+    message += `🍽️ ${data.food_name}\n`;
+    if (data.amount) message += `📏 섭취량: ${data.amount}\n`;
+    if (data.meal_time) message += `⏰ 섭취시간: ${data.meal_time}\n`;
+    
+    if (data.nutrition) {
+      message += `📊 영양 정보:\n`;
+      message += `  🔥 칼로리: ${data.nutrition.calories}kcal\n`;
+      message += `  🍞 탄수화물: ${data.nutrition.carbs}g\n`;
+      message += `  🥩 단백질: ${data.nutrition.protein}g\n`;
+      message += `  🧈 지방: ${data.nutrition.fat}g\n`;
+    }
+    
+    message += '\n확인하시면 "네", 수정이 필요하시면 "아니오"를 입력해주세요.';
+    
+    return message;
   };
 
   // 메시지 전송 처리 함수
@@ -436,38 +707,46 @@ const handleExerciseInput = async (input: string) => {
       setIsProcessing(true);
       const userMessage = inputValue.trim();
       
+      // 디버깅 로그
+      console.log('🔍 Message Send Debug:', {
+        userMessage,
+        currentRecordType,
+        currentStep,
+        validationStep,
+        exerciseState
+      });
+      
       // 사용자 메시지를 먼저 대화창에 추가
       addMessage('user', userMessage);
-      setIntroMessage(null); // ⬅️ 인사말은 이제 숨긴다
+      setIntroMessage(null);
       updateConversationHistory('user', userMessage);
   
       if (currentRecordType === 'exercise') {
+        console.log('🏋️ Exercise processing - Current step:', currentStep);
+        
         if (currentStep === 'validation') {
+          console.log('🔍 Validation step:', validationStep);
           await handleValidationResponse(userMessage);
         } else if (currentStep === 'confirmation') {
+          console.log('✅ Confirmation step');
           const isConfirmed = /^(네|예|yes)/i.test(userMessage.toLowerCase());
           await handleConfirmation(isConfirmed);
         } else {
+          console.log('📝 Initial exercise input processing');
           await handleExerciseInput(userMessage);
         }
       } else if (currentRecordType === 'diet') {
-        // 식단 기록 처리 로직
-        const response = await sendChatMessage(
-          userMessage, 
-          [
-            ...conversationHistory,
-            { role: "system", content: "식단 기록을 분석하여 JSON 형태로 변환합니다." }
-          ],
-          currentRecordType!,  // 'diet'
-          'extraction'
-        );
-  
-        if (response && response.message) {
-          addMessage('ai', response.message);
-          updateConversationHistory('assistant', response.message);
+        console.log('🍽️ Diet processing - Current step:', currentStep);
+        
+        if (currentStep === 'confirmation') {
+          const isConfirmed = /^(네|예|yes)/i.test(userMessage.toLowerCase());
+          await handleConfirmation(isConfirmed);
+        } else {
+          await handleDietInput(userMessage);
         }
       } else {
         // 일반 채팅 처리 로직
+        console.log('💬 General chat processing');
         const response = await sendChatMessage(
           userMessage, 
           conversationHistory,
@@ -484,7 +763,7 @@ const handleExerciseInput = async (input: string) => {
         }
       }
     } catch (error) {
-      console.error('Message processing error:', error);
+      console.error('❌ Message processing error:', error);
       toast({
         title: "처리 오류",
         description: "메시지 처리 중 오류가 발생했습니다.",
@@ -545,13 +824,20 @@ const handleExerciseInput = async (input: string) => {
       try {
         if (pendingRecord.type === 'exercise') {
           const exerciseData = JSON.parse(pendingRecord.content);
-          await saveExerciseRecord(exerciseData);
+          await healthApi.saveExerciseRecord(exerciseData);
           addMessage('ai', '운동 기록이 저장되었습니다! 다른 운동을 기록하시겠습니까?');
+          setExerciseState({});
+        } else if (pendingRecord.type === 'diet') {
+          const dietData = JSON.parse(pendingRecord.content);
+          await saveDietRecord(dietData);
+          addMessage('ai', '식단 기록이 저장되었습니다! 다른 식단을 기록하시겠습니까?');
+          setDietState({});
         }
-        setExerciseState({});
+        
         setValidationStep(null);
         setIsAwaitingConfirmation(false);
         setPendingRecord(null);
+        setCurrentStep('input');
       } catch (error) {
         console.error('Save error:', error);
         addMessage('ai', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
@@ -559,9 +845,11 @@ const handleExerciseInput = async (input: string) => {
     } else {
       addMessage('ai', '기록을 취소했습니다. 다시 입력해주세요.');
       setExerciseState({});
+      setDietState({});
       setValidationStep(null);
       setIsAwaitingConfirmation(false);
       setPendingRecord(null);
+      setCurrentStep('input');
     }
   };
 

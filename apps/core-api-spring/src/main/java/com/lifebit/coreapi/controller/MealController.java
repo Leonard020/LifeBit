@@ -12,8 +12,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/meals")
@@ -56,5 +58,17 @@ public class MealController {
     public ResponseEntity<FoodItem> getFoodItemByCode(
             @PathVariable String foodCode) {
         return ResponseEntity.ok(mealService.getFoodItemByCode(foodCode));
+    }
+
+    @PostMapping("/foods/find-or-create")
+    public ResponseEntity<FoodItem> findOrCreateFoodItem(@RequestBody Map<String, Object> request) {
+        String name = (String) request.get("name");
+        BigDecimal calories = new BigDecimal(request.get("calories").toString());
+        BigDecimal carbs = new BigDecimal(request.get("carbs").toString());
+        BigDecimal protein = new BigDecimal(request.get("protein").toString());
+        BigDecimal fat = new BigDecimal(request.get("fat").toString());
+        
+        FoodItem foodItem = mealService.findOrCreateFoodItem(name, calories, carbs, protein, fat);
+        return ResponseEntity.ok(foodItem);
     }
 } 
