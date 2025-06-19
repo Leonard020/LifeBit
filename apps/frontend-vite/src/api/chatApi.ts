@@ -1,6 +1,6 @@
-import axiosInstance from '@/utils/axios';
-import { AxiosError } from 'axios';
 
+import { AxiosError } from 'axios';
+import axiosInstance from '@/utils/axios';
 // 대화 메시지 타입
 export interface Message {
   role: 'user' | 'assistant' | 'system';
