@@ -434,3 +434,5 @@ EXECUTE FUNCTION update_processed_at();
 
 -- 트랜잭션 커밋
 COMMIT;
+
+SELECT user_id, email, password_hash FROM users WHERE email = 'admin@lifebit.com';

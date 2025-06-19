@@ -50,6 +50,9 @@ export default function Login() {
         rememberMe: values.rememberMe,
       };
 
+      console.log('[DEBUG] loginData to be sent:', loginData);
+
+
       const res = await login(loginData);
       const { access_token, nickname, user_id, role, email } = res;
 
@@ -81,6 +84,8 @@ export default function Login() {
       let errorMessage = '로그인에 실패했습니다.';
 
       if (axios.isAxiosError(error)) {
+        console.log('[DEBUG] Axios error response:', error.response?.data);
+
         errorMessage = error.response?.data?.message || error.message;
       } else if (error instanceof Error) {
         if (error.message === 'Invalid response data') {

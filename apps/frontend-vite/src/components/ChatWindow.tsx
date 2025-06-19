@@ -89,6 +89,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const [exerciseState, setExerciseState] = useState<ExerciseState>({});
   const [validationStep, setValidationStep] = useState<string | null>(null);
 
+  const [usedVoiceInput, setUsedVoiceInput] = useState(false);
+
   // Speech Recognition 초기화
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -292,6 +294,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         await requestMicrophonePermission();
         
         setIsRecording(true);
+        setUsedVoiceInput(true);  // 마이크 사용 흔적 기록
+
         recognitionRef.current.start();
         toast({
           title: "음성 인식 시작",
@@ -451,7 +455,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     if (confirmed && pendingRecord) {
       try {
         if (pendingRecord.type === 'exercise') {
-          const exerciseData = JSON.parse(pendingRecord.content);
+          const exerciseData = {
+            ...JSON.parse(pendingRecord.content),
+            input_source: usedVoiceInput ? 'VOICE' : 'TYPING'
+          };
           await saveExerciseRecord(exerciseData);
           addMessage('ai', '운동 기록이 저장되었습니다! 다른 운동을 기록하시겠습니까?');
         }
@@ -459,6 +466,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         setValidationStep(null);
         setIsAwaitingConfirmation(false);
         setPendingRecord(null);
+        setUsedVoiceInput(false);
       } catch (error) {
         console.error('Save error:', error);
         addMessage('ai', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
@@ -469,6 +477,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       setValidationStep(null);
       setIsAwaitingConfirmation(false);
       setPendingRecord(null);
+      setUsedVoiceInput(false);
     }
   };
 
