@@ -126,6 +126,83 @@ export const getUserIdFromToken = (): number | null => {
   }
 };
 
+// 🔧 토큰 디버깅 함수
+export const debugToken = (): void => {
+  console.group('🔍 토큰 디버깅 정보');
+  
+  const token = getToken();
+  const userInfo = getUserInfo();
+  
+  console.log('📝 로컬스토리지 상태:');
+  console.log('- token:', token ? `${token.substring(0, 20)}...` : 'null');
+  console.log('- user:', userInfo);
+  console.log('- 모든 키:', Object.keys(localStorage));
+  
+  if (token) {
+    try {
+      const payload = jwtDecode<JwtPayload>(token);
+      const currentTime = Date.now() / 1000;
+      const isExpired = payload.exp < currentTime;
+      const timeLeft = payload.exp - currentTime;
+      
+      console.log('🔑 토큰 정보:');
+      console.log('- 사용자 ID:', payload.userId);
+      console.log('- 이메일:', payload.email);
+      console.log('- 닉네임:', payload.nickname);
+      console.log('- 역할:', payload.role);
+      console.log('- 발급 시간:', new Date(payload.iat * 1000).toLocaleString());
+      console.log('- 만료 시간:', new Date(payload.exp * 1000).toLocaleString());
+      console.log('- 만료 여부:', isExpired ? '❌ 만료됨' : '✅ 유효함');
+      
+      if (!isExpired) {
+        const hours = Math.floor(timeLeft / 3600);
+        const minutes = Math.floor((timeLeft % 3600) / 60);
+        console.log(`- 남은 시간: ${hours}시간 ${minutes}분`);
+      }
+      
+      console.log('✅ 인증 상태:', isTokenValid() ? '유효' : '무효');
+    } catch (error) {
+      console.error('❌ 토큰 파싱 실패:', error);
+    }
+  } else {
+    console.log('❌ 토큰이 없습니다.');
+  }
+  
+  console.groupEnd();
+};
+
+// 🔧 토큰 상태 요약
+export const getTokenSummary = (): {
+  hasToken: boolean;
+  isValid: boolean;
+  userId?: number;
+  expiresIn?: number;
+  isExpired?: boolean;
+} => {
+  const token = getToken();
+  
+  if (!token) {
+    return { hasToken: false, isValid: false };
+  }
+  
+  try {
+    const payload = jwtDecode<JwtPayload>(token);
+    const currentTime = Date.now() / 1000;
+    const isExpired = payload.exp < currentTime;
+    const expiresIn = Math.max(0, payload.exp - currentTime);
+    
+    return {
+      hasToken: true,
+      isValid: !isExpired,
+      userId: payload.userId,
+      expiresIn,
+      isExpired
+    };
+  } catch (error) {
+    return { hasToken: true, isValid: false };
+  }
+};
+
 export const isAuthenticated = (): boolean => {
   return isTokenValid();
 }; 

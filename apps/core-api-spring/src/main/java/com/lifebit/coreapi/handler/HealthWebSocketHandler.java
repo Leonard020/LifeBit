@@ -31,23 +31,25 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) throws Exception {
+        log.info("🔗 [WebSocket] 연결 시도 - URI: {}, 세션 ID: {}", session.getUri(), session.getId());
+        
         // JWT 토큰 검증
         String userId = validateAndExtractUserId(session);
         if (userId != null) {
             userSessions.put(userId, session);
-            log.info("🔗 WebSocket 연결 성공 - 사용자 ID: {}, 세션 ID: {}", userId, session.getId());
+            log.info("✅ [WebSocket] 연결 성공 - 사용자 ID: {}, 세션 ID: {}", userId, session.getId());
             
             // 연결 성공 메시지 전송 (안전하게 처리)
             try {
                 // 환영 메시지는 선택적으로 전송 (클라이언트에서 요청할 때만)
                 // sendWelcomeMessage(session, userId);
-                log.info("✅ WebSocket 연결 완료 - 사용자 ID: {}", userId);
+                log.info("✅ [WebSocket] 연결 완료 - 사용자 ID: {}", userId);
             } catch (Exception e) {
-                log.warn("환영 메시지 전송 실패 (연결은 유지됨) - 사용자 ID: {}, 오류: {}", userId, e.getMessage());
+                log.warn("⚠️ [WebSocket] 환영 메시지 전송 실패 (연결은 유지됨) - 사용자 ID: {}, 오류: {}", userId, e.getMessage());
                 // 환영 메시지 전송 실패는 연결 종료의 이유가 되지 않음
             }
         } else {
-            log.warn("⚠️ 인증 실패 - 연결 종료");
+            log.error("❌ [WebSocket] 인증 실패 - 연결 종료, URI: {}", session.getUri());
             session.close(CloseStatus.POLICY_VIOLATION);
         }
     }
@@ -178,16 +180,16 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
         try {
             // URI null 체크
             if (session == null || session.getUri() == null) {
-                log.warn("WebSocket 세션 또는 URI가 null입니다.");
+                log.error("❌ [WebSocket] 세션 또는 URI가 null입니다.");
                 return null;
             }
             
-            log.info("🔍 WebSocket 연결 검증 시작 - URI: {}", session.getUri());
+            log.info("🔍 [WebSocket] 연결 검증 시작 - URI: {}", session.getUri());
             
             // URL에서 토큰 파라미터 추출
             String query = session.getUri().getQuery();
             if (query == null || !query.contains("token=")) {
-                log.warn("JWT 토큰이 없습니다. Query: {}", query);
+                log.error("❌ [WebSocket] JWT 토큰이 없습니다. Query: {}", query);
                 return null;
             }
             
@@ -196,43 +198,53 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
                 token = token.substring(0, token.indexOf("&"));
             }
             
-            log.info("🔑 토큰 추출 완료 - 길이: {}", token.length());
+            // URL 디코딩
+            try {
+                token = java.net.URLDecoder.decode(token, "UTF-8");
+            } catch (Exception e) {
+                log.error("❌ [WebSocket] 토큰 URL 디코딩 실패: {}", e.getMessage());
+                return null;
+            }
+            
+            log.info("🔑 [WebSocket] 토큰 추출 완료 - 길이: {}", token.length());
             
             // JWT 토큰 검증
             if (!jwtTokenProvider.validateToken(token)) {
-                log.warn("유효하지 않은 JWT 토큰입니다.");
+                log.error("❌ [WebSocket] 유효하지 않은 JWT 토큰입니다.");
                 return null;
             }
+            
+            log.info("✅ [WebSocket] JWT 토큰 검증 성공");
             
             // 토큰에서 사용자 ID 추출
             Long userIdLong = jwtTokenProvider.getUserIdFromToken(token);
             if (userIdLong == null) {
-                log.warn("토큰에서 사용자 ID를 추출할 수 없습니다.");
+                log.error("❌ [WebSocket] 토큰에서 사용자 ID를 추출할 수 없습니다.");
                 return null;
             }
             String userId = userIdLong.toString();
             
-            log.info("👤 토큰에서 사용자 ID 추출: {}", userId);
+            log.info("👤 [WebSocket] 토큰에서 사용자 ID 추출: {}", userId);
             
             // URL 경로의 사용자 ID와 토큰의 사용자 ID 일치 확인
             String pathUserId = extractUserIdFromPath(session);
-            log.info("🛣️ 경로에서 사용자 ID 추출: {}", pathUserId);
+            log.info("🛣️ [WebSocket] 경로에서 사용자 ID 추출: {}", pathUserId);
             
             if (pathUserId == null) {
-                log.warn("경로에서 사용자 ID를 추출할 수 없습니다.");
+                log.error("❌ [WebSocket] 경로에서 사용자 ID를 추출할 수 없습니다.");
                 return null;
             }
             
             if (!userId.equals(pathUserId)) {
-                log.warn("경로의 사용자 ID({})와 토큰의 사용자 ID({})가 일치하지 않습니다.", pathUserId, userId);
+                log.error("❌ [WebSocket] 경로의 사용자 ID({})와 토큰의 사용자 ID({})가 일치하지 않습니다.", pathUserId, userId);
                 return null;
             }
             
-            log.info("✅ 사용자 ID 검증 성공: {}", userId);
+            log.info("✅ [WebSocket] 사용자 ID 검증 성공: {}", userId);
             return userId;
             
         } catch (Exception e) {
-            log.error("JWT 토큰 검증 중 오류 발생: {}", e.getMessage(), e);
+            log.error("❌ [WebSocket] JWT 토큰 검증 중 오류 발생: {}", e.getMessage(), e);
             return null;
         }
     }

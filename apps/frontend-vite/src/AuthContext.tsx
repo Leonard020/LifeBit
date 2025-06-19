@@ -7,6 +7,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   nickname: string;
   user: UserInfo | null;
+  isLoading: boolean;
   setIsLoggedIn: (loggedIn: boolean) => void;
   setNickname: (nickname: string) => void;
   setUser: (user: UserInfo | null) => void;
@@ -18,6 +19,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [nickname, setNickname] = useState('');
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const token = getToken();
@@ -36,6 +38,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       console.log('❌ [AuthContext] 사용자 정보 없음');
     }
+    
+    setIsLoading(false);
   }, []);
 
   // 로컬 스토리지 변경 감지
@@ -64,13 +68,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // setUser 함수 래핑하여 로그 추가
-  const setUserWithLog = (user: any) => {
+  const setUserWithLog = (user: UserInfo | null) => {
     console.log('🔧 [AuthContext] setUser 호출:', user);
     setUser(user);
   };
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, nickname, user, setIsLoggedIn, setNickname, setUser: setUserWithLog }}>
+    <AuthContext.Provider value={{ isLoggedIn, nickname, user, isLoading, setIsLoggedIn, setNickname, setUser: setUserWithLog }}>
       {children}
     </AuthContext.Provider>
   );
