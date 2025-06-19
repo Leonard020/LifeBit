@@ -35,11 +35,15 @@ export interface ProfileUpdateData {
 // 로그인 API
 export const login = async (data: LoginData) => {
     try {
+        console.log('[DEBUG] login() called with:', data);
+
         console.log('Login request data:', { email: data.email, password: '***' });
         const response = await axios.post(API_ENDPOINTS.LOGIN, {
             email: data.email,
             password: data.password
         });
+        console.log('[DEBUG] login() response:', response.data);
+
         console.log('Login response:', response.data);
         const {
             access_token,
