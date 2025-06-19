@@ -283,26 +283,6 @@ const Note = () => {
     }
   };
 
-  // 백엔드 데이터 -> UI 형식으로 변환 (nutritionData)
-  const uiNutritionData = dailyNutritionGoals.map(dto => {
-    let color = '';
-    switch (dto.name) {
-      case '탄수화물': color = '#3B4A9C'; break;
-      case '단백질': color = '#E67E22'; break;
-      case '지방': color = '#95A5A6'; break;
-      case '칼로리': color = '#8B5CF6'; break;
-      default: color = '#CCCCCC';
-    }
-    return {
-      name: dto.name,
-      value: dto.percentage,
-      goal: 100,
-      color: color,
-      calories: dto.current,
-      targetCalories: dto.target,
-    };
-  });
-
   // 백엔드 데이터 -> UI 형식으로 변환 (todayRecords.diet)
   const uiTodayDietRecords = dailyDietLogs.map(log => ({
     meal: '기록',
@@ -312,10 +292,68 @@ const Note = () => {
     time: '',
   }));
 
-  const todayRecords = { // 기존 구조 유지
+  const todayRecords = {
     exercise: todayExercise,
     diet: uiTodayDietRecords
   };
+
+  // Calculate total nutrition intake based on actual consumed quantity
+  const BASE_AMOUNT = 100; // DB 기준량(예: 100g)
+
+  const totalCarbs = dailyDietLogs.reduce(
+    (sum, log) => sum + (log.carbs * log.quantity / BASE_AMOUNT), 0
+  );
+  const totalProtein = dailyDietLogs.reduce(
+    (sum, log) => sum + (log.protein * log.quantity / BASE_AMOUNT), 0
+  );
+  const totalFat = dailyDietLogs.reduce(
+    (sum, log) => sum + (log.fat * log.quantity / BASE_AMOUNT), 0
+  );
+  const totalCalories = dailyDietLogs.reduce(
+    (sum, log) => sum + (log.calories * log.quantity / BASE_AMOUNT), 0
+  );
+
+  // Get nutrition goals from DB (dailyNutritionGoals)
+  const getGoal = (name: string) => {
+    const found = dailyNutritionGoals.find(dto => dto.name === name);
+    return found ? found.target : 1; // fallback to 1 to avoid division by zero
+  };
+
+  const uiNutritionData = [
+    {
+      name: '탄수화물',
+      value: (totalCarbs / getGoal('탄수화물')) * 100,
+      goal: 100,
+      color: '#3B4A9C',
+      calories: totalCarbs,
+      targetCalories: getGoal('탄수화물'),
+    },
+    {
+      name: '단백질',
+      value: (totalProtein / getGoal('단백질')) * 100,
+      goal: 100,
+      color: '#E67E22',
+      calories: totalProtein,
+      targetCalories: getGoal('단백질'),
+    },
+    {
+      name: '지방',
+      value: (totalFat / getGoal('지방')) * 100,
+      goal: 100,
+      color: '#95A5A6',
+      calories: totalFat,
+      targetCalories: getGoal('지방'),
+    },
+    {
+      name: '칼로리',
+      value: (totalCalories / getGoal('칼로리')) * 100,
+      goal: 100,
+      color: '#8B5CF6',
+      calories: totalCalories,
+      targetCalories: getGoal('칼로리'),
+    },
+  ];
+
   useEffect(() => {
     const fetchExercise = async () => {
       const dateStr = selectedDate.toISOString().split("T")[0];
@@ -418,13 +456,6 @@ const Note = () => {
     const today = new Date();
     return date.toDateString() === today.toDateString();
   };
-
-  const nutritionData = [
-    { name: '탄수화물', value: 80, goal: 100, color: '#3B4A9C', calories: 180, targetCalories: 200 },
-    { name: '단백질', value: 75, goal: 100, color: '#E67E22', calories: 95, targetCalories: 120 },
-    { name: '지방', value: 60, goal: 100, color: '#95A5A6', calories: 45, targetCalories: 60 },
-    { name: '칼로리', value: 92.5, goal: 100, color: '#8B5CF6', calories: 1850, targetCalories: 2000 },
-  ];
 
   // 식단 수정 관련 상태
   const [isEditDietDialogOpen, setIsEditDietDialogOpen] = useState(false);
