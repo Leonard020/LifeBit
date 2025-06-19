@@ -20,8 +20,14 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // /ws/health/* 엔드포인트 등록 (경로 변수 지원)
-        registry.addHandler(healthWebSocketHandler, "/ws/health/*")
-                .setAllowedOrigins("http://localhost:5173", "http://localhost:3000"); // CORS 설정
+        // 여러 패턴으로 등록하여 호환성 확보
+        registry.addHandler(healthWebSocketHandler, "/ws/health/{userId}")
+                .setAllowedOrigins("http://localhost:5173", "http://localhost:3000") // CORS 설정
+                .setAllowedOriginPatterns("*"); // 모든 Origin 허용 (개발용)
+        
+        // 추가 패턴 등록
+        registry.addHandler(healthWebSocketHandler, "/ws/health/**")
+                .setAllowedOrigins("http://localhost:5173", "http://localhost:3000")
+                .setAllowedOriginPatterns("*");
     }
 } 

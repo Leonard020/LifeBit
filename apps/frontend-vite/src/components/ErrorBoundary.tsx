@@ -1,86 +1,129 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
-  errorInfo?: ErrorInfo;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
+  isAuthError: boolean;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      isAuthError: false
+    };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    // 인증 관련 오류 확인
+    const isAuthError = error.message.includes('401') || 
+                       error.message.includes('403') || 
+                       error.message.includes('토큰') ||
+                       error.message.includes('로그인');
+
+    return {
+      hasError: true,
+      error,
+      errorInfo: null,
+      isAuthError
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error('🔥 ErrorBoundary caught an error:', error, errorInfo);
+    
     this.setState({
       error,
-      errorInfo
+      errorInfo,
+      isAuthError: error.message.includes('401') || 
+                  error.message.includes('403') || 
+                  error.message.includes('토큰') ||
+                  error.message.includes('로그인')
     });
+
+    // 인증 오류인 경우 토큰 정리
+    if (this.state.isAuthError) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.dispatchEvent(new Event('storage'));
+    }
   }
 
   handleReload = () => {
     window.location.reload();
   };
 
-  handleRetry = () => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+  handleLogin = () => {
+    window.location.href = '/login';
   };
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
       return (
-        <div className="flex items-center justify-center min-h-[200px] p-6">
-          <div className="text-center max-w-md">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              문제가 발생했습니다
-            </h2>
-            <p className="text-gray-600 mb-4">
-              일시적인 오류가 발생했습니다. 페이지를 새로고침하거나 다시 시도해주세요.
-            </p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={this.handleRetry}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                다시 시도
-              </button>
-              <button
-                onClick={this.handleReload}
-                className="px-4 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-1"
-              >
-                <RefreshCw className="h-4 w-4" />
-                새로고침
-              </button>
-            </div>
-            {process.env.NODE_ENV === 'development' && this.state.error && (
-              <details className="mt-4 text-left">
-                <summary className="cursor-pointer text-sm text-gray-500">
-                  개발자 정보 (개발 모드에서만 표시)
-                </summary>
-                <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                  {this.state.error.toString()}
-                  {this.state.errorInfo?.componentStack}
-                </pre>
-              </details>
-            )}
-          </div>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 h-12 w-12 text-red-500">
+                {this.state.isAuthError ? <LogIn /> : <AlertTriangle />}
+              </div>
+              <CardTitle className="text-xl text-red-600">
+                {this.state.isAuthError ? '인증 오류' : '오류가 발생했습니다'}
+              </CardTitle>
+              <CardDescription>
+                {this.state.isAuthError 
+                  ? '로그인이 필요하거나 세션이 만료되었습니다.'
+                  : '예상치 못한 오류가 발생했습니다.'
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {this.state.error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700 font-mono">
+                    {this.state.error.message}
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                {this.state.isAuthError ? (
+                  <Button onClick={this.handleLogin} className="flex-1">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    로그인하기
+                  </Button>
+                ) : (
+                  <Button onClick={this.handleReload} className="flex-1">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    새로고침
+                  </Button>
+                )}
+              </div>
+
+              {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-sm text-gray-600">
+                    개발자 정보 (클릭하여 펼치기)
+                  </summary>
+                  <pre className="mt-2 p-3 bg-gray-100 border rounded text-xs overflow-auto max-h-40">
+                    {this.state.error?.stack}
+                    {'\n\n'}
+                    {this.state.errorInfo.componentStack}
+                  </pre>
+                </details>
+              )}
+            </CardContent>
+          </Card>
         </div>
       );
     }

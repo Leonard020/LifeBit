@@ -182,12 +182,70 @@ interface ApiCallOptions {
   retries?: number;
 }
 
-// API 호출을 위한 강화된 헬퍼 함수
+// 🔧 개선된 API 호출 함수
 const apiCall = async <T = unknown>(
   endpoint: string, 
   options: ApiCallOptions = {}
 ): Promise<ApiResponse<T>> => {
   const { method = 'GET', data, params, retries = 2 } = options;
+  
+  // 🔒 토큰 유효성 사전 검사
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.warn('🚨 [apiCall] 토큰이 없습니다. 로그인이 필요합니다.');
+    return {
+      error: {
+        code: 'AUTH_REQUIRED',
+        message: '로그인이 필요합니다.',
+        status: 401
+      },
+      success: false
+    };
+  }
+
+  // JWT 토큰 만료 검사
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const currentTime = Date.now() / 1000;
+    
+    if (payload.exp < currentTime) {
+      console.warn('🚨 [apiCall] 토큰이 만료되었습니다.');
+      // 만료된 토큰 제거
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.dispatchEvent(new Event('storage'));
+      
+      return {
+        error: {
+          code: 'TOKEN_EXPIRED',
+          message: '로그인이 만료되었습니다. 다시 로그인해주세요.',
+          status: 401
+        },
+        success: false
+      };
+    }
+    
+    console.log('✅ [apiCall] 토큰 유효성 확인됨:', {
+      userId: payload.userId,
+      expiresIn: Math.floor(payload.exp - currentTime),
+      endpoint
+    });
+  } catch (error) {
+    console.error('❌ [apiCall] 토큰 파싱 실패:', error);
+    // 잘못된 토큰 제거
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.dispatchEvent(new Event('storage'));
+    
+    return {
+      error: {
+        code: 'INVALID_TOKEN',
+        message: '토큰이 손상되었습니다. 다시 로그인해주세요.',
+        status: 401
+      },
+      success: false
+    };
+  }
   
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -225,6 +283,28 @@ const apiCall = async <T = unknown>(
         message?: string;
         code?: string;
       };
+      
+      // 401/403 오류 시 토큰 관련 처리
+      if (axiosError.response?.status === 401 || axiosError.response?.status === 403) {
+        console.warn(`🚨 [apiCall] 인증 오류 (${axiosError.response.status}):`, endpoint);
+        
+        // 토큰 제거 및 로그인 페이지 리다이렉트 준비
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new Event('storage'));
+        
+        return {
+          error: {
+            code: axiosError.response.status === 401 ? 'AUTH_REQUIRED' : 'PERMISSION_DENIED',
+            message: axiosError.response.status === 401 
+              ? '로그인이 필요합니다.' 
+              : '해당 데이터에 접근할 권한이 없습니다.',
+            details: axiosError.response?.data?.message || axiosError.message,
+            status: axiosError.response.status
+          },
+          success: false
+        };
+      }
       
       // 마지막 시도가 아니면 재시도
       if (attempt < retries) {
@@ -364,6 +444,19 @@ export const healthApi = {
 
   // 식단 기록 조회
   getMealLogs: async (userId: string, period: string = 'month'): Promise<ApiResponse<MealLog[]>> => {
+    // 🔒 사용자 권한 검증
+    if (!validateUserAccess(userId)) {
+      return {
+        error: {
+          code: 'PERMISSION_DENIED',
+          message: '다른 사용자의 식단 기록에 접근할 수 없습니다.',
+          status: 403
+        },
+        success: false
+      };
+    }
+
+    console.log('🍽️ [getMealLogs] 식단 기록 조회 시작:', { userId, period });
     return apiCall<MealLog[]>(`/api/meal-logs/${userId}?period=${period}`);
   },
 
@@ -386,8 +479,8 @@ export const healthApi = {
   },
 
   // 피드백 제출
-  submitFeedback: async (recommendationId: string, feedback: FeedbackData): Promise<void> => {
-    return apiCall(`/api/recommendations/${recommendationId}/feedback`, {
+  submitFeedback: async (recommendationId: string, feedback: FeedbackData): Promise<ApiResponse<void>> => {
+    return apiCall<void>(`/api/recommendations/${recommendationId}/feedback`, {
       method: 'POST',
       data: feedback,
     });
@@ -491,14 +584,16 @@ export const useCreateHealthRecord = () => {
 
   return useMutation({
     mutationFn: healthApi.createHealthRecord,
-    onSuccess: (data) => {
-      // 관련 쿼리 무효화하여 데이터 새로고침
-      queryClient.invalidateQueries({
-        queryKey: ['healthRecords', data.user_id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['healthStatistics', data.user_id],
-      });
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        // 관련 쿼리 무효화하여 데이터 새로고침
+        queryClient.invalidateQueries({
+          queryKey: ['healthRecords', response.data.user_id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['healthStatistics', response.data.user_id],
+        });
+      }
     },
     onError: (error) => {
       console.error('건강 기록 생성 실패:', error);
@@ -513,14 +608,16 @@ export const useUpdateUserGoals = () => {
   return useMutation({
     mutationFn: ({ userId, data }: { userId: string; data: UpdateGoalData }) =>
       healthApi.updateUserGoals(userId, data),
-    onSuccess: (data, variables) => {
-      // 관련 쿼리 무효화
-      queryClient.invalidateQueries({
-        queryKey: ['userGoals', variables.userId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['healthStatistics', variables.userId],
-      });
+    onSuccess: (response, variables) => {
+      if (response.success) {
+        // 관련 쿼리 무효화
+        queryClient.invalidateQueries({
+          queryKey: ['userGoals', variables.userId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['healthStatistics', variables.userId],
+        });
+      }
     },
     onError: (error) => {
       console.error('사용자 목표 업데이트 실패:', error);
@@ -534,14 +631,16 @@ export const useCreateExerciseSession = () => {
 
   return useMutation({
     mutationFn: healthApi.createExerciseSession,
-    onSuccess: (data) => {
-      // 관련 쿼리 무효화
-      queryClient.invalidateQueries({
-        queryKey: ['exerciseSessions', data.user_id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['healthStatistics', data.user_id],
-      });
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        // 관련 쿼리 무효화
+        queryClient.invalidateQueries({
+          queryKey: ['exerciseSessions', response.data.user_id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['healthStatistics', response.data.user_id],
+        });
+      }
     },
     onError: (error) => {
       console.error('운동 세션 생성 실패:', error);
@@ -555,14 +654,16 @@ export const useCreateMealLog = () => {
 
   return useMutation({
     mutationFn: healthApi.createMealLog,
-    onSuccess: (data) => {
-      // 관련 쿼리 무효화
-      queryClient.invalidateQueries({
-        queryKey: ['mealLogs', data.user_id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['healthStatistics', data.user_id],
-      });
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        // 관련 쿼리 무효화
+        queryClient.invalidateQueries({
+          queryKey: ['mealLogs', response.data.user_id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['healthStatistics', response.data.user_id],
+        });
+      }
     },
     onError: (error) => {
       console.error('식단 기록 생성 실패:', error);
@@ -681,6 +782,19 @@ console.log('access_token:', localStorage.getItem('access_token'));
 console.log('userInfo:', localStorage.getItem('userInfo'));
 console.log('모든 localStorage 키:', Object.keys(localStorage));
 
+// 브라우저 콘솔에서 실행
+console.log('Token:', localStorage.getItem('token'));
+console.log('User Info:', localStorage.getItem('user'));
+
+// 브라우저 콘솔에서 실행
+const token = localStorage.getItem('token');
+if (token) {
+  const payload = JSON.parse(atob(token.split('.')[1]));
+  console.log('Token payload:', payload);
+  console.log('Token expires at:', new Date(payload.exp * 1000));
+  console.log('Current time:', new Date());
+}
+
 // saveExerciseRecord 함수 수정
 export const saveExerciseRecord = async (exerciseData: ExerciseState): Promise<ExerciseSession> => {
   try {
@@ -693,7 +807,7 @@ export const saveExerciseRecord = async (exerciseData: ExerciseState): Promise<E
     }
 
     // 1. 운동 카탈로그 검색
-    const catalogResponse = await apiCall('/api/exercises/search', {
+    const catalogResponse = await apiCall<{ exerciseCatalogId: number; name: string }[]>('/api/exercises/search', {
       method: 'GET',
       params: { keyword: exerciseData.exercise || '알 수 없는 운동' }
     });
@@ -701,11 +815,11 @@ export const saveExerciseRecord = async (exerciseData: ExerciseState): Promise<E
     let catalogId;
     
     // 2. 카탈로그 생성 또는 검색
-    if (Array.isArray(catalogResponse) && catalogResponse.length > 0) {
-      catalogId = catalogResponse[0].exerciseCatalogId;
+    if (catalogResponse.success && catalogResponse.data && Array.isArray(catalogResponse.data) && catalogResponse.data.length > 0) {
+      catalogId = catalogResponse.data[0].exerciseCatalogId;
     } else {
       // 새로운 운동 종목 생성
-      const newCatalog = await apiCall('/api/exercises/catalog', {
+      const newCatalogResponse = await apiCall<{ exerciseCatalogId: number }>('/api/exercises/catalog', {
         method: 'POST',
         data: {
           name: exerciseData.exercise || '알 수 없는 운동',
@@ -713,7 +827,12 @@ export const saveExerciseRecord = async (exerciseData: ExerciseState): Promise<E
           description: `${exerciseData.category || '기타'} - ${exerciseData.subcategory || '기타'}`
         }
       });
-      catalogId = newCatalog.exerciseCatalogId;
+      
+      if (newCatalogResponse.success && newCatalogResponse.data) {
+        catalogId = newCatalogResponse.data.exerciseCatalogId;
+      } else {
+        throw new Error('운동 카탈로그 생성에 실패했습니다.');
+      }
     }
 
     // 3. 운동 세션 생성
@@ -726,12 +845,16 @@ export const saveExerciseRecord = async (exerciseData: ExerciseState): Promise<E
       exercise_date: new Date().toISOString().split('T')[0]
     };
 
-    const response = await apiCall('/api/exercises/record', {
+    const response = await apiCall<ExerciseSession>('/api/exercises/record', {
       method: 'POST',
       data: sessionData
     });
 
-    return response as ExerciseSession;
+    if (response.success && response.data) {
+      return response.data;
+    } else {
+      throw new Error(response.error?.message || '운동 세션 생성에 실패했습니다.');
+    }
   } catch (error) {
     console.error('Exercise record save error:', error);
     throw new Error('운동 기록 저장 중 오류가 발생했습니다.');
@@ -775,6 +898,54 @@ const calculateCalories = (exerciseData: ExerciseState): number => {
   // 무게 * 세트 * 횟수 * 0.1의 공식으로 간단히 추정
   const baseCalories = weight * sets * reps * 0.1;
   return Math.round(Math.max(baseCalories, 50)); // 최소 50칼로리 보장
+};
+
+// 🔧 사용자 ID 안전하게 가져오기 헬퍼 함수
+const getCurrentUserId = (): string | null => {
+  try {
+    // 1. 토큰에서 사용자 ID 추출 시도
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.userId) {
+        return payload.userId.toString();
+      }
+    }
+
+    // 2. 사용자 정보에서 추출 시도
+    const userInfo = localStorage.getItem('user');
+    if (userInfo) {
+      const user = JSON.parse(userInfo);
+      if (user.userId) {
+        return user.userId.toString();
+      }
+    }
+
+    console.warn('🚨 [getCurrentUserId] 사용자 ID를 찾을 수 없습니다.');
+    return null;
+  } catch (error) {
+    console.error('❌ [getCurrentUserId] 사용자 ID 추출 실패:', error);
+    return null;
+  }
+};
+
+// 🔧 사용자 ID 검증 함수
+const validateUserAccess = (requestedUserId: string): boolean => {
+  const currentUserId = getCurrentUserId();
+  if (!currentUserId) {
+    console.warn('🚨 [validateUserAccess] 현재 사용자 ID가 없습니다.');
+    return false;
+  }
+
+  if (currentUserId !== requestedUserId) {
+    console.warn('🚨 [validateUserAccess] 사용자 ID 불일치:', {
+      current: currentUserId,
+      requested: requestedUserId
+    });
+    return false;
+  }
+
+  return true;
 };
 
 export default healthApi; 

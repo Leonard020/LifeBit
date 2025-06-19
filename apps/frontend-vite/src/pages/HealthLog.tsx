@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { Layout } from '@/components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { useToast } from '../components/ui/use-toast';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -49,27 +50,31 @@ interface HealthStatistics {
 }
 
 const HealthLog: React.FC = () => {
-  const { user } = useAuth();
-  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('month');
+  // 🔧 모든 Hook을 최상단에 배치 (조건부 호출 금지!)
+  const { user, isLoggedIn, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  // State hooks
+  const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'day'>('month');
+  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
   const [recordType, setRecordType] = useState<'exercise' | 'diet'>('exercise');
   const [showChat, setShowChat] = useState(false);
   const [showVoiceInput, setShowVoiceInput] = useState(false);
-  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
-  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
+  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
   const [healthStats, setHealthStats] = useState<HealthStatistics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   // ChatInterface 상태
   const [chatInputText, setChatInputText] = useState('');
   const [chatIsRecording, setChatIsRecording] = useState(false);
   const [chatIsProcessing, setChatIsProcessing] = useState(false);
   const [chatNetworkError, setChatNetworkError] = useState(false);
-  const [chatAiFeedback, setChatAiFeedback] = useState<any>(null);
+  const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
   const [chatClarificationInput, setChatClarificationInput] = useState('');
-  const [chatStructuredData, setChatStructuredData] = useState<any>(null);
+  const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
 
   // VoiceInput 상태
   const [voiceInputText, setVoiceInputText] = useState('');
@@ -93,6 +98,12 @@ const HealthLog: React.FC = () => {
     return userUserId;
   }, [user?.userId]);
 
+  // 🔧 실시간 업데이트 Hook을 항상 호출 (조건부 호출 금지!)
+  const { isConnected, refreshData, requestNotificationPermission } = useRealTimeUpdates({
+    userId: userId?.toString() || '',
+    enabled: true // 폴링 방식으로 활성화
+  });
+
   const handleVoiceResult = useCallback((result: Record<string, unknown>) => {
     console.log('음성 처리 결과:', result);
     setParsedData(result);
@@ -105,18 +116,93 @@ const HealthLog: React.FC = () => {
     setParsedData(null);
   }, []);
 
-  // 인증 상태 확인
+  // 인증 상태 확인 (새로고침 시 토큰 재검증)
   useEffect(() => {
-    const authenticated = isLoggedIn();
+    // 로딩 중이면 대기
+    if (isLoading) {
+      console.log('⏳ [HealthLog] AuthContext 로딩 중...');
+      return;
+    }
     
-    // 인증되지 않은 경우 로그인 페이지로 리다이렉트
-    if (!authenticated) {
+    console.log('🔍 [HealthLog] 인증 상태 확인:', { 
+      isLoggedIn, 
+      user: !!user, 
+      token: !!getToken(),
+      userInfo: !!getUserInfo(),
+      isLoading
+    });
+    
+    // 토큰과 사용자 정보 재검증
+    const token = getToken();
+    const userInfo = getUserInfo();
+    
+    if (!token || !userInfo || !isLoggedIn) {
+      console.warn('🚨 [HealthLog] 인증 정보 부족으로 로그인 페이지로 이동');
       navigate('/login');
       return;
     }
-  }, [navigate]);
+    
+    console.log('✅ [HealthLog] 인증 상태 확인 완료');
+  }, [navigate, isLoggedIn, user, isLoading]);
 
-  // 사용자 정보가 로드되는 동안 로딩 표시
+  useEffect(() => {
+    const fetchHealthData = async () => {
+      try {
+        const token = getToken();
+        
+        if (!token || !userId) {
+          navigate('/login');
+          return;
+        }
+
+        setLoading(true);
+        setError(null);
+        
+        const data = await getHealthStatistics(userId.toString(), selectedPeriod);
+        setHealthStats(data);
+      } catch (error) {
+        console.error('Failed to fetch health statistics:', error);
+        if ((error as { response?: { status?: number } }).response?.status === 403) {
+          setError('인증이 필요합니다. 다시 로그인해주세요.');
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          setError('건강 데이터를 불러오는데 실패했습니다.');
+        }
+        toast({
+          title: "오류",
+          description: "건강 데이터를 불러오는데 실패했습니다.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchHealthData();
+    }
+  }, [userId, selectedPeriod, navigate, toast]);
+
+  // 🔧 조건부 렌더링을 Hook 호출 이후로 이동
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-center">로딩 중...</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-center text-gray-600">
+                사용자 정보를 확인하고 있습니다.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
   if (!user || !userId) {
     return (
       <Layout>
@@ -140,46 +226,6 @@ const HealthLog: React.FC = () => {
       </Layout>
     );
   }
-
-  // 실시간 업데이트 기능
-  const { isConnected, refreshData, requestNotificationPermission } = useRealTimeUpdates({
-    userId: userId?.toString() || '',
-    enabled: !!userId
-  });
-
-  useEffect(() => {
-    const fetchHealthData = async () => {
-      try {
-        const token = getToken();
-        
-        if (!token || !userId) {
-          navigate('/login');
-          return;
-        }
-
-        setLoading(true);
-        setError(null);
-        
-        const data = await getHealthStatistics(userId.toString(), selectedPeriod);
-        setHealthStats(data);
-      } catch (error) {
-        console.error('Failed to fetch health statistics:', error);
-        if (error.response?.status === 403) {
-          setError('인증이 필요합니다. 다시 로그인해주세요.');
-          setTimeout(() => navigate('/login'), 2000);
-        } else {
-          setError('건강 데이터를 불러오는데 실패했습니다.');
-        }
-        toast.error('건강 데이터를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (userId) {
-      fetchHealthData();
-    }
-  }, [userId, selectedPeriod, navigate]);
 
   return (
     <Layout>
@@ -207,7 +253,7 @@ const HealthLog: React.FC = () => {
                   className="text-xs flex items-center gap-1"
                 >
                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                  {isConnected ? '실시간 연결됨' : '연결 중...'}
+                  {isConnected ? '자동 새로고침 활성' : '비활성'}
                 </Badge>
                 <Button
                   variant="outline"
@@ -356,7 +402,7 @@ const HealthLog: React.FC = () => {
                     onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
                     onSendMessage={() => {}}
                     onRetry={() => setChatNetworkError(false)}
-                    aiFeedback={chatAiFeedback}
+                    aiFeedback={null}
                     clarificationInput={chatClarificationInput}
                     setClarificationInput={setChatClarificationInput}
                     onClarificationSubmit={() => {}}
@@ -387,18 +433,13 @@ const HealthLog: React.FC = () => {
           {showAIFeedback && parsedData && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-lg w-full max-w-2xl max-h-96 overflow-y-auto">
-                <AIFeedbackComponent
-                  aiFeedback={{
-                    type: 'success',
-                    message: '데이터가 성공적으로 처리되었습니다.',
-                    suggestions: []
-                  }}
-                  clarificationInput=""
-                  setClarificationInput={() => {}}
-                  onClarificationSubmit={() => {}}
-                  onSaveRecord={() => {}}
-                  structuredData={parsedData}
-                />
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold mb-2">AI 피드백</h3>
+                  <p>데이터가 성공적으로 처리되었습니다.</p>
+                  <Button onClick={handleCloseAIFeedback} className="mt-4">
+                    닫기
+                  </Button>
+                </div>
               </div>
             </div>
           )}
