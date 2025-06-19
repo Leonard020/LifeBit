@@ -7,6 +7,9 @@ import com.lifebit.coreapi.entity.FoodItem;
 import com.lifebit.coreapi.entity.MealLog;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.entity.UserGoal;
+import com.lifebit.coreapi.entity.MealTimeType;
+import com.lifebit.coreapi.entity.InputSourceType;
+import com.lifebit.coreapi.entity.ValidationStatusType;
 import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserRepository;
@@ -132,6 +135,27 @@ public class DietService {
         mealLog.setQuantity(BigDecimal.valueOf(request.getQuantity()));
         mealLog.setLogDate(LocalDate.parse(request.getLogDate()));
         mealLog.setCreatedAt(LocalDateTime.now());
+
+        // 추가: DTO의 필드를 Entity에 매핑
+        if (request.getMealTime() != null) {
+            mealLog.setMealTime(MealTimeType.valueOf(request.getMealTime()));
+        }
+        if (request.getInputSource() != null) {
+            mealLog.setInputSource(InputSourceType.valueOf(request.getInputSource()));
+        }
+        if (request.getConfidenceScore() != null) {
+            mealLog.setConfidenceScore(BigDecimal.valueOf(request.getConfidenceScore()));
+        }
+        if (request.getOriginalAudioPath() != null) {
+            mealLog.setOriginalAudioPath(request.getOriginalAudioPath());
+        }
+        if (request.getValidationStatus() != null) {
+            mealLog.setValidationStatus(ValidationStatusType.valueOf(request.getValidationStatus()));
+        }
+        if (request.getValidationNotes() != null) {
+            mealLog.setValidationNotes(request.getValidationNotes());
+        }
+        // createdAt은 이미 위에서 설정
 
         MealLog savedMealLog = mealLogRepository.save(mealLog);
         return convertToDietLogDTO(savedMealLog);

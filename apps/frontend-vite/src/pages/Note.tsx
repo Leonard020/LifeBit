@@ -14,8 +14,10 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from '@/utils/axios';
-import { getUserInfo, isLoggedIn } from '@/utils/auth';
+import { getUserInfo, isLoggedIn, getToken, getUserIdFromToken, isTokenValid } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/hooks/use-toast';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -30,6 +32,13 @@ interface DietLogDTO {
   fat: number;
   logDate: string;
   unit: string;
+  mealTime?: string; // ENUM: breakfast, lunch, dinner, snack
+  inputSource?: string; // ENUM: VOICE, TYPING
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string; // ENUM: PENDING, VALIDATED, REJECTED
+  validationNotes?: string;
+  createdAt?: string;
 }
 
 interface DietNutritionDTO {
@@ -70,6 +79,7 @@ const Note = () => {
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [quantity, setQuantity] = useState(100);
   const [isSearching, setIsSearching] = useState(false);
+  const [mealTime, setMealTime] = useState('breakfast');
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
@@ -77,6 +87,19 @@ const Note = () => {
 
   // Mock data for records on specific dates (유지)
   const [todayExercise, setTodayExercise] = useState([]);
+
+  // ✅ 토큰을 맨 처음에 한 번만 가져와서 저장
+  const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // ✅ 인증 토큰을 맨 처음에 가져오기
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    setAuthToken(token);
+  }, [navigate]);
 
   const recordsByDate = {
     '2025-06-12': { exercise: true, diet: true },
@@ -97,9 +120,11 @@ const Note = () => {
     '유산소': 5,
   };
 
-  // 운동데이터터
+  // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
     const fetchWeeklySummary = async () => {
+      if (!authToken) return; // 토큰이 없으면 실행하지 않음
+      
       setIsLoadingSummary(true);
       try {
         const userInfo = getUserInfo();
@@ -113,7 +138,10 @@ const Note = () => {
         const weekStart = monday.toISOString().split("T")[0];
 
         const res = await axios.get('/api/weekly-workouts/summary', {
-          params: { userId, weekStart }
+          params: { userId, weekStart },
+          headers: {
+            'Authorization': `Bearer ${authToken}` // ✅ 저장된 토큰 사용
+          }
         });
 
         setWeeklySummary(res.data);
@@ -125,7 +153,7 @@ const Note = () => {
     };
 
     fetchWeeklySummary();
-  }, []);
+  }, [authToken]); // authToken이 변경될 때마다 실행
 
   const exerciseData = Object.entries(exerciseGoals).map(([part, goal]) => ({
     subject: part,
@@ -133,21 +161,17 @@ const Note = () => {
     goal: goal * 20,
   }));
 
-  // 식단 데이터 페칭
+  // 식단 데이터 페칭 - 저장된 토큰 사용
   useEffect(() => {
-    if (!isLoggedIn()) {
-      navigate('/login');
-      return;
-    }
-
     const fetchDietData = async () => {
+      if (!authToken) return; // 토큰이 없으면 실행하지 않음
+      
       setIsLoadingDietData(true);
       setDietError(null);
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
 
       try {
-        const userInfo = getUserInfo();
-        const userId = userInfo?.userId || 1;
+        const userId = getUserIdFromToken() || 1;
 
         // 1. 실제 식단 기록 가져오기
         const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
@@ -171,7 +195,7 @@ const Note = () => {
     };
 
     fetchDietData();
-  }, [selectedDate, navigate]);
+  }, [selectedDate, authToken]); // authToken이 변경될 때마다 실행
 
   // 음식 검색
   const searchFood = async () => {
@@ -196,8 +220,7 @@ const Note = () => {
     if (!selectedFood) return;
 
     try {
-      const userInfo = getUserInfo();
-      const userId = userInfo?.userId || 1;
+      const userId = getUserIdFromToken() || 1;
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
 
       const request = {
@@ -210,7 +233,14 @@ const Note = () => {
         protein: (selectedFood.protein * quantity) / 100,
         fat: (selectedFood.fat * quantity) / 100,
         logDate: formattedDate,
-        unit: "g"
+        unit: "g",
+        meal_time: mealTime,
+        input_source: null, // 기본값, 추후 VOICE/TYPING 등으로 확장 가능
+        confidence_score: null,
+        original_audio_path: null,
+        validation_status: null,
+        validation_notes: null,
+        created_at: null
       };
 
       await axios.post('/api/diet/record', request);
@@ -221,12 +251,13 @@ const Note = () => {
       });
       setDailyDietLogs(dietLogsResponse.data);
 
-      // 다이얼로그 닫기
+      // 다이얼로그 닫기 및 상태 초기화
       setIsAddDietDialogOpen(false);
       setSelectedFood(null);
       setQuantity(100);
       setSearchKeyword('');
       setSearchResults([]);
+      setMealTime('breakfast');
 
     } catch (error) {
       console.error("식단 기록 추가 중 오류:", error);
@@ -239,8 +270,7 @@ const Note = () => {
       await axios.delete(`/api/diet/record/${id}`);
 
       // 데이터 새로고침
-      const userInfo = getUserInfo();
-      const userId = userInfo?.userId || 1;
+      const userId = getUserIdFromToken() || 1;
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
 
       const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
@@ -291,9 +321,9 @@ const Note = () => {
       const dateStr = selectedDate.toISOString().split("T")[0];
       try {
         // 인증 토큰 가져오기
-        const token = localStorage.getItem('token');
-        if (!token) {
-          console.warn('인증 토큰이 없습니다.');
+        const token = getToken();
+        if (!token || !isTokenValid()) {
+          console.warn('인증 토큰이 없거나 만료되었습니다.');
           setTodayExercise([]);
           return;
         }
@@ -396,6 +426,67 @@ const Note = () => {
     { name: '칼로리', value: 92.5, goal: 100, color: '#8B5CF6', calories: 1850, targetCalories: 2000 },
   ];
 
+  // 식단 수정 관련 상태
+  const [isEditDietDialogOpen, setIsEditDietDialogOpen] = useState(false);
+  const [editingDietLog, setEditingDietLog] = useState<DietLogDTO | null>(null);
+  const [editQuantity, setEditQuantity] = useState(100);
+  const [isUpdatingDiet, setIsUpdatingDiet] = useState(false);
+
+  // 식단 수정 시작
+  const startEditDiet = (dietLog: DietLogDTO) => {
+    setEditingDietLog(dietLog);
+    setEditQuantity(dietLog.quantity);
+    setIsEditDietDialogOpen(true);
+  };
+
+  // 식단 수정 저장
+  const saveDietEdit = async () => {
+    if (!editingDietLog) return;
+
+    setIsUpdatingDiet(true);
+    try {
+      const updateData = {
+        ...editingDietLog,
+        quantity: editQuantity,
+        meal_time: editingDietLog.mealTime || mealTime,
+        input_source: editingDietLog.inputSource || null,
+        confidence_score: editingDietLog.confidenceScore || null,
+        original_audio_path: editingDietLog.originalAudioPath || null,
+        validation_status: editingDietLog.validationStatus || null,
+        validation_notes: editingDietLog.validationNotes || null,
+        created_at: editingDietLog.createdAt || null
+      };
+
+      const response = await axios.put(`/api/diet/record/${editingDietLog.id}`, updateData);
+
+      // 로컬 상태 업데이트
+      setDailyDietLogs(prev => 
+        prev.map(log => 
+          log.id === editingDietLog.id 
+            ? response.data
+            : log
+        )
+      );
+
+      setIsEditDietDialogOpen(false);
+      setEditingDietLog(null);
+      setEditQuantity(100);
+      
+      toast({
+        title: "식단이 수정되었습니다.",
+        description: "식단 기록이 성공적으로 업데이트되었습니다.",
+      });
+    } catch (error) {
+      console.error("식단 수정 실패:", error);
+      toast({
+        title: "식단 수정 실패",
+        description: "식단을 수정하는 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingDiet(false);
+    }
+  };
 
   return (
     <Layout>
@@ -685,6 +776,20 @@ const Note = () => {
                               <div className="text-sm text-muted-foreground mt-1">
                                 예상 칼로리: {Math.round((selectedFood.calories * quantity) / 100)}kcal
                               </div>
+                              <div className="mt-3">
+                                <Label htmlFor="mealTime">식사 시간</Label>
+                                <select
+                                  id="mealTime"
+                                  value={mealTime}
+                                  onChange={e => setMealTime(e.target.value)}
+                                  className="mt-1 block w-full border rounded px-2 py-1"
+                                >
+                                  <option value="breakfast">아침</option>
+                                  <option value="lunch">점심</option>
+                                  <option value="dinner">저녁</option>
+                                  <option value="snack">간식</option>
+                                </select>
+                              </div>
                             </div>
                           )}
 
@@ -736,7 +841,12 @@ const Note = () => {
                           </p>
                         </div>
                         <div className="flex space-x-1">
-                          <Button size="icon" variant="ghost" className="h-8 w-8">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => startEditDiet(dailyDietLogs[index])}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
@@ -767,6 +877,81 @@ const Note = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* 식단 수정 다이얼로그 */}
+        <Dialog open={isEditDietDialogOpen} onOpenChange={setIsEditDietDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>식단 수정</DialogTitle>
+            </DialogHeader>
+            {editingDietLog && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="foodName">음식명</Label>
+                  <Input
+                    id="foodName"
+                    value={editingDietLog.foodName}
+                    disabled
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quantity">수량 (g)</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(Number(e.target.value))}
+                    min="1"
+                    step="1"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">칼로리:</span>
+                    <span className="ml-2 font-medium">
+                      {((editingDietLog.calories / editingDietLog.quantity) * editQuantity).toFixed(0)}kcal
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">탄수화물:</span>
+                    <span className="ml-2 font-medium">
+                      {((editingDietLog.carbs / editingDietLog.quantity) * editQuantity).toFixed(1)}g
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">단백질:</span>
+                    <span className="ml-2 font-medium">
+                      {((editingDietLog.protein / editingDietLog.quantity) * editQuantity).toFixed(1)}g
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">지방:</span>
+                    <span className="ml-2 font-medium">
+                      {((editingDietLog.fat / editingDietLog.quantity) * editQuantity).toFixed(1)}g
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsEditDietDialogOpen(false)}
+                    disabled={isUpdatingDiet}
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    onClick={saveDietEdit}
+                    disabled={isUpdatingDiet}
+                  >
+                    {isUpdatingDiet ? '저장 중...' : '저장'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
