@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getUserProfile, updateUserProfile } from '@/api/auth';
 import { isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
+import { BasicInfoBox } from '@/components/BasicInfoBox';
 
 interface StrengthGoal {
   id: string;
@@ -180,108 +181,12 @@ const Profile = () => {
           </div>
 
           {/* Basic Information */}
-          <Card className="hover-lift">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <User className="mr-2 h-5 w-5" />
-                기본 정보
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* ... keep existing code (basic information form) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nickname">닉네임</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="nickname"
-                      value={profileData.nickname}
-                      onChange={(e) => setProfileData({...profileData, nickname: e.target.value})}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">이메일</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profileData.email}
-                      readOnly
-                      className="pl-10 bg-gray-50 cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="height">키 (cm)</Label>
-                  <div className="relative">
-                    <Ruler className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="height"
-                      type="number"
-                      value={profileData.height}
-                      onChange={(e) => setProfileData({...profileData, height: e.target.value})}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="weight">체중 (kg)</Label>
-                  <div className="relative">
-                    <Weight className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="weight"
-                      type="number"
-                      value={profileData.weight}
-                      onChange={(e) => setProfileData({...profileData, weight: e.target.value})}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="age">나이</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="age"
-                      type="number"
-                      value={profileData.age}
-                      onChange={(e) => setProfileData({...profileData, age: e.target.value})}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="gender">성별</Label>
-                  <Select value={profileData.gender} onValueChange={(value) => setProfileData({...profileData, gender: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="성별을 선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">남성</SelectItem>
-                      <SelectItem value="female">여성</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Button 
-                onClick={handleProfileSave} 
-                disabled={loading}
-                className="w-full gradient-bg hover:opacity-90 transition-opacity"
-              >
-                {loading ? '저장 중...' : '기본 정보 저장'}
-              </Button>
-            </CardContent>
-          </Card>
+          <BasicInfoBox
+            profileData={profileData}
+            setProfileData={setProfileData}
+            loading={loading}
+            onSave={handleProfileSave}
+          />
 
           {/* Health Goals */}
           <Card className="hover-lift">
