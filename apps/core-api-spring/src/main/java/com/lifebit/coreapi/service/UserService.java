@@ -115,6 +115,14 @@ public class UserService {
             user.setGender(gender);
         }
 
+        if (updateData.containsKey("password")) {
+            Object passwordObj = updateData.get("password");
+            if (passwordObj != null && !passwordObj.toString().isEmpty()) {
+                String newPassword = passwordObj.toString();
+                user.setPasswordHash(passwordEncoder.encode(newPassword));
+            }
+        }
+
         return userRepository.save(user);
     }
 } 

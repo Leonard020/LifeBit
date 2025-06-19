@@ -20,6 +20,7 @@ import NotFound from './pages/NotFound';
 import SocialRedirect from './pages/SocialRedirect';
 import { AuthProvider } from './AuthContext'; // ← 이 줄 추가
 import { AdminPage } from './pages/AdminPage';
+import UserInfo from './pages/UserInfo';
 
 
 // ===================================================================
@@ -127,6 +128,7 @@ const App = () => (
           <Route path="/healthlog" element={<HealthLog />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/userinfo" element={<UserInfo />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/auth/social-redirect" element={<SocialRedirect />} />
 

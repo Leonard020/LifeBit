@@ -95,6 +95,12 @@ const WebHeader = () => {
                       마이페이지
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/userinfo" className="flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      회원정보
+                    </Link>
+                  </DropdownMenuItem>
                   {isAdmin() && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center">
@@ -202,6 +208,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       마이페이지
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/userinfo" className="flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      회원정보
                     </Link>
                   </DropdownMenuItem>
                   {isAdmin() && (
