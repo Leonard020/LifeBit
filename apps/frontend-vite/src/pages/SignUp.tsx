@@ -51,23 +51,32 @@ const SignUp = () => {
     setIsLoading(true);
 
     try {
+      const { email, nickname, password } = formData;
       const response = await signUp({
-        email: formData.email,
-        nickname: formData.nickname,
-        password: formData.password
+        email,
+        nickname,
+        password
       });
       console.log('Sign up successful:', response);
       navigate('/login');
-    } catch (error: any) {
-      console.error('Sign up failed:', error);
-      if (error.response?.data) {
-        // 필드별 유효성 검사 에러
-        if (typeof error.response.data === 'object' && !error.response.data.message) {
-          const errorMessages = Object.values(error.response.data).join('\n');
-          setError(errorMessages);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Sign up failed:', error);
+      }
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const err = error as { response?: { data?: unknown } };
+        if (err.response?.data) {
+          // 필드별 유효성 검사 에러
+          if (typeof err.response.data === 'object' && err.response.data !== null && !('message' in err.response.data)) {
+            const errorMessages = Object.values(err.response.data as Record<string, unknown>).join('\n');
+            setError(errorMessages);
+          } else if (typeof err.response.data === 'object' && err.response.data !== null && 'message' in err.response.data) {
+            setError((err.response.data as { message?: string }).message || '회원가입에 실패했습니다.');
+          } else {
+            setError('회원가입에 실패했습니다.');
+          }
         } else {
-          // 일반 에러 메시지
-          setError(error.response.data.message || '회원가입에 실패했습니다.');
+          setError('서버와의 통신에 실패했습니다.');
         }
       } else {
         setError('서버와의 통신에 실패했습니다.');

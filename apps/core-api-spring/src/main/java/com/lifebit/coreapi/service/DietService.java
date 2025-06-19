@@ -7,6 +7,9 @@ import com.lifebit.coreapi.entity.FoodItem;
 import com.lifebit.coreapi.entity.MealLog;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.entity.UserGoal;
+import com.lifebit.coreapi.entity.MealTimeType;
+import com.lifebit.coreapi.entity.InputSourceType;
+import com.lifebit.coreapi.entity.ValidationStatusType;
 import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserRepository;
@@ -66,16 +69,16 @@ public class DietService {
             BigDecimal quantity = mealLog.getQuantity();
             
             if (foodItem.getCalories() != null) {
-                totalCalories += foodItem.getCalories().multiply(quantity).doubleValue();
+                totalCalories += foodItem.getCalories().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
             }
             if (foodItem.getCarbs() != null) {
-                totalCarbs += foodItem.getCarbs().multiply(quantity).doubleValue();
+                totalCarbs += foodItem.getCarbs().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
             }
             if (foodItem.getProtein() != null) {
-                totalProtein += foodItem.getProtein().multiply(quantity).doubleValue();
+                totalProtein += foodItem.getProtein().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
             }
             if (foodItem.getFat() != null) {
-                totalFat += foodItem.getFat().multiply(quantity).doubleValue();
+                totalFat += foodItem.getFat().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
             }
         }
 
@@ -133,6 +136,27 @@ public class DietService {
         mealLog.setLogDate(LocalDate.parse(request.getLogDate()));
         mealLog.setCreatedAt(LocalDateTime.now());
 
+        // 추가: DTO의 필드를 Entity에 매핑
+        if (request.getMealTime() != null) {
+            mealLog.setMealTime(MealTimeType.valueOf(request.getMealTime()));
+        }
+        if (request.getInputSource() != null) {
+            mealLog.setInputSource(InputSourceType.valueOf(request.getInputSource()));
+        }
+        if (request.getConfidenceScore() != null) {
+            mealLog.setConfidenceScore(BigDecimal.valueOf(request.getConfidenceScore()));
+        }
+        if (request.getOriginalAudioPath() != null) {
+            mealLog.setOriginalAudioPath(request.getOriginalAudioPath());
+        }
+        if (request.getValidationStatus() != null) {
+            mealLog.setValidationStatus(ValidationStatusType.valueOf(request.getValidationStatus()));
+        }
+        if (request.getValidationNotes() != null) {
+            mealLog.setValidationNotes(request.getValidationNotes());
+        }
+        // createdAt은 이미 위에서 설정
+
         MealLog savedMealLog = mealLogRepository.save(mealLog);
         return convertToDietLogDTO(savedMealLog);
     }
@@ -180,19 +204,19 @@ public class DietService {
         dto.setLogDate(mealLog.getLogDate().toString());
         dto.setUnit("g");
         
-        // 영양소 정보 설정
+        // 영양소 정보 설정 (divide by 100 for per-100g values)
         FoodItem foodItem = mealLog.getFoodItem();
         if (foodItem.getCalories() != null) {
-            dto.setCalories(foodItem.getCalories().multiply(mealLog.getQuantity()).doubleValue());
+            dto.setCalories(foodItem.getCalories().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
         }
         if (foodItem.getCarbs() != null) {
-            dto.setCarbs(foodItem.getCarbs().multiply(mealLog.getQuantity()).doubleValue());
+            dto.setCarbs(foodItem.getCarbs().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
         }
         if (foodItem.getProtein() != null) {
-            dto.setProtein(foodItem.getProtein().multiply(mealLog.getQuantity()).doubleValue());
+            dto.setProtein(foodItem.getProtein().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
         }
         if (foodItem.getFat() != null) {
-            dto.setFat(foodItem.getFat().multiply(mealLog.getQuantity()).doubleValue());
+            dto.setFat(foodItem.getFat().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
         }
         
         return dto;
