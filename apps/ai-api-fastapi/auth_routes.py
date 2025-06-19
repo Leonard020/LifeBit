@@ -9,6 +9,7 @@ from models import UserRole  # 상단에 추가
 from pathlib import Path
 from passlib.hash import bcrypt
 from sqlalchemy import text
+from datetime import datetime
 
 
 # Load .env
@@ -129,6 +130,12 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
                     status_code=500,
                     detail="사용자 정보 저장 실패"
                 )
+        # Always re-fetch the user before updating last_visited
+        user = db.query(models.User).filter(models.User.email == email).first()
+        print(f"[DEBUG] Kakao before update last_visited: {user.last_visited}")
+        user.last_visited = datetime.utcnow()
+        db.commit()
+        print(f"[DEBUG] Kakao after update last_visited: {user.last_visited}")
 
         # 5️⃣ JWT 발급
         jwt_token = create_access_token(
@@ -253,7 +260,6 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             while db.query(models.User).filter(models.User.nickname == nickname).first():
                 nickname = f"{base_nick}_{suffix}"
                 suffix += 1
-
             user = models.User(
                 email=email,
                 nickname=nickname,
@@ -272,6 +278,12 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
                     status_code=500,
                     detail="사용자 정보 저장 실패"
                 )
+        # Always re-fetch the user before updating last_visited
+        user = db.query(models.User).filter(models.User.email == email).first()
+        print(f"[DEBUG] Google before update last_visited: {user.last_visited}")
+        user.last_visited = datetime.utcnow()
+        db.commit()
+        print(f"[DEBUG] Google after update last_visited: {user.last_visited}")
 
         # JWT 토큰 생성
         jwt_token = create_access_token(

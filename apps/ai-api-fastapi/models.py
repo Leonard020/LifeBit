@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey, DECIMAL,
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Enum as SqlEnum
+from sqlalchemy import DateTime
 from datetime import datetime
 import uuid
 import enum
@@ -64,3 +65,4 @@ class User(Base):
 
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow)
+    last_visited = Column(DateTime, nullable=True)
