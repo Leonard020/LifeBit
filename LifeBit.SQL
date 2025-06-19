@@ -332,26 +332,6 @@ CREATE INDEX idx_validation_history_record ON validation_history(record_type, re
 CREATE INDEX idx_validation_history_user ON validation_history(user_id);
 CREATE INDEX idx_validation_history_created ON validation_history(created_at);
 
--- 19. daily_workout_logs 테이블 추가
-DROP TABLE IF EXISTS daily_workout_logs CASCADE;
-
-CREATE TABLE daily_workout_logs (
-    workout_log_id BIGSERIAL PRIMARY KEY,         -- 고유 운동 기록 ID
-    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), -- 고유 식별자
-    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, -- 사용자
-    exercise_catalog_id BIGINT REFERENCES exercise_catalog(exercise_catalog_id) ON DELETE SET NULL, -- 운동 종류
-    duration_minutes INTEGER NOT NULL,            -- 총 소요 시간
-    sets INTEGER,                                 -- 세트 수
-    reps INTEGER,                                 -- 반복 수
-    weight DECIMAL(5,2),                          -- 무게
-    workout_date DATE NOT NULL,                   -- 운동한 날짜
-    created_at TIMESTAMP DEFAULT NOW()            -- 작성 시각
-);
-
--- 인덱스 추가
-CREATE INDEX idx_daily_workout_logs_user_date ON daily_workout_logs(user_id, workout_date);
-CREATE INDEX idx_daily_workout_logs_catalog ON daily_workout_logs(exercise_catalog_id);
-
 -- 20. 트리거 함수들
 -- 검증 상태 변경 트리거 함수
 CREATE OR REPLACE FUNCTION log_validation_change()
@@ -412,26 +392,7 @@ BEFORE UPDATE ON voice_recognition_logs
 FOR EACH ROW
 EXECUTE FUNCTION update_processed_at();
 
--- 22. workout 테이블 추가
-DROP TABLE IF EXISTS workout CASCADE;
-CREATE TABLE workout (
-    id BIGSERIAL PRIMARY KEY,
-    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    exercise_name VARCHAR(255) NOT NULL,
-    type VARCHAR(255),
-    duration INTEGER,
-    reps INTEGER,
-    sets INTEGER,
-    weight DOUBLE PRECISION,
-    calories_burned INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
-);
 
--- workout 테이블 인덱스 추가
-CREATE INDEX idx_workout_user_date ON workout(user_id, date);
-CREATE INDEX idx_workout_date ON workout(date);
 
 -- 트랜잭션 커밋
 COMMIT;

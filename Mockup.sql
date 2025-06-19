@@ -10,8 +10,6 @@ BEGIN;
     DELETE FROM recommendation CASCADE;
     DELETE FROM voice_recognition_logs CASCADE;
     DELETE FROM validation_history CASCADE;
-    DELETE FROM workout CASCADE;
-    DELETE FROM daily_workout_logs CASCADE;
     DELETE FROM user_goals CASCADE;
     DELETE FROM health_records CASCADE;
     DELETE FROM exercise_sessions CASCADE;
@@ -306,83 +304,5 @@ INSERT INTO validation_history (
  'SYSTEM',
  CURRENT_TIMESTAMP);
 
--- 18. workout 데이터 추가
-INSERT INTO workout (
-    user_id,
-    date,
-    exercise_name,
-    type,
-    duration,
-    reps,
-    sets,
-    weight,
-    calories_burned
-) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
- CURRENT_DATE,
- '벤치프레스',
- 'chest',
- 45,
- 12,
- 3,
- 80.0,
- 300),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'),
- CURRENT_DATE,
- '스쿼트',
- 'legs',
- 30,
- 15,
- 4,
- 100.0,
- 250),
-((SELECT user_id FROM users WHERE email = 'user2@example.com'),
- CURRENT_DATE,
- '데드리프트',
- 'back',
- 40,
- 10,
- 3,
- 120.0,
- 280),
-((SELECT user_id FROM users WHERE email = 'user3@example.com'),
- CURRENT_DATE,
- '플랭크',
- 'abs',
- 20,
- 1,
- 3,
- 0.0,
- 150),
-((SELECT user_id FROM users WHERE email = 'user4@example.com'),
- CURRENT_DATE,
- '풀업',
- 'back',
- 35,
- 8,
- 4,
- 0.0,
- 270);
-
--- 19. daily_workout_logs 데이터 추가
-WITH exercise_catalog_ids AS (
-    SELECT exercise_catalog_id, name 
-    FROM exercise_catalog
-)
-INSERT INTO daily_workout_logs (
-    user_id,
-    exercise_catalog_id,
-    duration_minutes,
-    sets,
-    reps,
-    weight,
-    workout_date
-) VALUES
-((SELECT user_id FROM users WHERE email = 'admin@lifebit.com'),
- (SELECT exercise_catalog_id FROM exercise_catalog WHERE name = '벤치프레스'),
- 45, 3, 12, 80.0, CURRENT_DATE),
-((SELECT user_id FROM users WHERE email = 'user1@example.com'),
- (SELECT exercise_catalog_id FROM exercise_catalog WHERE name = '스쿼트'),
- 30, 4, 15, 100.0, CURRENT_DATE);
 
 COMMIT; 
