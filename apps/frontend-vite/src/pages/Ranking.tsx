@@ -71,59 +71,9 @@ const Ranking = () => {
           console.log('Debug - getRanking API response:', data);
           setRankingData(data);
         } catch (apiError) {
-          console.log('Debug - API call failed, using mock data');
-          // API 호출 실패 시 Mock 데이터 사용
-          const mockData = {
-            topRankers: [
-              { rank: 1, userId: 1, nickname: "헬스킹", score: 3420, badge: "platinum", streakDays: 45 },
-              { rank: 2, userId: 2, nickname: "운동러버", score: 3180, badge: "gold", streakDays: 38 },
-              { rank: 3, userId: 3, nickname: "건강이최고", score: 2950, badge: "gold", streakDays: 32 },
-              { rank: 4, userId: 4, nickname: "바디빌더", score: 2780, badge: "silver", streakDays: 28 },
-              { rank: 5, userId: 5, nickname: "피트니스맨", score: 2650, badge: "silver", streakDays: 25 },
-            ],
-            myRanking: {
-              rank: 24,
-              score: 1847,
-              streakDays: 12,
-              totalUsers: 2841
-            },
-            achievements: [
-              { 
-                title: "7일 연속 기록", 
-                description: "일주일 동안 꾸준히 기록했습니다", 
-                badge: "bronze",
-                achieved: true,
-                date: "2024-06-05",
-                progress: 100
-              },
-              { 
-                title: "30일 연속 기록", 
-                description: "한 달 동안 꾸준히 기록했습니다", 
-                badge: "silver",
-                achieved: false,
-                progress: 12,
-                target: 30
-              },
-              { 
-                title: "100일 연속 기록", 
-                description: "100일 동안 꾸준히 기록했습니다", 
-                badge: "gold",
-                achieved: false,
-                progress: 12,
-                target: 100
-              },
-              { 
-                title: "1년 연속 기록", 
-                description: "1년 동안 꾸준히 기록했습니다", 
-                badge: "platinum",
-                achieved: false,
-                progress: 12,
-                target: 365
-              },
-            ]
-          };
-          setRankingData(mockData);
-          toast.info('백엔드 연결 실패로 임시 데이터를 표시합니다.');
+          console.log('Debug - API call failed:', apiError);
+          setError('랭킹 데이터를 불러올 수 없습니다. 인터넷 연결을 확인하거나 나중에 다시 시도해주세요.');
+          toast.error('랭킹 데이터를 불러오는데 실패했습니다.');
         }
       } catch (error) {
         console.error('Failed to fetch ranking data:', error);
@@ -207,6 +157,9 @@ const Ranking = () => {
 
   const { topRankers, myRanking, achievements } = rankingData;
 
+  // 데이터가 없을 때 안내 메시지 표시
+  const hasNoData = topRankers.length === 0 && myRanking.rank === 0 && achievements.length === 0;
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -216,131 +169,155 @@ const Ranking = () => {
           <p className="text-muted-foreground">사용자들과 함께 건강한 경쟁을 즐겨보세요</p>
         </div>
 
-        {/* My Ranking */}
-        <Card className="mb-8 border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-center">
-              <Trophy className="mr-2 h-5 w-5 text-primary" />
-              나의 랭킹
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center space-y-4">
-              <div className="flex items-center justify-center space-x-8">
-                <div className="text-center">
-                  <div className="text-3xl font-bold gradient-text">{myRanking.rank}</div>
-                  <div className="text-sm text-muted-foreground">순위</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold">{myRanking.score.toLocaleString()}</div>
-                  <div className="text-sm text-muted-foreground">점수</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{myRanking.streakDays}</div>
-                  <div className="text-sm text-muted-foreground">연속 기록</div>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                전체 {myRanking.totalUsers.toLocaleString()}명 중 {myRanking.rank}위
-              </p>
+        {/* 데이터가 없을 때 안내 메시지 */}
+        {hasNoData && (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">🏆</div>
+            <h3 className="text-xl font-semibold mb-2">아직 랭킹 데이터가 없습니다</h3>
+            <p className="text-muted-foreground mb-6">
+              건강 기록을 시작하고 다른 사용자들과 함께 경쟁해보세요!
+            </p>
+            <div className="space-y-2 text-sm text-muted-foreground max-w-md mx-auto">
+              <p>• 꾸준한 운동과 기록으로 점수를 획득하세요</p>
+              <p>• 연속 기록 일수를 늘려 더 높은 순위에 도전하세요</p>
+              <p>• 다양한 업적을 달성하여 배지를 수집하세요</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        )}
+
+        {/* My Ranking */}
+        {!hasNoData && (
+          <Card className="mb-8 border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-center">
+                <Trophy className="mr-2 h-5 w-5 text-primary" />
+                나의 랭킹
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center space-y-4">
+                <div className="flex items-center justify-center space-x-8">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold gradient-text">{myRanking.rank || '-'}</div>
+                    <div className="text-sm text-muted-foreground">순위</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold">{myRanking.score.toLocaleString()}</div>
+                    <div className="text-sm text-muted-foreground">점수</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-orange-600">{myRanking.streakDays}</div>
+                    <div className="text-sm text-muted-foreground">연속 기록</div>
+                  </div>
+                </div>
+                {myRanking.totalUsers > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    전체 {myRanking.totalUsers.toLocaleString()}명 중 {myRanking.rank}위
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Top Rankers */}
-        <Card className="mb-8 hover-lift">
-          <CardHeader>
-            <CardTitle>상위 랭킹</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {topRankers.map((user: RankingUser) => (
-                <div key={user.rank} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 flex items-center justify-center">
-                      {getRankIcon(user.rank)}
+        {!hasNoData && topRankers.length > 0 && (
+          <Card className="mb-8 hover-lift">
+            <CardHeader>
+              <CardTitle>상위 랭킹</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {topRankers.map((user: RankingUser) => (
+                  <div key={user.rank} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 flex items-center justify-center">
+                        {getRankIcon(user.rank)}
+                      </div>
+                      <Avatar>
+                        <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
+                          <span className="text-white text-sm font-bold">
+                            {user.nickname.charAt(0)}
+                          </span>
+                        </div>
+                        <AvatarFallback>{user.nickname.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">{user.nickname}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {user.streakDays}일 연속
+                        </div>
+                      </div>
                     </div>
-                    <Avatar>
-                      <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">
-                          {user.nickname.charAt(0)}
-                        </span>
-                      </div>
-                      <AvatarFallback>{user.nickname.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{user.nickname}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {user.streakDays}일 연속
-                      </div>
+                    <div className="text-right">
+                      <div className="font-bold">{user.score.toLocaleString()}점</div>
+                      <Badge className={`text-xs ${getBadgeColor(user.badge)}`}>
+                        {user.badge}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold">{user.score.toLocaleString()}점</div>
-                    <Badge className={`text-xs ${getBadgeColor(user.badge)}`}>
-                      {user.badge}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Achievement Badges */}
-        <Card className="hover-lift">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Award className="mr-2 h-5 w-5" />
-              활동 뱃지
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {achievements.map((achievement: Achievement, index: number) => (
-                <div key={index} className={`p-4 rounded-lg border ${
-                  achievement.achieved 
-                    ? 'border-green-200 bg-green-50' 
-                    : 'border-gray-200 bg-gray-50'
-                }`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>
-                        {achievement.title}
-                      </h4>
-                      <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>
-                        {achievement.description}
-                      </p>
+        {!hasNoData && achievements.length > 0 && (
+          <Card className="hover-lift">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Award className="mr-2 h-5 w-5" />
+                활동 뱃지
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {achievements.map((achievement: Achievement, index: number) => (
+                  <div key={index} className={`p-4 rounded-lg border ${
+                    achievement.achieved 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-gray-200 bg-gray-50'
+                  }`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>
+                          {achievement.title}
+                        </h4>
+                        <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>
+                          {achievement.description}
+                        </p>
+                      </div>
+                      <Badge className={`${getBadgeColor(achievement.badge)} ml-2`}>
+                        {achievement.badge}
+                      </Badge>
                     </div>
-                    <Badge className={`${getBadgeColor(achievement.badge)} ml-2`}>
-                      {achievement.badge}
-                    </Badge>
+                    
+                    {achievement.achieved ? (
+                      <div className="flex items-center space-x-2 text-green-600">
+                        <Trophy className="h-4 w-4" />
+                        <span className="text-sm">달성: {achievement.date}</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span>진행도</span>
+                          <span>{achievement.progress}/{achievement.target || 100}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-primary h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  
-                  {achievement.achieved ? (
-                    <div className="flex items-center space-x-2 text-green-600">
-                      <Trophy className="h-4 w-4" />
-                      <span className="text-sm">달성: {achievement.date}</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>진행도</span>
-                        <span>{achievement.progress}/{achievement.target || 100}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-primary h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </Layout>
   );
