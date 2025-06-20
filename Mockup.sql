@@ -84,7 +84,7 @@ INSERT INTO users (email, password_hash, nickname, profile_image_url, height, we
 -- ===================================================================
 -- 2. 운동 카탈로그 50개 (다양한 운동 종류)
 -- ===================================================================
-INSERT INTO exercise_catalog (name, exercise_type, body_part, description, intensity) VALUES
+INSERT INTO exercise_catalog (name, excercise_type, body_part, description, intensity) VALUES
 -- 가슴 운동 (8개)
 ('벤치프레스', 'strength', 'chest', '가슴 운동의 대표적인 기본 운동', 'high'),
 ('인클라인 벤치프레스', 'strength', 'chest', '상부 가슴을 집중적으로 단련하는 운동', 'high'),

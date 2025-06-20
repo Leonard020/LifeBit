@@ -33,7 +33,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TYPE user_role AS ENUM ('ADMIN', 'USER');
 CREATE TYPE badge_type AS ENUM ('bronze', 'silver', 'gold', 'platinum');
 CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'abs', 'arms', 'cardio');
-CREATE TYPE exercise_part_type AS ENUM ('aerobic', 'strength');
+CREATE TYPE excercise_part_type AS ENUM ('aerobic', 'strength');
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'night');
 CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
 CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
