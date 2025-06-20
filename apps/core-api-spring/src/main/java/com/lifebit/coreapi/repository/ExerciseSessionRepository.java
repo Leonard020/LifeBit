@@ -18,6 +18,10 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
     List<ExerciseSession> findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
         User user, LocalDate startDate, LocalDate endDate);
 
+    // ✅ NoteExerciseService 용
+    List<ExerciseSession> findByUser_UserIdAndExerciseDateBetween(Long userId, LocalDate start, LocalDate end);
+    List<ExerciseSession> findByUser_UserIdAndExerciseDate(Long userId, LocalDate date);
+
     @Query("SELECT es.exerciseDate as date, COUNT(es) as count FROM ExerciseSession es " +
            "WHERE es.user = :user AND es.exerciseDate BETWEEN :startDate AND :endDate " +
            "GROUP BY es.exerciseDate")
@@ -27,4 +31,4 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
 
     @Query("SELECT COUNT(DISTINCT es.exerciseDate) FROM ExerciseSession es WHERE es.user = :user")
     long countDistinctExerciseDateByUser(@Param("user") User user);
-} 
+}
