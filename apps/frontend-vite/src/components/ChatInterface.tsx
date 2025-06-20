@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Send, Loader2, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, Send, Loader2, AlertCircle, Utensils, Clock, Zap } from 'lucide-react';
 import { Message, ChatResponse } from '@/api/chatApi';
 
 interface ChatInterfaceProps {
@@ -20,6 +20,59 @@ interface ChatInterfaceProps {
   structuredData: ChatResponse['parsed_data'] | null;
   conversationHistory: Message[];
 }
+
+// 식단 데이터를 사용자 친화적으로 표시하는 함수
+const formatStructuredDataDisplay = (data: any, recordType: 'exercise' | 'diet') => {
+  if (!data) return null;
+
+  if (recordType === 'diet' && data.food_name && data.meal_time) {
+    return (
+      <div className="space-y-3">
+        <div className="bg-white rounded-lg p-3 border border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Utensils className="h-4 w-4 text-blue-600" />
+            <span className="font-medium text-gray-800">{data.meal_time} 식단</span>
+          </div>
+          <div className="text-sm text-gray-700">
+            <p><strong>음식:</strong> {data.food_name}</p>
+            <p><strong>양:</strong> {data.amount || "1인분"}</p>
+          </div>
+        </div>
+        
+        {data.nutrition && (
+          <div className="bg-white rounded-lg p-3 border border-gray-200">
+            <h4 className="font-medium text-gray-800 mb-2">영양소 정보</h4>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="flex justify-between">
+                <span>칼로리:</span>
+                <span className="font-medium text-red-600">{data.nutrition.calories}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>탄수화물:</span>
+                <span className="font-medium text-blue-600">{data.nutrition.carbs}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>단백질:</span>
+                <span className="font-medium text-green-600">{data.nutrition.protein}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>지방:</span>
+                <span className="font-medium text-yellow-600">{data.nutrition.fat}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 운동 데이터나 기타 데이터는 기존 방식 유지
+  return (
+    <pre className="text-sm whitespace-pre-wrap bg-white p-3 rounded border">
+      {JSON.stringify(data, null, 2)}
+    </pre>
+  );
+};
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   recordType,
@@ -123,14 +176,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         {structuredData && (
           <div className="bg-gray-50 rounded-lg p-4 mt-4">
-            <h3 className="font-medium mb-2">
+            <h3 className="font-medium mb-3 text-gray-800">
               {recordType === 'exercise' ? '운동 기록' : '식단 기록'} 미리보기
             </h3>
-            <pre className="text-sm whitespace-pre-wrap">
-              {JSON.stringify(structuredData, null, 2)}
-            </pre>
+            {formatStructuredDataDisplay(structuredData, recordType)}
             {aiFeedback?.type === 'success' && !aiFeedback.missingFields?.length && (
-              <Button className="mt-4" onClick={onSaveRecord}>저장하기</Button>
+              <Button className="mt-4 w-full" onClick={onSaveRecord}>저장하기</Button>
             )}
           </div>
         )}

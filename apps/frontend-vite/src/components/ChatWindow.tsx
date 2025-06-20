@@ -66,6 +66,7 @@ interface ExerciseState {
   sets?: number;
   reps?: number;
   duration_min?: number;
+  weight?: number;
 }
 
 // 식단 상태 인터페이스 추가
@@ -434,7 +435,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           { role: 'assistant', content: '운동 기록을 분석하여 JSON 형태로 변환합니다.' }
         ],
         currentRecordType!,
-        'extraction'
+        'extraction',
+        exerciseState // 현재 상태 전달
       );
 
       console.log('🤖 AI Response:', response);
@@ -450,14 +452,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         if (response.parsed_data) {
           console.log('📊 Parsed data:', response.parsed_data);
           
-          // 운동 상태 업데이트
-          const newExerciseState = {
+          // 운동 상태 업데이트 (타입 변환 포함)
+          const newExerciseState: ExerciseState = {
             exercise: response.parsed_data.exercise!,
             category: response.parsed_data.category!,
             target: response.parsed_data.subcategory,
             sets: response.parsed_data.sets,
             reps: response.parsed_data.reps,
-            duration_min: response.parsed_data.duration_min
+            duration_min: response.parsed_data.duration_min,
+            weight: typeof response.parsed_data.weight === 'string' 
+              ? parseFloat(response.parsed_data.weight) || undefined
+              : response.parsed_data.weight
           };
           
           console.log('🔄 New exercise state:', newExerciseState);
@@ -487,7 +492,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         console.log('⚠️ Incomplete response');
         // 정보가 부족한 경우
         addMessage('ai', response.message || '추가 정보가 필요합니다. 더 자세히 입력해주세요.');
+        updateConversationHistory('assistant', response.message || '추가 정보가 필요합니다.');
         // 계속 입력을 받기 위해 상태 유지
+      } else if (response.type === 'error') {
+        console.log('❌ Error response:', response.message);
+        addMessage('ai', response.message);
+        updateConversationHistory('assistant', response.message);
       } else {
         console.log('❌ Unknown response type:', response.type);
         addMessage('ai', '운동 정보를 파악하지 못했습니다. 다시 입력해주세요.\n\n예시: "스쿼트 60kg 3세트 10회 했어요" 또는 "런닝머신으로 30분 뛰었어요"');
@@ -504,10 +514,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const checkMissingExerciseInfo = (exerciseState: ExerciseState): string[] => {
     const missing: string[] = [];
     
-    if (exerciseState.category === 'strength') {
+    // 운동명과 카테고리는 기본적으로 필요
+    if (!exerciseState.exercise) missing.push('exercise');
+    if (!exerciseState.category) missing.push('category');
+    
+    // 카테고리별 필수 정보 확인
+    if (exerciseState.category === 'strength' || exerciseState.category === '근력') {
+      // 근력 운동의 경우
       if (!exerciseState.sets) missing.push('sets');
       if (!exerciseState.reps) missing.push('reps');
-    } else if (exerciseState.category === 'cardio') {
+      
+      // 맨몸 운동이 아닌 경우 무게도 필요 (추후 is_bodyweight 필드로 판별)
+      // 현재는 푸시업, 풀업, 플랭크, 크런치, 싯업은 맨몸운동으로 간주
+      const bodyweightExercises = ['푸시업', '풀업', '플랭크', '크런치', '싯업', '버피'];
+      const isBodyweight = bodyweightExercises.some(exercise => 
+        exerciseState.exercise?.toLowerCase().includes(exercise.toLowerCase())
+      );
+      
+      if (!isBodyweight && !exerciseState.weight) {
+        missing.push('weight');
+      }
+    } else if (exerciseState.category === 'cardio' || exerciseState.category === '유산소') {
+      // 유산소 운동의 경우
       if (!exerciseState.duration_min) missing.push('duration');
     }
     
@@ -519,14 +547,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     let question = '';
     
     switch (missingType) {
+      case 'weight':
+        question = `${exerciseState.exercise} 운동을 몇 kg으로 하셨나요? 💪`;
+        break;
       case 'sets':
-        question = `${exerciseState.exercise} 운동을 몇 세트 하셨나요?`;
+        question = `${exerciseState.exercise} 운동을 몇 세트 하셨나요? 💪`;
         break;
       case 'reps':
-        question = `한 세트당 몇 회씩 하셨나요?`;
+        question = `한 세트당 몇 회씩 하셨나요? 💪`;
         break;
       case 'duration':
-        question = `${exerciseState.exercise} 운동을 몇 분간 하셨나요?`;
+        question = `${exerciseState.exercise} 운동을 몇 분 동안 하셨나요? ⏱️`;
         break;
       default:
         question = '추가 정보가 필요합니다. 다시 입력해주세요.';
@@ -545,7 +576,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       const updatedExerciseState = { ...exerciseState };
       let processed = false;
       
-      if (validationStep === 'sets') {
+      if (validationStep === 'weight') {
+        const weight = parseFloat(input.match(/[\d.]+/)?.[0] || '0');
+        console.log('🏋️ Extracted weight:', weight);
+        
+        if (weight > 0) {
+          updatedExerciseState.weight = weight;
+          setExerciseState(updatedExerciseState);
+          processed = true;
+          
+          // 다음 필요한 정보 확인
+          const missingInfo = checkMissingExerciseInfo(updatedExerciseState);
+          console.log('❓ Next missing info:', missingInfo);
+          
+          if (missingInfo.length > 0) {
+            setValidationStep(missingInfo[0]);
+            askForMissingInfo(missingInfo[0], updatedExerciseState);
+          } else {
+            // 모든 정보 수집 완료, 칼로리 계산 중 메시지 표시
+            addMessage('ai', '모든 정보가 수집되었습니다! 🔥 칼로리를 계산하는 중입니다...');
+            
+            // 칼로리 계산 후 확인 단계로
+            setTimeout(() => {
+              console.log('✅ All validation complete, moving to confirmation');
+              setCurrentStep('confirmation');
+              const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+              addMessage('ai', confirmationMessage);
+              setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+              setIsAwaitingConfirmation(true);
+            }, 1500); // 1.5초 딜레이로 계산 시뮬레이션
+          }
+        } else {
+          addMessage('ai', '올바른 무게를 입력해주세요. (예: 60)');
+        }
+      } else if (validationStep === 'sets') {
         const sets = parseInt(input.match(/\d+/)?.[0] || '0');
         console.log('📊 Extracted sets:', sets);
         
@@ -562,13 +626,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
             setValidationStep(missingInfo[0]);
             askForMissingInfo(missingInfo[0], updatedExerciseState);
           } else {
-            // 모든 정보 수집 완료, 확인 단계로
-            console.log('✅ All validation complete, moving to confirmation');
-            setCurrentStep('confirmation');
-            const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
-            addMessage('ai', confirmationMessage);
-            setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
-            setIsAwaitingConfirmation(true);
+            // 모든 정보 수집 완료, 칼로리 계산 중 메시지 표시
+            addMessage('ai', '모든 정보가 수집되었습니다! 🔥 칼로리를 계산하는 중입니다...');
+            
+            // 칼로리 계산 후 확인 단계로
+            setTimeout(() => {
+              console.log('✅ All validation complete, moving to confirmation');
+              setCurrentStep('confirmation');
+              const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+              addMessage('ai', confirmationMessage);
+              setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+              setIsAwaitingConfirmation(true);
+            }, 1500); // 1.5초 딜레이로 계산 시뮬레이션
           }
         } else {
           addMessage('ai', '올바른 세트 수를 입력해주세요. (예: 3)');
@@ -582,13 +651,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           setExerciseState(updatedExerciseState);
           processed = true;
           
-          // 모든 정보 수집 완료, 확인 단계로
-          console.log('✅ Reps validation complete, moving to confirmation');
-          setCurrentStep('confirmation');
-          const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
-          addMessage('ai', confirmationMessage);
-          setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
-          setIsAwaitingConfirmation(true);
+          // 모든 정보 수집 완료, 칼로리 계산 중 메시지 표시
+          addMessage('ai', '모든 정보가 수집되었습니다! 🔥 칼로리를 계산하는 중입니다...');
+          
+          // 칼로리 계산 후 확인 단계로
+          setTimeout(() => {
+            console.log('✅ Reps validation complete, moving to confirmation');
+            setCurrentStep('confirmation');
+            const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+            addMessage('ai', confirmationMessage);
+            setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+            setIsAwaitingConfirmation(true);
+          }, 1500); // 1.5초 딜레이로 계산 시뮬레이션
         } else {
           addMessage('ai', '올바른 횟수를 입력해주세요. (예: 10)');
         }
@@ -601,13 +675,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           setExerciseState(updatedExerciseState);
           processed = true;
           
-          // 확인 단계로
-          console.log('✅ Duration validation complete, moving to confirmation');
-          setCurrentStep('confirmation');
-          const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
-          addMessage('ai', confirmationMessage);
-          setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
-          setIsAwaitingConfirmation(true);
+          // 칼로리 계산 중 메시지 표시
+          addMessage('ai', '운동 시간이 기록되었습니다! 🔥 칼로리를 계산하는 중입니다...');
+          
+          // 칼로리 계산 후 확인 단계로
+          setTimeout(() => {
+            console.log('✅ Duration validation complete, moving to confirmation');
+            setCurrentStep('confirmation');
+            const confirmationMessage = formatConfirmationMessage(updatedExerciseState);
+            addMessage('ai', confirmationMessage);
+            setPendingRecord({ type: 'exercise', content: JSON.stringify(updatedExerciseState) });
+            setIsAwaitingConfirmation(true);
+          }, 1500); // 1.5초 딜레이로 계산 시뮬레이션
         } else {
           addMessage('ai', '올바른 시간을 입력해주세요. (예: 30)');
         }
@@ -640,7 +719,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           { role: 'assistant', content: '식단 기록을 분석하여 JSON 형태로 변환합니다.' }
         ],
         currentRecordType!,
-        'extraction'
+        'extraction',
+        dietState // 현재 식단 상태 전달
       );
 
       if (response.type === 'success') {
@@ -669,6 +749,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           setPendingRecord({ type: 'diet', content: JSON.stringify(response.parsed_data) });
           setIsAwaitingConfirmation(true);
         }
+      } else if (response.type === 'incomplete') {
+        addMessage('ai', response.message || '식단 정보가 부족합니다. 더 자세히 입력해주세요.');
+        updateConversationHistory('assistant', response.message || '식단 정보가 부족합니다.');
+      } else if (response.type === 'error') {
+        addMessage('ai', response.message);
+        updateConversationHistory('assistant', response.message);
       }
     } catch (error) {
       console.error('Diet input processing error:', error);
@@ -750,8 +836,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         const response = await sendChatMessage(
           userMessage, 
           conversationHistory,
-          currentRecordType!,
-          'extraction'
+          'exercise', // 기본값으로 설정
+          'extraction',
+          {} // 빈 객체로 전달
         );
         console.log('Chat response:', response);
   
@@ -796,25 +883,123 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
 
   // 확인 메시지 포맷팅 함수 추가
   const formatConfirmationMessage = (data: ExerciseState): string => {
-    let message = '다음과 같이 운동을 기록하시겠습니까?\n\n';
+    let message = '운동 기록이 완료되었습니다! 🏆\n\n';
     
-    if (data.category === 'strength') {
-      message += `🏋️‍♂️ ${data.exercise}\n`;
-      message += `- 운동 종류: 근력운동`;
-      if (data.target) {
-        message += ` (${getBodyPartKorean(data.target)})\n`;
-      } else {
-        message += '\n';
+    // 실제 칼로리 계산 함수 (백엔드와 동일한 로직)
+    const calculateCalories = (exerciseData: ExerciseState): number => {
+      try {
+        const category = exerciseData.category?.toLowerCase() || '';
+        const exercise = exerciseData.exercise?.toLowerCase() || '';
+        
+        if (category === 'cardio' || category === '유산소') {
+          // 유산소 운동 칼로리 계산
+          const duration = exerciseData.duration_min || 0;
+          if (!duration) return 0;
+          
+          // 운동별 칼로리 계수
+          if (['달리기', '조깅', 'running'].some(keyword => exercise.includes(keyword))) {
+            return duration * 11;
+          } else if (['걷기', '워킹', 'walking'].some(keyword => exercise.includes(keyword))) {
+            return duration * 5;
+          } else if (['수영', 'swimming'].some(keyword => exercise.includes(keyword))) {
+            return duration * 9;
+          } else if (['자전거', 'cycling', '사이클'].some(keyword => exercise.includes(keyword))) {
+            return duration * 7;
+          } else {
+            return duration * 8; // 기타 유산소
+          }
+        } else if (category === 'strength' || category === '근력') {
+          // 근력 운동 칼로리 계산
+          const sets = exerciseData.sets || 0;
+          const reps = exerciseData.reps || 0;
+          const weight = exerciseData.weight || 0;
+          const bodyPart = exerciseData.target?.toLowerCase() || '';
+          
+          if (!sets || !reps) return 0;
+          
+          // 맨몸 운동 판별
+          const bodyweightExercises = ['푸시업', '풀업', '플랭크', '크런치', '싯업', '버피'];
+          const isBodyweight = bodyweightExercises.some(bwExercise => 
+            exercise.includes(bwExercise.toLowerCase())
+          );
+          
+          if (isBodyweight) {
+            // 맨몸 운동: (세트 × 횟수 × 체중70kg기준 × 0.03)
+            return Math.round(sets * reps * 70 * 0.03);
+          } else {
+            // 기구/중량 운동: (무게 × 세트 × 횟수 × 0.045) + 운동강도계수
+            if (!weight) return 0;
+            
+            const baseCalories = weight * sets * reps * 0.045;
+            
+            // 운동 부위별 계수 적용
+            let multiplier = 1.0;
+            if (['가슴', '등', '하체', 'chest', 'back', 'legs'].includes(bodyPart)) {
+              multiplier = 1.2; // 대근육
+            } else if (['어깨', '팔', 'shoulders', 'arms'].includes(bodyPart)) {
+              multiplier = 1.0; // 소근육
+            } else if (bodyPart.includes('복근') || bodyPart.includes('abs')) {
+              multiplier = 0.8; // 코어
+            }
+            
+            return Math.round(baseCalories * multiplier);
+          }
+        }
+        
+        return 0;
+      } catch (error) {
+        console.error('칼로리 계산 오류:', error);
+        return 0;
       }
-      if (data.sets) message += `- 세트: ${data.sets}세트\n`;
-      if (data.reps) message += `- 횟수: ${data.reps}회\n`;
+    };
+
+    // 현재 시간 기준 시간대 자동 설정
+    const getCurrentTimePeriod = (): string => {
+      const currentHour = new Date().getHours();
+      
+      if (currentHour >= 6 && currentHour < 12) {
+        return "오전";
+      } else if (currentHour >= 12 && currentHour < 18) {
+        return "오후";
+      } else if (currentHour >= 18 && currentHour < 24) {
+        return "저녁";
+      } else {
+        return "새벽";
+      }
+    };
+
+    // 실제 칼로리 계산
+    const calculatedCalories = calculateCalories(data);
+    const timePeriod = getCurrentTimePeriod();
+    
+    if (data.category === 'cardio' || data.category === '유산소') {
+      // 유산소 운동
+      message += `✅ 운동명: ${data.exercise}\n`;
+      message += `🏃 분류: 유산소운동\n`;
+      message += `⏰ 시간대: ${timePeriod} (자동설정)\n`;
+      message += `⏱️ 운동시간: ${data.duration_min}분\n`;
+      message += `🔥 소모 칼로리: ${calculatedCalories}kcal\n\n`;
     } else {
-      message += `🏃‍♂️ ${data.exercise}\n`;
-      message += `- 운동 종류: 유산소운동\n`;
-      if (data.duration_min) message += `- 시간: ${data.duration_min}분\n`;
+      // 근력 운동
+      const bodyweightExercises = ['푸시업', '풀업', '플랭크', '크런치', '싯업', '버피'];
+      const isBodyweight = bodyweightExercises.some(exercise => 
+        data.exercise?.toLowerCase().includes(exercise.toLowerCase())
+      );
+      
+      message += `✅ 운동명: ${data.exercise}\n`;
+      message += `💪 분류: 근력운동 (${getBodyPartKorean(data.target || '')}${isBodyweight ? ', 맨몸' : ''})\n`;
+      message += `⏰ 시간대: ${timePeriod} (자동설정)\n`;
+      
+      if (!isBodyweight && data.weight) {
+        message += `🏋️ 무게: ${data.weight}kg\n`;
+      }
+      
+      message += `🔢 세트: ${data.sets}세트\n`;
+      message += `🔄 횟수: ${data.reps}회\n`;
+      message += `🔥 소모 칼로리: ${calculatedCalories}kcal\n\n`;
     }
     
-    message += '\n확인하시면 "네", 수정이 필요하시면 "아니오"를 입력해주세요.';
+    message += '맞으면 "네", 수정이 필요하면 "아니오"라고 해주세요!';
     
     return message;
   };
