@@ -13,9 +13,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { isLoggedIn, getUserInfo, getToken } from '@/utils/auth';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Brain } from 'lucide-react';
 import { Layout } from "../components/Layout";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 interface User {
   id: string;
@@ -179,30 +178,12 @@ export const AdminPage = () => {
   return (
     <Layout>
       <div className="container mx-auto py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">관리자 페이지</h1>
-          <p className="text-gray-600 mt-1">사용자 관리 및 시스템 구축 현황을 확인하세요</p>
-        </div>
-
-        <Tabs defaultValue="users" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              사용자 관리
-            </TabsTrigger>
-            <TabsTrigger value="ai-roadmap" className="flex items-center gap-2">
-              <Brain className="h-4 w-4" />
-              AI 시스템 로드맵
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="users" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>사용자 관리</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
+        <Card>
+          <CardHeader>
+            <CardTitle>관리자 페이지</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead onClick={() => handleSort('email')} style={{ cursor: 'pointer' }}>
@@ -242,6 +223,59 @@ export const AdminPage = () => {
                 ))}
               </TableBody>
             </Table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-600">
+                  {indexOfFirstUser + 1}-{Math.min(indexOfLastUser, finalUsers.length)} of {finalUsers.length} users
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToFirstPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  {getPageNumbers().map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => goToPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToLastPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
