@@ -113,30 +113,40 @@ public class HealthStatisticsService {
         Map<String, Object> stats = new HashMap<>();
         
         try {
-            // 최근 7일간 운동 횟수
-            int weeklyWorkouts = exerciseService.getWeeklyExerciseCount(userId);
+            // period에 따른 기간 설정
+            int days = getPeriodDays(period);
             
-            // 최근 7일간 총 운동 시간 (분)
-            int weeklyExerciseMinutes = exerciseService.getWeeklyExerciseMinutes(userId);
+            // 설정된 기간 동안의 운동 횟수
+            int periodWorkouts = exerciseService.getExerciseCountByPeriod(userId, days);
             
-            // 총 칼로리 소모량 (최근 7일)
-            int totalCaloriesBurned = exerciseService.getWeeklyCaloriesBurned(userId);
-            int averageDailyCalories = totalCaloriesBurned / 7;
+            // 설정된 기간 동안의 총 운동 시간 (분)
+            int periodExerciseMinutes = exerciseService.getExerciseMinutesByPeriod(userId, days);
             
-            // 연속 운동 일수
+            // 설정된 기간 동안의 총 칼로리 소모량
+            int totalCaloriesBurned = exerciseService.getCaloriesBurnedByPeriod(userId, days);
+            int averageDailyCalories = days > 0 ? totalCaloriesBurned / days : 0;
+            
+            // 연속 운동 일수 (period 무관하게 전체 기간)
             int streak = exerciseService.getCurrentStreak(userId);
             
-            // 총 운동 일수
+            // 총 운동 일수 (period 무관하게 전체 기간)
             int totalWorkoutDays = exerciseService.getTotalWorkoutDays(userId);
             
             // 목표 달성률 계산
             UserGoal userGoal = userGoalService.getUserGoalOrDefault(userId);
             int workoutGoal = userGoal.getWeeklyWorkoutTarget();
-            int goalAchievementRate = workoutGoal > 0 ? (weeklyWorkouts * 100 / workoutGoal) : 0;
-            int goalChange = goalAchievementRate - 85; // 이전 주 대비 변화 (임시)
             
-            stats.put("weeklyWorkouts", weeklyWorkouts);
-            stats.put("weeklyExerciseMinutes", weeklyExerciseMinutes); // 주간 운동 시간 추가
+            // period에 따른 목표 조정
+            int adjustedGoal = adjustGoalForPeriod(workoutGoal, period);
+            int goalAchievementRate = adjustedGoal > 0 ? (periodWorkouts * 100 / adjustedGoal) : 0;
+            int goalChange = goalAchievementRate - 85; // 이전 기간 대비 변화 (임시)
+            
+            // period별 필드명 설정
+            String workoutKey = getWorkoutKey(period);
+            String minutesKey = getMinutesKey(period);
+            
+            stats.put(workoutKey, periodWorkouts);  // weeklyWorkouts, monthlyWorkouts, dailyWorkouts
+            stats.put(minutesKey, periodExerciseMinutes); // weeklyExerciseMinutes, monthlyExerciseMinutes, dailyExerciseMinutes
             stats.put("totalCaloriesBurned", totalCaloriesBurned);
             stats.put("averageDailyCalories", averageDailyCalories);
             stats.put("streak", streak);
@@ -144,13 +154,16 @@ public class HealthStatisticsService {
             stats.put("goalAchievementRate", goalAchievementRate);
             stats.put("goalChange", goalChange);
             
-            log.info("운동 통계 조회 성공 - 사용자: {}, 횟수: {}, 시간: {}분, 칼로리: {}", 
-                    userId, weeklyWorkouts, weeklyExerciseMinutes, totalCaloriesBurned);
+            log.info("운동 통계 조회 성공 - 사용자: {}, 기간: {}, 횟수: {}, 시간: {}분, 칼로리: {}", 
+                    userId, period, periodWorkouts, periodExerciseMinutes, totalCaloriesBurned);
             
         } catch (Exception e) {
             log.warn("운동 통계 조회 실패, 기본값 사용: {}", e.getMessage());
-            stats.put("weeklyWorkouts", 0);
-            stats.put("weeklyExerciseMinutes", 0); // 기본값 추가
+            String workoutKey = getWorkoutKey(period);
+            String minutesKey = getMinutesKey(period);
+            
+            stats.put(workoutKey, 0);
+            stats.put(minutesKey, 0);
             stats.put("totalCaloriesBurned", 0);
             stats.put("averageDailyCalories", 0);
             stats.put("streak", 0);
@@ -160,6 +173,78 @@ public class HealthStatisticsService {
         }
         
         return stats;
+    }
+    
+    /**
+     * Period에 따른 일수 반환
+     */
+    private int getPeriodDays(String period) {
+        switch (period.toLowerCase()) {
+            case "day":
+                return 1;
+            case "week":
+                return 7;
+            case "month":
+                return 30;
+            case "year":
+                return 365;
+            default:
+                return 7; // 기본값은 주간
+        }
+    }
+    
+    /**
+     * Period에 따른 운동 횟수 필드명 반환
+     */
+    private String getWorkoutKey(String period) {
+        switch (period.toLowerCase()) {
+            case "day":
+                return "dailyWorkouts";
+            case "week":
+                return "weeklyWorkouts";
+            case "month":
+                return "monthlyWorkouts";
+            case "year":
+                return "yearlyWorkouts";
+            default:
+                return "weeklyWorkouts";
+        }
+    }
+    
+    /**
+     * Period에 따른 운동 시간 필드명 반환
+     */
+    private String getMinutesKey(String period) {
+        switch (period.toLowerCase()) {
+            case "day":
+                return "dailyExerciseMinutes";
+            case "week":
+                return "weeklyExerciseMinutes";
+            case "month":
+                return "monthlyExerciseMinutes";
+            case "year":
+                return "yearlyExerciseMinutes";
+            default:
+                return "weeklyExerciseMinutes";
+        }
+    }
+    
+    /**
+     * Period에 따른 목표 조정
+     */
+    private int adjustGoalForPeriod(int weeklyGoal, String period) {
+        switch (period.toLowerCase()) {
+            case "day":
+                return Math.round(weeklyGoal / 7.0f);
+            case "week":
+                return weeklyGoal;
+            case "month":
+                return weeklyGoal * 4; // 월간 = 주간 × 4
+            case "year":
+                return weeklyGoal * 52; // 연간 = 주간 × 52
+            default:
+                return weeklyGoal;
+        }
     }
 
     /**

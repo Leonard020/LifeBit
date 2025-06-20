@@ -74,35 +74,35 @@ public class MealLogController {
             // 🔐 인증된 사용자만 자신의 데이터에 접근 가능 (또는 관리자)
             if (tokenUserId != null && !tokenUserId.equals(userId)) {
                 log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
-                return ResponseEntity.status(403).build();
-            }
-            
-            // 기간에 따른 날짜 범위 계산
-            LocalDate endDate = LocalDate.now();
-            LocalDate startDate;
-            
-            switch (period.toLowerCase()) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        // 기간에 따른 날짜 범위 계산
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate;
+        
+        switch (period.toLowerCase()) {
                 case "day":
                     startDate = endDate.minusDays(1);
                     break;
-                case "week":
-                    startDate = endDate.minusWeeks(1);
-                    break;
-                case "month":
-                    startDate = endDate.minusMonths(1);
-                    break;
-                case "year":
-                    startDate = endDate.minusYears(1);
-                    break;
-                default:
-                    startDate = endDate.minusMonths(1);
-            }
-            
+            case "week":
+                startDate = endDate.minusWeeks(1);
+                break;
+            case "month":
+                startDate = endDate.minusMonths(1);
+                break;
+            case "year":
+                startDate = endDate.minusYears(1);
+                break;
+            default:
+                startDate = endDate.minusMonths(1);
+        }
+        
             log.info("📅 [MealLogController] 조회 기간: {} ~ {}", startDate, endDate);
             
             // 실제 데이터베이스에서 식단 기록 조회
-            User user = new User(userId);
-            List<MealLog> mealLogs = mealService.getMealHistory(user, startDate, endDate);
+        User user = new User(userId);
+        List<MealLog> mealLogs = mealService.getMealHistory(user, startDate, endDate);
             
             log.info("📊 [MealLogController] 조회된 식단 기록 수: {}", mealLogs.size());
             
@@ -147,20 +147,20 @@ public class MealLogController {
             
             // 토큰에서 사용자 ID 추출하여 권한 확인
             Long tokenUserId = getUserIdFromToken(httpRequest);
-            
-            // 🔐 인증된 사용자만 자신의 데이터 생성 가능
+        
+        // 🔐 인증된 사용자만 자신의 데이터 생성 가능
             if (!tokenUserId.equals(request.getUserId())) {
                 log.warn("권한 없는 생성 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, request.getUserId());
-                return ResponseEntity.status(403).build();
-            }
-            
+            return ResponseEntity.status(403).build();
+        }
+        
             // 데이터베이스에 저장
-            MealLog mealLog = mealService.recordMeal(
-                request.getUserId(),
-                request.getFoodItemId(),
-                request.getQuantity()
-            );
-            
+        MealLog mealLog = mealService.recordMeal(
+            request.getUserId(),
+            request.getFoodItemId(),
+            request.getQuantity()
+        );
+        
             // 응답 데이터 구성
             Map<String, Object> response = new HashMap<>();
             response.put("meal_log_id", mealLog.getMealLogId());

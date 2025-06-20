@@ -141,12 +141,12 @@ const HealthLog: React.FC = () => {
   useEffect(() => {
     if (healthStatsError) {
       console.error('Failed to fetch health statistics:', healthStatsError);
-      toast({
-        title: "오류",
-        description: "건강 데이터를 불러오는데 실패했습니다.",
-        variant: "destructive"
-      });
-    }
+        toast({
+          title: "오류",
+          description: "건강 데이터를 불러오는데 실패했습니다.",
+          variant: "destructive"
+        });
+      }
   }, [healthStatsError, toast]);
 
   // 🔧 조건부 렌더링을 Hook 호출 이후로 이동

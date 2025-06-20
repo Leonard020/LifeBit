@@ -241,4 +241,32 @@ public class ExerciseService {
     public List<ExerciseCatalog> getAllExerciseCatalog() {
         return exerciseCatalogRepository.findAll();
     }
+
+    /**
+     * 지정된 기간 동안의 운동 횟수 조회
+     */
+    public int getExerciseCountByPeriod(Long userId, int days) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, days);
+        return sessions.size();
+    }
+
+    /**
+     * 지정된 기간 동안의 총 운동 시간(분) 조회
+     */
+    public int getExerciseMinutesByPeriod(Long userId, int days) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, days);
+        return sessions.stream()
+            .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
+            .sum();
+    }
+
+    /**
+     * 지정된 기간 동안의 총 칼로리 소모량 조회
+     */
+    public int getCaloriesBurnedByPeriod(Long userId, int days) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, days);
+        return sessions.stream()
+            .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
+            .sum();
+    }
 } 

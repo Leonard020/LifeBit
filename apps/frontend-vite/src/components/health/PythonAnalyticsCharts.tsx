@@ -7,7 +7,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
+import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
+import { useHealthAnalyticsReport, useAIHealthInsights } from '../../api/analyticsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -109,12 +110,32 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     error: goalsError,
     refetch: refetchGoals 
   } = useUserGoals(userId.toString());
+
+  const { 
+    data: healthStats, 
+    isLoading: isHealthStatsLoading,
+    error: healthStatsError,
+    refetch: refetchHealthStats 
+  } = useHealthStatistics(userId.toString(), 'week');
+
+  // 🚀 Python AI Analytics API 호출
+  const { 
+    data: pythonAnalytics, 
+    isLoading: isPythonAnalyticsLoading,
+    error: pythonAnalyticsError
+  } = useHealthAnalyticsReport(userId, period);
+
+  const { 
+    data: aiInsights, 
+    isLoading: isAIInsightsLoading,
+    error: aiInsightsError
+  } = useAIHealthInsights(userId, period);
   
   // 로딩 상태
-  const isLoading = isHealthLoading || isMealLoading || isExerciseLoading || isGoalsLoading;
+  const isLoading = isHealthLoading || isMealLoading || isExerciseLoading || isGoalsLoading || isHealthStatsLoading || isPythonAnalyticsLoading || isAIInsightsLoading;
   
   // 오류 상태  
-  const hasError = healthError || mealError || exerciseError || goalsError;
+  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError;
 
   // 차트 데이터 준비
   const chartData = useMemo(() => {
@@ -436,7 +457,11 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">이번 주 운동</p>
                     <p className="text-2xl font-bold">
-                      {chartData.reduce((sum, item) => sum + (item.exerciseMinutes || 0), 0)}분
+                      {(() => {
+                        const statsData = healthStats?.data as Record<string, unknown>;
+                        const weeklyMinutes = statsData?.weeklyExerciseMinutes;
+                        return typeof weeklyMinutes === 'number' ? weeklyMinutes : 0;
+                      })()}분
                     </p>
                   </div>
                 </div>
