@@ -32,6 +32,9 @@ public class UserGoal {
     @Column(name = "daily_fat_target")
     private Integer dailyFatTarget;
     
+    @Column(name = "daily_calory_target")
+    private Integer dailyCaloriesTarget;
+    
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     
