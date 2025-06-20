@@ -186,4 +186,63 @@ public class MealService {
             return number;
         }
     }
+
+    /**
+     * 특정 날짜의 일일 영양소 섭취량 요약을 반환합니다.
+     */
+    public Map<String, Object> getDailyNutritionSummary(Long userId, LocalDate date) {
+        Map<String, Object> summary = new HashMap<>();
+        
+        try {
+            User user = new User();
+            user.setUserId(userId);
+            
+            // 해당 날짜의 모든 식단 기록 조회
+            List<MealLog> dailyMealLogs = mealLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
+            
+            double totalCalories = 0.0;
+            double totalCarbs = 0.0;
+            double totalProtein = 0.0;
+            double totalFat = 0.0;
+            int mealCount = dailyMealLogs.size();
+            
+            // 각 식단 기록의 영양소 합계 계산
+            for (MealLog mealLog : dailyMealLogs) {
+                FoodItem foodItem = mealLog.getFoodItem();
+                BigDecimal quantity = mealLog.getQuantity();
+                
+                if (foodItem.getCalories() != null) {
+                    totalCalories += foodItem.getCalories().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
+                }
+                if (foodItem.getCarbs() != null) {
+                    totalCarbs += foodItem.getCarbs().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
+                }
+                if (foodItem.getProtein() != null) {
+                    totalProtein += foodItem.getProtein().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
+                }
+                if (foodItem.getFat() != null) {
+                    totalFat += foodItem.getFat().multiply(quantity).divide(new BigDecimal(100)).doubleValue();
+                }
+            }
+            
+            summary.put("totalCalories", totalCalories);
+            summary.put("totalCarbs", totalCarbs);
+            summary.put("totalProtein", totalProtein);
+            summary.put("totalFat", totalFat);
+            summary.put("mealCount", mealCount);
+            summary.put("date", date.toString());
+            
+        } catch (Exception e) {
+            // 오류 발생 시 기본값 반환
+            summary.put("totalCalories", 0.0);
+            summary.put("totalCarbs", 0.0);
+            summary.put("totalProtein", 0.0);
+            summary.put("totalFat", 0.0);
+            summary.put("mealCount", 0);
+            summary.put("date", date.toString());
+            summary.put("error", e.getMessage());
+        }
+        
+        return summary;
+    }
 } 

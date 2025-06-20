@@ -116,6 +116,9 @@ public class HealthStatisticsService {
             // 최근 7일간 운동 횟수
             int weeklyWorkouts = exerciseService.getWeeklyExerciseCount(userId);
             
+            // 최근 7일간 총 운동 시간 (분)
+            int weeklyExerciseMinutes = exerciseService.getWeeklyExerciseMinutes(userId);
+            
             // 총 칼로리 소모량 (최근 7일)
             int totalCaloriesBurned = exerciseService.getWeeklyCaloriesBurned(userId);
             int averageDailyCalories = totalCaloriesBurned / 7;
@@ -133,6 +136,7 @@ public class HealthStatisticsService {
             int goalChange = goalAchievementRate - 85; // 이전 주 대비 변화 (임시)
             
             stats.put("weeklyWorkouts", weeklyWorkouts);
+            stats.put("weeklyExerciseMinutes", weeklyExerciseMinutes); // 주간 운동 시간 추가
             stats.put("totalCaloriesBurned", totalCaloriesBurned);
             stats.put("averageDailyCalories", averageDailyCalories);
             stats.put("streak", streak);
@@ -140,9 +144,13 @@ public class HealthStatisticsService {
             stats.put("goalAchievementRate", goalAchievementRate);
             stats.put("goalChange", goalChange);
             
+            log.info("운동 통계 조회 성공 - 사용자: {}, 횟수: {}, 시간: {}분, 칼로리: {}", 
+                    userId, weeklyWorkouts, weeklyExerciseMinutes, totalCaloriesBurned);
+            
         } catch (Exception e) {
             log.warn("운동 통계 조회 실패, 기본값 사용: {}", e.getMessage());
             stats.put("weeklyWorkouts", 0);
+            stats.put("weeklyExerciseMinutes", 0); // 기본값 추가
             stats.put("totalCaloriesBurned", 0);
             stats.put("averageDailyCalories", 0);
             stats.put("streak", 0);
@@ -194,19 +202,42 @@ public class HealthStatisticsService {
     }
 
     /**
-     * 식단 관련 통계 조회 (선택적)
+     * 식단 관련 통계 조회 (실제 영양소 데이터)
      */
     private Map<String, Object> getMealStatistics(Long userId, String period) {
         Map<String, Object> stats = new HashMap<>();
         
         try {
-            // 식단 관련 통계는 선택적으로 구현
-            // 현재는 기본값만 반환
-            stats.put("dailyCaloriesAverage", 0);
-            stats.put("mealLogCount", 0);
+            // 오늘 날짜로 일일 영양소 섭취량 조회
+            LocalDate today = LocalDate.now();
+            
+            // MealService를 통해 오늘의 영양소 정보 조회
+            Map<String, Object> todayNutrition = mealService.getDailyNutritionSummary(userId, today);
+            
+            // 영양소 섭취량 추출 (기본값 0으로 설정)
+            double dailyCalories = (Double) todayNutrition.getOrDefault("totalCalories", 0.0);
+            double dailyCarbs = (Double) todayNutrition.getOrDefault("totalCarbs", 0.0);
+            double dailyProtein = (Double) todayNutrition.getOrDefault("totalProtein", 0.0);
+            double dailyFat = (Double) todayNutrition.getOrDefault("totalFat", 0.0);
+            int mealLogCount = (Integer) todayNutrition.getOrDefault("mealCount", 0);
+            
+            // 통계 데이터에 추가
+            stats.put("dailyCaloriesAverage", dailyCalories);
+            stats.put("dailyCarbsIntake", dailyCarbs);
+            stats.put("dailyProteinIntake", dailyProtein);
+            stats.put("dailyFatIntake", dailyFat);
+            stats.put("mealLogCount", mealLogCount);
+            
+            log.info("식단 통계 조회 성공 - 사용자: {}, 칼로리: {}, 탄수화물: {}, 단백질: {}, 지방: {}", 
+                    userId, dailyCalories, dailyCarbs, dailyProtein, dailyFat);
             
         } catch (Exception e) {
-            log.warn("식단 통계 조회 실패: {}", e.getMessage());
+            log.warn("식단 통계 조회 실패, 기본값 사용: {}", e.getMessage());
+            stats.put("dailyCaloriesAverage", 0.0);
+            stats.put("dailyCarbsIntake", 0.0);
+            stats.put("dailyProteinIntake", 0.0);
+            stats.put("dailyFatIntake", 0.0);
+            stats.put("mealLogCount", 0);
         }
         
         return stats;

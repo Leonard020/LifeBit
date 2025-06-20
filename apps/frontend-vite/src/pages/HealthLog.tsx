@@ -247,10 +247,7 @@ const HealthLog: React.FC = () => {
             <TabsList className="grid w-full grid-cols-3 max-w-2xl">
               <TabsTrigger value="enhanced" className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4" />
-                향상된 UI
-                <Badge variant="secondary" className="text-xs ml-1">
-                  NEW
-                </Badge>
+                나의활동
               </TabsTrigger>
               <TabsTrigger value="react" className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
