@@ -13,7 +13,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { isLoggedIn, getUserInfo, getToken } from '@/utils/auth';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Users, Brain } from 'lucide-react';
 import { Layout } from "../components/Layout";
+import { AISystemRoadmap } from "../components/admin/AISystemRoadmap";
 
 interface User {
   id: string;
@@ -148,12 +151,30 @@ export const AdminPage = () => {
   return (
     <Layout>
       <div className="container mx-auto py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>관리자 페이지</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">관리자 페이지</h1>
+          <p className="text-gray-600 mt-1">사용자 관리 및 시스템 구축 현황을 확인하세요</p>
+        </div>
+
+        <Tabs defaultValue="users" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              사용자 관리
+            </TabsTrigger>
+            <TabsTrigger value="ai-roadmap" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              AI 시스템 로드맵
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>사용자 관리</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead onClick={() => handleSort('email')} style={{ cursor: 'pointer' }}>
@@ -193,21 +214,28 @@ export const AdminPage = () => {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>사용자 삭제 확인</DialogTitle>
-            </DialogHeader>
-            <div>정말로 이 사용자를 삭제하시겠습니까?</div>
-            <DialogFooter>
-              <Button variant="destructive" onClick={() => handleDelete(deleteUserId!)}>삭제</Button>
-              <Button variant="outline" onClick={() => setShowDialog(false)}>취소</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </Layout>
-  );
-}; 
+                </CardContent>
+              </Card>
+
+              <Dialog open={showDialog} onOpenChange={setShowDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>사용자 삭제 확인</DialogTitle>
+                  </DialogHeader>
+                  <div>정말로 이 사용자를 삭제하시겠습니까?</div>
+                  <DialogFooter>
+                    <Button variant="destructive" onClick={() => handleDelete(deleteUserId!)}>삭제</Button>
+                    <Button variant="outline" onClick={() => setShowDialog(false)}>취소</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
+
+            <TabsContent value="ai-roadmap" className="mt-6">
+              <AISystemRoadmap />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </Layout>
+    );
+  }; 

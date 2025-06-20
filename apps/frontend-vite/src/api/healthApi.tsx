@@ -403,7 +403,7 @@ const apiCall = async <T = unknown>(
 export const healthApi = {
   // 건강 기록 조회
   getHealthRecords: async (userId: string, period: string = 'month'): Promise<ApiResponse<HealthRecord[]>> => {
-    return apiCall<HealthRecord[]>(`/api/health-records/${userId}?period=${period}`);
+    return apiCall<HealthRecord[]>(`/api/health-statistics/health-records/${userId}?period=${period}`);
   },
 
   // 건강 기록 생성
@@ -466,7 +466,7 @@ export const healthApi = {
 
   // 운동 세션 조회
   getExerciseSessions: async (userId: string, period: string = 'month'): Promise<ApiResponse<ExerciseSession[]>> => {
-    return apiCall<ExerciseSession[]>(`/api/exercise-sessions/${userId}?period=${period}`);
+    return apiCall<ExerciseSession[]>(`/api/health-statistics/exercise-sessions/${userId}?period=${period}`);
   },
 
   // 운동 세션 생성
