@@ -381,3 +381,12 @@ export const getMealLogs = async (userId: string, period: string = 'month') => {
   const response = await axios.get(`${API_ENDPOINTS.MEAL_LOGS}/${userId}?period=${period}`);
   return response.data;
 };
+
+export const verifyPassword = async (password: string): Promise<boolean> => {
+    try {
+        const response = await axios.post('/api/auth/verify-password', { password });
+        return response.data.valid;
+    } catch (error) {
+        return false;
+    }
+};

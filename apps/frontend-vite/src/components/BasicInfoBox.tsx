@@ -30,6 +30,7 @@ interface BasicInfoBoxProps {
   setShowPassword?: (value: boolean) => void;
   showConfirmPassword?: boolean;
   setShowConfirmPassword?: (value: boolean) => void;
+  nicknameEditable?: boolean;
 }
 
 export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
@@ -46,6 +47,7 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
   setShowPassword,
   showConfirmPassword,
   setShowConfirmPassword,
+  nicknameEditable = false,
 }) => (
   <Card className="hover-lift">
     <CardHeader>
@@ -63,8 +65,9 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
             <Input
               id="nickname"
               value={profileData.nickname}
-              readOnly
-              className="pl-10 bg-gray-50 cursor-not-allowed"
+              readOnly={!nicknameEditable}
+              onChange={nicknameEditable ? (e) => setProfileData({ ...profileData, nickname: e.target.value }) : undefined}
+              className={`pl-10 ${nicknameEditable ? '' : 'bg-gray-50 cursor-not-allowed'}`}
             />
           </div>
         </div>
