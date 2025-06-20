@@ -1005,28 +1005,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
           </Card>
         </div>
 
-            {/* 기술 스택 정보 */}
-            <div className="border-t pt-6">
-              <h4 className="font-medium text-gray-900 mb-4">구현 예정 기술 스택</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>Apache Airflow</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>Python ML</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span>TensorFlow</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  <span>Scikit-learn</span>
-                </div>
-              </div>
-            </div>
+
           </div>
         </CardContent>
       </Card>

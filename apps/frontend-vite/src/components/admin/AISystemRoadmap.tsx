@@ -65,7 +65,7 @@ const AI_ROADMAP_PHASES: RoadmapPhase[] = [
       { name: '데이터 카탈로그 시스템', status: 'planned' },
       { name: '모니터링 및 알림 시스템', status: 'planned' }
     ],
-    technologies: ['Apache Airflow', 'Apache Kafka', 'PostgreSQL', 'Redis', 'Docker']
+    technologies: []
   },
   {
     id: 'phase2',
@@ -84,7 +84,7 @@ const AI_ROADMAP_PHASES: RoadmapPhase[] = [
       { name: '하이퍼파라미터 튜닝', status: 'planned' }
     ],
     dependencies: ['phase1'],
-    technologies: ['Python', 'TensorFlow', 'Scikit-learn', 'Pandas', 'NumPy', 'Jupyter']
+    technologies: []
   },
   {
     id: 'phase3',
@@ -103,7 +103,7 @@ const AI_ROADMAP_PHASES: RoadmapPhase[] = [
       { name: '자동화된 재훈련 시스템', status: 'planned' }
     ],
     dependencies: ['phase2'],
-    technologies: ['MLflow', 'Kubernetes', 'FastAPI', 'Prometheus', 'Grafana', 'AWS SageMaker']
+    technologies: []
   },
   {
     id: 'phase4',
@@ -122,7 +122,7 @@ const AI_ROADMAP_PHASES: RoadmapPhase[] = [
       { name: '웨어러블 디바이스 연동', status: 'planned' }
     ],
     dependencies: ['phase3'],
-    technologies: ['OpenAI GPT', 'MediaPipe', 'WebRTC', 'TensorFlow Lite', 'React Native']
+    technologies: []
   }
 ];
 
@@ -282,17 +282,7 @@ export const AISystemRoadmap: React.FC = () => {
                   </div>
                 )}
 
-                {/* 기술 스택 */}
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-2">주요 기술</p>
-                  <div className="flex flex-wrap gap-2">
-                    {phase.technologies.map((tech) => (
-                      <Badge key={tech} variant="secondary" className="text-xs">
-                        {tech}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
 
