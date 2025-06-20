@@ -2,11 +2,13 @@ package com.lifebit.coreapi.controller;
 
 import com.lifebit.coreapi.dto.LoginRequest;
 import com.lifebit.coreapi.dto.SignUpRequest;
+import com.lifebit.coreapi.dto.PasswordVerifyRequest;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.security.JwtTokenProvider;
 import com.lifebit.coreapi.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -78,6 +80,21 @@ public class AuthController {
             Map<String, String> error = new HashMap<>();
             error.put("message", e.getMessage());
             return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    @PostMapping("/verify-password")
+    public ResponseEntity<?> verifyPassword(@RequestBody @Valid PasswordVerifyRequest request, @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(401).body(Map.of("valid", false, "message", "No token provided"));
+            }
+            String token = authHeader.substring(7);
+            Long userId = tokenProvider.getUserIdFromToken(token);
+            boolean valid = userService.verifyPassword(userId, request.getPassword());
+            return ResponseEntity.ok(Map.of("valid", valid));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body(Map.of("valid", false, "message", e.getMessage()));
         }
     }
 } 

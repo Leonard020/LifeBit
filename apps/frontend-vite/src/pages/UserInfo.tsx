@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile, updateUserProfile, deleteUser, ProfileUpdateData } from '@/api/auth';
+import { getUserProfile, updateUserProfile, deleteUser, ProfileUpdateData, verifyPassword } from '@/api/auth';
 import { isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { BasicInfoBox } from '@/components/BasicInfoBox';
@@ -48,8 +48,13 @@ const UserInfo = () => {
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [isImageRemoved, setIsImageRemoved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isVerified, setIsVerified] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(true);
+  const [verifyPasswordInput, setVerifyPasswordInput] = useState('');
+  const [verifyLoading, setVerifyLoading] = useState(false);
 
   useEffect(() => {
+    if (!isVerified) return;
     const loadUserProfile = async () => {
       if (!isLoggedIn()) {
         navigate('/login');
@@ -78,7 +83,23 @@ const UserInfo = () => {
       }
     };
     loadUserProfile();
-  }, [navigate, toast]);
+  }, [isVerified, navigate, toast]);
+
+  const handleVerifyPassword = async () => {
+    setVerifyLoading(true);
+    const valid = await verifyPassword(verifyPasswordInput);
+    if (valid) {
+      setIsVerified(true);
+      setShowPasswordDialog(false);
+    } else {
+      toast({
+        variant: 'destructive',
+        title: '비밀번호 오류',
+        description: '비밀번호가 올바르지 않습니다.',
+      });
+    }
+    setVerifyLoading(false);
+  };
 
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -175,75 +196,102 @@ const UserInfo = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8 pb-24">
-        <div className="max-w-2xl mx-auto space-y-6">
-          <div className="text-center mb-8">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleProfileImageChange}
-              className="hidden"
-              accept="image/*"
-            />
-            <div 
-              className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4"
-            >
-              {profileData.profileImageUrl ? (
-                <img 
-                  src={profileData.profileImageUrl.startsWith('data:') ? profileData.profileImageUrl : `${API_CONFIG.BASE_URL}${profileData.profileImageUrl}`} 
-                  alt="Profile" 
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <span className="text-3xl text-white font-bold">회원</span>
-              )}
-            </div>
-            <div className="flex justify-center gap-4">
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="mr-2 h-4 w-4" />
-                사진 변경
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleRemoveImage}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                기본값으로
-              </Button>
-            </div>
-            <h1 className="text-2xl font-bold mb-2 mt-4">회원정보</h1>
-            <p className="text-muted-foreground">회원정보를 확인하고 수정할 수 있습니다.</p>
-          </div>
-          <BasicInfoBox
-            profileData={profileData}
-            setProfileData={setProfileData}
-            loading={loading}
-            onSave={handleProfileSave}
-            onUnregister={() => setShowUnregisterDialog(true)}
-            password={password}
-            setPassword={setPassword}
-            confirmPassword={confirmPassword}
-            setConfirmPassword={setConfirmPassword}
-            showPassword={showPassword}
-            setShowPassword={setShowPassword}
-            showConfirmPassword={showConfirmPassword}
-            setShowConfirmPassword={setShowConfirmPassword}
+      <Dialog open={showPasswordDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>비밀번호 확인</DialogTitle>
+            <DialogDescription>
+              회원정보를 확인하려면 비밀번호를 입력하세요.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            type="password"
+            value={verifyPasswordInput}
+            onChange={e => setVerifyPasswordInput(e.target.value)}
+            placeholder="비밀번호"
+            disabled={verifyLoading}
+            onKeyDown={e => { if (e.key === 'Enter') handleVerifyPassword(); }}
           />
+          <DialogFooter>
+            <Button onClick={handleVerifyPassword} disabled={verifyLoading || !verifyPasswordInput}>
+              {verifyLoading ? '확인 중...' : '확인'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isVerified && (
+        <div className="container mx-auto px-4 py-8 pb-24">
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold mb-2">회원정보</h1>
+              <p className="text-muted-foreground mb-6">회원정보를 확인하고 수정할 수 있습니다.</p>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleProfileImageChange}
+                className="hidden"
+                accept="image/*"
+              />
+              <div 
+                className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4"
+              >
+                {profileData.profileImageUrl ? (
+                  <img 
+                    src={profileData.profileImageUrl.startsWith('data:') ? profileData.profileImageUrl : `${API_CONFIG.BASE_URL}${profileData.profileImageUrl}`} 
+                    alt="Profile" 
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="text-3xl text-white font-bold">회원</span>
+                )}
+              </div>
+              <div className="flex justify-center gap-4">
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  사진 변경
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleRemoveImage}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  기본값으로
+                </Button>
+              </div>
+            </div>
+            <BasicInfoBox
+              profileData={profileData}
+              setProfileData={setProfileData}
+              loading={loading}
+              onSave={handleProfileSave}
+              onUnregister={() => setShowUnregisterDialog(true)}
+              password={password}
+              setPassword={setPassword}
+              confirmPassword={confirmPassword}
+              setConfirmPassword={setConfirmPassword}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              showConfirmPassword={showConfirmPassword}
+              setShowConfirmPassword={setShowConfirmPassword}
+              nicknameEditable={true}
+            />
+          </div>
+          <Dialog open={showUnregisterDialog} onOpenChange={setShowUnregisterDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>회원 탈퇴 확인</DialogTitle>
+                <DialogDescription>정말로 회원탈퇴를 하시겠습니까? 이 작업은 되돌릴 수 없습니다.</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowUnregisterDialog(false)}>
+                  취소
+                </Button>
+                <Button variant="destructive" onClick={handleUnregister} disabled={loading}>
+                  {loading ? '탈퇴 처리 중...' : '회원탈퇴'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
-        <Dialog open={showUnregisterDialog} onOpenChange={setShowUnregisterDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>회원 탈퇴 확인</DialogTitle>
-              <DialogDescription>정말로 회원탈퇴를 하시겠습니까? 이 작업은 되돌릴 수 없습니다.</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowUnregisterDialog(false)}>
-                취소
-              </Button>
-              <Button variant="destructive" onClick={handleUnregister} disabled={loading}>
-                {loading ? '탈퇴 처리 중...' : '회원탈퇴'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+      )}
     </Layout>
   );
 };

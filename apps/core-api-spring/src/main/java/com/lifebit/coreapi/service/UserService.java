@@ -161,4 +161,13 @@ public class UserService {
         User user = getUserById(userId);
         userRepository.delete(user);
     }
+
+    /**
+     * 비밀번호 검증
+     */
+    @Transactional(readOnly = true)
+    public boolean verifyPassword(Long userId, String password) {
+        User user = getUserById(userId);
+        return passwordEncoder.matches(password, user.getPasswordHash());
+    }
 } 
