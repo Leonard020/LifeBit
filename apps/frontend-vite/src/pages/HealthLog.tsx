@@ -6,8 +6,6 @@ import { RecommendationPanel } from '../components/health/RecommendationPanel';
 import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
 import { ChatInterface } from '../components/ChatInterface';
-import { VoiceInput } from '../components/VoiceInput';
-import { StructuredDataPreview } from '../components/StructuredDataPreview';
 import { AIFeedbackComponent } from '../components/AIFeedback';
 import { useAuth } from '../AuthContext';
 import { Button } from '../components/ui/button';
@@ -17,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { 
   BarChart3, 
   MessageSquare, 
-  Mic, 
   Activity,
   TrendingUp,
   Brain,
@@ -25,7 +22,7 @@ import {
   Smartphone,
   Heart
 } from 'lucide-react';
-import { getHealthStatistics } from '@/api/auth';
+import { useHealthStatistics } from '@/api/auth';
 import { getToken, getUserInfo, isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -33,6 +30,7 @@ import { Layout } from '@/components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
+import { Message } from '@/api/chatApi';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -60,12 +58,9 @@ const HealthLog: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
   const [recordType, setRecordType] = useState<'exercise' | 'diet'>('exercise');
   const [showChat, setShowChat] = useState(false);
-  const [showVoiceInput, setShowVoiceInput] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
-  const [healthStats, setHealthStats] = useState<HealthStatistics | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
 
   // ChatInterface 상태
   const [chatInputText, setChatInputText] = useState('');
@@ -73,14 +68,7 @@ const HealthLog: React.FC = () => {
   const [chatIsProcessing, setChatIsProcessing] = useState(false);
   const [chatNetworkError, setChatNetworkError] = useState(false);
   const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
-  const [chatClarificationInput, setChatClarificationInput] = useState('');
   const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
-
-  // VoiceInput 상태
-  const [voiceInputText, setVoiceInputText] = useState('');
-  const [voiceIsRecording, setVoiceIsRecording] = useState(false);
-  const [voiceIsProcessing, setVoiceIsProcessing] = useState(false);
-  const [voiceNetworkError, setVoiceNetworkError] = useState(false);
 
   // 토큰에서 올바른 사용자 ID 가져오기
   const userId = useMemo(() => {
@@ -104,12 +92,13 @@ const HealthLog: React.FC = () => {
     enabled: true // 폴링 방식으로 활성화
   });
 
-  const handleVoiceResult = useCallback((result: Record<string, unknown>) => {
-    console.log('음성 처리 결과:', result);
-    setParsedData(result);
-    setShowVoiceInput(false);
-    setShowAIFeedback(true);
-  }, []);
+  // ✅ React Query Hook으로 건강 통계 조회
+  const { 
+    data: healthStats, 
+    isLoading: healthStatsLoading, 
+    error: healthStatsError,
+    refetch: refetchHealthStats
+  } = useHealthStatistics(userId?.toString() || '', selectedPeriod);
 
   const handleCloseAIFeedback = useCallback(() => {
     setShowAIFeedback(false);
@@ -145,46 +134,23 @@ const HealthLog: React.FC = () => {
     console.log('✅ [HealthLog] 인증 상태 확인 완료');
   }, [navigate, isLoggedIn, user, isLoading]);
 
+  // React Query로 데이터 조회하므로 기존 useEffect 제거
+  // healthStats가 변경되면 자동으로 리렌더링됨
+
+  // 에러 처리
   useEffect(() => {
-    const fetchHealthData = async () => {
-      try {
-        const token = getToken();
-        
-        if (!token || !userId) {
-          navigate('/login');
-          return;
-        }
-
-        setLoading(true);
-        setError(null);
-        
-        const data = await getHealthStatistics(userId.toString(), selectedPeriod);
-        setHealthStats(data);
-      } catch (error) {
-        console.error('Failed to fetch health statistics:', error);
-        if ((error as { response?: { status?: number } }).response?.status === 403) {
-          setError('인증이 필요합니다. 다시 로그인해주세요.');
-          setTimeout(() => navigate('/login'), 2000);
-        } else {
-          setError('건강 데이터를 불러오는데 실패했습니다.');
-        }
-        toast({
-          title: "오류",
-          description: "건강 데이터를 불러오는데 실패했습니다.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (userId) {
-      fetchHealthData();
+    if (healthStatsError) {
+      console.error('Failed to fetch health statistics:', healthStatsError);
+      toast({
+        title: "오류",
+        description: "건강 데이터를 불러오는데 실패했습니다.",
+        variant: "destructive"
+      });
     }
-  }, [userId, selectedPeriod, navigate, toast]);
+  }, [healthStatsError, toast]);
 
   // 🔧 조건부 렌더링을 Hook 호출 이후로 이동
-  if (isLoading) {
+  if (isLoading || healthStatsLoading) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center">
@@ -194,7 +160,7 @@ const HealthLog: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="text-center text-gray-600">
-                사용자 정보를 확인하고 있습니다.
+                {isLoading ? '사용자 정보를 확인하고 있습니다.' : '건강 데이터를 불러오고 있습니다.'}
               </p>
             </CardContent>
           </Card>
@@ -263,15 +229,6 @@ const HealthLog: React.FC = () => {
                 >
                   <MessageSquare className="h-4 w-4" />
                   AI 채팅
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowVoiceInput(true)}
-                  className="flex items-center gap-1"
-                >
-                  <Mic className="h-4 w-4" />
-                  음성 입력
                 </Button>
               </div>
             </div>
@@ -403,30 +360,13 @@ const HealthLog: React.FC = () => {
                     onSendMessage={() => {}}
                     onRetry={() => setChatNetworkError(false)}
                     aiFeedback={null}
-                    clarificationInput={chatClarificationInput}
-                    setClarificationInput={setChatClarificationInput}
-                    onClarificationSubmit={() => {}}
                     onSaveRecord={() => {}}
                     structuredData={chatStructuredData}
+                    conversationHistory={conversationHistory}
                   />
                 </div>
               </div>
             </div>
-          )}
-
-          {/* 음성 입력 */}
-          {showVoiceInput && (
-            <VoiceInput
-              recordType={recordType}
-              inputText={voiceInputText}
-              setInputText={setVoiceInputText}
-              isRecording={voiceIsRecording}
-              isProcessing={voiceIsProcessing}
-              networkError={voiceNetworkError}
-              onVoiceToggle={() => setVoiceIsRecording(!voiceIsRecording)}
-              onAnalyze={() => handleVoiceResult({ type: 'exercise', data: voiceInputText })}
-              onRetry={() => setVoiceNetworkError(false)}
-            />
           )}
 
           {/* AI 피드백 */}
@@ -447,10 +387,12 @@ const HealthLog: React.FC = () => {
           {/* 구조화된 데이터 미리보기 */}
           {parsedData && (
             <div className="mt-6">
-              <StructuredDataPreview 
-                structuredData={parsedData} 
-                isSuccess={true}
-              />
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-medium mb-2">데이터 처리 결과</h3>
+                <pre className="text-sm whitespace-pre-wrap">
+                  {JSON.stringify(parsedData, null, 2)}
+                </pre>
+              </div>
             </div>
           )}
         </div>

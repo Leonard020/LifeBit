@@ -114,9 +114,16 @@ export default function SocialRedirect() {
         });
 
         navigate('/');
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('❌ [SocialRedirect] 소셜 로그인 오류:', err);
-        const errorMessage = err.response?.data?.detail || err.message || '알 수 없는 오류가 발생했습니다.';
+        
+        let errorMessage = '알 수 없는 오류가 발생했습니다.';
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (typeof err === 'object' && err !== null && 'response' in err) {
+          const axiosError = err as { response?: { data?: { detail?: string } } };
+          errorMessage = axiosError.response?.data?.detail || '알 수 없는 오류가 발생했습니다.';
+        }
         
         toast({
           title: '로그인 실패',

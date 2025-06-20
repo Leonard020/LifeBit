@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useRecommendations, useHealthRecords, useExerciseSessions } from '../../api/healthApi';
+import { useRecommendations, useHealthRecords, useExerciseSessions } from '../../api/auth';
 import { Brain, Dumbbell, Apple, Lightbulb, Clock, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface RecommendationPanelProps {

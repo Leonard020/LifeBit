@@ -13,6 +13,7 @@ interface ProfileData {
   weight: string;
   age: string;
   gender: string;
+  profileImageUrl?: string;
 }
 
 interface BasicInfoBoxProps {

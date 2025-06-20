@@ -41,6 +41,9 @@ spring:
     sql-migration-separator: __
     sql-migration-suffixes: .sql
 
+file:
+  upload-dir: uploads/
+
 springdoc:
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
@@ -72,7 +75,10 @@ management:
 logging:
   level:
     com.lifebit: DEBUG
+    com.lifebit.coreapi.controller.MealLogController: DEBUG
+    com.lifebit.coreapi.security: DEBUG
     org.springframework.web: DEBUG
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    root: INFO

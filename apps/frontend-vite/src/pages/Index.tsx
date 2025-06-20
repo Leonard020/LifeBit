@@ -13,6 +13,18 @@ import {
   type MealTimeType 
 } from '@/utils/mealTimeMapping';
 
+interface FoodData {
+  food_name?: string;
+  amount?: string;
+  meal_time?: string;
+  nutrition?: {
+    calories?: number | string;
+    carbs?: number | string;
+    protein?: number | string;
+    fat?: number | string;
+  };
+}
+
 const Index = () => {
   const { toast } = useToast();
   const [recordType, setRecordType] = useState<'exercise' | 'diet' | null>(null);
@@ -27,7 +39,7 @@ const Index = () => {
   const [chatStep, setChatStep] = useState<'extraction' | 'validation' | 'confirmation'>('extraction');
   
   // 식단 기록용 추가 상태들
-  const [currentMealFoods, setCurrentMealFoods] = useState<Array<any>>([]);
+  const [currentMealFoods, setCurrentMealFoods] = useState<Array<FoodData>>([]);
   const [isAddingMoreFood, setIsAddingMoreFood] = useState(false);
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 
@@ -119,21 +131,37 @@ const Index = () => {
       setConversationHistory(newHistory);
       setChatAiFeedback(response);
 
-      // 구조화된 데이터가 있으면 저장
-      if (response.parsed_data) {
-        setChatStructuredData(response.parsed_data);
+      // 성공적으로 데이터가 파싱되면 확인 UI 없이 자동 저장
+      if (response.type === 'success' && response.parsed_data) {
         
-        // 식단의 경우 식사 시간 저장
-        if (recordType === 'diet' && response.parsed_data.meal_time) {
-          setCurrentMealTime(response.parsed_data.meal_time as MealTimeType);
-        }
-      }
+        // 추가적인 AI 응답 메시지 (저장 안내)
+        const saveSuccessMessage = `${recordType === 'diet' ? '식단' : '운동'} 기록이 완료되었습니다! 자동으로 저장할게요. ✅`;
+        const finalHistory: Message[] = [
+          ...newHistory,
+          { role: 'assistant', content: saveSuccessMessage }
+        ];
+        setConversationHistory(finalHistory);
+        setChatAiFeedback(prev => ({ ...prev!, message: saveSuccessMessage }));
 
-      // 다음 단계 전환 로직 (백엔드 응답 기준)
-      if (response.type === 'incomplete' || response.missingFields?.length) {
-        setChatStep('validation');
-      } else if (response.type === 'success' && response.parsed_data) {
-        setChatStep('confirmation');
+        // 자동 저장 실행
+        handleRecordSubmit(recordType!, JSON.stringify(response.parsed_data));
+        setChatStructuredData(null); // 확인 UI가 나타나지 않도록 null 처리
+        
+      } else {
+        // 데이터가 불완전하거나 다른 단계일 경우 기존 로직 수행
+        if (response.parsed_data) {
+          setChatStructuredData(response.parsed_data);
+          
+          if (recordType === 'diet' && response.parsed_data.meal_time) {
+            setCurrentMealTime(response.parsed_data.meal_time as MealTimeType);
+          }
+        }
+  
+        if (response.type === 'incomplete' || response.missingFields?.length) {
+          setChatStep('validation');
+        } else if (response.type === 'confirmation') {
+          setChatStep('confirmation');
+        }
       }
 
     } catch (error) {
@@ -272,8 +300,8 @@ const Index = () => {
           />
         ) : (
           <div className="text-center text-gray-600 p-8 bg-gray-50 rounded-lg">
-            <p className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</p>
-            <p>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</p>
+            <div className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</div>
+            <div>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</div>
           </div>
         )}
       </div>

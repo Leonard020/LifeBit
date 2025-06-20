@@ -1,11 +1,13 @@
 package com.lifebit.coreapi.controller;
 
+import com.lifebit.coreapi.dto.UserProfileUpdateRequest;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.security.JwtTokenProvider;
 import com.lifebit.coreapi.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +38,7 @@ public class UserController {
             response.put("userId", user.getUserId());
             response.put("email", user.getEmail());
             response.put("nickname", user.getNickname());
+            response.put("profileImageUrl", user.getProfileImageUrl());
             response.put("height", user.getHeight());
             response.put("weight", user.getWeight());
             response.put("age", user.getAge());
@@ -58,20 +61,22 @@ public class UserController {
     @PutMapping("/profile")
     public ResponseEntity<?> updateUserProfile(
             @RequestHeader("Authorization") String authHeader,
-            @RequestBody Map<String, Object> updateData) {
+            @RequestPart("updateData") UserProfileUpdateRequest updateData,
+            @RequestPart(value = "profileImage", required = false) MultipartFile profileImage) {
         try {
             // Bearer 토큰에서 JWT 추출
             String token = authHeader.replace("Bearer ", "");
             Long userId = tokenProvider.getUserIdFromToken(token);
             
             // 사용자 정보 업데이트
-            User updatedUser = userService.updateUserProfile(userId, updateData);
+            User updatedUser = userService.updateUserProfile(userId, updateData, profileImage);
             
             // 응답 데이터 구성
             Map<String, Object> response = new HashMap<>();
             response.put("userId", updatedUser.getUserId());
             response.put("email", updatedUser.getEmail());
             response.put("nickname", updatedUser.getNickname());
+            response.put("profileImageUrl", updatedUser.getProfileImageUrl());
             response.put("height", updatedUser.getHeight());
             response.put("weight", updatedUser.getWeight());
             response.put("age", updatedUser.getAge());

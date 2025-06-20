@@ -6,6 +6,20 @@ import { Mic, MicOff, Send, Loader2, AlertCircle, Utensils, Clock, Zap, Plus, Ch
 import { Message, ChatResponse } from '@/api/chatApi';
 import { getMealTimeDescription, type MealTimeType } from '@/utils/mealTimeMapping';
 
+interface FoodNutrition {
+  calories?: number | string;
+  carbs?: number | string;
+  protein?: number | string;
+  fat?: number | string;
+}
+
+interface FoodData {
+  food_name?: string;
+  amount?: string;
+  meal_time?: string;
+  nutrition?: FoodNutrition;
+}
+
 interface ChatInterfaceProps {
   recordType: 'exercise' | 'diet';
   inputText: string;
@@ -20,7 +34,7 @@ interface ChatInterfaceProps {
   onSaveRecord: () => void;
   structuredData: ChatResponse['parsed_data'] | null;
   conversationHistory: Message[];
-  currentMealFoods?: Array<any>;
+  currentMealFoods?: Array<FoodData>;
   onAddMoreFood?: () => void;
   isAddingMoreFood?: boolean;
 }
@@ -84,10 +98,11 @@ const ChatMessage: React.FC<{
 };
 
 // 식단 데이터를 카드 형태로 표시하는 함수
-const formatStructuredDataDisplay = (data: any, recordType: 'exercise' | 'diet') => {
+const formatStructuredDataDisplay = (data: FoodData | Record<string, unknown>, recordType: 'exercise' | 'diet') => {
   if (!data) return null;
 
-  if (recordType === 'diet' && data.food_name) {
+  if (recordType === 'diet' && 'food_name' in data && data.food_name) {
+    const foodData = data as FoodData;
     return (
       <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between mb-3">
@@ -96,37 +111,37 @@ const formatStructuredDataDisplay = (data: any, recordType: 'exercise' | 'diet')
               <Utensils className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h4 className="font-semibold text-gray-800">{data.food_name}</h4>
-              <p className="text-xs text-gray-500">{data.amount}</p>
+              <h4 className="font-semibold text-gray-800">{foodData.food_name}</h4>
+              <p className="text-xs text-gray-500">{foodData.amount}</p>
             </div>
           </div>
           
-          {data.meal_time && (
+          {foodData.meal_time && (
             <div className="text-right">
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
-                {data.meal_time}
+                {foodData.meal_time}
               </span>
             </div>
           )}
         </div>
         
-        {data.nutrition && (
+        {foodData.nutrition && (
           <div className="grid grid-cols-2 gap-3 mt-3">
             <div className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
               <span className="text-sm text-gray-600">칼로리</span>
-              <span className="font-semibold text-red-600">{data.nutrition.calories}kcal</span>
+              <span className="font-semibold text-red-600">{foodData.nutrition.calories}kcal</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
               <span className="text-sm text-gray-600">탄수화물</span>
-              <span className="font-semibold text-blue-600">{data.nutrition.carbs}g</span>
+              <span className="font-semibold text-blue-600">{foodData.nutrition.carbs}g</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
               <span className="text-sm text-gray-600">단백질</span>
-              <span className="font-semibold text-green-600">{data.nutrition.protein}g</span>
+              <span className="font-semibold text-green-600">{foodData.nutrition.protein}g</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-yellow-50 rounded-lg">
               <span className="text-sm text-gray-600">지방</span>
-              <span className="font-semibold text-yellow-600">{data.nutrition.fat}g</span>
+              <span className="font-semibold text-yellow-600">{foodData.nutrition.fat}g</span>
             </div>
           </div>
         )}
@@ -260,37 +275,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         )}
 
-        {/* 구조화된 데이터 표시 */}
-        {structuredData && (
-          <div className="my-4">
-            {formatStructuredDataDisplay(structuredData, recordType)}
-            
-            {/* 액션 버튼들 */}
-            <div className="mt-4 flex gap-2">
-              {recordType === 'diet' && onAddMoreFood && !isAddingMoreFood && (
-                <Button 
-                  onClick={onAddMoreFood}
-                  variant="outline"
-                  className="flex items-center gap-2 border-purple-300 text-purple-600 hover:bg-purple-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  음식 추가
-                </Button>
-              )}
-              
-              {((recordType === 'diet' && structuredData.food_name && structuredData.meal_time) || 
-                (recordType === 'exercise' && structuredData.exercise)) && (
-                <Button 
-                  onClick={onSaveRecord}
-                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
-                >
-                  <Check className="h-4 w-4" />
-                  저장하기
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
+        {/* 구조화된 데이터 표시 비활성화 */}
+        {/* {structuredData && (
+          <StructuredDataPreview 
+            data={structuredData}
+            type={recordType}
+            onSave={onSaveRecord}
+            onAddMore={onAddMoreFood}
+            isAddingMore={isAddingMoreFood}
+          />
+        )} */}
 
         {networkError && (
           <Alert variant="destructive" className="mb-4">

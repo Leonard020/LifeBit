@@ -1,5 +1,5 @@
 import React, { useMemo, memo, useCallback } from 'react';
-import { useHealthRecords, useExerciseSessions, useUserGoals } from '../../api/healthApi';
+import { useHealthRecords, useExerciseSessions, useUserGoals } from '../../api/auth';
 import { TrendingUp, TrendingDown, Activity, Weight, BarChart3 } from 'lucide-react';
 import {
   LineChart,

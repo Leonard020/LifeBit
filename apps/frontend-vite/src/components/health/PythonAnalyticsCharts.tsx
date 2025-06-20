@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/healthApi';
+import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';

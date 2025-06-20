@@ -71,4 +71,24 @@ public class MealController {
         FoodItem foodItem = mealService.findOrCreateFoodItem(name, calories, carbs, protein, fat);
         return ResponseEntity.ok(foodItem);
     }
+
+    @PostMapping("/foods/search-nutrition")
+    public ResponseEntity<Map<String, Object>> searchFoodNutrition(@RequestBody Map<String, Object> request) {
+        String foodName = (String) request.get("foodName");
+        String amount = (String) request.get("amount");
+        
+        // AI가 계산한 영양소 정보를 직접 반환
+        Map<String, Object> nutritionInfo = mealService.calculateNutrition(foodName, amount);
+        return ResponseEntity.ok(nutritionInfo);
+    }
+
+    @PostMapping("/foods/auto-nutrition")
+    public ResponseEntity<Map<String, Object>> getAutoNutrition(@RequestBody Map<String, String> request) {
+        String foodName = request.get("foodName");
+        String amount = request.get("amount");
+        
+        // 음식명과 섭취량을 기반으로 자동 영양소 계산
+        Map<String, Object> result = mealService.getAutoCalculatedNutrition(foodName, amount);
+        return ResponseEntity.ok(result);
+    }
 } 

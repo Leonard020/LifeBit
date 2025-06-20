@@ -18,7 +18,7 @@ interface AIFeedbackProps {
   setClarificationInput: (input: string) => void;
   onClarificationSubmit: () => void;
   onSaveRecord: () => void;
-  structuredData: any;
+  structuredData: Record<string, unknown>;
 }
 
 export const AIFeedbackComponent: React.FC<AIFeedbackProps> = ({

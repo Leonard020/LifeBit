@@ -10,9 +10,10 @@ export const API_ENDPOINTS = {
     HEALTH_LOG: '/api/health-log',
     HEALTH_STATISTICS: '/api/health-statistics',
     RANKING: '/api/health-statistics/ranking',
-    HEALTH_RECORDS: '/api/health-statistics/health-records',
-    EXERCISE_SESSIONS: '/api/exercises/history',
-    MEAL_LOGS: '/api/meals/history'
+    HEALTH_RECORDS: '/api/health-records',
+    HEALTH_STATISTICS_HEALTH_RECORDS: '/api/health-statistics/health-records',
+    EXERCISE_SESSIONS: '/api/exercise-sessions',
+    MEAL_LOGS: '/api/meal-logs'
 };
 
 // API 기본 설정
