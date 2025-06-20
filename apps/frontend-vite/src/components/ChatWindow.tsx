@@ -436,7 +436,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         ],
         currentRecordType!,
         'extraction',
-        exerciseState // 현재 상태 전달
+        exerciseState // 현재 운동 상태 전달
       );
 
       console.log('🤖 AI Response:', response);
@@ -707,80 +707,108 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     }
   };
 
-  // 식단 입력 처리 함수 추가
+  // 식단 입력 처리 함수 개선
   const handleDietInput = async (input: string) => {
     try {
       setIsProcessing(true);
 
+      // 사용자 수정 요청인지 확인
+      const isModificationRequest = /수정|바꿔|변경|고쳐/.test(input);
+      
       const response = await sendChatMessage(
         input,
         [
           ...conversationHistory,
-          { role: 'assistant', content: '식단 기록을 분석하여 JSON 형태로 변환합니다.' }
+          { role: 'assistant', content: '식단 기록을 분석하여 영양소를 자동 계산합니다.' }
         ],
         currentRecordType!,
-        'extraction',
+        isModificationRequest ? 'validation' : 'extraction',
         dietState // 현재 식단 상태 전달
       );
 
-      if (response.type === 'success') {
+      if (response.type === 'success' || response.type === 'modified') {
         if (response.message) {
           addMessage('ai', response.message.replace(/<EOL>/g, '\n'));
           updateConversationHistory('assistant', response.message);
         }
 
         if (response.parsed_data) {
-          setDietState({
-            food_name: response.parsed_data.food_name!,
-            amount: response.parsed_data.amount!,
-            meal_time: response.parsed_data.meal_time!,
-            nutrition: response.parsed_data.nutrition
-          });
+          // 영양소가 자동 계산된 경우 즉시 확인 단계로
+          if (response.parsed_data.nutrition && 
+              response.parsed_data.food_name && 
+              response.parsed_data.amount && 
+              response.parsed_data.meal_time) {
+            
+            setDietState({
+              food_name: response.parsed_data.food_name,
+              amount: response.parsed_data.amount,
+              meal_time: response.parsed_data.meal_time,
+              nutrition: response.parsed_data.nutrition
+            });
 
-          setCurrentStep('confirmation');
-          // 식단 확인 메시지 표시
-          const confirmationMessage = formatDietConfirmationMessage({
-            food_name: response.parsed_data.food_name!,
-            amount: response.parsed_data.amount!,
-            meal_time: response.parsed_data.meal_time!,
-            nutrition: response.parsed_data.nutrition
-          });
-          addMessage('ai', confirmationMessage);
-          setPendingRecord({ type: 'diet', content: JSON.stringify(response.parsed_data) });
-          setIsAwaitingConfirmation(true);
+            setCurrentStep('confirmation');
+            
+            // 자동 계산된 영양소와 함께 확인 메시지 표시
+            const confirmationMessage = formatDietConfirmationMessage({
+              food_name: response.parsed_data.food_name,
+              amount: response.parsed_data.amount,
+              meal_time: response.parsed_data.meal_time,
+              nutrition: response.parsed_data.nutrition
+            });
+            
+            // 잠시 후에 확인 메시지 표시 (계산 완료 느낌)
+            setTimeout(() => {
+              addMessage('ai', '영양소 계산이 완료되었습니다! 🔥\n\n' + confirmationMessage);
+              setPendingRecord({ type: 'diet', content: JSON.stringify(response.parsed_data) });
+              setIsAwaitingConfirmation(true);
+            }, 1000);
+            
+          } else {
+            // 정보가 부족한 경우 계속 수집
+            setDietState(prev => ({
+              ...prev,
+              ...response.parsed_data
+            }));
+          }
         }
       } else if (response.type === 'incomplete') {
-        addMessage('ai', response.message || '식단 정보가 부족합니다. 더 자세히 입력해주세요.');
-        updateConversationHistory('assistant', response.message || '식단 정보가 부족합니다.');
+        if (response.message) {
+          addMessage('ai', response.message);
+          updateConversationHistory('assistant', response.message);
+        }
+        
+        // 부족한 정보가 있는 경우 validation 단계로
+        setCurrentStep('validation');
       } else if (response.type === 'error') {
-        addMessage('ai', response.message);
-        updateConversationHistory('assistant', response.message);
+        addMessage('ai', response.message || '식단 처리 중 오류가 발생했습니다.');
+        updateConversationHistory('assistant', response.message || '오류 발생');
       }
     } catch (error) {
       console.error('Diet input processing error:', error);
-      addMessage('ai', '죄송합니다. 식단 기록 처리 중 오류가 발생했습니다.');
+      addMessage('ai', '죄송합니다. 식단 기록 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // 식단 확인 메시지 포맷팅 함수 추가
+  // 식단 확인 메시지 포맷팅 함수 개선
   const formatDietConfirmationMessage = (data: DietState): string => {
-    let message = '다음과 같이 식단을 기록하시겠습니까?\n\n';
+    let message = '📊 계산된 식단 정보를 확인해주세요!\n\n';
     
-    message += `🍽️ ${data.food_name}\n`;
+    message += `🍽️ **${data.food_name}**\n`;
     if (data.amount) message += `📏 섭취량: ${data.amount}\n`;
-    if (data.meal_time) message += `⏰ 섭취시간: ${data.meal_time}\n`;
+    if (data.meal_time) message += `⏰ 섭취시간: ${data.meal_time}\n\n`;
     
     if (data.nutrition) {
-      message += `📊 영양 정보:\n`;
-      message += `  🔥 칼로리: ${data.nutrition.calories}kcal\n`;
-      message += `  🍞 탄수화물: ${data.nutrition.carbs}g\n`;
-      message += `  🥩 단백질: ${data.nutrition.protein}g\n`;
-      message += `  🧈 지방: ${data.nutrition.fat}g\n`;
+      message += `📊 **자동 계산된 영양 정보:**\n`;
+      message += `🔥 칼로리: ${data.nutrition.calories}kcal\n`;
+      message += `🍞 탄수화물: ${data.nutrition.carbs}g\n`;
+      message += `🥩 단백질: ${data.nutrition.protein}g\n`;
+      message += `🧈 지방: ${data.nutrition.fat}g\n\n`;
     }
     
-    message += '\n확인하시면 "네", 수정이 필요하시면 "아니오"를 입력해주세요.';
+    message += '✅ 맞으면 "네", 수정이 필요하시면 구체적으로 말씀해주세요.\n';
+    message += '예) "칼로리를 200으로 바꿔줘", "양을 1개로 바꿔줘"';
     
     return message;
   };

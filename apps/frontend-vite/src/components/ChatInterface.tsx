@@ -260,37 +260,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         )}
 
-        {/* 구조화된 데이터 표시 */}
-        {structuredData && (
-          <div className="my-4">
-            {formatStructuredDataDisplay(structuredData, recordType)}
-            
-            {/* 액션 버튼들 */}
-            <div className="mt-4 flex gap-2">
-              {recordType === 'diet' && onAddMoreFood && !isAddingMoreFood && (
-                <Button 
-                  onClick={onAddMoreFood}
-                  variant="outline"
-                  className="flex items-center gap-2 border-purple-300 text-purple-600 hover:bg-purple-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  음식 추가
-                </Button>
-              )}
-              
-              {((recordType === 'diet' && structuredData.food_name && structuredData.meal_time) || 
-                (recordType === 'exercise' && structuredData.exercise)) && (
-                <Button 
-                  onClick={onSaveRecord}
-                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
-                >
-                  <Check className="h-4 w-4" />
-                  저장하기
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
+        {/* 구조화된 데이터 표시 비활성화 */}
+        {/* {structuredData && (
+          <StructuredDataPreview 
+            data={structuredData}
+            type={recordType}
+            onSave={onSaveRecord}
+            onAddMore={onAddMoreFood}
+            isAddingMore={isAddingMoreFood}
+          />
+        )} */}
 
         {networkError && (
           <Alert variant="destructive" className="mb-4">

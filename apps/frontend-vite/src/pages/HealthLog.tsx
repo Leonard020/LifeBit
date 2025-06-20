@@ -7,7 +7,6 @@ import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
 import { ChatInterface } from '../components/ChatInterface';
 import { VoiceInput } from '../components/VoiceInput';
-import { StructuredDataPreview } from '../components/StructuredDataPreview';
 import { AIFeedbackComponent } from '../components/AIFeedback';
 import { useAuth } from '../AuthContext';
 import { Button } from '../components/ui/button';

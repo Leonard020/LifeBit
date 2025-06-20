@@ -23,7 +23,7 @@ interface ChatRequestBody {
 
 // API 응답 타입
 export interface ChatResponse {
-  type: 'initial' | 'success' | 'incomplete' | 'clarification' | 'error';
+  type: 'initial' | 'success' | 'incomplete' | 'clarification' | 'error' | 'modified' | 'confirmation';
   message: string;
   suggestions?: string[];
   missingFields?: string[];
@@ -49,18 +49,46 @@ export interface ChatResponse {
   };
 }
 
+// 현재 상태 데이터 타입 정의
+interface ExerciseState {
+  exercise?: string;
+  category?: string;
+  target?: string;
+  sets?: number;
+  reps?: number;
+  duration_min?: number;
+  weight?: number;
+}
+
+interface DietState {
+  food_name?: string;
+  amount?: string;
+  meal_time?: string;
+  nutrition?: {
+    calories: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+  };
+}
+
+// 현재 데이터 타입 (any 대신 union 타입 사용)
+type CurrentDataType = ExerciseState | DietState | null;
+
 /**
  * 챗 메시지를 전송하고 응답을 반환합니다.
  * @param message - 사용자 입력 텍스트
  * @param conversationHistory - 전체 대화 기록
  * @param recordType - 'exercise' | 'diet'
  * @param chatStep - 'extraction' | 'validation' | 'confirmation'
+ * @param currentData - 현재 상태 데이터 (운동 또는 식단)
  */
 export const sendChatMessage = async (
   message: string,
   conversationHistory: Message[],
   recordType: 'exercise' | 'diet',
-  chatStep?: 'extraction' | 'validation' | 'confirmation'
+  chatStep?: 'extraction' | 'validation' | 'confirmation',
+  currentData?: CurrentDataType
 ): Promise<ChatResponse> => {
   try {
     const body: ChatRequestBody = {
