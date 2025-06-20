@@ -46,6 +46,8 @@ public class UserController {
             response.put("role", user.getRole());
             response.put("createdAt", user.getCreatedAt());
             response.put("updatedAt", user.getUpdatedAt());
+            response.put("provider", user.getProvider());
+            response.put("passwordHash", user.getPasswordHash());
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {

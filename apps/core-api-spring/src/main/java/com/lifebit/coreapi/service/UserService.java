@@ -168,6 +168,10 @@ public class UserService {
     @Transactional(readOnly = true)
     public boolean verifyPassword(Long userId, String password) {
         User user = getUserById(userId);
+        if (user.getPasswordHash() == null) {
+            // Social login user: allow access without password
+            return true;
+        }
         return passwordEncoder.matches(password, user.getPasswordHash());
     }
 } 

@@ -31,6 +31,7 @@ interface BasicInfoBoxProps {
   showConfirmPassword?: boolean;
   setShowConfirmPassword?: (value: boolean) => void;
   nicknameEditable?: boolean;
+  disablePasswordFields?: boolean;
 }
 
 export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
@@ -48,6 +49,7 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
   showConfirmPassword,
   setShowConfirmPassword,
   nicknameEditable = false,
+  disablePasswordFields = false,
 }) => (
   <Card className="hover-lift">
     <CardHeader>
@@ -84,8 +86,8 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
             />
           </div>
         </div>
-        {/* Password fields only if setPassword etc. are provided */}
-        {setPassword && setConfirmPassword && setShowPassword && setShowConfirmPassword && (
+        {/* Password fields only if not disabled and setPassword etc. are provided */}
+        {!disablePasswordFields && setPassword && setConfirmPassword && setShowPassword && setShowConfirmPassword && (
           <>
             <div className="space-y-2">
               <Label htmlFor="password">비밀번호</Label>
