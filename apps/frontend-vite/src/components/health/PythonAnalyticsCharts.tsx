@@ -1,5 +1,5 @@
 /**
- * 파이썬 기반 고급 건강 데이터 분석 차트 컴포넌트
+ * AI 기반 고급 건강 데이터 분석 차트 컴포넌트
  * - 전문적인 통계 분석 및 시각화
  * - 일/주/월별 운동, 식단, 체중, BMI 목표치와 성취도 표시
  * - Plotly 기반 인터랙티브 차트
@@ -338,7 +338,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">파이썬 고급 분석</h2>
+          <h2 className="text-2xl font-bold text-gray-900">AI 스마트 분석</h2>
           <Skeleton className="h-10 w-24" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -361,7 +361,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">파이썬 고급 분석</h2>
+          <h2 className="text-2xl font-bold text-gray-900">AI 스마트 분석</h2>
           <Button onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             새로고침
@@ -371,7 +371,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>분석 오류</AlertTitle>
           <AlertDescription>
-            파이썬 분석 데이터를 불러오는 중 오류가 발생했습니다. 새로고침을 시도해보세요.
+            AI 분석 데이터를 불러오는 중 오류가 발생했습니다. 새로고침을 시도해보세요.
           </AlertDescription>
         </Alert>
       </div>
@@ -383,8 +383,10 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">파이썬 고급 분석</h2>
-          <p className="text-gray-600">{getPeriodLabel()} 건강 데이터 종합 분석</p>
+          <h2 className="text-2xl font-bold text-gray-900">AI 스마트 분석</h2>
+          <p className="text-gray-600 mt-2">
+            {getPeriodLabel()} 건강 데이터를 종합 분석하여 맞춤형 인사이트를 제공합니다.
+          </p>
         </div>
         <Button onClick={handleRefresh} disabled={isRefreshing}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />

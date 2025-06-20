@@ -71,24 +71,81 @@ class HealthAnalyticsService:
             ]
         }
     
-    def analyze_exercise_patterns(self, exercise_sessions: List[Dict]) -> Dict[str, Any]:
-        """운동 패턴 분석"""
+    def analyze_exercise_patterns(self, exercise_sessions: List[Dict], period: str = "month") -> Dict[str, Any]:
+        """운동 패턴 분석 - period별 처리"""
         if not exercise_sessions:
             return {
                 "total_sessions": 0,
                 "avg_duration": 0,
+                "total_minutes": 0,
+                "calories_burned": 0,
+                "period_label": self._get_period_label(period),
                 "insights": ["운동 기록이 없습니다."]
             }
         
-        # 더미 분석 결과
+        # 실제 데이터 분석
+        total_sessions = len(exercise_sessions)
+        total_minutes = sum(session.get('duration_minutes', 0) for session in exercise_sessions)
+        total_calories = sum(session.get('calories_burned', 0) for session in exercise_sessions)
+        avg_duration = total_minutes / total_sessions if total_sessions > 0 else 0
+        
+        # period별 목표와 비교
+        period_goals = self._get_period_goals(period)
+        achievement_rate = (total_sessions / period_goals['sessions']) * 100 if period_goals['sessions'] > 0 else 0
+        
+        # 인사이트 생성
+        insights = self._generate_exercise_insights(
+            total_sessions, avg_duration, achievement_rate, period
+        )
+        
         return {
-            "total_sessions": len(exercise_sessions),
-            "avg_duration": 45,
-            "insights": [
-                "주 3-4회 꾸준한 운동 패턴을 보이고 있습니다.",
-                "운동 강도를 점진적으로 늘려보세요."
-            ]
+            "total_sessions": total_sessions,
+            "avg_duration": round(avg_duration, 1),
+            "total_minutes": total_minutes,
+            "calories_burned": total_calories,
+            "achievement_rate": round(achievement_rate, 1),
+            "period_label": self._get_period_label(period),
+            "insights": insights
         }
+    
+    def _get_period_label(self, period: str) -> str:
+        """기간별 라벨 반환"""
+        labels = {
+            "day": "오늘",
+            "week": "이번 주",
+            "month": "이번 달"
+        }
+        return labels.get(period, "이번 달")
+    
+    def _get_period_goals(self, period: str) -> Dict[str, int]:
+        """기간별 목표 반환"""
+        goals = {
+            "day": {"sessions": 1, "minutes": 60},
+            "week": {"sessions": 3, "minutes": 300},
+            "month": {"sessions": 12, "minutes": 1200}
+        }
+        return goals.get(period, goals["month"])
+    
+    def _generate_exercise_insights(self, sessions: int, avg_duration: float, achievement_rate: float, period: str) -> List[str]:
+        """운동 인사이트 생성"""
+        insights = []
+        period_label = self._get_period_label(period)
+        
+        if achievement_rate >= 100:
+            insights.append(f"🎉 {period_label} 운동 목표를 달성했습니다!")
+        elif achievement_rate >= 80:
+            insights.append(f"💪 {period_label} 운동 목표의 {achievement_rate:.0f}%를 달성했습니다.")
+        else:
+            insights.append(f"📈 {period_label} 운동량을 늘려보세요. 현재 {achievement_rate:.0f}% 달성.")
+        
+        if avg_duration >= 60:
+            insights.append("⏱️ 운동 시간이 충분합니다. 강도를 높여보세요.")
+        elif avg_duration >= 30:
+            insights.append("⏱️ 적절한 운동 시간입니다. 지속하세요.")
+        else:
+            insights.append("⏱️ 운동 시간을 늘려보세요.")
+        
+        return insights
     
     def analyze_bmi_health_status(self, health_records: List[Dict]) -> Dict[str, Any]:
         """BMI 기반 건강 상태 분석"""
@@ -294,7 +351,7 @@ class HealthAnalyticsService:
             
             # 각종 분석 수행
             weight_analysis = self.analyze_weight_trends(data['health_records'])
-            exercise_analysis = self.analyze_exercise_patterns(data['exercise_sessions'])
+            exercise_analysis = self.analyze_exercise_patterns(data['exercise_sessions'], period)
             
             # 차트 생성
             weight_chart = self.generate_weight_chart(data['health_records'], weight_analysis)

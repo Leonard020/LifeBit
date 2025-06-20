@@ -54,8 +54,13 @@ const HealthLog: React.FC = () => {
   const { toast } = useToast();
   
   // State hooks
-  const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'day'>('month');
   const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
+  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('week');
+  
+  // 각 탭별 독립적인 기간 상태
+  const [reactPeriod, setReactPeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [pythonPeriod, setPythonPeriod] = useState<'day' | 'week' | 'month'>('week');
+  
   const [recordType, setRecordType] = useState<'exercise' | 'diet'>('exercise');
   const [showChat, setShowChat] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
@@ -234,13 +239,15 @@ const HealthLog: React.FC = () => {
             </div>
           </div>
 
-          {/* 기간 선택 */}
+          {/* 기간 선택 제거 */}
+          {/* 
           <div className="mb-6">
             <PeriodSelector
               selectedPeriod={selectedPeriod}
               onPeriodChange={setSelectedPeriod}
             />
           </div>
+          */}
 
           {/* 차트 분석 탭 */}
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'enhanced' | 'react' | 'python')} className="mb-6">
@@ -277,6 +284,14 @@ const HealthLog: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="react" className="mt-6">
+              {/* 기간 선택 - 기본 차트용 */}
+              <div className="mb-6">
+                <PeriodSelector
+                  selectedPeriod={reactPeriod}
+                  onPeriodChange={setReactPeriod}
+                />
+              </div>
+              
               {/* 기존 React 차트 */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
                 {/* 왼쪽: 통계 차트 (모바일에서는 전체 너비, 데스크톱에서는 2/3) */}
@@ -284,7 +299,7 @@ const HealthLog: React.FC = () => {
                   <ErrorBoundary>
                     <StatisticsCharts 
                       userId={userId?.toString() || ''} 
-                      period={selectedPeriod}
+                      period={reactPeriod}
                     />
                   </ErrorBoundary>
                 </div>
@@ -304,25 +319,33 @@ const HealthLog: React.FC = () => {
                 <ErrorBoundary>
                   <GoalProgress 
                     userId={userId?.toString() || ''}
-                    period={selectedPeriod}
+                    period={reactPeriod}
                   />
                 </ErrorBoundary>
               </div>
             </TabsContent>
 
             <TabsContent value="python" className="mt-6">
-              {/* Python AI 분석 차트 */}
+              {/* 기간 선택 - AI분석용 */}
+              <div className="mb-6">
+                <PeriodSelector
+                  selectedPeriod={pythonPeriod}
+                  onPeriodChange={setPythonPeriod}
+                />
+              </div>
+              
+              {/* AI 고급 분석 차트 */}
               <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
                 <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg p-3">
                   <Zap className="h-4 w-4" />
-                  <span className="font-medium">Python 기반 고급 데이터 분석 및 AI 인사이트</span>
+                  <span className="font-medium">AI 기반 고급 데이터 분석 및 인사이트</span>
                 </div>
               </div>
               
               <ErrorBoundary>
                 <PythonAnalyticsCharts 
                   userId={userId || 0} 
-                  period={selectedPeriod}
+                  period={pythonPeriod}
                 />
               </ErrorBoundary>
             </TabsContent>
