@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Send, Loader2, AlertCircle, Utensils, Clock, Zap } from 'lucide-react';
+import { Mic, MicOff, Send, Loader2, AlertCircle, Utensils, Clock, Zap, Plus, Check } from 'lucide-react';
 import { Message, ChatResponse } from '@/api/chatApi';
+import { getMealTimeDescription, type MealTimeType } from '@/utils/mealTimeMapping';
 
 interface ChatInterfaceProps {
   recordType: 'exercise' | 'diet';
@@ -19,46 +20,113 @@ interface ChatInterfaceProps {
   onSaveRecord: () => void;
   structuredData: ChatResponse['parsed_data'] | null;
   conversationHistory: Message[];
+  currentMealFoods?: Array<any>;
+  onAddMoreFood?: () => void;
+  isAddingMoreFood?: boolean;
 }
 
-// 식단 데이터를 사용자 친화적으로 표시하는 함수
-const formatStructuredDataDisplay = (data: any, recordType: 'exercise' | 'diet') => {
-  if (!data) return null;
+// 카카오톡 스타일 메시지 컴포넌트
+const ChatMessage: React.FC<{ 
+  message: Message; 
+  isLast: boolean;
+  showTime?: boolean;
+}> = ({ message, isLast, showTime = true }) => {
+  const isUser = message.role === 'user';
+  const time = new Date().toLocaleTimeString('ko-KR', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  });
 
-  if (recordType === 'diet' && data.food_name && data.meal_time) {
-    return (
-      <div className="space-y-3">
-        <div className="bg-white rounded-lg p-3 border border-gray-200">
-          <div className="flex items-center gap-2 mb-2">
-            <Utensils className="h-4 w-4 text-blue-600" />
-            <span className="font-medium text-gray-800">{data.meal_time} 식단</span>
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2`}>
+      <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[70%]`}>
+        {!isUser && (
+          <div className="flex items-center gap-2 mb-1 ml-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
+              <span className="text-white text-sm font-medium">AI</span>
+            </div>
+            <span className="text-xs text-gray-500 font-medium">영양사 AI</span>
           </div>
-          <div className="text-sm text-gray-700">
-            <p><strong>음식:</strong> {data.food_name}</p>
-            <p><strong>양:</strong> {data.amount || "1인분"}</p>
+        )}
+        
+        <div className={`relative px-4 py-3 rounded-2xl shadow-sm ${
+          isUser 
+            ? 'bg-purple-500 text-white rounded-br-md' 
+            : 'bg-white border border-gray-200 rounded-bl-md'
+        }`}>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+            {message.content}
+          </div>
+          
+          {/* 카카오톡 스타일 말풍선 꼬리 */}
+          <div className={`absolute bottom-0 ${
+            isUser 
+              ? 'right-0 translate-x-0 translate-y-full' 
+              : 'left-0 translate-x-0 translate-y-full'
+          }`}>
+            <div className={`w-3 h-3 ${
+              isUser 
+                ? 'bg-purple-500 clip-path-tail-right' 
+                : 'bg-white border-l border-b border-gray-200 clip-path-tail-left'
+            }`} />
           </div>
         </div>
         
+        {showTime && isLast && (
+          <span className={`text-xs text-gray-400 mt-1 ${isUser ? 'mr-2' : 'ml-2'}`}>
+            {time}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// 식단 데이터를 카드 형태로 표시하는 함수
+const formatStructuredDataDisplay = (data: any, recordType: 'exercise' | 'diet') => {
+  if (!data) return null;
+
+  if (recordType === 'diet' && data.food_name) {
+    return (
+      <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-red-500 flex items-center justify-center">
+              <Utensils className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-gray-800">{data.food_name}</h4>
+              <p className="text-xs text-gray-500">{data.amount}</p>
+            </div>
+          </div>
+          
+          {data.meal_time && (
+            <div className="text-right">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
+                {data.meal_time}
+              </span>
+            </div>
+          )}
+        </div>
+        
         {data.nutrition && (
-          <div className="bg-white rounded-lg p-3 border border-gray-200">
-            <h4 className="font-medium text-gray-800 mb-2">영양소 정보</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="flex justify-between">
-                <span>칼로리:</span>
-                <span className="font-medium text-red-600">{data.nutrition.calories}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>탄수화물:</span>
-                <span className="font-medium text-blue-600">{data.nutrition.carbs}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>단백질:</span>
-                <span className="font-medium text-green-600">{data.nutrition.protein}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>지방:</span>
-                <span className="font-medium text-yellow-600">{data.nutrition.fat}</span>
-              </div>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
+              <span className="text-sm text-gray-600">칼로리</span>
+              <span className="font-semibold text-red-600">{data.nutrition.calories}kcal</span>
+            </div>
+            <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
+              <span className="text-sm text-gray-600">탄수화물</span>
+              <span className="font-semibold text-blue-600">{data.nutrition.carbs}g</span>
+            </div>
+            <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
+              <span className="text-sm text-gray-600">단백질</span>
+              <span className="font-semibold text-green-600">{data.nutrition.protein}g</span>
+            </div>
+            <div className="flex items-center justify-between p-2 bg-yellow-50 rounded-lg">
+              <span className="text-sm text-gray-600">지방</span>
+              <span className="font-semibold text-yellow-600">{data.nutrition.fat}g</span>
             </div>
           </div>
         )}
@@ -87,12 +155,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   aiFeedback,
   onSaveRecord,
   structuredData,
-  conversationHistory
+  conversationHistory,
+  currentMealFoods = [],
+  onAddMoreFood,
+  isAddingMoreFood = false
 }) => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
-
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -109,12 +179,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const handleSendMessageWithFocus = () => {
     onSendMessage();
-    // 약간의 딜레이를 주어 DOM 업데이트 후 포커스 시도
     setTimeout(() => {
       requestAnimationFrame(() => {
         if (inputRef.current) {
           inputRef.current.focus();
-          // 커서를 텍스트 끝에 위치시킴 (UX 개선)
           const len = inputRef.current.value.length;
           inputRef.current.setSelectionRange(len, len);
         }
@@ -129,54 +197,97 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
-  // Merge AI feedback at start of history
-  const mergedHistory: Message[] = [
-    ...(aiFeedback ? [{ role: 'assistant' as const, content: aiFeedback.message }] : []),
-    ...conversationHistory
-  ];
-
   return (
-    <div className="flex flex-col h-[600px] bg-white rounded-lg shadow-lg">
+    <div className="flex flex-col h-[600px] bg-gradient-to-b from-blue-50 to-purple-50 rounded-2xl shadow-lg overflow-hidden">
+      {/* 카카오톡 스타일 헤더 */}
+      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
+            <span className="text-white font-bold">AI</span>
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">영양사 AI</h3>
+            <p className="text-xs text-green-500 flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              온라인
+            </p>
+          </div>
+        </div>
+        <span className="text-sm text-gray-500">
+          {recordType === 'exercise' ? '💪 운동 기록' : '🍽️ 식단 기록'}
+        </span>
+      </div>
+
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* 인사말(초기 aiFeedback)만 맨 위에 고정 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-1">
+        {/* 초기 인사말 */}
         {aiFeedback?.type === 'initial' && aiFeedback.message && (
-          <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-lg p-3 whitespace-pre-line bg-gray-100 text-gray-900">
-              {aiFeedback.message}
+          <ChatMessage 
+            message={{ role: 'assistant', content: aiFeedback.message }} 
+            isLast={conversationHistory.length === 0}
+            showTime={conversationHistory.length === 0}
+          />
+        )}
+        
+        {/* 대화 내역 */}
+        {conversationHistory.map((message, idx) => (
+          <ChatMessage 
+            key={idx}
+            message={message}
+            isLast={idx === conversationHistory.length - 1}
+            showTime={idx === conversationHistory.length - 1}
+          />
+        ))}
+
+        {/* 현재 식사에 추가된 음식들 표시 */}
+        {currentMealFoods.length > 0 && (
+          <div className="my-4 p-4 bg-white rounded-xl border border-purple-200 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              <Utensils className="h-4 w-4 text-purple-600" />
+              현재 식사 기록
+            </h4>
+            <div className="space-y-2">
+              {currentMealFoods.map((food, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                  <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-medium text-purple-600">{idx + 1}</span>
+                  </div>
+                  <span className="flex-1 text-sm">{food.food_name} {food.amount}</span>
+                  <span className="text-xs text-gray-500">{food.nutrition?.calories}kcal</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
-        {/* 실제 대화 내역 */}
-        {conversationHistory.map((message, idx) => (
-          <div
-            key={idx}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-lg p-3 whitespace-pre-line ${
-                message.role === 'user' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-900'
-              }`}
-            >
-              {message.content}
-            </div>
-          </div>
-        ))}
 
-        {aiFeedback?.suggestions?.length > 0 && showSuggestions && (
-          <div className="flex justify-start">
-            <div className="max-w-[80%] bg-gray-100 rounded-lg p-3">
-              {aiFeedback.suggestions.map((suggestion, i) => (
-                <Button
-                  key={i}
+        {/* 구조화된 데이터 표시 */}
+        {structuredData && (
+          <div className="my-4">
+            {formatStructuredDataDisplay(structuredData, recordType)}
+            
+            {/* 액션 버튼들 */}
+            <div className="mt-4 flex gap-2">
+              {recordType === 'diet' && onAddMoreFood && !isAddingMoreFood && (
+                <Button 
+                  onClick={onAddMoreFood}
                   variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setInputText(suggestion);
-                    setShowSuggestions(false);
-                  }}
-                >{suggestion}</Button>
-              ))}
+                  className="flex items-center gap-2 border-purple-300 text-purple-600 hover:bg-purple-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  음식 추가
+                </Button>
+              )}
+              
+              {((recordType === 'diet' && structuredData.food_name && structuredData.meal_time) || 
+                (recordType === 'exercise' && structuredData.exercise)) && (
+                <Button 
+                  onClick={onSaveRecord}
+                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                >
+                  <Check className="h-4 w-4" />
+                  저장하기
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -191,41 +302,51 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </Alert>
         )}
 
-        {structuredData && (
-          <div className="bg-gray-50 rounded-lg p-4 mt-4">
-            <h3 className="font-medium mb-3 text-gray-800">
-              {recordType === 'exercise' ? '운동 기록' : '식단 기록'} 미리보기
-            </h3>
-            {formatStructuredDataDisplay(structuredData, recordType)}
-            {aiFeedback?.type === 'success' && !aiFeedback.missingFields?.length && (
-              <Button className="mt-4 w-full" onClick={onSaveRecord}>저장하기</Button>
-            )}
-          </div>
-        )}
-
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="border-t p-4 flex items-center gap-2">
-        <Input
-          ref={inputRef}
-          value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder={`${recordType === 'exercise' ? '운동을' : '식단을'} 자유롭게 입력하세요...`}
-          disabled={isProcessing}
-          className="flex-1"
-        />
-        {inputText.trim() === '' ? (
-          <Button variant="outline" size="icon" onClick={onVoiceToggle} disabled={isProcessing}>
-            {isRecording ? <Mic className="text-red-500" /> : <MicOff />}
-          </Button>
-        ) : (
-          <Button onClick={handleSendMessageWithFocus} disabled={isProcessing} className="gradient-bg hover:opacity-90 transition-opacity">
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        )}
+      {/* 카카오톡 스타일 입력창 */}
+      <div className="bg-white border-t border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <Input
+            ref={inputRef}
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={`메시지를 입력하세요...`}
+            disabled={isProcessing}
+            className="flex-1 border-gray-300 rounded-full px-4 py-2 focus:border-purple-500 focus:ring-purple-500"
+          />
+          
+          {inputText.trim() === '' ? (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onVoiceToggle} 
+              disabled={isProcessing}
+              className="rounded-full w-10 h-10 hover:bg-purple-100"
+            >
+              {isRecording ? (
+                <Mic className="h-5 w-5 text-red-500 animate-pulse" />
+              ) : (
+                <MicOff className="h-5 w-5 text-gray-500" />
+              )}
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleSendMessageWithFocus} 
+              disabled={isProcessing} 
+              size="icon"
+              className="rounded-full w-10 h-10 bg-purple-500 hover:bg-purple-600 text-white"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

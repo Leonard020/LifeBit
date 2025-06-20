@@ -1,6 +1,7 @@
-
 import { AxiosError } from 'axios';
 import axiosInstance from '@/utils/axios';
+import { convertTimeToMealType, hasTimeInformation } from '@/utils/mealTimeMapping';
+
 // 대화 메시지 타입
 export interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -13,6 +14,11 @@ interface ChatRequestBody {
   conversation_history: Message[];
   record_type: 'exercise' | 'diet';
   chat_step?: 'extraction' | 'validation' | 'confirmation';
+  meal_time_mapping?: {
+    detected_time?: string;
+    mapped_meal_type?: string;
+    has_time_info: boolean;
+  };
 }
 
 // API 응답 타입
@@ -63,6 +69,20 @@ export const sendChatMessage = async (
       record_type: recordType,
       ...(chatStep && { chat_step: chatStep }),
     };
+
+    // 식단 기록인 경우 시간 매핑 정보 추가
+    if (recordType === 'diet') {
+      const hasTime = hasTimeInformation(message);
+      const mappedTime = hasTime ? convertTimeToMealType(message) : null;
+      
+      body.meal_time_mapping = {
+        has_time_info: hasTime,
+        ...(mappedTime && { 
+          detected_time: message,
+          mapped_meal_type: mappedTime 
+        })
+      };
+    }
 
     const response = await axiosInstance.post<ChatResponse>('/api/chat', body);
     return response.data;

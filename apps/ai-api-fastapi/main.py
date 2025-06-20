@@ -79,7 +79,7 @@ EXERCISE_EXTRACTION_PROMPT = """
 1. 운동명 (exercise): 사용자가 한 운동
 2. 대분류 (category): "유산소" 또는 "근력" 
 3. 중분류 (subcategory): "가슴", "등", "하체", "팔", "복근", "어깨" 중 하나 (근력운동만)
-4. 시간대 (time_period): "오전", "오후", "저녁", "새벽" 중 하나
+4. 시간대 (time_period): 현재 대화 시간 기준으로 자동 설정 (질문하지 않음)
 5. 무게 (weight): kg 단위 (근력운동만, 맨몸운동은 제외)
 6. 세트 (sets): 세트 수 (근력운동만)
 7. 횟수 (reps): 회 수 (근력운동만)
@@ -89,7 +89,7 @@ EXERCISE_EXTRACTION_PROMPT = """
 🏋️ **운동 분류 규칙:**
 [유산소 운동] → category: "유산소", subcategory: null
 - 달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀
-- 필수: duration_min만 수집
+- 필수: duration_min만 수집 ("몇 분 동안 운동하셨나요?" 형식으로 질문)
 - 제외: weight, sets, reps는 수집하지 않음
 
 [근력 운동] → category: "근력"
@@ -103,11 +103,12 @@ EXERCISE_EXTRACTION_PROMPT = """
 [맨몸 운동 판별]
 - 푸시업, 풀업, 플랭크, 크런치, 싯업, 버피, 스쿼트(무게 없이) → is_bodyweight: true
 
-⏰ **시간대 자동 판단:**
+⏰ **시간대 자동 설정 (현재 시간 기준):**
 - 오전: 06:00-11:59
 - 오후: 12:00-17:59  
 - 저녁: 18:00-23:59
 - 새벽: 00:00-05:59
+※ 사용자에게 시간대를 묻지 말고 자동으로 설정할 것
 
 💬 **응답 형식:**
 {
@@ -117,36 +118,37 @@ EXERCISE_EXTRACTION_PROMPT = """
       "exercise": "운동명",
       "category": "유산소 | 근력",
       "subcategory": "가슴|등|하체|팔|복근|어깨 (근력만)",
-      "time_period": "오전|오후|저녁|새벽",
+      "time_period": "현재시간_기준_자동설정",
       "is_bodyweight": true/false,
       "weight": null/숫자,
       "sets": null/숫자,
       "reps": null/숫자,
       "duration_min": null/숫자,
-      "calories_burned": null/계산된값
+      "calories_burned": 계산된_실제값
     },
     "missing_fields": ["weight", "sets", "reps"],
     "next_step": "validation | confirmation"
   },
   "user_message": {
     "text": "사용자에게 보여줄 자연어 메시지",
-    "display_format": "🏋️‍♂️ {exercise} 운동 정보\\n\\n✅ 운동명: {exercise}\\n✅ 분류: {category}({subcategory})\\n⏰ 시간대: {time_period}\\n💪 무게: {weight}kg\\n🔢 세트: {sets}세트\\n🔄 횟수: {reps}회\\n⏱️ 시간: {duration_min}분\\n🔥 칼로리: {calories_burned}kcal"
+    "display_format": "🏋️‍♂️ {exercise} 운동 정보\\n\\n✅ 운동명: {exercise}\\n💪 분류: {category}({subcategory})\\n⏰ 시간대: {time_period}\\n💪 무게: {weight}kg\\n🔢 세트: {sets}세트\\n🔄 횟수: {reps}회\\n⏱️ 시간: {duration_min}분\\n🔥 칼로리: {calories_burned}kcal"
   }
 }
 
-🔥 **칼로리 계산 공식:**
+🔥 **칼로리 계산 공식 (실제 계산 필수):**
 [근력운동]
 - 기본 계산: (무게 × 세트 × 횟수 × 0.045) + (운동강도계수)
 - 가슴/등/하체: × 1.2 (대근육)
 - 어깨/팔: × 1.0 (소근육)  
 - 복근: × 0.8 (코어)
-- 맨몸운동: 체중 기준 계산
+- 맨몸운동: (세트 × 횟수 × 체중70kg기준 × 0.03)
 
 [유산소운동]
-- 달리기: 시간(분) × 10-12kcal
-- 걷기: 시간(분) × 4-6kcal  
-- 수영: 시간(분) × 8-11kcal
-- 자전거: 시간(분) × 6-9kcal
+- 달리기: 시간(분) × 11kcal
+- 걷기: 시간(분) × 5kcal  
+- 수영: 시간(분) × 9kcal
+- 자전거: 시간(분) × 7kcal
+- 기타: 시간(분) × 8kcal
 
 🎯 **대화 예시:**
 사용자: "스쿼트 했어요"
@@ -155,15 +157,19 @@ AI: "스쿼트 하셨군요! 💪 몇 kg으로 운동하셨나요?"
 사용자: "푸시업 했어요"  
 AI: "푸시업 하셨네요! 몇 세트 하셨나요?"
 
-사용자: "달리기 30분 했어요"
-AI: "달리기 30분 하셨군요! 🏃‍♂️ 훌륭하네요. 몇 시쯤 하셨나요?"
+사용자: "달리기 했어요"
+AI: "달리기 하셨군요! 🏃‍♂️ 몇 분 동안 운동하셨나요?"
+
+사용자: "30분 달렸어요"
+AI: "달리기 30분 하셨군요! 🏃‍♂️ 훌륭하네요. 30분 × 11kcal = 330kcal 소모하셨습니다!"
 
 📌 **주의사항:**
 - 모든 대화는 친근하고 격려하는 톤으로
 - 필수 정보가 부족하면 한 번에 하나씩만 질문
 - 불필요한 정보는 수집하지 않음 (유산소는 weight/sets/reps 제외)
-- 시간대는 현재 시간 기준으로 자동 설정 가능
-- 입력되지 않은 정보는 display_format에서 제외
+- 시간대는 절대 질문하지 말고 현재 시간 기준으로 자동 설정
+- 칼로리는 반드시 실제 계산된 값을 제공할 것
+- 유산소 운동은 "얼마나 달렸는지" 대신 "몇 분 동안" 형식으로 질문
 """
 
 # 🚩 [운동 기록 검증 프롬프트]
@@ -177,7 +183,7 @@ EXERCISE_VALIDATION_PROMPT = """
 - exercise (운동명) ✅ 필수
 - category: "유산소" ✅ 필수  
 - duration_min (운동시간) ✅ 필수
-- time_period (시간대) ✅ 필수
+- time_period (시간대) ✅ 자동설정 (현재시간 기준)
 - calories_burned (자동 계산) ✅ 필수
 
 [근력 운동 - 기구/중량 운동]
@@ -187,7 +193,7 @@ EXERCISE_VALIDATION_PROMPT = """
 - weight (무게) ✅ 필수
 - sets (세트) ✅ 필수  
 - reps (횟수) ✅ 필수
-- time_period (시간대) ✅ 필수
+- time_period (시간대) ✅ 자동설정 (현재시간 기준)
 - calories_burned (자동 계산) ✅ 필수
 
 [근력 운동 - 맨몸 운동]
@@ -196,7 +202,7 @@ EXERCISE_VALIDATION_PROMPT = """
 - subcategory (부위) ✅ 필수
 - sets (세트) ✅ 필수
 - reps (횟수) ✅ 필수  
-- time_period (시간대) ✅ 필수
+- time_period (시간대) ✅ 자동설정 (현재시간 기준)
 - is_bodyweight: true ✅ 필수
 - calories_burned (자동 계산) ✅ 필수
 
@@ -218,14 +224,22 @@ EXERCISE_VALIDATION_PROMPT = """
 - weight: "몇 kg으로 하셨나요? 💪"
 - sets: "몇 세트 하셨어요? 💪"  
 - reps: "한 세트에 몇 회씩 하셨나요? 💪"
-- duration_min: "몇 분 동안 하셨나요? ⏱️"
-- time_period: "몇 시쯤 운동하셨나요? (오전/오후/저녁/새벽) 🕐"
+- duration_min: "몇 분 동안 운동하셨나요? ⏱️"
+※ time_period는 절대 질문하지 말고 현재 시간 기준으로 자동 설정
 
 📌 **검증 완료 조건:**
 - 필수 필드가 모두 채워짐
-- 칼로리가 계산됨  
+- 칼로리가 반드시 계산되어야 함 (계산 중 상태는 허용하지 않음)
+- 시간대는 현재 시간 기준으로 자동 설정
 - response_type: "complete"
 - next_step: "confirmation"
+
+⚠️ **중요 검증 규칙:**
+1. 칼로리가 계산되지 않았거나 null이면 절대 complete 상태로 넘어가지 않음
+2. 모든 필수 필드가 채워져야 함
+3. 맨몸 운동은 weight 필드가 필요하지 않음
+4. 유산소 운동은 weight, sets, reps 필드가 필요하지 않음
+5. 시간대(time_period)는 절대 질문하지 말고 현재 시간 기준으로 자동 설정
 """
 
 # 🚩 [운동 기록 확인 프롬프트]  
@@ -241,18 +255,18 @@ EXERCISE_CONFIRMATION_PROMPT = """
       "exercise": "최종_운동명",
       "category": "유산소|근력", 
       "subcategory": "부위|null",
-      "time_period": "시간대",
+      "time_period": "현재시간_기준_자동설정",
       "is_bodyweight": true/false,
       "weight": 무게|null,
       "sets": 세트수|null,
       "reps": 횟수|null, 
       "duration_min": 시간|null,
-      "calories_burned": 계산된_칼로리
+      "calories_burned": 실제_계산된_칼로리
     },
     "next_step": "complete"
   },
   "user_message": {
-    "text": "아래 운동 기록이 맞는지 확인해주세요!",
+    "text": "운동 기록이 완료되었습니다! 아래 내용이 맞는지 확인해주세요.",
     "display_format": "🏋️‍♂️ 운동 기록 확인\\n\\n{formatted_exercise_info}\\n\\n맞으면 '네', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
@@ -261,7 +275,7 @@ EXERCISE_CONFIRMATION_PROMPT = """
 [근력 운동]
 ✅ 운동명: 스쿼트
 💪 분류: 근력운동 (하체)  
-⏰ 시간대: 오후
+⏰ 시간대: 오후 (자동설정)
 🏋️ 무게: 60kg
 🔢 세트: 3세트
 🔄 횟수: 10회
@@ -270,14 +284,24 @@ EXERCISE_CONFIRMATION_PROMPT = """
 [유산소 운동]  
 ✅ 운동명: 달리기
 🏃 분류: 유산소운동
-⏰ 시간대: 오전
+⏰ 시간대: 오전 (자동설정)
 ⏱️ 운동시간: 30분
-🔥 소모 칼로리: 350kcal
+🔥 소모 칼로리: 330kcal
+
+[맨몸 운동]
+✅ 운동명: 푸시업
+💪 분류: 근력운동 (가슴, 맨몸)  
+⏰ 시간대: 오후 (자동설정)
+🔢 세트: 3세트
+🔄 횟수: 15회
+🔥 소모 칼로리: 95kcal
 
 📌 **주의사항:**
 - 입력된 정보만 표시
-- 칼로리는 반드시 계산되어야 함
+- 칼로리는 반드시 계산되어야 함 (계산 중 상태 불허)
+- 시간대는 현재 시간 기준 자동 설정으로 표시
 - 확인 후 '네'면 DB 저장 진행
+- 칼로리 계산이 완료된 후에만 확인 단계 진입
 """
 
 # 🚩 [식단 기록 추출 프롬프트]
