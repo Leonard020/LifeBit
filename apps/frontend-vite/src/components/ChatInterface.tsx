@@ -38,6 +38,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 }) => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const inputRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,10 +54,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     );
   }
 
+  const handleSendMessageWithFocus = () => {
+    onSendMessage();
+    // 약간의 딜레이를 주어 DOM 업데이트 후 포커스 시도
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          // 커서를 텍스트 끝에 위치시킴 (UX 개선)
+          const len = inputRef.current.value.length;
+          inputRef.current.setSelectionRange(len, len);
+        }
+      });
+    }, 50);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSendMessage();
+      handleSendMessageWithFocus();
     }
   };
 
@@ -141,6 +158,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Input Area */}
       <div className="border-t p-4 flex items-center gap-2">
         <Input
+          ref={inputRef}
           value={inputText}
           onChange={e => setInputText(e.target.value)}
           onKeyPress={handleKeyPress}
@@ -153,7 +171,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             {isRecording ? <Mic className="text-red-500" /> : <MicOff />}
           </Button>
         ) : (
-          <Button onClick={onSendMessage} disabled={isProcessing} className="gradient-bg hover:opacity-90 transition-opacity">
+          <Button onClick={handleSendMessageWithFocus} disabled={isProcessing} className="gradient-bg hover:opacity-90 transition-opacity">
             {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         )}
