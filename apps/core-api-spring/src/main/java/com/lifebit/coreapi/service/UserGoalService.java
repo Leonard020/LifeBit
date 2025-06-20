@@ -91,4 +91,39 @@ public class UserGoalService {
         
         return defaultGoal;
     }
+
+    /**
+     * 사용자 목표 생성
+     */
+    @Transactional
+    public UserGoal createUserGoal(UserGoal userGoal) {
+        // UUID 설정
+        userGoal.setUuid(UUID.randomUUID());
+        
+        // 생성/수정 시간 설정
+        LocalDateTime now = LocalDateTime.now();
+        userGoal.setCreatedAt(now);
+        userGoal.setUpdatedAt(now);
+        
+        return userGoalRepository.save(userGoal);
+    }
+
+    /**
+     * ID로 사용자 목표 조회
+     */
+    @Transactional(readOnly = true)
+    public UserGoal getUserGoalById(Long goalId) {
+        return userGoalRepository.findById(goalId).orElse(null);
+    }
+
+    /**
+     * 사용자 목표 삭제
+     */
+    @Transactional
+    public void deleteUserGoal(Long goalId) {
+        if (!userGoalRepository.existsById(goalId)) {
+            throw new RuntimeException("사용자 목표를 찾을 수 없습니다: " + goalId);
+        }
+        userGoalRepository.deleteById(goalId);
+    }
 } 

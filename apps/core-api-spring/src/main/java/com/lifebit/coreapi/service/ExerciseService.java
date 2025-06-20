@@ -191,4 +191,44 @@ public class ExerciseService {
         
         return exerciseCatalogRepository.save(newExercise);
     }
+
+    /**
+     * ID로 운동 세션 조회
+     */
+    public ExerciseSession getExerciseSessionById(Long sessionId) {
+        return exerciseSessionRepository.findById(sessionId).orElse(null);
+    }
+
+    /**
+     * ID로 운동 카탈로그 조회
+     */
+    public ExerciseCatalog getExerciseCatalogById(Long catalogId) {
+        return exerciseCatalogRepository.findById(catalogId).orElse(null);
+    }
+
+    /**
+     * 운동 세션 업데이트
+     */
+    @Transactional
+    public ExerciseSession updateExerciseSession(ExerciseSession exerciseSession) {
+        return exerciseSessionRepository.save(exerciseSession);
+    }
+
+    /**
+     * 운동 세션 삭제
+     */
+    @Transactional
+    public void deleteExerciseSession(Long sessionId) {
+        if (!exerciseSessionRepository.existsById(sessionId)) {
+            throw new RuntimeException("운동 세션을 찾을 수 없습니다: " + sessionId);
+        }
+        exerciseSessionRepository.deleteById(sessionId);
+    }
+
+    /**
+     * 모든 운동 카탈로그 조회
+     */
+    public List<ExerciseCatalog> getAllExerciseCatalog() {
+        return exerciseCatalogRepository.findAll();
+    }
 } 

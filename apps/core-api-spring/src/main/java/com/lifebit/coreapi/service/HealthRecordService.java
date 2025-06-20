@@ -56,6 +56,13 @@ public class HealthRecordService {
     }
 
     /**
+     * ID로 건강 기록 조회
+     */
+    public HealthRecord getHealthRecordById(Long recordId) {
+        return healthRecordRepository.findById(recordId).orElse(null);
+    }
+
+    /**
      * 건강 기록 생성
      */
     @Transactional
@@ -86,6 +93,15 @@ public class HealthRecordService {
 
         log.info("건강 기록 업데이트 - ID: {}, 사용자: {}", recordId, existingRecord.getUserId());
         return healthRecordRepository.save(existingRecord);
+    }
+
+    /**
+     * 건강 기록 업데이트 (엔티티 직접 전달)
+     */
+    @Transactional
+    public HealthRecord updateHealthRecord(HealthRecord healthRecord) {
+        log.info("건강 기록 업데이트 - ID: {}, 사용자: {}", healthRecord.getHealthRecordId(), healthRecord.getUserId());
+        return healthRecordRepository.save(healthRecord);
     }
 
     /**

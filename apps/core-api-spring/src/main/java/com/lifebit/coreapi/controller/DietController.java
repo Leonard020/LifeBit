@@ -65,5 +65,10 @@ public class DietController {
         return ResponseEntity.ok().build();
     }
 
-    
+    @GetMapping("/food-items/search")
+    public ResponseEntity<List<Map<String, Object>>> searchFoodItems(
+            @RequestParam String keyword) {
+        List<Map<String, Object>> foodItems = dietService.searchFoodItems(keyword);
+        return ResponseEntity.ok(foodItems);
+    }
 } 

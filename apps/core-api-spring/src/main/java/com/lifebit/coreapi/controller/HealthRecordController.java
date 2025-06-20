@@ -135,4 +135,170 @@ public class HealthRecordController {
             return ResponseEntity.badRequest().body(errorResponse);
         }
     }
+
+    @PutMapping("/{recordId}")
+    public ResponseEntity<Map<String, Object>> updateHealthRecord(
+            @PathVariable Long recordId,
+            @RequestBody Map<String, Object> request,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            log.info("건강 기록 수정 요청 - ID: {}, 데이터: {}", recordId, request);
+            
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(httpRequest);
+            
+            // 기존 기록 조회 및 권한 확인
+            HealthRecord existingRecord = healthRecordService.getHealthRecordById(recordId);
+            if (existingRecord == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "건강 기록을 찾을 수 없습니다.");
+                return ResponseEntity.notFound().build();
+            }
+            
+            // 권한 확인: 자신의 기록만 수정 가능
+            if (!existingRecord.getUserId().equals(tokenUserId)) {
+                log.warn("권한 없는 수정 시도 - 토큰 사용자: {}, 기록 소유자: {}", tokenUserId, existingRecord.getUserId());
+                return ResponseEntity.status(403).build();
+            }
+            
+            // 수정할 데이터 적용
+            if (request.get("weight") != null) {
+                existingRecord.setWeight(new java.math.BigDecimal(request.get("weight").toString()));
+            }
+            if (request.get("height") != null) {
+                existingRecord.setHeight(new java.math.BigDecimal(request.get("height").toString()));
+            }
+            if (request.get("record_date") != null) {
+                existingRecord.setRecordDate(LocalDate.parse(request.get("record_date").toString()));
+            }
+            
+            // 데이터베이스에 저장
+            HealthRecord updatedRecord = healthRecordService.updateHealthRecord(existingRecord);
+            
+            // 응답 데이터 구성
+            Map<String, Object> response = new HashMap<>();
+            response.put("health_record_id", updatedRecord.getHealthRecordId());
+            response.put("uuid", updatedRecord.getUuid().toString());
+            response.put("user_id", updatedRecord.getUserId());
+            response.put("weight", updatedRecord.getWeight() != null ? updatedRecord.getWeight().doubleValue() : null);
+            response.put("height", updatedRecord.getHeight() != null ? updatedRecord.getHeight().doubleValue() : null);
+            response.put("bmi", updatedRecord.getBmi() != null ? updatedRecord.getBmi().doubleValue() : null);
+            response.put("record_date", updatedRecord.getRecordDate().toString());
+            response.put("created_at", updatedRecord.getCreatedAt().toString());
+            
+            log.info("건강 기록 수정 완료 - ID: {}", updatedRecord.getHealthRecordId());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("건강 기록 수정 중 오류 발생 - ID: {}, 오류: {}", recordId, e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "건강 기록 수정에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+
+    @DeleteMapping("/{recordId}")
+    public ResponseEntity<Map<String, Object>> deleteHealthRecord(
+            @PathVariable Long recordId,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            log.info("건강 기록 삭제 요청 - ID: {}", recordId);
+            
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(httpRequest);
+            
+            // 기존 기록 조회 및 권한 확인
+            HealthRecord existingRecord = healthRecordService.getHealthRecordById(recordId);
+            if (existingRecord == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "건강 기록을 찾을 수 없습니다.");
+                return ResponseEntity.notFound().build();
+            }
+            
+            // 권한 확인: 자신의 기록만 삭제 가능
+            if (!existingRecord.getUserId().equals(tokenUserId)) {
+                log.warn("권한 없는 삭제 시도 - 토큰 사용자: {}, 기록 소유자: {}", tokenUserId, existingRecord.getUserId());
+                return ResponseEntity.status(403).build();
+            }
+            
+            // 기록 삭제
+            healthRecordService.deleteHealthRecord(recordId);
+            
+            // 응답 데이터 구성
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "건강 기록이 성공적으로 삭제되었습니다.");
+            
+            log.info("건강 기록 삭제 완료 - ID: {}", recordId);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("건강 기록 삭제 중 오류 발생 - ID: {}, 오류: {}", recordId, e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "건강 기록 삭제에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+
+    @GetMapping("/record/{recordId}")
+    public ResponseEntity<Map<String, Object>> getHealthRecord(
+            @PathVariable Long recordId,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            log.info("건강 기록 단일 조회 요청 - ID: {}", recordId);
+            
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(httpRequest);
+            
+            // 기록 조회
+            HealthRecord record = healthRecordService.getHealthRecordById(recordId);
+            if (record == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "건강 기록을 찾을 수 없습니다.");
+                return ResponseEntity.notFound().build();
+            }
+            
+            // 권한 확인: 자신의 기록만 조회 가능
+            if (!record.getUserId().equals(tokenUserId)) {
+                log.warn("권한 없는 조회 시도 - 토큰 사용자: {}, 기록 소유자: {}", tokenUserId, record.getUserId());
+                return ResponseEntity.status(403).build();
+            }
+            
+            // 응답 데이터 구성
+            Map<String, Object> response = new HashMap<>();
+            response.put("health_record_id", record.getHealthRecordId());
+            response.put("uuid", record.getUuid().toString());
+            response.put("user_id", record.getUserId());
+            response.put("weight", record.getWeight() != null ? record.getWeight().doubleValue() : null);
+            response.put("height", record.getHeight() != null ? record.getHeight().doubleValue() : null);
+            response.put("bmi", record.getBmi() != null ? record.getBmi().doubleValue() : null);
+            response.put("record_date", record.getRecordDate().toString());
+            response.put("created_at", record.getCreatedAt().toString());
+            
+            log.info("건강 기록 단일 조회 완료 - ID: {}", recordId);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("건강 기록 단일 조회 중 오류 발생 - ID: {}, 오류: {}", recordId, e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "건강 기록 조회에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
 } 

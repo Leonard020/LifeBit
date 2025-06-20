@@ -70,4 +70,23 @@ public class ExerciseController {
         ExerciseCatalog exercise = exerciseService.findOrCreateExercise(name, bodyPart, description);
         return ResponseEntity.ok(exercise);
     }
+
+    @GetMapping("/catalog")
+    public ResponseEntity<List<ExerciseCatalog>> getExerciseCatalog() {
+        List<ExerciseCatalog> catalog = exerciseService.getAllExerciseCatalog();
+        return ResponseEntity.ok(catalog);
+    }
+}
+
+@RestController
+@RequestMapping("/api")
+@RequiredArgsConstructor
+class ExerciseCatalogController {
+    private final ExerciseService exerciseService;
+
+    @GetMapping("/exercise-catalog")
+    public ResponseEntity<List<ExerciseCatalog>> getExerciseCatalog() {
+        List<ExerciseCatalog> catalog = exerciseService.getAllExerciseCatalog();
+        return ResponseEntity.ok(catalog);
+    }
 } 

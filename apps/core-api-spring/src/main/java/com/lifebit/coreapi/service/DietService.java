@@ -182,6 +182,29 @@ public class DietService {
         mealLogRepository.deleteById(id);
     }
 
+    /**
+     * 식품 검색
+     */
+    public List<Map<String, Object>> searchFoodItems(String keyword) {
+        List<FoodItem> foodItems = foodItemRepository.findByNameContainingIgnoreCase(keyword);
+        
+        return foodItems.stream()
+            .map(this::convertFoodItemToMap)
+            .collect(Collectors.toList());
+    }
+
+    private Map<String, Object> convertFoodItemToMap(FoodItem foodItem) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("foodItemId", foodItem.getFoodItemId());
+        map.put("name", foodItem.getName());
+        map.put("calories", foodItem.getCalories() != null ? foodItem.getCalories().doubleValue() : 0.0);
+        map.put("carbs", foodItem.getCarbs() != null ? foodItem.getCarbs().doubleValue() : 0.0);
+        map.put("protein", foodItem.getProtein() != null ? foodItem.getProtein().doubleValue() : 0.0);
+        map.put("fat", foodItem.getFat() != null ? foodItem.getFat().doubleValue() : 0.0);
+        map.put("servingSize", foodItem.getServingSize() != null ? foodItem.getServingSize().doubleValue() : 100.0);
+        return map;
+    }
+
     private UserGoal getDefaultUserGoal(Long userId) {
         UserGoal defaultGoal = new UserGoal();
         defaultGoal.setUuid(UUID.randomUUID());
