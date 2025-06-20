@@ -58,6 +58,7 @@ models.Base.metadata.create_all(bind=engine)
 analytics_service = HealthAnalyticsService()
 
 # ChatGPT 시스템 프롬프트 정의
+# ChatGPT 시스템 프롬프트 정의
 CHAT_SYSTEM_PROMPT = """
 당신은 LifeBit의 AI 어시스턴트입니다.
 사용자의 건강한 라이프스타일을 돕기 위해 운동과 식단에 대한 기록을 도와줍니다.
@@ -549,6 +550,7 @@ DIET_CONFIRMATION_PROMPT = """
 - 영양소는 반드시 계산되어야 함
 - 확인 후 '네'면 DB 저장 진행
 """
+
 
 # 채팅 요청을 위한 스키마
 class ChatRequest(BaseModel):

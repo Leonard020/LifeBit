@@ -14,6 +14,7 @@ import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserRepository;
 import com.lifebit.coreapi.repository.UserGoalRepository;
+import com.lifebit.coreapi.service.UserGoalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,7 @@ public class DietService {
     private final FoodItemRepository foodItemRepository;
     private final UserRepository userRepository;
     private final UserGoalRepository userGoalRepository;
+    private final UserGoalService userGoalService;
 
     public List<DietLogDTO> getDailyDietRecords(Long userId, LocalDate date) {
         User user = userRepository.findById(userId)
@@ -51,7 +53,7 @@ public class DietService {
     public List<DietNutritionDTO> getNutritionGoals(Long userId, LocalDate date) {
         // 사용자별 목표 가져오기
         UserGoal userGoal = userGoalRepository.findByUserId(userId)
-            .orElse(getDefaultUserGoal(userId));
+            .orElse(userGoalService.getDefaultDietGoalByGender(userId));
 
         // 해당 날짜의 실제 섭취량 계산 (직접 엔티티 조회)
         User user = userRepository.findById(userId)
@@ -203,20 +205,6 @@ public class DietService {
         map.put("fat", foodItem.getFat() != null ? foodItem.getFat().doubleValue() : 0.0);
         map.put("servingSize", foodItem.getServingSize() != null ? foodItem.getServingSize().doubleValue() : 100.0);
         return map;
-    }
-
-    private UserGoal getDefaultUserGoal(Long userId) {
-        UserGoal defaultGoal = new UserGoal();
-        defaultGoal.setUuid(UUID.randomUUID());
-        defaultGoal.setUserId(userId);
-        defaultGoal.setWeeklyWorkoutTarget(3);
-        defaultGoal.setDailyCarbsTarget(250);
-        defaultGoal.setDailyProteinTarget(150);
-        defaultGoal.setDailyFatTarget(67);
-        defaultGoal.setDailyCaloriesTarget(1500);
-        defaultGoal.setCreatedAt(LocalDateTime.now());
-        defaultGoal.setUpdatedAt(LocalDateTime.now());
-        return defaultGoal;
     }
 
     private DietLogDTO convertToDietLogDTO(MealLog mealLog) {

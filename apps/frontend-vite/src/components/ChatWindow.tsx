@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send, Dumbbell, Utensils, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sendChatMessage } from '../api/chatApi';
+import { saveExerciseRecord } from '@/api/chatApi'; 
 
 // Speech Recognition 타입 정의
 interface SpeechRecognitionEvent extends Event {
@@ -807,7 +808,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     try {
       setIsProcessing(true);
       const userMessage = inputValue.trim();
-      
+  
       // 디버깅 로그
       console.log('🔍 Message Send Debug:', {
         userMessage,
@@ -816,46 +817,73 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         validationStep,
         exerciseState
       });
-      
-      // 사용자 메시지를 먼저 대화창에 추가
+  
+      // 대화에 사용자 메시지 추가
       addMessage('user', userMessage);
       setIntroMessage(null);
       updateConversationHistory('user', userMessage);
   
       if (currentRecordType === 'exercise') {
         console.log('🏋️ Exercise processing - Current step:', currentStep);
-        
+  
         if (currentStep === 'validation') {
           console.log('🔍 Validation step:', validationStep);
           await handleValidationResponse(userMessage);
+  
         } else if (currentStep === 'confirmation') {
           console.log('✅ Confirmation step');
-          const isConfirmed = /^(네|예|yes)/i.test(userMessage.toLowerCase());
+  
+          const lowered = userMessage.toLowerCase();
+          const isConfirmed = /^(네|예|yes|저장|저장해|저장해줘)/.test(lowered); // 확장된 확인 조건
+  
+          if (isConfirmed && pendingRecord?.type === 'exercise') {
+            try {
+              const exerciseData = JSON.parse(pendingRecord.content);
+              await saveExerciseRecord(exerciseData);
+  
+              addMessage('ai', '운동 기록을 저장했어요! 수고하셨습니다 💪');
+              updateConversationHistory('assistant', '운동 기록을 저장했어요!');
+  
+              // 상태 초기화
+              setExerciseState({});
+              setPendingRecord(null);
+              setIsAwaitingConfirmation(false);
+              setCurrentStep('input');
+            } catch (err) {
+              console.error('❌ 저장 실패:', err);
+              addMessage('ai', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
+            }
+            return; // 저장 완료 후 종료
+          }
+  
+          // "아니오" 등 일반 확인 응답 처리
           await handleConfirmation(isConfirmed);
+  
         } else {
           console.log('📝 Initial exercise input processing');
           await handleExerciseInput(userMessage);
         }
+  
       } else if (currentRecordType === 'diet') {
         console.log('🍽️ Diet processing - Current step:', currentStep);
-        
+  
         if (currentStep === 'confirmation') {
           const isConfirmed = /^(네|예|yes)/i.test(userMessage.toLowerCase());
           await handleConfirmation(isConfirmed);
         } else {
           await handleDietInput(userMessage);
         }
+  
       } else {
-        // 일반 채팅 처리 로직
+        // 일반 챗 처리
         console.log('💬 General chat processing');
         const response = await sendChatMessage(
-          userMessage, 
+          userMessage,
           conversationHistory,
-          'exercise', // 기본값으로 설정
+          'exercise',
           'extraction',
-          {} // 빈 객체로 전달
+          {}
         );
-        console.log('Chat response:', response);
   
         if (response && response.message) {
           addMessage('ai', response.message);
@@ -864,12 +892,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           addMessage('ai', '죄송합니다. 응답을 처리할 수 없습니다. 다시 시도해주세요.');
         }
       }
+  
     } catch (error) {
       console.error('❌ Message processing error:', error);
       toast({
-        title: "처리 오류",
-        description: "메시지 처리 중 오류가 발생했습니다.",
-        variant: "destructive",
+        title: '처리 오류',
+        description: '메시지 처리 중 오류가 발생했습니다.',
+        variant: 'destructive',
       });
       addMessage('ai', '죄송합니다. 메시지 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {

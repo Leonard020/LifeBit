@@ -174,14 +174,7 @@ const Note = () => {
         monday.setDate(today.getDate() + diffToMonday);
         const weekStart = monday.toISOString().split("T")[0];
 
-        const res = await axios.get('/api/weekly-workouts/summary', {
-          params: { userId, weekStart },
-          headers: {
-            'Authorization': `Bearer ${authToken}` // ✅ 저장된 토큰 사용
-          }
-        });
-
-        setWeeklySummary(res.data);
+        
       } catch (err) {
         console.error("주간 운동 집계 불러오기 실패:", err);
       } finally {

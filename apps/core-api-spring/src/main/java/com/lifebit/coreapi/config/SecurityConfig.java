@@ -24,29 +24,32 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/api/auth/**", 
-                    "/api/public/**",
-                    "/uploads/**",
-                    "/swagger-ui/**", 
-                    "/v3/api-docs/**", 
-                    "/actuator/**",
-                    "/ws/**",  // WebSocket 경로 허용
-                    "/api/daily-workouts",  // 추가된 daily-workouts 허용
-                    "/api/weekly-workouts/summary"  // 추가된 weekly-workouts 허용
-                ).permitAll()
-                .anyRequest().authenticated()  // ✅ 보안 유지: 모든 건강 API는 인증 필요
-            )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+        .csrf(csrf -> csrf.disable())
+        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers(
+                "/api/auth/**", 
+                "/api/public/**",
+                "/uploads/**",
+                "/swagger-ui/**", 
+                "/v3/api-docs/**", 
+                "/actuator/**",
+                "/ws/**"
+            ).permitAll()
+            
+            // ✅ 인증 필요 경로는 따로 명시
+            .requestMatchers("/api/note/exercise/**").authenticated()
 
-        return http.build();
-    }
+            // ✅ 나머지 모든 요청도 인증 필요
+            .anyRequest().authenticated()
+        )
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+    return http.build();
+}
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {

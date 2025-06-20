@@ -124,3 +124,24 @@ export const sendChatMessage = async (
     return { type: 'error', message: errorMessage };
   }
 };
+
+
+// 운동 기록 저장 API 호출
+export const saveExerciseRecord = async (exerciseData: any) => {
+  try {
+    const res = await axiosInstance.post('/api/note/exercise', {
+      user_id: 1,
+      name: exerciseData.exercise,
+      weight: exerciseData.weight,
+      sets: exerciseData.sets,
+      reps: exerciseData.reps,
+      time: `${exerciseData.duration_min}분`,
+      calories_burned: exerciseData.calories_burned || 0,
+      exercise_date: new Date().toISOString().split('T')[0]
+    });
+    return res.data;
+  } catch (err) {
+    console.error('❌ 운동 기록 저장 실패:', err);
+    throw err;
+  }
+};
