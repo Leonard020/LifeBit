@@ -418,40 +418,45 @@ const Note = () => {
 
   useEffect(() => {
     const fetchExercise = async () => {
+      if (!authToken) return; // 토큰이 없으면 실행하지 않음
+      
       const dateStr = selectedDate.toISOString().split("T")[0];
       try {
-        // 인증 토큰 가져오기
-        const token = getToken();
-        if (!token || !isTokenValid()) {
-          console.warn('인증 토큰이 없거나 만료되었습니다.');
-          setTodayExercise([]);
-          return;
-        }
-
-        const res = await fetch(`/api/note/exercise/daily?date=${dateStr}`, {
+        // axios 인스턴스를 사용하여 자동으로 토큰 헤더 추가
+        const res = await axios.get(`/api/note/exercise/daily`, {
+          params: { date: dateStr },
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${authToken}`
           }
         });
-        
-        if (!res.ok) {
-          if (res.status === 403) {
-            console.warn('인증이 필요합니다.');
-          }
-          throw new Error("운동 기록 불러오기 실패");
+
+        // NoteExerciseDTO 타입 정의
+        interface NoteExerciseDTO {
+          name: string;
+          sets: number;
+          reps: number;
+          weight: number;
+          time: string;
         }
 
-        const data = await res.json();
-        setTodayExercise(data);
+        // NoteExerciseDTO 타입에 맞게 데이터 변환
+        const exerciseData = res.data.map((item: NoteExerciseDTO) => ({
+          name: item.name,
+          weight: item.weight ? `${item.weight}kg` : '0kg',
+          sets: item.sets || 0,
+          reps: item.reps || 0,
+          time: item.time || '0분'
+        }));
+
+        setTodayExercise(exerciseData);
       } catch (err) {
-        console.error(err);
+        console.error("운동 기록 불러오기 실패:", err);
         setTodayExercise([]);
       }
     };
 
     fetchExercise();
-  }, [selectedDate]);
+  }, [selectedDate, authToken]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
