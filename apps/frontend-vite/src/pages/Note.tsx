@@ -513,8 +513,8 @@ const Note = () => {
         <span
           style={{
             ...dotStyle,
-            background: 'linear-gradient(90deg, #22c55e 50%, #3b82f6 50%)', // green + blue
-            boxShadow: '0 0 0 2px #a78bfa', // 보라색 외곽
+            background: '#a78bfa', // purple-500
+            boxShadow: '0 0 0 2px #8B5CF644',
           }}
         />
       );
