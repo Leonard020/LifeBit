@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile, updateUserProfile } from '@/api/auth';
+import { getUserProfile, updateUserProfile, deleteUser } from '@/api/auth';
 import { isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { BasicInfoBox } from '@/components/BasicInfoBox';
@@ -9,6 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Lock, Eye, EyeOff, Check } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 const UserInfo = () => {
   const { toast } = useToast();
@@ -26,6 +35,7 @@ const UserInfo = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showUnregisterDialog, setShowUnregisterDialog] = useState(false);
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -95,6 +105,26 @@ const UserInfo = () => {
     }
   };
 
+  const handleUnregister = async () => {
+    try {
+      setLoading(true);
+      await deleteUser();
+      toast({
+        title: '회원탈퇴 완료',
+        description: '회원탈퇴가 성공적으로 처리되었습니다.',
+      });
+      setShowUnregisterDialog(false);
+      navigate('/login');
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: '회원탈퇴 실패',
+        description: '회원탈퇴 중 오류가 발생했습니다.',
+      });
+      setLoading(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -111,6 +141,7 @@ const UserInfo = () => {
             setProfileData={setProfileData}
             loading={loading}
             onSave={handleProfileSave}
+            onUnregister={() => setShowUnregisterDialog(true)}
             password={password}
             setPassword={setPassword}
             confirmPassword={confirmPassword}
@@ -121,6 +152,22 @@ const UserInfo = () => {
             setShowConfirmPassword={setShowConfirmPassword}
           />
         </div>
+        <Dialog open={showUnregisterDialog} onOpenChange={setShowUnregisterDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>회원 탈퇴 확인</DialogTitle>
+              <DialogDescription>정말로 회원탈퇴를 하시겠습니까? 이 작업은 되돌릴 수 없습니다.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowUnregisterDialog(false)}>
+                취소
+              </Button>
+              <Button variant="destructive" onClick={handleUnregister} disabled={loading}>
+                {loading ? '탈퇴 처리 중...' : '회원탈퇴'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

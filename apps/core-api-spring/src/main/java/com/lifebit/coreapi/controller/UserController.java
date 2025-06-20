@@ -85,4 +85,19 @@ public class UserController {
             return ResponseEntity.badRequest().body(error);
         }
     }
+
+    /**
+     * 사용자 계정 삭제
+     */
+    @DeleteMapping("/profile")
+    public ResponseEntity<?> deleteUserProfile(@RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.replace("Bearer ", "");
+            Long userId = tokenProvider.getUserIdFromToken(token);
+            userService.deleteUser(userId);
+            return ResponseEntity.ok(Map.of("message", "사용자 계정이 성공적으로 삭제되었습니다."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "사용자 계정 삭제에 실패했습니다: " + e.getMessage()));
+        }
+    }
 } 

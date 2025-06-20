@@ -9,14 +9,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from '@/utils/axios';
-import { getUserInfo, isLoggedIn, getToken, getUserIdFromToken, isTokenValid } from '@/utils/auth';
+import { getUserInfo, getToken, getUserIdFromToken, isTokenValid } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
-import { Textarea } from '@/components/ui/textarea';
+
 import { toast } from '@/hooks/use-toast';
 
 // 백엔드 API 응답 타입 정의
@@ -85,8 +85,17 @@ const Note = () => {
 
   const navigate = useNavigate();
 
+  // 운동 기록 타입 정의
+  interface ExerciseRecord {
+    name: string;
+    weight: string;
+    sets: number;
+    reps: number;
+    time: string;
+  }
+
   // Mock data for records on specific dates (유지)
-  const [todayExercise, setTodayExercise] = useState([]);
+  const [todayExercise, setTodayExercise] = useState<ExerciseRecord[]>([]);
 
   // ✅ 토큰을 맨 처음에 한 번만 가져와서 저장
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -131,8 +140,14 @@ const Note = () => {
     });
   }, [calendarMonth]);
 
+  // 날짜별 기록 타입 정의 (원격 저장소 기능과 함께 유지)
+  interface DateRecord {
+    exercise: boolean;
+    diet: boolean;
+  }
+
   // Exercise goals from profile (mock data) (유지)
-  const exerciseGoals = {
+  const exerciseGoals: { [key: string]: number } = {
     '가슴': 3,
     '등': 2,
     '하체': 4,
@@ -305,8 +320,17 @@ const Note = () => {
     }
   };
 
+  // UI 기록 타입 정의
+  interface UIRecord {
+    meal: string;
+    food: string;
+    amount: string;
+    calories: number;
+    time: string;
+  }
+
   // 백엔드 데이터 -> UI 형식으로 변환 (todayRecords.diet)
-  const uiTodayDietRecords = dailyDietLogs.map(log => ({
+  const uiTodayDietRecords: UIRecord[] = dailyDietLogs.map(log => ({
     meal: '기록',
     food: log.foodName,
     amount: `${log.quantity}${log.unit}`,
@@ -314,7 +338,13 @@ const Note = () => {
     time: '',
   }));
 
-  const todayRecords = {
+  // 오늘의 기록 타입 정의
+  interface TodayRecords {
+    exercise: ExerciseRecord[];
+    diet: UIRecord[];
+  }
+
+  const todayRecords: TodayRecords = {
     exercise: todayExercise,
     diet: uiTodayDietRecords
   };
@@ -341,7 +371,17 @@ const Note = () => {
     return found ? found.target : 1; // fallback to 1 to avoid division by zero
   };
 
-  const uiNutritionData = [
+  // 영양소 데이터 타입 정의
+  interface NutritionData {
+    name: string;
+    value: number;
+    goal: number;
+    color: string;
+    calories: number;
+    targetCalories: number;
+  }
+
+  const uiNutritionData: NutritionData[] = [
     {
       name: '탄수화물',
       value: (totalCarbs / getGoal('탄수화물')) * 100,
@@ -378,40 +418,45 @@ const Note = () => {
 
   useEffect(() => {
     const fetchExercise = async () => {
+      if (!authToken) return; // 토큰이 없으면 실행하지 않음
+      
       const dateStr = selectedDate.toISOString().split("T")[0];
       try {
-        // 인증 토큰 가져오기
-        const token = getToken();
-        if (!token || !isTokenValid()) {
-          console.warn('인증 토큰이 없거나 만료되었습니다.');
-          setTodayExercise([]);
-          return;
-        }
-
-        const res = await fetch(`/api/note/exercise/daily?date=${dateStr}`, {
+        // axios 인스턴스를 사용하여 자동으로 토큰 헤더 추가
+        const res = await axios.get(`/api/note/exercise/daily`, {
+          params: { date: dateStr },
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${authToken}`
           }
         });
-        
-        if (!res.ok) {
-          if (res.status === 403) {
-            console.warn('인증이 필요합니다.');
-          }
-          throw new Error("운동 기록 불러오기 실패");
+
+        // NoteExerciseDTO 타입 정의
+        interface NoteExerciseDTO {
+          name: string;
+          sets: number;
+          reps: number;
+          weight: number;
+          time: string;
         }
 
-        const data = await res.json();
-        setTodayExercise(data);
+        // NoteExerciseDTO 타입에 맞게 데이터 변환
+        const exerciseData = res.data.map((item: NoteExerciseDTO) => ({
+          name: item.name,
+          weight: item.weight ? `${item.weight}kg` : '0kg',
+          sets: item.sets || 0,
+          reps: item.reps || 0,
+          time: item.time || '0분'
+        }));
+
+        setTodayExercise(exerciseData);
       } catch (err) {
-        console.error(err);
+        console.error("운동 기록 불러오기 실패:", err);
         setTodayExercise([]);
       }
     };
 
     fetchExercise();
-  }, [selectedDate]);
+  }, [selectedDate, authToken]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
@@ -893,6 +938,7 @@ const Note = () => {
                                 <Label htmlFor="mealTime">식사 시간</Label>
                                 <select
                                   id="mealTime"
+                                  title="식사 시간 선택"
                                   value={mealTime}
                                   onChange={e => setMealTime(e.target.value)}
                                   className="mt-1 block w-full border rounded px-2 py-1"

@@ -105,7 +105,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     }) => ({
       date: record.record_date,
       value: record.weight,
-      formattedDate: formatDateForChart(record.record_date)
+      displayDate: formatDateForChart(record.record_date)
     }));
 
     const bmiData: ChartDataPoint[] = safeHealthRecords.map((record: {
@@ -115,7 +115,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     }) => ({
       date: record.record_date,
       value: record.bmi,
-      formattedDate: formatDateForChart(record.record_date)
+      displayDate: formatDateForChart(record.record_date)
     }));
 
     // 운동 데이터 변환
@@ -127,7 +127,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     }) => ({
       date: session.exercise_date,
       value: session.duration_minutes,
-      formattedDate: formatDateForChart(session.exercise_date)
+      displayDate: formatDateForChart(session.exercise_date)
     }));
 
     // 통계 계산
@@ -175,12 +175,14 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
   // 목표 대비 진행률 계산
   const progressData = useMemo(() => {
     // 안전한 기본값 설정
-    const safeUserGoals = userGoals || {
+    const defaultGoals = {
       weekly_workout_target: 3,
       daily_carbs_target: 250,
       daily_protein_target: 150,
       daily_fat_target: 67
     };
+
+    const safeUserGoals = userGoals?.data || defaultGoals;
 
     const weeklyExerciseCount = chartData.exercise.length;
     const exerciseProgress = safeUserGoals.weekly_workout_target > 0 
@@ -226,8 +228,31 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     );
   }
 
-  // 에러 처리 - 인증 오류 시에도 차트를 표시하되 경고 메시지 추가
+  // 에러 처리 및 데이터 없음 처리
   const hasErrors = healthError || exerciseError || goalsError;
+  const hasNoData = chartData.weight.length === 0 && chartData.exercise.length === 0;
+
+  // 데이터가 없을 때 안내 메시지 표시
+  if (hasNoData && !hasErrors) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
+          <div className="text-blue-600 text-6xl mb-4">📊</div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            아직 기록된 데이터가 없습니다
+          </h3>
+          <p className="text-gray-600 mb-4">
+            건강 데이터를 입력하시면 상세한 통계와 차트를 확인할 수 있습니다.
+          </p>
+          <div className="space-y-2 text-sm text-gray-500">
+            <p>• 체중과 키를 기록하여 BMI 변화를 추적하세요</p>
+            <p>• 운동 세션을 기록하여 운동량을 모니터링하세요</p>
+            <p>• 꾸준한 기록으로 건강 목표를 달성해보세요</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -236,8 +261,21 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center">
             <div className="text-yellow-600 text-sm">
-              ⚠️ 일부 데이터를 불러오는 중 문제가 발생했습니다. 기본값으로 표시됩니다.
-              {goalsError && ' (사용자 목표 데이터 오류)'}
+              ⚠️ 일부 데이터를 불러오는 중 문제가 발생했습니다.
+              {goalsError && ' 사용자 목표 데이터를 확인해주세요.'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 데이터가 부족할 때 안내 */}
+      {(chartData.weight.length === 0 || chartData.exercise.length === 0) && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-gray-600 text-sm">
+              💡 더 정확한 통계를 위해 {chartData.weight.length === 0 ? '건강 기록' : ''}
+              {chartData.weight.length === 0 && chartData.exercise.length === 0 ? '과 ' : ''}
+              {chartData.exercise.length === 0 ? '운동 기록' : ''}을 추가해보세요.
             </div>
           </div>
         </div>

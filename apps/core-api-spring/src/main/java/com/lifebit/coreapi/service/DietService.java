@@ -84,7 +84,8 @@ public class DietService {
 
         // 목표 대비 백분율 계산 (Integer -> double 변환)
         return List.of(
-            new DietNutritionDTO("칼로리", 0.0, totalCalories, "kcal", 0.0),
+            new DietNutritionDTO("칼로리", userGoal.getDailyCaloriesTarget() != null ? userGoal.getDailyCaloriesTarget().doubleValue() : 1500.0, totalCalories, "kcal", 
+                calculatePercentage(totalCalories, userGoal.getDailyCaloriesTarget() != null ? userGoal.getDailyCaloriesTarget().doubleValue() : 1500.0)),
             new DietNutritionDTO("탄수화물", userGoal.getDailyCarbsTarget().doubleValue(), totalCarbs, "g", 
                 calculatePercentage(totalCarbs, userGoal.getDailyCarbsTarget().doubleValue())),
             new DietNutritionDTO("단백질", userGoal.getDailyProteinTarget().doubleValue(), totalProtein, "g", 
@@ -189,6 +190,7 @@ public class DietService {
         defaultGoal.setDailyCarbsTarget(250);
         defaultGoal.setDailyProteinTarget(150);
         defaultGoal.setDailyFatTarget(67);
+        defaultGoal.setDailyCaloriesTarget(1500);
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return defaultGoal;

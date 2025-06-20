@@ -20,6 +20,7 @@ interface BasicInfoBoxProps {
   setProfileData: (data: ProfileData) => void;
   loading: boolean;
   onSave: () => void;
+  onUnregister?: () => void;
   password?: string;
   setPassword?: (value: string) => void;
   confirmPassword?: string;
@@ -35,6 +36,7 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
   setProfileData,
   loading,
   onSave,
+  onUnregister,
   password,
   setPassword,
   confirmPassword,
@@ -190,6 +192,11 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
       <Button onClick={onSave} disabled={loading} className="w-full gradient-bg hover:opacity-90 transition-opacity">
         {loading ? '저장 중...' : '기본 정보 저장'}
       </Button>
+      {onUnregister && (
+        <Button onClick={onUnregister} disabled={loading} variant="destructive" className="w-full mt-2">
+          회원탈퇴
+        </Button>
+      )}
     </CardContent>
   </Card>
 ); 

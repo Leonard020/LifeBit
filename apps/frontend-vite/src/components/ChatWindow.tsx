@@ -183,7 +183,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-
+  const inputRef = useRef<HTMLInputElement>(null);
   // Speech Recognition 초기화
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -860,6 +860,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     } finally {
       setIsProcessing(false);
       setInputValue('');
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
   
@@ -1130,6 +1133,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         <div className="border-t p-4">
           <div className="flex space-x-2 items-end">
             <Input
+              ref={inputRef}
               placeholder="메시지를 입력하세요..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}

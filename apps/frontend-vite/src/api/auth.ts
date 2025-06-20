@@ -118,6 +118,19 @@ export const updateUserProfile = async (profileData: ProfileUpdateData) => {
     }
 };
 
+// 사용자 계정 삭제 API
+export const deleteUser = async () => {
+    try {
+        const response = await axios.delete(API_ENDPOINTS.PROFILE);
+        // On successful deletion, remove token and user info
+        removeToken();
+        return response.data;
+    } catch (error) {
+        console.error('Failed to delete user:', error);
+        throw error;
+    }
+};
+
 // 건강 통계 API
 export const getHealthStatistics = async (userId: string, period: string = 'month') => {
   const response = await axios.get(`${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}?period=${period}`);
