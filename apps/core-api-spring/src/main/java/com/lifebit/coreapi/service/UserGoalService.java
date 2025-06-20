@@ -2,6 +2,8 @@ package com.lifebit.coreapi.service;
 
 import com.lifebit.coreapi.entity.UserGoal;
 import com.lifebit.coreapi.repository.UserGoalRepository;
+import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserGoalService {
     private final UserGoalRepository userGoalRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public UserGoal getUserGoal(Long userId) {
@@ -59,10 +62,11 @@ public class UserGoalService {
         UserGoal defaultGoal = new UserGoal();
         defaultGoal.setUuid(UUID.randomUUID());
         defaultGoal.setUserId(userId);
-        defaultGoal.setWeeklyWorkoutTarget(3);
-        defaultGoal.setDailyCarbsTarget(250);
-        defaultGoal.setDailyProteinTarget(150);
-        defaultGoal.setDailyFatTarget(67);
+        defaultGoal.setWeeklyWorkoutTarget(null);
+        defaultGoal.setDailyCarbsTarget(null);
+        defaultGoal.setDailyProteinTarget(null);
+        defaultGoal.setDailyFatTarget(null);
+        defaultGoal.setDailyCaloriesTarget(null);
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return userGoalRepository.save(defaultGoal);
@@ -82,10 +86,11 @@ public class UserGoalService {
         // DB에 저장하지 않고 메모리상의 기본값만 반환
         UserGoal defaultGoal = new UserGoal();
         defaultGoal.setUserId(userId);
-        defaultGoal.setWeeklyWorkoutTarget(3);
-        defaultGoal.setDailyCarbsTarget(250);
-        defaultGoal.setDailyProteinTarget(150);
-        defaultGoal.setDailyFatTarget(67);
+        defaultGoal.setWeeklyWorkoutTarget(null);
+        defaultGoal.setDailyCarbsTarget(null);
+        defaultGoal.setDailyProteinTarget(null);
+        defaultGoal.setDailyFatTarget(null);
+        defaultGoal.setDailyCaloriesTarget(null);
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         
@@ -125,5 +130,40 @@ public class UserGoalService {
             throw new RuntimeException("사용자 목표를 찾을 수 없습니다: " + goalId);
         }
         userGoalRepository.deleteById(goalId);
+    }
+
+    /**
+     * 성별에 따라 식단 목표치 디폴트값을 반환
+     */
+    public UserGoal getDefaultDietGoalByGender(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        String gender = user.getGender();
+
+        UserGoal defaultGoal = new UserGoal();
+        defaultGoal.setUuid(UUID.randomUUID());
+        defaultGoal.setUserId(userId);
+        // 운동 목표치는 null 또는 필요시 설정
+        defaultGoal.setWeeklyWorkoutTarget(null);
+        // 식단 목표치는 성별에 따라 다르게 설정
+        if ("MALE".equalsIgnoreCase(gender)) {
+            defaultGoal.setDailyCarbsTarget(359);
+            defaultGoal.setDailyProteinTarget(78);
+            defaultGoal.setDailyFatTarget(51);
+            defaultGoal.setDailyCaloriesTarget(2300);
+        } else if ("FEMALE".equalsIgnoreCase(gender)) {
+            defaultGoal.setDailyCarbsTarget(289);
+            defaultGoal.setDailyProteinTarget(62);
+            defaultGoal.setDailyFatTarget(41);
+            defaultGoal.setDailyCaloriesTarget(1900);
+        } else {
+            defaultGoal.setDailyCarbsTarget(310);
+            defaultGoal.setDailyProteinTarget(150);
+            defaultGoal.setDailyFatTarget(45);
+            defaultGoal.setDailyCaloriesTarget(2100);
+        }
+        defaultGoal.setCreatedAt(LocalDateTime.now());
+        defaultGoal.setUpdatedAt(LocalDateTime.now());
+        return defaultGoal;
     }
 } 
