@@ -5,14 +5,23 @@ import com.lifebit.coreapi.service.UserService;
 import com.lifebit.coreapi.service.HealthRecordService;
 import com.lifebit.coreapi.service.ExerciseService;
 import com.lifebit.coreapi.service.UserGoalService;
+import com.lifebit.coreapi.service.ranking.RankingService;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.entity.HealthRecord;
 import com.lifebit.coreapi.entity.UserGoal;
+import com.lifebit.coreapi.entity.UserRanking;
+import com.lifebit.coreapi.entity.ExerciseSession;
 import com.lifebit.coreapi.security.JwtTokenProvider;
+import com.lifebit.coreapi.dto.ranking.RankingResponse;
+import com.lifebit.coreapi.repository.ranking.UserRankingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDate;
@@ -20,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Optional;
 import java.math.BigDecimal;
 
 @RestController
@@ -34,6 +44,8 @@ public class HealthStatisticsController {
     private final HealthRecordService healthRecordService;
     private final ExerciseService exerciseService;
     private final UserGoalService userGoalService;
+    private final RankingService rankingService;
+    private final UserRankingRepository userRankingRepository;
 
     /**
      * JWT 토큰에서 사용자 ID 추출
@@ -210,58 +222,66 @@ public class HealthStatisticsController {
             // 사용자 업적 초기화 (필요한 경우)
             achievementService.initializeUserAchievements(currentUserId);
             
-            // 상위 랭킹 사용자들 (Mock 데이터 - 추후 실제 랭킹 시스템으로 교체)
-            List<Map<String, Object>> topRankers = List.of(
-                Map.of(
-                    "rank", 1,
-                    "userId", 1L,
-                    "nickname", "헬스킹",
-                    "score", 3420,
-                    "badge", "platinum",
-                    "streakDays", 45
-                ),
-                Map.of(
-                    "rank", 2,
-                    "userId", 2L,
-                    "nickname", "운동러버",
-                    "score", 3180,
-                    "badge", "gold",
-                    "streakDays", 38
-                ),
-                Map.of(
-                    "rank", 3,
-                    "userId", 3L,
-                    "nickname", "건강이최고",
-                    "score", 2950,
-                    "badge", "gold",
-                    "streakDays", 32
-                ),
-                Map.of(
-                    "rank", 4,
-                    "userId", 4L,
-                    "nickname", "바디빌더",
-                    "score", 2780,
-                    "badge", "silver",
-                    "streakDays", 28
-                ),
-                Map.of(
-                    "rank", 5,
-                    "userId", 5L,
-                    "nickname", "피트니스맨",
-                    "score", 2650,
-                    "badge", "silver",
-                    "streakDays", 25
-                )
-            );
-
-            // 현재 사용자의 랭킹 정보 (Mock 데이터)
-            Map<String, Object> myRanking = Map.of(
-                "rank", 24,
-                "score", 1847,
-                "streakDays", 12,
-                "totalUsers", 2841,
-                "userId", currentUserId
-            );
+            // 실제 데이터베이스에서 상위 랭킹 조회 (기본값 제공)
+            List<Map<String, Object>> topRankers;
+            Map<String, Object> myRanking;
+            
+            try {
+                // 상위 5명 랭킹 조회
+                Pageable topRankingsPageable = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalScore"));
+                Page<UserRanking> topRankingsPage = userRankingRepository.findTopRankings(topRankingsPageable);
+                
+                topRankers = topRankingsPage.getContent().stream()
+                    .map(ranking -> {
+                        Map<String, Object> rankerMap = new HashMap<>();
+                        rankerMap.put("rank", ranking.getRankPosition());
+                        rankerMap.put("userId", ranking.getUserUuid());
+                        rankerMap.put("nickname", ranking.getUsername() != null ? ranking.getUsername() : "사용자" + ranking.getUserUuid());
+                        rankerMap.put("score", ranking.getTotalScore());
+                        rankerMap.put("badge", getBadgeFromScore(ranking.getTotalScore()));
+                        rankerMap.put("streakDays", ranking.getStreakDays());
+                        return rankerMap;
+                    })
+                    .toList();
+                
+                // 현재 사용자의 랭킹 정보 조회
+                User currentUser = userService.getUserById(currentUserId);
+                Optional<UserRanking> userRankingOpt = userRankingRepository.findByUserUuid(currentUser.getUuid().toString());
+                
+                if (userRankingOpt.isPresent()) {
+                    UserRanking userRanking = userRankingOpt.get();
+                    myRanking = Map.of(
+                        "rank", userRanking.getRankPosition(),
+                        "score", userRanking.getTotalScore(),
+                        "streakDays", userRanking.getStreakDays(),
+                        "totalUsers", userRankingRepository.count(),
+                        "userId", currentUserId
+                    );
+                } else {
+                    // 사용자 랭킹이 없는 경우 기본값
+                    myRanking = Map.of(
+                        "rank", 0,
+                        "score", 0,
+                        "streakDays", 0,
+                        "totalUsers", userRankingRepository.count(),
+                        "userId", currentUserId
+                    );
+                }
+                
+                         } catch (Exception e) {
+                log.warn("랭킹 데이터 조회 실패, 빈 데이터 반환: {}", e.getMessage());
+                
+                // 랭킹 조회 실패 시 빈 데이터 반환
+                topRankers = List.of();
+                
+                myRanking = Map.of(
+                    "rank", 0,
+                    "score", 0,
+                    "streakDays", 0,
+                    "totalUsers", 0,
+                    "userId", currentUserId
+                );
+            }
 
             // 실제 데이터베이스에서 사용자 업적 조회
             List<Map<String, Object>> achievements = achievementService.getUserAchievements(currentUserId);
@@ -279,26 +299,26 @@ public class HealthStatisticsController {
         } catch (Exception e) {
             log.error("Error getting ranking data", e);
             
-            // 에러 발생 시 기본 데이터 반환
-            List<Map<String, Object>> fallbackAchievements = List.of(
-                Map.of(
-                    "title", "7일 연속 기록",
-                    "description", "일주일 동안 꾸준히 기록했습니다",
-                    "badge", "bronze",
-                    "achieved", false,
-                    "progress", 0,
-                    "target", 7
-                )
-            );
-            
+            // 에러 발생 시 빈 데이터 반환
             Map<String, Object> fallbackData = Map.of(
                 "topRankers", List.of(),
                 "myRanking", Map.of("rank", 0, "score", 0, "streakDays", 0, "totalUsers", 0, "userId", 1L),
-                "achievements", fallbackAchievements
+                "achievements", List.of(),
+                "error", "랭킹 데이터를 불러올 수 없습니다. 나중에 다시 시도해주세요."
             );
             
             return ResponseEntity.ok(fallbackData);
         }
+    }
+    
+    /**
+     * 점수에 따른 배지 결정
+     */
+    private String getBadgeFromScore(int score) {
+        if (score >= 3000) return "platinum";
+        else if (score >= 2500) return "gold";
+        else if (score >= 2000) return "silver";
+        else return "bronze";
     }
 
     @GetMapping("/health-records/{userId}")
@@ -307,43 +327,109 @@ public class HealthStatisticsController {
             @RequestParam(defaultValue = "month") String period,
             HttpServletRequest request) {
         
-        // 토큰에서 사용자 ID 추출하여 권한 확인
-        Long tokenUserId = getUserIdFromToken(request);
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 실제 데이터베이스에서 건강 기록 조회
+            List<HealthRecord> healthRecords;
+            
+            // 기간에 따른 데이터 조회
+            switch (period.toLowerCase()) {
+                case "day":
+                    healthRecords = healthRecordService.getRecentHealthRecords(tokenUserId, 1);
+                    break;
+                case "week":
+                    healthRecords = healthRecordService.getRecentHealthRecords(tokenUserId, 7);
+                    break;
+                case "month":
+                    healthRecords = healthRecordService.getRecentHealthRecords(tokenUserId, 30);
+                    break;
+                case "year":
+                    healthRecords = healthRecordService.getRecentHealthRecords(tokenUserId, 365);
+                    break;
+                default:
+                    healthRecords = healthRecordService.getRecentHealthRecords(tokenUserId, 30);
+            }
+            
+            // HealthRecord 엔티티를 Map으로 변환
+            List<Map<String, Object>> healthRecordsData = healthRecords.stream()
+                .map(record -> {
+                    Map<String, Object> recordMap = new HashMap<>();
+                    recordMap.put("health_record_id", record.getHealthRecordId());
+                    recordMap.put("uuid", record.getUuid().toString());
+                    recordMap.put("user_id", record.getUserId());
+                    recordMap.put("weight", record.getWeight() != null ? record.getWeight().doubleValue() : null);
+                    recordMap.put("height", record.getHeight() != null ? record.getHeight().doubleValue() : null);
+                    recordMap.put("bmi", record.getBmi() != null ? record.getBmi().doubleValue() : null);
+                    recordMap.put("record_date", record.getRecordDate().toString());
+                    recordMap.put("created_at", record.getCreatedAt().toString());
+                    return recordMap;
+                })
+                .toList();
+            
+            log.info("건강 기록 조회 완료 - 사용자: {}, 기간: {}, 개수: {}", 
+                tokenUserId, period, healthRecordsData.size());
+            
+            return ResponseEntity.ok(healthRecordsData);
+            
+        } catch (RuntimeException e) {
+            log.error("건강 기록 조회 중 오류 발생 - 사용자: {}, 기간: {}, 오류: {}", 
+                userId, period, e.getMessage());
+            
+            // 오류 발생 시 빈 리스트 반환
+            return ResponseEntity.ok(List.of());
+        }
+    }
+
+    /**
+     * 사용자의 운동 세션 데이터 조회
+     */
+    @GetMapping("/exercise-sessions/{userId}")
+    public ResponseEntity<List<Map<String, Object>>> getExerciseSessions(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "month") String period,
+            HttpServletRequest request) {
         
-        // 건강 기록 데이터
-        List<Map<String, Object>> healthRecords = List.of(
-            Map.of(
-                "health_record_id", 1,
-                "uuid", "550e8400-e29b-41d4-a716-446655440000",
-                "user_id", tokenUserId,
-                "weight", 70.5,
-                "height", 175.0,
-                "bmi", 23.0,
-                "record_date", LocalDate.now().minusDays(7).toString(),
-                "created_at", LocalDateTime.now().minusDays(7).toString()
-            ),
-            Map.of(
-                "health_record_id", 2,
-                "uuid", "550e8400-e29b-41d4-a716-446655440001",
-                "user_id", tokenUserId,
-                "weight", 70.3,
-                "height", 175.0,
-                "bmi", 22.9,
-                "record_date", LocalDate.now().minusDays(3).toString(),
-                "created_at", LocalDateTime.now().minusDays(3).toString()
-            ),
-            Map.of(
-                "health_record_id", 3,
-                "uuid", "550e8400-e29b-41d4-a716-446655440002",
-                "user_id", tokenUserId,
-                "weight", 70.1,
-                "height", 175.0,
-                "bmi", 22.8,
-                "record_date", LocalDate.now().toString(),
-                "created_at", LocalDateTime.now().toString()
-            )
-        );
-        
-        return ResponseEntity.ok(healthRecords);
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 실제 데이터베이스에서 운동 세션 조회
+            List<ExerciseSession> exerciseSessions = exerciseService.getRecentExerciseSessions(tokenUserId, period);
+            
+            // ExerciseSession 엔티티를 Map으로 변환
+            List<Map<String, Object>> exerciseSessionsData = exerciseSessions.stream()
+                .map(session -> {
+                    Map<String, Object> sessionMap = new HashMap<>();
+                    sessionMap.put("exercise_session_id", session.getExerciseSessionId());
+                    sessionMap.put("uuid", session.getUuid().toString());
+                    sessionMap.put("user_id", session.getUser().getUserId());
+                    sessionMap.put("exercise_catalog_id", session.getExerciseCatalog() != null ? session.getExerciseCatalog().getExerciseCatalogId() : null);
+                    sessionMap.put("exercise_name", session.getExerciseCatalog() != null ? session.getExerciseCatalog().getName() : "기타 운동");
+                    sessionMap.put("duration_minutes", session.getDurationMinutes());
+                    sessionMap.put("calories_burned", session.getCaloriesBurned());
+                    sessionMap.put("weight", session.getWeight() != null ? session.getWeight().doubleValue() : null);
+                    sessionMap.put("reps", session.getReps());
+                    sessionMap.put("sets", session.getSets());
+                    sessionMap.put("notes", session.getNotes());
+                    sessionMap.put("exercise_date", session.getExerciseDate() != null ? session.getExerciseDate().toString() : null);
+                    sessionMap.put("created_at", session.getCreatedAt().toString());
+                    return sessionMap;
+                })
+                .toList();
+            
+            log.info("운동 세션 조회 완료 - 사용자: {}, 기간: {}, 개수: {}", 
+                tokenUserId, period, exerciseSessionsData.size());
+            
+            return ResponseEntity.ok(exerciseSessionsData);
+            
+        } catch (RuntimeException e) {
+            log.error("운동 세션 조회 중 오류 발생 - 사용자: {}, 기간: {}, 오류: {}", 
+                userId, period, e.getMessage());
+            
+            // 오류 발생 시 빈 리스트 반환
+            return ResponseEntity.ok(List.of());
+        }
     }
 } 
