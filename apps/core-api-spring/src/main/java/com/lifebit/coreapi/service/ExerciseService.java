@@ -122,6 +122,16 @@ public class ExerciseService {
     }
 
     /**
+     * 최근 7일간 총 운동 시간(분) 조회
+     */
+    public int getWeeklyExerciseMinutes(Long userId) {
+        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        return sessions.stream()
+            .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
+            .sum();
+    }
+
+    /**
      * 현재 연속 운동 일수 계산
      */
     public int getCurrentStreak(Long userId) {

@@ -1,5 +1,6 @@
 package com.lifebit.coreapi.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -33,6 +34,7 @@ public class UserGoal {
     private Integer dailyFatTarget;
     
     @Column(name = "daily_calory_target")
+    @JsonProperty("daily_calories_target")
     private Integer dailyCaloriesTarget;
     
     @Column(name = "created_at")

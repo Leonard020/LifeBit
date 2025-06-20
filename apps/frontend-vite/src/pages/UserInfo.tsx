@@ -20,25 +20,32 @@ import {
 } from '@/components/ui/dialog';
 import { API_CONFIG } from '@/config/env';
 
+// Extend the profileData type to include provider and passwordHash
+interface UserProfileData {
+  nickname: string;
+  email: string;
+  height: string;
+  weight: string;
+  age: string;
+  gender: string;
+  profileImageUrl?: string;
+  provider?: string;
+  passwordHash?: string | null;
+}
+
 const UserInfo = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState<{
-    nickname: string;
-    email: string;
-    height: string;
-    weight: string;
-    age: string;
-    gender: string;
-    profileImageUrl?: string;
-  }>({
+  const [profileData, setProfileData] = useState<UserProfileData>({
     nickname: '',
     email: '',
     height: '',
     weight: '',
     age: '',
     gender: 'male',
+    provider: undefined,
+    passwordHash: undefined,
   });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -52,6 +59,45 @@ const UserInfo = () => {
   const [showPasswordDialog, setShowPasswordDialog] = useState(true);
   const [verifyPasswordInput, setVerifyPasswordInput] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
+
+  useEffect(() => {
+    // On mount, check if user is social login and skip password dialog if so
+    const checkSocialUser = async () => {
+      if (!isLoggedIn()) {
+        navigate('/login');
+        return;
+      }
+      try {
+        const userProfile = await getUserProfile();
+        // If provider exists (social login) or passwordHash is null/undefined, skip password dialog
+        if (userProfile.provider && (!userProfile.passwordHash || userProfile.passwordHash === null)) {
+          setIsVerified(true);
+          setShowPasswordDialog(false);
+          setProfileData({
+            nickname: userProfile.nickname || '',
+            email: userProfile.email || '',
+            height: userProfile.height ? userProfile.height.toString() : '',
+            weight: userProfile.weight ? userProfile.weight.toString() : '',
+            age: userProfile.age ? userProfile.age.toString() : '',
+            gender: userProfile.gender || 'male',
+            profileImageUrl: userProfile.profileImageUrl || '',
+            provider: userProfile.provider,
+            passwordHash: userProfile.passwordHash,
+          });
+          setIsImageRemoved(false);
+          setLoading(false);
+        }
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: '회원정보 로드 실패',
+          description: '사용자 정보를 불러올 수 없습니다.',
+        });
+        setLoading(false);
+      }
+    };
+    checkSocialUser();
+  }, [navigate, toast]);
 
   useEffect(() => {
     if (!isVerified) return;
@@ -70,6 +116,8 @@ const UserInfo = () => {
           age: userProfile.age ? userProfile.age.toString() : '',
           gender: userProfile.gender || 'male',
           profileImageUrl: userProfile.profileImageUrl || '',
+          provider: userProfile.provider,
+          passwordHash: userProfile.passwordHash,
         });
         setIsImageRemoved(false);
       } catch (error) {
@@ -194,9 +242,17 @@ const UserInfo = () => {
     }
   };
 
+  // Determine if password fields should be disabled for social users
+  const disablePasswordFields = Boolean(profileData.provider && (!profileData.passwordHash || profileData.passwordHash === null));
+
   return (
     <Layout>
-      <Dialog open={showPasswordDialog}>
+      <Dialog open={showPasswordDialog} onOpenChange={open => {
+        if (!open && !isVerified) {
+          navigate(-1);
+        }
+        setShowPasswordDialog(open);
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>비밀번호 확인</DialogTitle>
@@ -272,6 +328,7 @@ const UserInfo = () => {
               showConfirmPassword={showConfirmPassword}
               setShowConfirmPassword={setShowConfirmPassword}
               nicknameEditable={true}
+              disablePasswordFields={disablePasswordFields}
             />
           </div>
           <Dialog open={showUnregisterDialog} onOpenChange={setShowUnregisterDialog}>

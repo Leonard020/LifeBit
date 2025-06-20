@@ -29,36 +29,47 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
     );
   }
 
-  // 임시 목표 데이터 (나중에 실제 데이터로 교체)
-  const mockGoals = {
-    weekly_workout_target: 5, // 주 5회 운동
-    daily_carbs_target: 250, // 일일 탄수화물 250g
-    daily_protein_target: 120, // 일일 단백질 120g
-    daily_fat_target: 65, // 일일 지방 65g
+  // 실제 API 데이터에서 목표 값 추출 (기본값 포함)
+  const goalsData = userGoals?.data || userGoals;
+  const statsData = healthStats?.data || healthStats;
+
+  console.log('🎯 [GoalProgress] 사용자 목표 데이터:', goalsData);
+  console.log('📊 [GoalProgress] 건강 통계 데이터:', statsData);
+
+  // 목표 데이터 (DB에서 가져온 실제 데이터 또는 기본값)
+  const targetGoals = {
+    weekly_workout_target: (goalsData?.weekly_workout_target || 3) * 60, // 횟수를 시간(분)으로 변환 (1회당 60분 가정)
+    daily_carbs_target: goalsData?.daily_carbs_target || 250,
+    daily_protein_target: goalsData?.daily_protein_target || 120,
+    daily_fat_target: goalsData?.daily_fat_target || 65,
   };
 
-  const mockProgress = {
-    weekly_workout_current: 3, // 현재 3회 완료
-    daily_carbs_current: 180, // 현재 180g 섭취
-    daily_protein_current: 95, // 현재 95g 섭취
-    daily_fat_current: 55, // 현재 55g 섭취
+  // 현재 진행 상황 (통계 데이터에서 추출 또는 기본값)
+  const currentProgress = {
+    weekly_workout_current: statsData?.weeklyExerciseMinutes || 0, // 운동 시간(분)으로 변경
+    daily_carbs_current: statsData?.dailyCarbsIntake || 0,
+    daily_protein_current: statsData?.dailyProteinIntake || 0,
+    daily_fat_current: statsData?.dailyFatIntake || 0,
   };
+
+  console.log('🎯 [GoalProgress] 목표 값:', targetGoals);
+  console.log('📈 [GoalProgress] 현재 진행률:', currentProgress);
 
   const goals = [
     {
       id: 'workout',
-      title: '주간 운동 목표',
-      current: mockProgress.weekly_workout_current,
-      target: mockGoals.weekly_workout_target,
-      unit: '회',
+      title: '주간 운동 시간',
+      current: currentProgress.weekly_workout_current,
+      target: targetGoals.weekly_workout_target,
+      unit: '분',
       icon: '🏃‍♂️',
       color: 'blue',
     },
     {
       id: 'carbs',
       title: '일일 탄수화물',
-      current: mockProgress.daily_carbs_current,
-      target: mockGoals.daily_carbs_target,
+      current: currentProgress.daily_carbs_current,
+      target: targetGoals.daily_carbs_target,
       unit: 'g',
       icon: '🍞',
       color: 'yellow',
@@ -66,8 +77,8 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
     {
       id: 'protein',
       title: '일일 단백질',
-      current: mockProgress.daily_protein_current,
-      target: mockGoals.daily_protein_target,
+      current: currentProgress.daily_protein_current,
+      target: targetGoals.daily_protein_target,
       unit: 'g',
       icon: '🥩',
       color: 'red',
@@ -75,8 +86,8 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
     {
       id: 'fat',
       title: '일일 지방',
-      current: mockProgress.daily_fat_current,
-      target: mockGoals.daily_fat_target,
+      current: currentProgress.daily_fat_current,
+      target: targetGoals.daily_fat_target,
       unit: 'g',
       icon: '🥑',
       color: 'green',
@@ -135,6 +146,25 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
           </p>
         </div>
       </div>
+
+      {/* 데이터 연동 상태 표시 */}
+      {goalsData && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center text-sm text-green-700">
+            <span className="mr-2">✅</span>
+            사용자 목표가 DB에서 연동되었습니다
+          </div>
+        </div>
+      )}
+
+      {!goalsData && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center text-sm text-yellow-700">
+            <span className="mr-2">⚠️</span>
+            목표가 설정되지 않아 기본값을 사용합니다
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {goals.map((goal) => {

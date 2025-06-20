@@ -36,3 +36,27 @@ class MealOutput(BaseModel):
 
     class Config:
         from_attributes = True
+
+        # 🔽 오늘 운동 기록 조회용 (프론트엔드 Note.tsx 사용 타입과 일치)
+class DailyExerciseRecord(BaseModel):
+    name: str
+    weight: str
+    sets: int
+    reps: int
+    time: str  # 예: "2분" 또는 "30초"
+
+# ✅ 챗봇에서 운동 기록 저장용 (name, weight 등 포함)
+class ExerciseChatInput(BaseModel):
+    user_id: int
+    name: str                # 운동 이름 (예: 플랭크)
+    weight: str              # 보통은 체중 기준 (예: "50kg")
+    sets: int
+    reps: int
+    time: str                # 예: "2분", "30초"
+    calories_burned: Optional[float] = None
+    exercise_date: Optional[date] = date.today()
+
+# (선택) 저장 후 반환할 때 쓸 수 있는 출력 스키마
+class ExerciseChatOutput(ExerciseChatInput):
+    class Config:
+        from_attributes = True

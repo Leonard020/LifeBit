@@ -28,7 +28,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, UserGoal } from '../../api/auth';
+import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, UserGoal } from '../../api/auth';
 import { getToken, getUserInfo, isTokenValid } from '../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../hooks/use-toast';
@@ -301,9 +301,16 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     refetch: refetchGoals
   } = useUserGoals(userId);
 
+  const { 
+    data: healthStats, 
+    isLoading: healthStatsLoading, 
+    error: healthStatsError,
+    refetch: refetchHealthStats
+  } = useHealthStatistics(userId, 'week');
+
   // 전체 로딩 상태 계산
-  const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading;
-  const hasError = healthError || mealError || exerciseError || goalsError;
+  const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading;
+  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError;
 
   // 에러 처리
   useEffect(() => {
@@ -313,6 +320,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
         mealError?.message || 
         exerciseError?.message || 
         goalsError?.message || 
+        healthStatsError?.message || 
         '데이터를 불러오는데 실패했습니다.';
       
       setError(errorMessage);
@@ -324,7 +332,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     } else {
       setError(null);
     }
-  }, [hasError, healthError, mealError, exerciseError, goalsError]);
+  }, [hasError, healthError, mealError, exerciseError, goalsError, healthStatsError]);
 
   // 전체 재시도 함수
   const handleRetry = useCallback(() => {
@@ -333,7 +341,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     refetchMeals();
     refetchExercise();
     refetchGoals();
-  }, [refetchHealth, refetchMeals, refetchExercise, refetchGoals]);
+    refetchHealthStats();
+  }, [refetchHealth, refetchMeals, refetchExercise, refetchGoals, refetchHealthStats]);
 
   // 오늘의 데이터 계산 (실제 API 데이터 기반)
   const todayData = useMemo(() => {
@@ -347,13 +356,36 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     const goalsData = userGoals?.data as UserGoal | undefined;
     const targetMinutes = goalsData?.weekly_workout_target ? Math.round(goalsData.weekly_workout_target / 7) : 60;
     
-    // 오늘의 운동 시간 (실제 API 데이터)
+    // 실제 건강 통계 API에서 운동 시간 가져오기
+    const healthStatsData = healthStats?.data as Record<string, unknown>;
+    console.log('🎯 [EnhancedHealthDashboard] 건강 통계 데이터:', healthStatsData);
+    console.log('📅 [EnhancedHealthDashboard] 오늘 날짜:', today);
+    
+    // 주간 운동 시간을 일일 평균으로 계산 (더 의미있는 데이터 표시)
+    const weeklyExerciseMinutes = typeof healthStatsData?.weeklyExerciseMinutes === 'number' 
+      ? healthStatsData.weeklyExerciseMinutes 
+      : 0;
+    const exerciseMinutes = Math.round(weeklyExerciseMinutes / 7); // 주간 평균을 일일로 표시
+    
+    // 운동 세션 데이터로 오늘의 정확한 칼로리 계산
     const exerciseSessionsData = exerciseSessions?.data || exerciseSessions || [];
+    console.log('🏃 [EnhancedHealthDashboard] 운동 세션 데이터:', exerciseSessionsData);
+    
     const todayExercise = Array.isArray(exerciseSessionsData) 
       ? exerciseSessionsData.filter(session => session.exercise_date === today)
       : [];
-    const exerciseMinutes = todayExercise.reduce((sum, session) => sum + session.duration_minutes, 0);
+    console.log('📊 [EnhancedHealthDashboard] 오늘 운동 세션:', todayExercise);
+    
     const caloriesBurned = todayExercise.reduce((sum, session) => sum + session.calories_burned, 0);
+    
+    // 만약 오늘 운동 기록이 있다면 실제 오늘 시간을 사용, 없다면 평균 사용
+    const actualTodayMinutes = todayExercise.reduce((sum, session) => sum + session.duration_minutes, 0);
+    const displayExerciseMinutes = actualTodayMinutes > 0 ? actualTodayMinutes : exerciseMinutes;
+    
+    console.log('⏱️ [EnhancedHealthDashboard] 주간 총 운동시간:', weeklyExerciseMinutes);
+    console.log('📈 [EnhancedHealthDashboard] 일일 평균 운동시간:', exerciseMinutes);
+    console.log('🎯 [EnhancedHealthDashboard] 실제 오늘 운동시간:', actualTodayMinutes);
+    console.log('💪 [EnhancedHealthDashboard] 최종 표시 운동시간:', displayExerciseMinutes);
     
     // 오늘의 식단 (API 데이터 - 현재는 기본 MealLog 타입 사용)
     const mealLogsData = mealLogs?.data || mealLogs || [];
@@ -379,7 +411,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     };
     
     return {
-      exerciseMinutes,
+      exerciseMinutes: displayExerciseMinutes,
       targetMinutes,
       caloriesBurned,
       meals: mealsByTime,
@@ -396,7 +428,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
         fat: goalsData?.daily_fat_target || 80
       }
     };
-  }, [exerciseSessions, mealLogs, userGoals, allLoading]);
+  }, [exerciseSessions, mealLogs, userGoals, healthStats, allLoading]);
 
   const handleMealAdd = useCallback((mealType: string) => {
     console.log(`${mealType} 식단 추가`);

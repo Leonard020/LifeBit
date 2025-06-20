@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import models
 from database import engine, get_db
 import openai, os, json
 from dotenv import load_dotenv
@@ -11,6 +10,9 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date
+from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput
+import models
+
 
 # 새로 추가: 차트 분석 서비스 import
 from analytics_service import HealthAnalyticsService
@@ -55,6 +57,7 @@ models.Base.metadata.create_all(bind=engine)
 # 차트 분석 서비스 인스턴스 생성
 analytics_service = HealthAnalyticsService()
 
+# ChatGPT 시스템 프롬프트 정의
 # ChatGPT 시스템 프롬프트 정의
 CHAT_SYSTEM_PROMPT = """
 당신은 LifeBit의 AI 어시스턴트입니다.
@@ -548,6 +551,7 @@ DIET_CONFIRMATION_PROMPT = """
 - 확인 후 '네'면 DB 저장 진행
 """
 
+
 # 채팅 요청을 위한 스키마
 class ChatRequest(BaseModel):
     message: str
@@ -884,7 +888,47 @@ async def chat(request: ChatRequest):
             status_code=500,
             detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
         )
+# 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
+@app.post("/api/note/exercise", response_model=ExerciseChatOutput)
+def save_exercise_record(data: ExerciseChatInput, db: Session = Depends(get_db)):
+    exercise = models.ExerciseSession(
+        user_id=data.user_id,
+        notes=data.name,
+        weight=float(data.weight.replace("kg", "").strip()) if "kg" in data.weight else None,
+        sets=data.sets,
+        reps=data.reps,
+        duration_minutes=int(data.time.replace("분", "").strip()) if "분" in data.time else 0,
+        calories_burned=int(data.calories_burned or 0),
+        exercise_date=data.exercise_date,
+        input_source="VOICE",  # 기본값
+        confidence_score=1.0,
+        validation_status="PENDING"
+    )
+    db.add(exercise)
+    db.commit()
+    db.refresh(exercise)
+    return data
 
+
+# ✅ 오늘 날짜 운동 기록 조회
+@app.get("/api/note/exercise/daily", response_model=list[DailyExerciseRecord])
+def get_today_exercise(date: Optional[date] = date.today(), user_id: Optional[int] = 1, db: Session = Depends(get_db)):
+    records = db.query(models.ExerciseSession).filter(
+        models.ExerciseSession.user_id == user_id,
+        models.ExerciseSession.exercise_date == date
+    ).all()
+
+    results = []
+    for record in records:
+        results.append(DailyExerciseRecord(
+            name=record.notes,
+            weight=f"{record.weight}kg" if record.weight else "체중",
+            sets=record.sets or 1,
+            reps=record.reps or 1,
+            time=f"{record.duration_minutes}분"
+        ))
+
+    return results
 # AI 영양소 데이터베이스에서 계산하는 함수
 def calculate_nutrition_from_ai_database(food_name: str, amount: str) -> dict:
     """

@@ -233,7 +233,7 @@ const Note = () => {
 
     setIsSearching(true);
     try {
-      const response = await axios.get(`/api/meals/foods/search`, {
+      const response = await axios.get(`/api/diet/food-items/search`, {
         params: { keyword: searchKeyword }
       });
       setSearchResults(response.data);
