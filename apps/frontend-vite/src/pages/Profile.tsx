@@ -12,6 +12,7 @@ import { getUserProfile, updateUserProfile } from '@/api/auth';
 import { isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { BasicInfoBox } from '@/components/BasicInfoBox';
+import { API_CONFIG } from '@/config/env';
 
 interface StrengthGoal {
   id: string;
@@ -23,7 +24,15 @@ const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<{
+    nickname: string;
+    email: string;
+    height: string;
+    weight: string;
+    age: string;
+    gender: string;
+    profileImageUrl?: string;
+  }>({
     nickname: '',
     email: '',
     height: '',
@@ -90,6 +99,7 @@ const Profile = () => {
           weight: userProfile.weight ? userProfile.weight.toString() : '',
           age: userProfile.age ? userProfile.age.toString() : '',
           gender: userProfile.gender || 'male',
+          profileImageUrl: userProfile.profileImageUrl || '',
         });
       } catch (error) {
         console.error('Failed to load user profile:', error);
@@ -174,7 +184,15 @@ const Profile = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="h-10 w-10 text-white" />
+              {profileData.profileImageUrl ? (
+                <img 
+                  src={`${API_CONFIG.BASE_URL}${profileData.profileImageUrl}`} 
+                  alt="Profile" 
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <User className="h-10 w-10 text-white" />
+              )}
             </div>
             <h1 className="text-2xl font-bold mb-2">마이페이지</h1>
             <p className="text-muted-foreground">개인정보와 건강 목표를 관리하세요</p>

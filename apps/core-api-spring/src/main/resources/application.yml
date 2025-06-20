@@ -41,6 +41,9 @@ spring:
     sql-migration-separator: __
     sql-migration-suffixes: .sql
 
+file:
+  upload-dir: uploads/
+
 springdoc:
   default-consumes-media-type: application/json
   default-produces-media-type: application/json

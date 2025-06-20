@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile, updateUserProfile, deleteUser } from '@/api/auth';
+import { getUserProfile, updateUserProfile, deleteUser, ProfileUpdateData } from '@/api/auth';
 import { isLoggedIn } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { BasicInfoBox } from '@/components/BasicInfoBox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Lock, Eye, EyeOff, Check } from 'lucide-react';
+import { Lock, Eye, EyeOff, Check, Upload, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -18,12 +18,21 @@ import {
   DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { API_CONFIG } from '@/config/env';
 
 const UserInfo = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<{
+    nickname: string;
+    email: string;
+    height: string;
+    weight: string;
+    age: string;
+    gender: string;
+    profileImageUrl?: string;
+  }>({
     nickname: '',
     email: '',
     height: '',
@@ -36,6 +45,9 @@ const UserInfo = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showUnregisterDialog, setShowUnregisterDialog] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [isImageRemoved, setIsImageRemoved] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -52,7 +64,9 @@ const UserInfo = () => {
           weight: userProfile.weight ? userProfile.weight.toString() : '',
           age: userProfile.age ? userProfile.age.toString() : '',
           gender: userProfile.gender || 'male',
+          profileImageUrl: userProfile.profileImageUrl || '',
         });
+        setIsImageRemoved(false);
       } catch (error) {
         toast({
           variant: 'destructive',
@@ -65,6 +79,27 @@ const UserInfo = () => {
     };
     loadUserProfile();
   }, [navigate, toast]);
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setProfileImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileData({ ...profileData, profileImageUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setProfileData({ ...profileData, profileImageUrl: undefined });
+    setProfileImageFile(null);
+    setIsImageRemoved(true);
+    if(fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleProfileSave = async () => {
     if (password || confirmPassword) {
@@ -79,7 +114,7 @@ const UserInfo = () => {
     }
     try {
       setLoading(true);
-      const updateData: Record<string, unknown> = {
+      const updateData: ProfileUpdateData = {
         nickname: profileData.nickname,
         height: profileData.height ? parseFloat(profileData.height) : null,
         weight: profileData.weight ? parseFloat(profileData.weight) : null,
@@ -87,7 +122,20 @@ const UserInfo = () => {
         gender: profileData.gender,
       };
       if (password) updateData.password = password;
-      await updateUserProfile(updateData);
+      if (profileImageFile) {
+        updateData.profileImage = profileImageFile;
+      } else if (isImageRemoved) {
+        updateData.removeProfileImage = true;
+      }
+
+      const updatedProfile = await updateUserProfile(updateData);
+      setProfileData({
+        ...profileData,
+        profileImageUrl: updatedProfile.profileImageUrl || ''
+      });
+      setIsImageRemoved(false);
+      setProfileImageFile(null);
+
       toast({
         title: '회원정보 저장 완료',
         description: '회원정보가 성공적으로 업데이트되었습니다.',
@@ -130,10 +178,37 @@ const UserInfo = () => {
       <div className="container mx-auto px-4 py-8 pb-24">
         <div className="max-w-2xl mx-auto space-y-6">
           <div className="text-center mb-8">
-            <div className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl text-white font-bold">회원</span>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleProfileImageChange}
+              className="hidden"
+              accept="image/*"
+            />
+            <div 
+              className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              {profileData.profileImageUrl ? (
+                <img 
+                  src={profileData.profileImageUrl.startsWith('data:') ? profileData.profileImageUrl : `${API_CONFIG.BASE_URL}${profileData.profileImageUrl}`} 
+                  alt="Profile" 
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-3xl text-white font-bold">회원</span>
+              )}
             </div>
-            <h1 className="text-2xl font-bold mb-2">회원정보</h1>
+            <div className="flex justify-center gap-4">
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                사진 변경
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleRemoveImage}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                기본값으로
+              </Button>
+            </div>
+            <h1 className="text-2xl font-bold mb-2 mt-4">회원정보</h1>
             <p className="text-muted-foreground">회원정보를 확인하고 수정할 수 있습니다.</p>
           </div>
           <BasicInfoBox

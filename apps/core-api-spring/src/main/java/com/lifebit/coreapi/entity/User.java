@@ -34,6 +34,9 @@ public class User {
     @Column(name = "nickname", unique = true, nullable = false)
     private String nickname;
 
+    @Column(name = "profile_image_url")
+    private String profileImageUrl;
+
     private BigDecimal height;
     private BigDecimal weight;
     private Integer age;

@@ -2,21 +2,44 @@ package com.lifebit.coreapi.service;
 
 import com.lifebit.coreapi.dto.LoginRequest;
 import com.lifebit.coreapi.dto.SignUpRequest;
+import com.lifebit.coreapi.dto.UserProfileUpdateRequest;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.repository.UserRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${file.upload-dir}")
+    private String uploadDir;
+
+    @PostConstruct
+    public void init() {
+        try {
+            Files.createDirectories(Paths.get(uploadDir));
+        } catch (IOException e) {
+            throw new RuntimeException("Could not create upload directory!", e);
+        }
+    }
 
     @Transactional
     public User signUp(SignUpRequest request) {
@@ -74,52 +97,56 @@ public class UserService {
      * 사용자 프로필 정보 업데이트
      */
     @Transactional
-    public User updateUserProfile(Long userId, Map<String, Object> updateData) {
+    public User updateUserProfile(Long userId, UserProfileUpdateRequest updateData, MultipartFile profileImage) {
         User user = getUserById(userId);
 
-        // 업데이트 가능한 필드들만 처리
-        if (updateData.containsKey("nickname")) {
-            String nickname = (String) updateData.get("nickname");
+        if (updateData.getNickname() != null) {
+            String nickname = updateData.getNickname();
             if (!user.getNickname().equals(nickname) && userRepository.existsByNickname(nickname)) {
                 throw new RuntimeException("이미 사용 중인 닉네임입니다.");
             }
             user.setNickname(nickname);
         }
 
-        if (updateData.containsKey("height")) {
-            Object heightObj = updateData.get("height");
-            if (heightObj != null) {
-                BigDecimal height = new BigDecimal(heightObj.toString());
-                user.setHeight(height);
-            }
+        if (updateData.getHeight() != null) {
+            user.setHeight(updateData.getHeight());
         }
 
-        if (updateData.containsKey("weight")) {
-            Object weightObj = updateData.get("weight");
-            if (weightObj != null) {
-                BigDecimal weight = new BigDecimal(weightObj.toString());
-                user.setWeight(weight);
-            }
+        if (updateData.getWeight() != null) {
+            user.setWeight(updateData.getWeight());
         }
 
-        if (updateData.containsKey("age")) {
-            Object ageObj = updateData.get("age");
-            if (ageObj != null) {
-                Integer age = Integer.parseInt(ageObj.toString());
-                user.setAge(age);
-            }
+        if (updateData.getAge() != null) {
+            user.setAge(updateData.getAge());
         }
 
-        if (updateData.containsKey("gender")) {
-            String gender = (String) updateData.get("gender");
-            user.setGender(gender);
+        if (updateData.getGender() != null) {
+            user.setGender(updateData.getGender());
         }
 
-        if (updateData.containsKey("password")) {
-            Object passwordObj = updateData.get("password");
-            if (passwordObj != null && !passwordObj.toString().isEmpty()) {
-                String newPassword = passwordObj.toString();
-                user.setPasswordHash(passwordEncoder.encode(newPassword));
+        if (updateData.getPassword() != null && !updateData.getPassword().isEmpty()) {
+            user.setPasswordHash(passwordEncoder.encode(updateData.getPassword()));
+        }
+
+        if (updateData.getRemoveProfileImage() != null && updateData.getRemoveProfileImage()) {
+            user.setProfileImageUrl(null);
+        } else if (profileImage != null && !profileImage.isEmpty()) {
+            try {
+                String fileName = UUID.randomUUID().toString() + "_" + profileImage.getOriginalFilename();
+                Path destinationFile = Paths.get(uploadDir).resolve(Paths.get(fileName)).normalize().toAbsolutePath();
+
+                if (!destinationFile.getParent().equals(Paths.get(uploadDir).toAbsolutePath())) {
+                    throw new RuntimeException("Cannot store file outside current directory.");
+                }
+
+                try (InputStream inputStream = profileImage.getInputStream()) {
+                    Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
+                }
+
+                user.setProfileImageUrl("/" + uploadDir + fileName);
+
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to store file.", e);
             }
         }
 

@@ -23,13 +23,23 @@ export interface UserInfo {
     nickname: string;
     role?: string;
     provider?: string;
+    profileImageUrl?: string;
+    height?: number;
+    weight?: number;
+    age?: number;
+    gender?: string;
 }
 
 // 프로필 업데이트 타입 정의
 export interface ProfileUpdateData {
     nickname?: string;
     password?: string;
-    // 필요한 경우 다른 필드도 추가
+    height?: number | null;
+    weight?: number | null;
+    age?: number | null;
+    gender?: string;
+    profileImage?: File | null;
+    removeProfileImage?: boolean;
 }
 
 // 로그인 API
@@ -110,7 +120,21 @@ export const getUserProfile = async () => {
 // 사용자 프로필 업데이트 API
 export const updateUserProfile = async (profileData: ProfileUpdateData) => {
     try {
-        const response = await axios.put(API_ENDPOINTS.PROFILE, profileData);
+        const formData = new FormData();
+
+        const { profileImage, ...updateRequest } = profileData;
+
+        formData.append('updateData', new Blob([JSON.stringify(updateRequest)], { type: "application/json"}));
+
+        if (profileImage) {
+            formData.append('profileImage', profileImage);
+        }
+        
+        const response = await axios.put(API_ENDPOINTS.PROFILE, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
         return response.data;
     } catch (error) {
         console.error('Failed to update user profile:', error);
