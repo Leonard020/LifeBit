@@ -6,7 +6,6 @@ import { RecommendationPanel } from '../components/health/RecommendationPanel';
 import { GoalProgress } from '../components/health/GoalProgress';
 import { PeriodSelector } from '../components/health/PeriodSelector';
 import { ChatInterface } from '../components/ChatInterface';
-import { VoiceInput } from '../components/VoiceInput';
 import { AIFeedbackComponent } from '../components/AIFeedback';
 import { useAuth } from '../AuthContext';
 import { Button } from '../components/ui/button';
@@ -16,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { 
   BarChart3, 
   MessageSquare, 
-  Mic, 
   Activity,
   TrendingUp,
   Brain,
@@ -32,6 +30,7 @@ import { Layout } from '@/components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
+import { Message } from '@/api/chatApi';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -59,7 +58,6 @@ const HealthLog: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
   const [recordType, setRecordType] = useState<'exercise' | 'diet'>('exercise');
   const [showChat, setShowChat] = useState(false);
-  const [showVoiceInput, setShowVoiceInput] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
   const [healthStats, setHealthStats] = useState<HealthStatistics | null>(null);
@@ -72,14 +70,8 @@ const HealthLog: React.FC = () => {
   const [chatIsProcessing, setChatIsProcessing] = useState(false);
   const [chatNetworkError, setChatNetworkError] = useState(false);
   const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
-  const [chatClarificationInput, setChatClarificationInput] = useState('');
   const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
-
-  // VoiceInput 상태
-  const [voiceInputText, setVoiceInputText] = useState('');
-  const [voiceIsRecording, setVoiceIsRecording] = useState(false);
-  const [voiceIsProcessing, setVoiceIsProcessing] = useState(false);
-  const [voiceNetworkError, setVoiceNetworkError] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
 
   // 토큰에서 올바른 사용자 ID 가져오기
   const userId = useMemo(() => {
@@ -102,13 +94,6 @@ const HealthLog: React.FC = () => {
     userId: userId?.toString() || '',
     enabled: true // 폴링 방식으로 활성화
   });
-
-  const handleVoiceResult = useCallback((result: Record<string, unknown>) => {
-    console.log('음성 처리 결과:', result);
-    setParsedData(result);
-    setShowVoiceInput(false);
-    setShowAIFeedback(true);
-  }, []);
 
   const handleCloseAIFeedback = useCallback(() => {
     setShowAIFeedback(false);
@@ -263,15 +248,6 @@ const HealthLog: React.FC = () => {
                   <MessageSquare className="h-4 w-4" />
                   AI 채팅
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowVoiceInput(true)}
-                  className="flex items-center gap-1"
-                >
-                  <Mic className="h-4 w-4" />
-                  음성 입력
-                </Button>
               </div>
             </div>
           </div>
@@ -402,30 +378,13 @@ const HealthLog: React.FC = () => {
                     onSendMessage={() => {}}
                     onRetry={() => setChatNetworkError(false)}
                     aiFeedback={null}
-                    clarificationInput={chatClarificationInput}
-                    setClarificationInput={setChatClarificationInput}
-                    onClarificationSubmit={() => {}}
                     onSaveRecord={() => {}}
                     structuredData={chatStructuredData}
+                    conversationHistory={conversationHistory}
                   />
                 </div>
               </div>
             </div>
-          )}
-
-          {/* 음성 입력 */}
-          {showVoiceInput && (
-            <VoiceInput
-              recordType={recordType}
-              inputText={voiceInputText}
-              setInputText={setVoiceInputText}
-              isRecording={voiceIsRecording}
-              isProcessing={voiceIsProcessing}
-              networkError={voiceNetworkError}
-              onVoiceToggle={() => setVoiceIsRecording(!voiceIsRecording)}
-              onAnalyze={() => handleVoiceResult({ type: 'exercise', data: voiceInputText })}
-              onRetry={() => setVoiceNetworkError(false)}
-            />
           )}
 
           {/* AI 피드백 */}
@@ -446,10 +405,12 @@ const HealthLog: React.FC = () => {
           {/* 구조화된 데이터 미리보기 */}
           {parsedData && (
             <div className="mt-6">
-              <StructuredDataPreview 
-                structuredData={parsedData} 
-                isSuccess={true}
-              />
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-medium mb-2">데이터 처리 결과</h3>
+                <pre className="text-sm whitespace-pre-wrap">
+                  {JSON.stringify(parsedData, null, 2)}
+                </pre>
+              </div>
             </div>
           )}
         </div>

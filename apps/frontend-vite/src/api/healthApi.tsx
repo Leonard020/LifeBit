@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axiosInstance from '@/utils/axios';
+import { AUTH_CONFIG } from '@/config/env';
 // import { supabase } from '../lib/supabase'; // TODO: Supabase 설정 후 주석 해제
 
 // ============================================================================
@@ -225,7 +226,7 @@ const apiCall = async <T = unknown>(
   const { method = 'GET', data, params, retries = 2 } = options;
   
   // 🔒 토큰 유효성 사전 검사
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
   if (!token) {
     console.warn('🚨 [apiCall] 토큰이 없습니다. 로그인이 필요합니다.');
     return {
@@ -246,8 +247,8 @@ const apiCall = async <T = unknown>(
     if (payload.exp < currentTime) {
       console.warn('🚨 [apiCall] 토큰이 만료되었습니다.');
       // 만료된 토큰 제거
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+      localStorage.removeItem(AUTH_CONFIG.USER_KEY);
       window.dispatchEvent(new Event('storage'));
       
       return {
@@ -268,8 +269,8 @@ const apiCall = async <T = unknown>(
   } catch (error) {
     console.error('❌ [apiCall] 토큰 파싱 실패:', error);
     // 잘못된 토큰 제거
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+    localStorage.removeItem(AUTH_CONFIG.USER_KEY);
     window.dispatchEvent(new Event('storage'));
     
     return {
@@ -324,8 +325,8 @@ const apiCall = async <T = unknown>(
         console.warn(`🚨 [apiCall] 인증 오류 (${axiosError.response.status}):`, endpoint);
         
         // 토큰 제거 및 로그인 페이지 리다이렉트 준비
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+        localStorage.removeItem(AUTH_CONFIG.USER_KEY);
         window.dispatchEvent(new Event('storage'));
         
         return {
@@ -419,7 +420,7 @@ export const healthApi = {
     console.log('🎯 [getUserGoals] 요청 시작:', { userId });
     
     // 토큰 확인
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
     if (!token) {
       console.warn('🚨 [getUserGoals] 토큰이 없습니다.');
       return {
@@ -489,6 +490,31 @@ export const healthApi = {
         },
         success: false
       };
+    }
+
+    // 🔍 디버깅: 토큰과 사용자 ID 확인
+    const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
+    console.log('🔍 [getMealLogs] 토큰 상태:', {
+      hasToken: !!token,
+      tokenLength: token?.length,
+      userId,
+      period,
+      endpoint: `/api/meal-logs/${userId}?period=${period}`
+    });
+
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('🔍 [getMealLogs] 토큰 정보:', {
+          tokenUserId: payload.userId,
+          requestedUserId: userId,
+          isMatch: payload.userId?.toString() === userId,
+          exp: new Date(payload.exp * 1000),
+          isExpired: payload.exp < Date.now() / 1000
+        });
+      } catch (e) {
+        console.error('🚨 [getMealLogs] 토큰 파싱 오류:', e);
+      }
     }
 
     console.log('🍽️ [getMealLogs] 식단 기록 조회 시작:', { userId, period });
@@ -571,7 +597,7 @@ export const healthApi = {
   },
 
   // 운동 기록 저장 API 개선
-  saveExerciseRecord: async (exerciseData: ExerciseRecordRequest): Promise<any> => {
+  saveExerciseRecord: async (exerciseData: ExerciseRecordRequest): Promise<ExerciseSession> => {
     try {
       // 1. 먼저 운동 카탈로그를 검색하거나 생성
       const catalogResponse = await axiosInstance.post('/api/exercises/find-or-create', {
@@ -889,7 +915,7 @@ if (token) {
 const getCurrentUserId = (): string | null => {
   try {
     // 1. 토큰에서 사용자 ID 추출 시도
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem(AUTH_CONFIG.TOKEN_KEY);
     if (token) {
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.userId) {

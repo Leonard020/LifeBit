@@ -6,6 +6,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255),
     provider VARCHAR(50),
     nickname VARCHAR(100) UNIQUE NOT NULL,
+    profile_image_url VARCHAR(255),
     height DECIMAL(5,2),
     weight DECIMAL(5,2),
     age INTEGER,
