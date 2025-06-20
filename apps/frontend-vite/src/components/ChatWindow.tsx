@@ -834,7 +834,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           console.log('✅ Confirmation step');
   
           const lowered = userMessage.toLowerCase();
-          const isConfirmed = /^(네|예|yes|저장|저장해|저장해줘)/.test(lowered); // 확장된 확인 조건
+          const isConfirmed = /^(네|예|yes|저장|저장해|저장해줘|기록|기록해줘|기록해|등록|등록해줘|등록해|완료|끝)/.test(lowered); // 확장된 확인 조건
   
           if (isConfirmed && pendingRecord?.type === 'exercise') {
             try {
