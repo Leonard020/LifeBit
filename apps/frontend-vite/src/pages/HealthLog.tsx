@@ -22,7 +22,7 @@ import {
   Smartphone,
   Heart
 } from 'lucide-react';
-import { getHealthStatistics } from '@/api/auth';
+import { useHealthStatistics } from '@/api/auth';
 import { getToken, getUserInfo, isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -60,9 +60,7 @@ const HealthLog: React.FC = () => {
   const [showChat, setShowChat] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
-  const [healthStats, setHealthStats] = useState<HealthStatistics | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
 
   // ChatInterface 상태
   const [chatInputText, setChatInputText] = useState('');
@@ -71,7 +69,6 @@ const HealthLog: React.FC = () => {
   const [chatNetworkError, setChatNetworkError] = useState(false);
   const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
   const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
-  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
 
   // 토큰에서 올바른 사용자 ID 가져오기
   const userId = useMemo(() => {
@@ -94,6 +91,14 @@ const HealthLog: React.FC = () => {
     userId: userId?.toString() || '',
     enabled: true // 폴링 방식으로 활성화
   });
+
+  // ✅ React Query Hook으로 건강 통계 조회
+  const { 
+    data: healthStats, 
+    isLoading: healthStatsLoading, 
+    error: healthStatsError,
+    refetch: refetchHealthStats
+  } = useHealthStatistics(userId?.toString() || '', selectedPeriod);
 
   const handleCloseAIFeedback = useCallback(() => {
     setShowAIFeedback(false);
@@ -129,46 +134,23 @@ const HealthLog: React.FC = () => {
     console.log('✅ [HealthLog] 인증 상태 확인 완료');
   }, [navigate, isLoggedIn, user, isLoading]);
 
+  // React Query로 데이터 조회하므로 기존 useEffect 제거
+  // healthStats가 변경되면 자동으로 리렌더링됨
+
+  // 에러 처리
   useEffect(() => {
-    const fetchHealthData = async () => {
-      try {
-        const token = getToken();
-        
-        if (!token || !userId) {
-          navigate('/login');
-          return;
-        }
-
-        setLoading(true);
-        setError(null);
-        
-        const data = await getHealthStatistics(userId.toString(), selectedPeriod);
-        setHealthStats(data);
-      } catch (error) {
-        console.error('Failed to fetch health statistics:', error);
-        if ((error as { response?: { status?: number } }).response?.status === 403) {
-          setError('인증이 필요합니다. 다시 로그인해주세요.');
-          setTimeout(() => navigate('/login'), 2000);
-        } else {
-          setError('건강 데이터를 불러오는데 실패했습니다.');
-        }
-        toast({
-          title: "오류",
-          description: "건강 데이터를 불러오는데 실패했습니다.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (userId) {
-      fetchHealthData();
+    if (healthStatsError) {
+      console.error('Failed to fetch health statistics:', healthStatsError);
+      toast({
+        title: "오류",
+        description: "건강 데이터를 불러오는데 실패했습니다.",
+        variant: "destructive"
+      });
     }
-  }, [userId, selectedPeriod, navigate, toast]);
+  }, [healthStatsError, toast]);
 
   // 🔧 조건부 렌더링을 Hook 호출 이후로 이동
-  if (isLoading) {
+  if (isLoading || healthStatsLoading) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center">
@@ -178,7 +160,7 @@ const HealthLog: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="text-center text-gray-600">
-                사용자 정보를 확인하고 있습니다.
+                {isLoading ? '사용자 정보를 확인하고 있습니다.' : '건강 데이터를 불러오고 있습니다.'}
               </p>
             </CardContent>
           </Card>

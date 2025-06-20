@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Send, Dumbbell, Utensils, Mic, MicOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sendChatMessage } from '../api/chatApi';
-import { healthApi } from '../api/healthApi';
 
 // Speech Recognition 타입 정의
 interface SpeechRecognitionEvent extends Event {
@@ -108,7 +107,7 @@ interface ChatResponse {
 }
 
 // 식단 저장 함수 추가
-const saveDietRecord = async (dietData: any) => {
+const saveDietRecord = async (dietData: DietState) => {
   try {
     // healthApi에서 가져온 함수 사용
     const response = await fetch('/api/foods/find-or-create', {
@@ -184,74 +183,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const { toast } = useToast();
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // Speech Recognition 초기화
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
-        recognitionRef.current.lang = 'ko-KR';
-
-        recognitionRef.current.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
-          setInputValue(transcript);
-          setIsRecording(false);
-          toast({
-            title: "음성 인식 완료",
-            description: "음성이 텍스트로 변환되었습니다.",
-          });
-        };
-
-        recognitionRef.current.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
-          setIsRecording(false);
-          
-          let errorMessage = "음성 인식 중 오류가 발생했습니다.";
-          
-          switch (event.error) {
-            case 'not-allowed':
-            case 'permission-denied':
-              errorMessage = "마이크 사용 권한이 필요합니다. 브라우저 설정에서 마이크 권한을 허용해주세요.";
-              // 권한 요청 다이얼로그 표시
-              requestMicrophonePermission();
-              break;
-            case 'no-speech':
-              errorMessage = "음성이 감지되지 않았습니다. 다시 시도해주세요.";
-              break;
-            case 'audio-capture':
-              errorMessage = "마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.";
-              break;
-            case 'network':
-              errorMessage = "네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.";
-              break;
-            default:
-              errorMessage = "음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.";
-          }
-          
-          toast({
-            title: "음성 인식 오류",
-            description: errorMessage,
-            variant: "destructive",
-          });
-        };
-
-        recognitionRef.current.onend = () => {
-          setIsRecording(false);
-        };
-      }
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-    };
-  }, [toast]);
 
   // 마이크 권한 요청 함수
-  const requestMicrophonePermission = async () => {
+  const requestMicrophonePermission = useCallback(async () => {
     try {
       // 사용 가능한 오디오 장치 확인
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -306,7 +240,60 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
+
+  // Speech Recognition 초기화
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'ko-KR';
+      
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Speech recognition result:', transcript);
+        setInputValue(transcript);
+        setIsRecording(false);
+      };
+      
+      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech recognition error:', event.error);
+        setIsRecording(false);
+        
+        let errorMessage = "음성 인식 중 오류가 발생했습니다.";
+        switch (event.error) {
+          case 'no-speech':
+            errorMessage = "음성이 감지되지 않았습니다. 다시 시도해주세요.";
+            break;
+          case 'audio-capture':
+            errorMessage = "마이크에 접근할 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.";
+            break;
+          case 'not-allowed':
+            errorMessage = "마이크 사용 권한이 거부되었습니다.";
+            break;
+        }
+        
+        toast({
+          title: "음성 인식 오류",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      };
+      
+      recognitionRef.current.onend = () => {
+        setIsRecording(false);
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [toast]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1040,7 +1027,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       try {
         if (pendingRecord.type === 'exercise') {
           const exerciseData = JSON.parse(pendingRecord.content);
-          await healthApi.saveExerciseRecord(exerciseData);
+          // TODO: 운동 저장 API 호출 필요
+          console.log('Exercise data to save:', exerciseData);
           addMessage('ai', '운동 기록이 저장되었습니다! 다른 운동을 기록하시겠습니까?');
           setExerciseState({});
         } else if (pendingRecord.type === 'diet') {

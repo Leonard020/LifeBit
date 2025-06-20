@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { useHealthRecords } from '../../api/healthApi';
+import { useHealthRecords } from '../../api/auth';
 
 interface WeightTrendChartProps {
   userId: string;

@@ -13,6 +13,18 @@ import {
   type MealTimeType 
 } from '@/utils/mealTimeMapping';
 
+interface FoodData {
+  food_name?: string;
+  amount?: string;
+  meal_time?: string;
+  nutrition?: {
+    calories?: number | string;
+    carbs?: number | string;
+    protein?: number | string;
+    fat?: number | string;
+  };
+}
+
 const Index = () => {
   const { toast } = useToast();
   const [recordType, setRecordType] = useState<'exercise' | 'diet' | null>(null);
@@ -27,7 +39,7 @@ const Index = () => {
   const [chatStep, setChatStep] = useState<'extraction' | 'validation' | 'confirmation'>('extraction');
   
   // 식단 기록용 추가 상태들
-  const [currentMealFoods, setCurrentMealFoods] = useState<Array<any>>([]);
+  const [currentMealFoods, setCurrentMealFoods] = useState<Array<FoodData>>([]);
   const [isAddingMoreFood, setIsAddingMoreFood] = useState(false);
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 

@@ -1,11 +1,14 @@
 package com.lifebit.coreapi.controller;
 
 import com.lifebit.coreapi.service.HealthRecordService;
+import com.lifebit.coreapi.service.HealthStatisticsService;
 import com.lifebit.coreapi.entity.HealthRecord;
+import com.lifebit.coreapi.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,60 +23,57 @@ import java.util.HashMap;
 public class HealthRecordController {
 
     private final HealthRecordService healthRecordService;
+    private final HealthStatisticsService healthStatisticsService;
+    private final JwtTokenProvider jwtTokenProvider;
 
+    /**
+     * JWT 토큰에서 사용자 ID 추출
+     */
+    private Long getUserIdFromToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            String token = bearerToken.substring(7);
+            return jwtTokenProvider.getUserIdFromToken(token);
+        }
+        throw new RuntimeException("JWT token not found");
+    }
+
+    /**
+     * 건강 기록 조회 (통합 서비스 사용)
+     * 
+     * 2024-12-31: HealthStatisticsService로 리팩토링됨
+     * - 일관된 응답 형식
+     * - 중복 로직 제거
+     */
     @GetMapping("/{userId}")
     public ResponseEntity<List<Map<String, Object>>> getHealthRecords(
             @PathVariable Long userId,
-            @RequestParam(defaultValue = "month") String period) {
+            @RequestParam(defaultValue = "month") String period,
+            HttpServletRequest request) {
         
         try {
             log.info("건강 기록 조회 요청 - 사용자: {}, 기간: {}", userId, period);
             
-            // 실제 데이터베이스에서 건강 기록 조회
-            List<HealthRecord> healthRecords;
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
             
-            // 기간에 따른 데이터 조회
-            switch (period.toLowerCase()) {
-                case "day":
-                    healthRecords = healthRecordService.getRecentHealthRecords(userId, 1);
-                    break;
-                case "week":
-                    healthRecords = healthRecordService.getRecentHealthRecords(userId, 7);
-                    break;
-                case "month":
-                    healthRecords = healthRecordService.getRecentHealthRecords(userId, 30);
-                    break;
-                case "year":
-                    healthRecords = healthRecordService.getRecentHealthRecords(userId, 365);
-                    break;
-                default:
-                    healthRecords = healthRecordService.getRecentHealthRecords(userId, 30);
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
             }
             
-            // HealthRecord 엔티티를 Map으로 변환
-            List<Map<String, Object>> healthRecordsData = healthRecords.stream()
-                .map(record -> {
-                    Map<String, Object> recordMap = new HashMap<>();
-                    recordMap.put("health_record_id", record.getHealthRecordId());
-                    recordMap.put("uuid", record.getUuid().toString());
-                    recordMap.put("user_id", record.getUserId());
-                    recordMap.put("weight", record.getWeight() != null ? record.getWeight().doubleValue() : null);
-                    recordMap.put("height", record.getHeight() != null ? record.getHeight().doubleValue() : null);
-                    recordMap.put("bmi", record.getBmi() != null ? record.getBmi().doubleValue() : null);
-                    recordMap.put("record_date", record.getRecordDate().toString());
-                    recordMap.put("created_at", record.getCreatedAt().toString());
-                    return recordMap;
-                })
-                .toList();
+            // ✅ 통합된 서비스에서 건강 기록 조회
+            List<Map<String, Object>> healthRecordsData = healthStatisticsService.getHealthRecords(tokenUserId, period);
             
             log.info("건강 기록 조회 완료 - 사용자: {}, 기간: {}, 개수: {}", 
-                userId, period, healthRecordsData.size());
+                tokenUserId, period, healthRecordsData.size());
             
             return ResponseEntity.ok(healthRecordsData);
             
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("건강 기록 조회 중 오류 발생 - 사용자: {}, 기간: {}, 오류: {}", 
-                userId, period, e.getMessage(), e);
+                userId, period, e.getMessage());
             
             // 오류 발생 시 빈 리스트 반환
             return ResponseEntity.ok(List.of());
@@ -82,14 +82,18 @@ public class HealthRecordController {
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createHealthRecord(
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> request,
+            HttpServletRequest httpRequest) {
         
         try {
             log.info("건강 기록 생성 요청: {}", request);
             
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(httpRequest);
+            
             // 요청 데이터에서 HealthRecord 엔티티 생성
             HealthRecord healthRecord = new HealthRecord();
-            healthRecord.setUserId(Long.valueOf(request.get("user_id").toString()));
+            healthRecord.setUserId(tokenUserId); // 토큰에서 가져온 사용자 ID 사용
             
             if (request.get("weight") != null) {
                 healthRecord.setWeight(new java.math.BigDecimal(request.get("weight").toString()));

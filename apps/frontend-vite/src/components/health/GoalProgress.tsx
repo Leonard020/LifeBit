@@ -1,5 +1,5 @@
 import React from 'react';
-import { useUserGoals, useHealthStatistics } from '../../api/healthApi';
+import { useUserGoals, useHealthStatistics } from '../../api/auth';
 
 interface GoalProgressProps {
   userId: string;

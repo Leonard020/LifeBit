@@ -28,7 +28,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, UserGoal } from '../../api/healthApi';
+import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, UserGoal } from '../../api/auth';
 import { getToken, getUserInfo, isTokenValid } from '../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../hooks/use-toast';

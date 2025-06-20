@@ -33,9 +33,12 @@ export const login = async (credentials: LoginRequest): Promise<LoginResponse> =
     });
     
     return response.data;
-  } catch (error: any) {
-    if (error.response?.data?.message) {
-      throw new Error(error.response.data.message);
+  } catch (error: unknown) {
+    if (error instanceof Error && 'response' in error) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      if (axiosError.response?.data?.message) {
+        throw new Error(axiosError.response.data.message);
+      }
     }
     throw new Error('로그인 중 오류가 발생했습니다.');
   }
