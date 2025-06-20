@@ -255,10 +255,7 @@ const HealthLog: React.FC = () => {
               </TabsTrigger>
               <TabsTrigger value="python" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
-                AI 고급 분석
-                <Badge variant="secondary" className="text-xs ml-1">
-                  Python
-                </Badge>
+                AI분석
               </TabsTrigger>
             </TabsList>
 
