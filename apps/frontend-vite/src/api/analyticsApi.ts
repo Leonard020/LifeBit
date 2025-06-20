@@ -162,22 +162,39 @@ const getHealthAnalyticsReport = async (
   userId: number, 
   period: string
 ): Promise<AnalyticsApiResponse<HealthAnalyticsReport>> => {
-  // TODO: Airflow 파이프라인 완성 후 실제 API 호출
+  try {
   console.log('🤖 [AI Analytics] 건강 분석 리포트 요청:', { userId, period });
   
-  // 임시 응답 (실제 구현 시 제거)
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
+    const response = await axiosInstance.post('/api/py/analytics/health-report', {
+      user_id: userId,
+      period: period
+    }, {
+      baseURL: 'http://localhost:8001' // FastAPI 서버
+    });
+    
+    return {
+      success: true,
+      data: response.data.report,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        pipeline_version: '1.0.0',
+        model_version: '1.0.0'
+      }
+    };
+  } catch (error: unknown) {
+    console.error('❌ [AI Analytics] 건강 분석 리포트 오류:', error);
+    const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+    const responseMessage = (error as {response?: {data?: {detail?: string}}})?.response?.data?.detail;
+    
+    return {
         success: false,
         error: {
-          code: 'NOT_IMPLEMENTED',
-          message: 'AI 분석 시스템이 아직 구현되지 않았습니다.',
-          details: 'Airflow 데이터 파이프라인 구축 중입니다.'
+        code: 'API_ERROR',
+        message: responseMessage || '건강 분석 중 오류가 발생했습니다.',
+        details: errorMessage
         }
-      });
-    }, 1000);
-  });
+    };
+  }
 };
 
 // AI 인사이트 조회
@@ -185,20 +202,39 @@ const getAIHealthInsights = async (
   userId: number, 
   period: string
 ): Promise<AnalyticsApiResponse<AIInsights>> => {
+  try {
   console.log('🧠 [AI Insights] AI 인사이트 요청:', { userId, period });
   
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
+    const response = await axiosInstance.post('/api/py/analytics/ai-insights', {
+      user_id: userId,
+      period: period
+    }, {
+      baseURL: 'http://localhost:8001' // FastAPI 서버
+    });
+    
+    return {
+      success: true,
+      data: response.data.insights,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        pipeline_version: '1.0.0',
+        model_version: '1.0.0'
+      }
+    };
+  } catch (error: unknown) {
+    console.error('❌ [AI Insights] AI 인사이트 오류:', error);
+    const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+    const responseMessage = (error as {response?: {data?: {detail?: string}}})?.response?.data?.detail;
+    
+    return {
         success: false,
         error: {
-          code: 'NOT_IMPLEMENTED',
-          message: '머신러닝 모델이 아직 훈련 중입니다.',
-          details: '개인화된 인사이트 생성을 위한 데이터 수집 중입니다.'
+        code: 'AI_ERROR',
+        message: responseMessage || 'AI 인사이트 생성 중 오류가 발생했습니다.',
+        details: errorMessage
         }
-      });
-    }, 1500);
-  });
+    };
+  }
 };
 
 // 체중 트렌드 분석

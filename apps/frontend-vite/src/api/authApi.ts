@@ -250,7 +250,7 @@ export const login = async (credentials: LoginRequest): Promise<LoginResponse> =
     }
     throw new Error('로그인 중 오류가 발생했습니다.');
   }
-};
+}; 
 
 // ============================================================================
 // 건강 기록 CRUD API 함수들

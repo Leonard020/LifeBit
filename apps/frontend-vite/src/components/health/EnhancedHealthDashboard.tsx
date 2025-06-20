@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Calendar } from '../ui/calendar';
 import { Progress } from '../ui/progress';
 import { WeightTrendChart } from './WeightTrendChart';
-import { PythonAnalyticsCharts } from './PythonAnalyticsCharts';
 import { 
   Activity, 
   Apple, 
@@ -256,8 +255,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   userId,
   period
 }) => {
+  console.log('🚀 [EnhancedHealthDashboard] 컴포넌트 렌더링 시작!', { userId, period });
+  
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'calendar' | 'analytics'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'calendar'>('dashboard');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -307,10 +308,33 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     error: healthStatsError,
     refetch: refetchHealthStats
   } = useHealthStatistics(userId, 'week');
+  
+  // API 응답 직접 확인
+  console.log('🔥 [DEBUG] healthStats 전체 응답:', healthStats);
+  console.log('🔥 [DEBUG] healthStats.data:', healthStats?.data);
 
   // 전체 로딩 상태 계산
   const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading;
   const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError;
+  
+  // 상태 디버깅
+  console.log('📊 [EnhancedHealthDashboard] API 로딩 상태:', {
+    healthLoading,
+    mealLoading,
+    exerciseLoading,
+    goalsLoading,
+    healthStatsLoading,
+    allLoading
+  });
+  
+  console.log('📊 [EnhancedHealthDashboard] API 에러 상태:', {
+    healthError: healthError?.message,
+    mealError: mealError?.message,
+    exerciseError: exerciseError?.message,
+    goalsError: goalsError?.message,
+    healthStatsError: healthStatsError?.message,
+    hasError
+  });
 
   // 에러 처리
   useEffect(() => {
@@ -509,8 +533,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   return (
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'calendar' | 'analytics')}>
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'calendar')}>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="dashboard" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             대시보드
@@ -518,10 +542,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           <TabsTrigger value="nutrition" className="flex items-center gap-2">
             <Apple className="h-4 w-4" />
             영양 분석
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            파이썬 분석
           </TabsTrigger>
           <TabsTrigger value="calendar" className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
@@ -671,14 +691,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* 파이썬 고급 분석 탭 */}
-        <TabsContent value="analytics" className="space-y-6">
-          <PythonAnalyticsCharts
-            userId={parseInt(userId)}
-            period={period}
-          />
         </TabsContent>
 
         {/* 캘린더 탭 */}
