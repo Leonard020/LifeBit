@@ -13,18 +13,6 @@ import {
   type MealTimeType 
 } from '@/utils/mealTimeMapping';
 
-interface FoodData {
-  food_name?: string;
-  amount?: string;
-  meal_time?: string;
-  nutrition?: {
-    calories?: number | string;
-    carbs?: number | string;
-    protein?: number | string;
-    fat?: number | string;
-  };
-}
-
 const Index = () => {
   const { toast } = useToast();
   const [recordType, setRecordType] = useState<'exercise' | 'diet' | null>(null);
@@ -39,7 +27,7 @@ const Index = () => {
   const [chatStep, setChatStep] = useState<'extraction' | 'validation' | 'confirmation'>('extraction');
   
   // 식단 기록용 추가 상태들
-  const [currentMealFoods, setCurrentMealFoods] = useState<Array<FoodData>>([]);
+  const [currentMealFoods, setCurrentMealFoods] = useState<Array<any>>([]);
   const [isAddingMoreFood, setIsAddingMoreFood] = useState(false);
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 
@@ -131,37 +119,22 @@ const Index = () => {
       setConversationHistory(newHistory);
       setChatAiFeedback(response);
 
-      // 성공적으로 데이터가 파싱되면 확인 UI 없이 자동 저장
-      if (response.type === 'success' && response.parsed_data) {
+      // 파싱된 데이터가 있는 경우 처리
+      if (response.parsed_data) {
+        setChatStructuredData(response.parsed_data);
         
-        // 추가적인 AI 응답 메시지 (저장 안내)
-        const saveSuccessMessage = `${recordType === 'diet' ? '식단' : '운동'} 기록이 완료되었습니다! 자동으로 저장할게요. ✅`;
-        const finalHistory: Message[] = [
-          ...newHistory,
-          { role: 'assistant', content: saveSuccessMessage }
-        ];
-        setConversationHistory(finalHistory);
-        setChatAiFeedback(prev => ({ ...prev!, message: saveSuccessMessage }));
+        if (recordType === 'diet' && response.parsed_data.meal_time) {
+          setCurrentMealTime(response.parsed_data.meal_time as MealTimeType);
+        }
+      }
 
-        // 자동 저장 실행
-        handleRecordSubmit(recordType!, JSON.stringify(response.parsed_data));
-        setChatStructuredData(null); // 확인 UI가 나타나지 않도록 null 처리
-        
-      } else {
-        // 데이터가 불완전하거나 다른 단계일 경우 기존 로직 수행
-        if (response.parsed_data) {
-          setChatStructuredData(response.parsed_data);
-          
-          if (recordType === 'diet' && response.parsed_data.meal_time) {
-            setCurrentMealTime(response.parsed_data.meal_time as MealTimeType);
-          }
-        }
-  
-        if (response.type === 'incomplete' || response.missingFields?.length) {
-          setChatStep('validation');
-        } else if (response.type === 'confirmation') {
-          setChatStep('confirmation');
-        }
+      // 단계별 처리 로직 수정
+      if (response.type === 'incomplete' || response.missingFields?.length) {
+        // 정보가 누락된 경우: 검증 → 확인 → 저장
+        setChatStep('validation');
+      } else if (response.type === 'success' || response.type === 'confirmation') {
+        // 완벽한 정보 제공 또는 확인 단계: 확인 → 저장
+        setChatStep('confirmation');
       }
 
     } catch (error) {
@@ -242,7 +215,7 @@ const Index = () => {
               setChatInputText('');
               setChatStructuredData(null);
               setConversationHistory([]);
-              setChatAiFeedback({ type: 'initial', message: '안녕하세요! 💪 오늘 어떤 운동을 하셨나요?' });
+              setChatAiFeedback({ type: 'initial', message: '안녕하세요! 💪 오늘 어떤 운동을 하셨나요?\n\n운동 이름, 무게, 세트수, 회수, 운동시간을 알려주세요!\n\n예시:\n"조깅 40분 동안 했어요"\n"벤치프레스 30kg 10회 3세트 했어요"' });
               setChatStep('extraction');
             }}
             className={`flex items-center gap-2 ${
