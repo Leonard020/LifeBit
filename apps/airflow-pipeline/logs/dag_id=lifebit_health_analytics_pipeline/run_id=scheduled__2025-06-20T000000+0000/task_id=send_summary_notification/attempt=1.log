@@ -1,0 +1,29 @@
+[2025-06-21T06:10:42.874+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: lifebit_health_analytics_pipeline.send_summary_notification scheduled__2025-06-20T00:00:00+00:00 [queued]>
+[2025-06-21T06:10:42.894+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: lifebit_health_analytics_pipeline.send_summary_notification scheduled__2025-06-20T00:00:00+00:00 [queued]>
+[2025-06-21T06:10:42.895+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2025-06-21T06:10:42.926+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): send_summary_notification> on 2025-06-20 00:00:00+00:00
+[2025-06-21T06:10:42.938+0000] {standard_task_runner.py:60} INFO - Started process 698 to run task
+[2025-06-21T06:10:42.941+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'lifebit_health_analytics_pipeline', 'send_summary_notification', 'scheduled__2025-06-20T00:00:00+00:00', '--job-id', '13', '--raw', '--subdir', 'DAGS_FOLDER/lifebit_health_analytics_dag.py', '--cfg-path', '/tmp/tmp3i4dnl4m']
+[2025-06-21T06:10:42.945+0000] {standard_task_runner.py:88} INFO - Job 13: Subtask send_summary_notification
+[2025-06-21T06:10:43.031+0000] {task_command.py:423} INFO - Running <TaskInstance: lifebit_health_analytics_pipeline.send_summary_notification scheduled__2025-06-20T00:00:00+00:00 [running]> on host 1c6dd86bb0ec
+[2025-06-21T06:10:43.141+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='lifebit-team' AIRFLOW_CTX_DAG_ID='lifebit_health_analytics_pipeline' AIRFLOW_CTX_TASK_ID='send_summary_notification' AIRFLOW_CTX_EXECUTION_DATE='2025-06-20T00:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2025-06-20T00:00:00+00:00'
+[2025-06-21T06:10:43.142+0000] {lifebit_health_analytics_dag.py:294} INFO - 📢 분석 결과 요약 알림
+[2025-06-21T06:10:43.176+0000] {lifebit_health_analytics_dag.py:309} INFO - ==================================================
+[2025-06-21T06:10:43.177+0000] {lifebit_health_analytics_dag.py:310} INFO - 📊 LifeBit 건강 데이터 파이프라인 실행 완료
+[2025-06-21T06:10:43.178+0000] {lifebit_health_analytics_dag.py:311} INFO - ==================================================
+[2025-06-21T06:10:43.179+0000] {lifebit_health_analytics_dag.py:318} INFO - 👥 건강 기록: 2명, 2건
+[2025-06-21T06:10:43.179+0000] {lifebit_health_analytics_dag.py:319} INFO - ⚖️ 평균 체중: 69.3kg
+[2025-06-21T06:10:43.180+0000] {lifebit_health_analytics_dag.py:320} INFO - 📏 평균 BMI: 23.0
+[2025-06-21T06:10:43.180+0000] {lifebit_health_analytics_dag.py:324} INFO - 💪 운동 세션: 4건
+[2025-06-21T06:10:43.181+0000] {lifebit_health_analytics_dag.py:325} INFO - ⏰ 총 운동 시간: 293분
+[2025-06-21T06:10:43.181+0000] {lifebit_health_analytics_dag.py:326} INFO - 🔥 총 소모 칼로리: 1834kcal
+[2025-06-21T06:10:43.181+0000] {lifebit_health_analytics_dag.py:330} INFO - 🍽️ 식단 기록: 4건
+[2025-06-21T06:10:43.182+0000] {lifebit_health_analytics_dag.py:331} INFO - 🥗 총 섭취 칼로리: 407kcal
+[2025-06-21T06:10:43.182+0000] {lifebit_health_analytics_dag.py:335} INFO - 🤖 AI 추천: 2개 생성
+[2025-06-21T06:10:43.183+0000] {lifebit_health_analytics_dag.py:338} INFO -    1. [MEDIUM] 단백질 섭취량이 부족할 수 있습니다.
+[2025-06-21T06:10:43.183+0000] {lifebit_health_analytics_dag.py:338} INFO -    2. [LOW] 꾸준한 건강 관리가 중요합니다.
+[2025-06-21T06:10:43.184+0000] {lifebit_health_analytics_dag.py:340} INFO - ==================================================
+[2025-06-21T06:10:43.184+0000] {python.py:201} INFO - Done. Returned value was: {'pipeline_date': '2025-06-21 06:10:43', 'data_analysis': {'health_analysis': {'average_weight': 69.25999999999999, 'average_bmi': 23.005000000000003, 'users_count': 2, 'records_count': 2}, 'exercise_analysis': {'total_exercise_time': 293, 'total_calories_burned': 1834, 'active_users': 4, 'exercise_sessions': 4}, 'nutrition_analysis': {'total_calories_consumed': 407, 'average_protein': 6.7, 'average_carbs': 6.8500000000000005, 'meal_logs_count': 4}, 'summary': {'analysis_date': '2025-06-20', 'total_records_processed': 10, 'processing_timestamp': '2025-06-21T06:10:41.181929'}}, 'ai_recommendations': [{'type': 'nutrition', 'priority': 'medium', 'message': '단백질 섭취량이 부족할 수 있습니다.', 'suggestion': '닭가슴살, 계란, 두부 등 단백질이 풍부한 음식을 드세요.'}, {'type': 'general', 'priority': 'low', 'message': '꾸준한 건강 관리가 중요합니다.', 'suggestion': '규칙적인 생활 패턴을 유지하고 충분한 수면을 취하세요.'}], 'status': 'completed'}
+[2025-06-21T06:10:43.224+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=lifebit_health_analytics_pipeline, task_id=send_summary_notification, execution_date=20250620T000000, start_date=20250621T061042, end_date=20250621T061043
+[2025-06-21T06:10:43.277+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2025-06-21T06:10:43.302+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

@@ -317,8 +317,8 @@ public class ExerciseSessionController {
             response.put("created_at", session.getCreatedAt() != null ? session.getCreatedAt().toString() : null);
             
             log.info("운동 세션 단일 조회 완료 - ID: {}", sessionId);
-            
-            return ResponseEntity.ok(response);
+        
+        return ResponseEntity.ok(response);
             
         } catch (Exception e) {
             log.error("운동 세션 단일 조회 중 오류 발생 - ID: {}, 오류: {}", sessionId, e.getMessage(), e);

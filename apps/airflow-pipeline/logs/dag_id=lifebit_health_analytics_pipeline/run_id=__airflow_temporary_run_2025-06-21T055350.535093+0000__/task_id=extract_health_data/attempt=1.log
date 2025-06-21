@@ -1,0 +1,35 @@
+[2025-06-21T05:53:51.385+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: lifebit_health_analytics_pipeline.extract_health_data __airflow_temporary_run_2025-06-21T05:53:50.535093+00:00__ [queued]>
+[2025-06-21T05:53:51.403+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: lifebit_health_analytics_pipeline.extract_health_data __airflow_temporary_run_2025-06-21T05:53:50.535093+00:00__ [queued]>
+[2025-06-21T05:53:51.404+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2025-06-21T05:53:51.449+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): extract_health_data> on 2025-06-21 00:00:00+00:00
+[2025-06-21T05:53:51.461+0000] {standard_task_runner.py:60} INFO - Started process 700 to run task
+[2025-06-21T05:53:51.467+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'lifebit_health_analytics_pipeline', 'extract_health_data', '__***_temporary_run_2025-06-21T05:53:50.535093+00:00__', '--job-id', '7', '--raw', '--subdir', 'DAGS_FOLDER/lifebit_health_analytics_dag.py', '--cfg-path', '/tmp/tmpp8z62nek']
+[2025-06-21T05:53:51.471+0000] {standard_task_runner.py:88} INFO - Job 7: Subtask extract_health_data
+[2025-06-21T05:53:51.572+0000] {task_command.py:423} INFO - Running <TaskInstance: lifebit_health_analytics_pipeline.extract_health_data __airflow_temporary_run_2025-06-21T05:53:50.535093+00:00__ [running]> on host 7e33819bbd11
+[2025-06-21T05:53:51.706+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='lifebit-team' AIRFLOW_CTX_DAG_ID='lifebit_health_analytics_pipeline' AIRFLOW_CTX_TASK_ID='extract_health_data' AIRFLOW_CTX_EXECUTION_DATE='2025-06-21T00:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='__***_temporary_run_2025-06-21T05:53:50.535093+00:00__'
+[2025-06-21T05:53:52.971+0000] {lifebit_health_analytics_dag.py:57} INFO - 🔍 건강 데이터 추출 시작
+[2025-06-21T05:53:53.017+0000] {lifebit_health_analytics_dag.py:131} ERROR - ❌ 데이터 추출 실패: connection to server at "host.docker.internal" (192.168.65.254), port 3306 failed: received invalid response to SSL negotiation: J
+
+[2025-06-21T05:53:53.018+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/lifebit_health_analytics_dag.py", line 73, in extract_health_data
+    connection = psycopg2.connect(
+                 ^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.OperationalError: connection to server at "host.docker.internal" (192.168.65.254), port 3306 failed: received invalid response to SSL negotiation: J
+
+[2025-06-21T05:53:53.033+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=lifebit_health_analytics_pipeline, task_id=extract_health_data, execution_date=20250621T000000, start_date=20250621T055351, end_date=20250621T055353
+[2025-06-21T05:53:53.051+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 7 for task extract_health_data (connection to server at "host.docker.internal" (192.168.65.254), port 3306 failed: received invalid response to SSL negotiation: J
+; 700)
+[2025-06-21T05:53:53.091+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1

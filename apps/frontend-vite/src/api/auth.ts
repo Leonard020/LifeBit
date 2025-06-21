@@ -261,10 +261,25 @@ export const useHealthRecords = (userId: string, period: string = 'month') => {
   return useQuery({
     queryKey: ['healthRecords', userId, period],
     queryFn: async () => {
-      const response = await axios.get(`${API_ENDPOINTS.HEALTH_RECORDS}/${userId}`, { 
-        params: { period } 
-      });
-      return response.data;
+      try {
+        console.log('🏥 [useHealthRecords] API 호출 시작:', { userId, period });
+        
+        const response = await axios.get(`${API_ENDPOINTS.HEALTH_RECORDS}/${userId}`, { 
+          params: { period } 
+        });
+        
+        console.log('✅ [useHealthRecords] API 호출 성공:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ [useHealthRecords] API 호출 실패:', {
+          error,
+          userId,
+          period,
+          endpoint: `${API_ENDPOINTS.HEALTH_RECORDS}/${userId}`,
+          params: { period }
+        });
+        throw error;
+      }
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5분간 캐시 유지
@@ -277,8 +292,21 @@ export const useUserGoals = (userId: string) => {
   return useQuery({
     queryKey: ['userGoals', userId],
     queryFn: async () => {
-      const response = await axios.get(`/api/user-goals/${userId}`);
-      return response.data;
+      try {
+        console.log('🎯 [useUserGoals] API 호출 시작:', { userId });
+        
+        const response = await axios.get(`/api/user-goals/${userId}`);
+        
+        console.log('✅ [useUserGoals] API 호출 성공:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ [useUserGoals] API 호출 실패:', {
+          error,
+          userId,
+          endpoint: `/api/user-goals/${userId}`
+        });
+        throw error;
+      }
     },
     enabled: !!userId,
     staleTime: 10 * 60 * 1000, // 10분간 캐시 유지
@@ -291,10 +319,25 @@ export const useExerciseSessions = (userId: string, period: string = 'month') =>
   return useQuery({
     queryKey: ['exerciseSessions', userId, period],
     queryFn: async () => {
-      const response = await axios.get(`${API_ENDPOINTS.EXERCISE_SESSIONS}/${userId}`, { 
-        params: { period } 
-      });
-      return response.data;
+      try {
+        console.log('🏃 [useExerciseSessions] API 호출 시작:', { userId, period });
+        
+        const response = await axios.get(`${API_ENDPOINTS.EXERCISE_SESSIONS}/${userId}`, { 
+          params: { period } 
+        });
+        
+        console.log('✅ [useExerciseSessions] API 호출 성공:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ [useExerciseSessions] API 호출 실패:', {
+          error,
+          userId,
+          period,
+          endpoint: `${API_ENDPOINTS.EXERCISE_SESSIONS}/${userId}`,
+          params: { period }
+        });
+        throw error;
+      }
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5분간 캐시 유지
@@ -307,10 +350,25 @@ export const useMealLogs = (userId: string, period: string = 'month') => {
   return useQuery({
     queryKey: ['mealLogs', userId, period],
     queryFn: async () => {
-      const response = await axios.get(`${API_ENDPOINTS.MEAL_LOGS}/${userId}`, { 
-        params: { period } 
-      });
-      return response.data;
+      try {
+        console.log('🍽️ [useMealLogs] API 호출 시작:', { userId, period });
+        
+        const response = await axios.get(`${API_ENDPOINTS.MEAL_LOGS}/${userId}`, { 
+          params: { period } 
+        });
+        
+        console.log('✅ [useMealLogs] API 호출 성공:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ [useMealLogs] API 호출 실패:', {
+          error,
+          userId,
+          period,
+          endpoint: `${API_ENDPOINTS.MEAL_LOGS}/${userId}`,
+          params: { period }
+        });
+        throw error;
+      }
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5분간 캐시 유지
@@ -323,10 +381,25 @@ export const useHealthStatistics = (userId: string, period: string = 'month') =>
   return useQuery({
     queryKey: ['healthStatistics', userId, period],
     queryFn: async () => {
-      const response = await axios.get(`${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}`, { 
-        params: { period } 
-      });
-      return response.data;
+      try {
+        console.log('📊 [useHealthStatistics] API 호출 시작:', { userId, period });
+        
+        const response = await axios.get(`${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}`, { 
+          params: { period } 
+        });
+        
+        console.log('✅ [useHealthStatistics] API 호출 성공:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ [useHealthStatistics] API 호출 실패:', {
+          error,
+          userId,
+          period,
+          endpoint: `${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}`,
+          params: { period }
+        });
+        throw error;
+      }
     },
     enabled: !!userId,
     staleTime: 10 * 60 * 1000, // 10분간 캐시 유지

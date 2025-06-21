@@ -27,7 +27,17 @@ const Index = () => {
   const [chatStep, setChatStep] = useState<'extraction' | 'validation' | 'confirmation'>('extraction');
   
   // 식단 기록용 추가 상태들
-  const [currentMealFoods, setCurrentMealFoods] = useState<Array<any>>([]);
+  const [currentMealFoods, setCurrentMealFoods] = useState<Array<{
+    food_name: string;
+    amount: string;
+    meal_time?: string;
+    nutrition?: {
+      calories: number;
+      carbs: number;
+      protein: number;
+      fat: number;
+    };
+  }>>([]);
   const [isAddingMoreFood, setIsAddingMoreFood] = useState(false);
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 
@@ -155,9 +165,16 @@ const Index = () => {
    * 음식 추가 기능
    */
   const handleAddMoreFood = () => {
-    if (chatStructuredData) {
-      // 현재 음식을 리스트에 추가
-      setCurrentMealFoods(prev => [...prev, chatStructuredData]);
+    if (chatStructuredData && chatStructuredData.food_name && chatStructuredData.amount) {
+      // 현재 음식을 리스트에 추가 (타입 변환)
+      const foodToAdd = {
+        food_name: chatStructuredData.food_name,
+        amount: chatStructuredData.amount,
+        meal_time: chatStructuredData.meal_time,
+        nutrition: chatStructuredData.nutrition
+      };
+      
+      setCurrentMealFoods(prev => [...prev, foodToAdd]);
       setChatStructuredData(null);
       setIsAddingMoreFood(true);
       setChatStep('extraction');

@@ -75,12 +75,10 @@ const HealthLog: React.FC = () => {
   const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
   const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
 
-  // 토큰에서 올바른 사용자 ID 가져오기
+  // 🔧 userId를 안전하게 계산하는 로직 (useMemo로 메모화)
   const userId = useMemo(() => {
+    // 토큰에서 사용자 ID 추출 시도
     const tokenUserId = getUserIdFromToken();
-    console.log('🔍 [HealthLog] 토큰에서 사용자 ID:', tokenUserId);
-    console.log('🔍 [HealthLog] user 객체:', user);
-    
     if (tokenUserId) {
       console.log('✅ [HealthLog] 토큰에서 사용자 ID 사용:', tokenUserId);
       return tokenUserId;
@@ -89,7 +87,7 @@ const HealthLog: React.FC = () => {
     const userUserId = user?.userId ? parseInt(user.userId) : null;
     console.log('🔍 [HealthLog] user 객체에서 사용자 ID:', userUserId);
     return userUserId;
-  }, [user?.userId]);
+  }, [user]);
 
   // 🔧 실시간 업데이트 Hook을 항상 호출 (조건부 호출 금지!)
   const { isConnected, refreshData, requestNotificationPermission } = useRealTimeUpdates({

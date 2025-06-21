@@ -6,7 +6,7 @@
  * - AI 기반 개인화된 인사이트
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
 import { useHealthAnalyticsReport, useAIHealthInsights } from '../../api/analyticsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -56,6 +56,7 @@ import {
   RadialBar,
   BarChart
 } from 'recharts';
+import { getToken, getUserInfo, debugToken, isTokenValid } from '../../utils/auth';
 
 interface PythonAnalyticsChartsProps {
   userId: number;
@@ -81,6 +82,28 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
 }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'weight' | 'exercise' | 'nutrition' | 'goals'>('overview');
+  
+  // 🔧 인증 상태 디버깅
+  useEffect(() => {
+    console.group('🔐 [PythonAnalyticsCharts] 인증 상태 디버깅');
+    console.log('📝 Props userId:', userId);
+    console.log('📝 Props period:', period);
+    
+    const token = getToken();
+    const userInfo = getUserInfo();
+    const tokenValid = isTokenValid();
+    
+    console.log('🔑 토큰 존재:', !!token);
+    console.log('👤 사용자 정보:', userInfo);
+    console.log('✅ 토큰 유효성:', tokenValid);
+    
+    if (token) {
+      console.log('🔍 토큰 미리보기:', token.substring(0, 50) + '...');
+      debugToken(); // 상세 토큰 정보 출력
+    }
+    
+    console.groupEnd();
+  }, [userId, period]);
   
   // 실제 건강 데이터 조회
   const { 
@@ -154,7 +177,10 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     healthError,
     exerciseError,
     isHealthLoading,
-    isExerciseLoading
+    isExerciseLoading,
+    // 🔧 에러 상세 정보 추가
+    healthErrorMessage: healthError?.message || 'Unknown error',
+    exerciseErrorMessage: exerciseError?.message || 'Unknown error'
   });
 
   // 차트 데이터 준비
@@ -292,7 +318,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     }
 
     return Object.values(groupedData);
-  }, [healthRecords, exerciseSessions, mealLogs, period]);
+  }, [healthRecords, exerciseSessions, mealLogs, period, userGoals]);
 
   // 목표 달성률 계산
   const goalAchievements = useMemo(() => {

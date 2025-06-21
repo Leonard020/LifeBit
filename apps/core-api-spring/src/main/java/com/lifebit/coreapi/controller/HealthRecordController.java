@@ -288,8 +288,8 @@ public class HealthRecordController {
             response.put("created_at", record.getCreatedAt().toString());
             
             log.info("건강 기록 단일 조회 완료 - ID: {}", recordId);
-            
-            return ResponseEntity.ok(response);
+        
+        return ResponseEntity.ok(response);
             
         } catch (Exception e) {
             log.error("건강 기록 단일 조회 중 오류 발생 - ID: {}, 오류: {}", recordId, e.getMessage(), e);

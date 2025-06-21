@@ -20,7 +20,17 @@ interface ChatInterfaceProps {
   onSaveRecord: () => void;
   structuredData: ChatResponse['parsed_data'] | null;
   conversationHistory: Message[];
-  currentMealFoods?: Array<any>;
+  currentMealFoods?: Array<{
+    food_name: string;
+    amount: string;
+    meal_time?: string;
+    nutrition?: {
+      calories: number;
+      carbs: number;
+      protein: number;
+      fat: number;
+    };
+  }>;
   onAddMoreFood?: () => void;
   isAddingMoreFood?: boolean;
 }
@@ -81,7 +91,7 @@ const ChatMessage: React.FC<{
 };
 
 // 식단 데이터를 카드 형태로 표시하는 함수
-const formatStructuredDataDisplay = (data: any, recordType: 'exercise' | 'diet') => {
+const formatStructuredDataDisplay = (data: ChatResponse['parsed_data'], recordType: 'exercise' | 'diet') => {
   if (!data) return null;
 
   if (recordType === 'diet' && data.food_name) {

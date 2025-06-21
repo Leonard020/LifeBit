@@ -58,6 +58,7 @@ interface ExerciseState {
   reps?: number;
   duration_min?: number;
   weight?: number;
+  calories_burned?: number;
 }
 
 interface DietState {
@@ -127,7 +128,7 @@ export const sendChatMessage = async (
 
 
 // 운동 기록 저장 API 호출
-export const saveExerciseRecord = async (exerciseData: any) => {
+export const saveExerciseRecord = async (exerciseData: ExerciseState) => {
   try {
     const res = await axiosInstance.post('/api/note/exercise', {
       user_id: 1,
