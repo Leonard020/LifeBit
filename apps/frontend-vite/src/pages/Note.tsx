@@ -343,22 +343,6 @@ const Note = () => {
     diet: uiTodayDietRecords
   };
 
-  // Calculate total nutrition intake based on actual consumed quantity
-  const BASE_AMOUNT = 100; // DB 기준량(예: 100g)
-
-  const totalCarbs = dailyDietLogs.reduce(
-    (sum, log) => sum + (log.carbs * log.quantity / BASE_AMOUNT), 0
-  );
-  const totalProtein = dailyDietLogs.reduce(
-    (sum, log) => sum + (log.protein * log.quantity / BASE_AMOUNT), 0
-  );
-  const totalFat = dailyDietLogs.reduce(
-    (sum, log) => sum + (log.fat * log.quantity / BASE_AMOUNT), 0
-  );
-  const totalCalories = dailyDietLogs.reduce(
-    (sum, log) => sum + (log.calories * log.quantity / BASE_AMOUNT), 0
-  );
-
   // Get nutrition goals from DB (dailyNutritionGoals)
   const getGoal = (name: string) => {
     const found = dailyNutritionGoals.find(dto => dto.name === name);
@@ -378,34 +362,34 @@ const Note = () => {
   const uiNutritionData: NutritionData[] = [
     {
       name: '탄수화물',
-      value: (totalCarbs / getGoal('탄수화물')) * 100,
+      value: (dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0) / getGoal('탄수화물')) * 100,
       goal: 100,
       color: '#3B4A9C',
-      calories: totalCarbs,
+      calories: dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0),
       targetCalories: getGoal('탄수화물'),
     },
     {
       name: '단백질',
-      value: (totalProtein / getGoal('단백질')) * 100,
+      value: (dailyDietLogs.reduce((sum, log) => sum + log.protein, 0) / getGoal('단백질')) * 100,
       goal: 100,
       color: '#E67E22',
-      calories: totalProtein,
+      calories: dailyDietLogs.reduce((sum, log) => sum + log.protein, 0),
       targetCalories: getGoal('단백질'),
     },
     {
       name: '지방',
-      value: (totalFat / getGoal('지방')) * 100,
+      value: (dailyDietLogs.reduce((sum, log) => sum + log.fat, 0) / getGoal('지방')) * 100,
       goal: 100,
       color: '#95A5A6',
-      calories: totalFat,
+      calories: dailyDietLogs.reduce((sum, log) => sum + log.fat, 0),
       targetCalories: getGoal('지방'),
     },
     {
       name: '칼로리',
-      value: (totalCalories / getGoal('칼로리')) * 100,
+      value: (dailyDietLogs.reduce((sum, log) => sum + log.calories, 0) / getGoal('칼로리')) * 100,
       goal: 100,
       color: '#8B5CF6',
-      calories: totalCalories,
+      calories: dailyDietLogs.reduce((sum, log) => sum + log.calories, 0),
       targetCalories: getGoal('칼로리'),
     },
   ];
@@ -1028,7 +1012,11 @@ const Note = () => {
                             <Badge variant="secondary" className="text-xs">{record.meal}</Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {record.amount} • {Math.round(record.calories)}kcal {record.time && `• ${record.time}`}
+                            {record.amount} • {Math.round(record.calories)}kcal
+                            {typeof dailyDietLogs[index]?.carbs === 'number' && ` • 탄수화물: ${dailyDietLogs[index].carbs.toFixed(1)}g`}
+                            {typeof dailyDietLogs[index]?.protein === 'number' && ` • 단백질: ${dailyDietLogs[index].protein.toFixed(1)}g`}
+                            {typeof dailyDietLogs[index]?.fat === 'number' && ` • 지방: ${dailyDietLogs[index].fat.toFixed(1)}g`}
+                            {record.time && ` • ${record.time}`}
                           </p>
                         </div>
                         <div className="flex space-x-1">
