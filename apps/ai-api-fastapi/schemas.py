@@ -16,6 +16,7 @@ class MealInput(BaseModel):
     food_item_id: Optional[int] = None
     quantity: float
     log_date: Optional[date] = date.today()
+    meal_time: str
 
 # (선택) 응답용 모델이 필요하면 아래 추가 가능
 class ExerciseOutput(BaseModel):
@@ -39,6 +40,7 @@ class MealOutput(BaseModel):
 
         # 🔽 오늘 운동 기록 조회용 (프론트엔드 Note.tsx 사용 타입과 일치)
 class DailyExerciseRecord(BaseModel):
+    exercise_session_id: int
     name: str
     weight: str
     sets: int

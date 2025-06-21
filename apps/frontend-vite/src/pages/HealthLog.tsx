@@ -33,6 +33,7 @@ import { useToast } from '../components/ui/use-toast';
 import { Message } from '@/api/chatApi';
 import { sendChatMessage } from '@/api/chatApi';
 import { saveExerciseRecord } from '@/api/chatApi';
+import { createDietRecord, searchFoodItems } from '@/api/authApi';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -154,6 +155,10 @@ const HealthLog: React.FC = () => {
       }
   }, [healthStatsError, toast]);
 
+  React.useEffect(() => {
+    console.log('[ChatInterface 전달] recordType:', recordType);
+  }, [recordType]);
+
   // 🔧 조건부 렌더링을 Hook 호출 이후로 이동
   if (isLoading || healthStatsLoading) {
     return (
@@ -199,48 +204,107 @@ const HealthLog: React.FC = () => {
   }
   const handleHealthLogSendMessage = async () => {
     console.log('📌 [HealthLog] handleHealthLogSendMessage 진입');
-
+    console.log('[DEBUG] 저장 시점 recordType:', recordType);
     if (!chatInputText.trim()) return;
-  
     try {
       setChatIsProcessing(true);
       setChatNetworkError(false);
-  
       const updatedHistory: Message[] = [
         ...conversationHistory,
         { role: 'user', content: chatInputText }
       ];
-  
       const response = await sendChatMessage(
         chatInputText,
         updatedHistory,
         recordType
       );
-  
       console.log('📦 AI 응답:', response);
-  
       if (response?.parsed_data) {
         setChatStructuredData(response.parsed_data);
         setParsedData(response.parsed_data);
-  
         // ✅ 응답 직후 저장 키워드가 있는지 검사하여 저장
         const lowered = chatInputText.toLowerCase();
         const saveKeywords = /저장해줘|기록해줘|완료|끝|등록해줘|저장|기록|등록/;
-  
         if (saveKeywords.test(lowered)) {
           console.log('💾 [자동 저장 조건 충족] 저장 시작');
-  
           try {
-            await saveExerciseRecord({
-              ...response.parsed_data,
-              exercise_date: new Date().toISOString().slice(0, 10),
-            });
-  
-            toast({
-              title: "운동 기록 저장 완료",
-              description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-            });
-  
+            console.log('[저장 함수 진입] recordType:', recordType, 'chatInputText:', chatInputText);
+            if (recordType === 'exercise') {
+              console.log('[운동기록 저장] payload:', response.parsed_data);
+              await saveExerciseRecord({
+                ...response.parsed_data,
+                exercise_date: new Date().toISOString().slice(0, 10),
+              });
+              toast({
+                title: "운동 기록 저장 완료",
+                description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
+              });
+            } else if (recordType === 'diet') {
+              console.log('[식단기록 저장] payload:', response.parsed_data);
+              type DietData = {
+                food_item_id?: number;
+                foodItemId?: number;
+                foodItemID?: number;
+                food_name?: string;
+                amount?: number | string;
+                quantity?: number | string;
+                meal_time?: string;
+                mealTime?: string;
+                input_source?: string;
+                confidence_score?: number;
+                original_audio_path?: string;
+                validation_status?: string;
+                validation_notes?: string;
+                created_at?: string;
+              };
+              const dietData: DietData = response.parsed_data;
+              console.log('[식단기록] 저장 시도:', dietData);
+              let foodItemId = dietData.food_item_id || dietData.foodItemId || dietData.foodItemID;
+              const quantity = dietData.amount || dietData.quantity;
+              if (!foodItemId && dietData.food_name) {
+                const searchResults = await searchFoodItems(dietData.food_name);
+                foodItemId = searchResults[0]?.foodItemId;
+                console.log('[식단기록] foodItemId 검색 결과:', searchResults);
+              }
+              if (!foodItemId || !quantity) {
+                toast({
+                  title: "식단 기록 저장 실패",
+                  description: "음식 정보 또는 섭취량이 부족합니다. 다시 시도해주세요.",
+                  variant: "destructive",
+                });
+                console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
+              } else {
+                try {
+                  const result = await createDietRecord({
+                    food_item_id: foodItemId as number,
+                    quantity: Number(quantity),
+                    meal_time: (dietData.meal_time || dietData.mealTime || 'breakfast') as string,
+                    input_source: (dietData.input_source || undefined) as string | undefined,
+                    confidence_score: (dietData.confidence_score || undefined) as number | undefined,
+                    original_audio_path: (dietData.original_audio_path || undefined) as string | undefined,
+                    validation_status: (dietData.validation_status || undefined) as string | undefined,
+                    validation_notes: (dietData.validation_notes || undefined) as string | undefined,
+                    created_at: (dietData.created_at || undefined) as string | undefined,
+                  });
+                  console.log(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 성공]`, result);
+                  toast({
+                    title: "식단 기록 저장 완료",
+                    description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
+                  });
+                  // 그래프/식단 기록 새로고침
+                  if (typeof refetchHealthStats === 'function') await refetchHealthStats();
+                } catch (err) {
+                  console.error(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 실패]`, err);
+                  toast({
+                    title: "식단 기록 저장 실패",
+                    description: "서버에 데이터를 저장하는 데 실패했습니다.",
+                    variant: "destructive",
+                  });
+                }
+              }
+            } else {
+              console.warn('[방어] recordType이 diet/exercise가 아님:', recordType, response.parsed_data);
+            }
             setChatStructuredData(null);
             setParsedData(null);
           } catch (err) {
@@ -253,7 +317,6 @@ const HealthLog: React.FC = () => {
           }
         }
       }
-  
       setConversationHistory([
         ...updatedHistory,
         { role: 'assistant', content: response.message }
@@ -271,8 +334,6 @@ const HealthLog: React.FC = () => {
     }
   };
   
-  
-
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -301,6 +362,29 @@ const HealthLog: React.FC = () => {
                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
                   {isConnected ? '자동 새로고침 활성' : '비활성'}
                 </Badge>
+                {/* 운동/식단 기록 타입 선택 버튼 */}
+                <Button
+                  variant={recordType === 'exercise' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setRecordType('exercise');
+                    console.log('[DEBUG] recordType set to exercise');
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  💪 운동 기록
+                </Button>
+                <Button
+                  variant={recordType === 'diet' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setRecordType('diet');
+                    console.log('[DEBUG] recordType set to diet');
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  🍽️ 식단 기록
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -450,8 +534,6 @@ const HealthLog: React.FC = () => {
                     networkError={chatNetworkError}
                     onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
                     onSendMessage={handleHealthLogSendMessage}
-
-
                     onRetry={() => setChatNetworkError(false)}
                     aiFeedback={null}
                     onSaveRecord={async () => {
@@ -460,14 +542,80 @@ const HealthLog: React.FC = () => {
                       if (!chatStructuredData) return;
                     
                       try {
-                        await saveExerciseRecord({
-                          ...chatStructuredData,
-                          exercise_date: new Date().toISOString().slice(0, 10), // 🔥 오늘 날짜 자동 삽입
-                        });
-                        toast({
-                          title: "운동 기록 저장 완료",
-                          description: "AI 분석된 데이터를 성공적으로 저장했습니다."
-                        });
+                        if (recordType === 'exercise') {
+                          await saveExerciseRecord({
+                            ...chatStructuredData,
+                            exercise_date: new Date().toISOString().slice(0, 10),
+                          });
+                          toast({
+                            title: "운동 기록 저장 완료",
+                            description: "AI 분석된 데이터를 성공적으로 저장했습니다."
+                          });
+                        } else if (recordType === 'diet') {
+                          type DietData = {
+                            food_item_id?: number;
+                            foodItemId?: number;
+                            foodItemID?: number;
+                            food_name?: string;
+                            amount?: number | string;
+                            quantity?: number | string;
+                            meal_time?: string;
+                            mealTime?: string;
+                            input_source?: string;
+                            confidence_score?: number;
+                            original_audio_path?: string;
+                            validation_status?: string;
+                            validation_notes?: string;
+                            created_at?: string;
+                          };
+                          const dietData: DietData = chatStructuredData;
+                          console.log('[식단기록] 저장 시도:', dietData);
+                          let foodItemId = dietData.food_item_id || dietData.foodItemId || dietData.foodItemID;
+                          const quantity = dietData.amount || dietData.quantity;
+                          if (!foodItemId && dietData.food_name) {
+                            const searchResults = await searchFoodItems(dietData.food_name);
+                            foodItemId = searchResults[0]?.foodItemId;
+                            console.log('[식단기록] foodItemId 검색 결과:', searchResults);
+                          }
+                          if (!foodItemId || !quantity) {
+                            toast({
+                              title: "식단 기록 저장 실패",
+                              description: "음식 정보 또는 섭취량이 부족합니다. 다시 시도해주세요.",
+                              variant: "destructive"
+                            });
+                            console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
+                          } else {
+                            try {
+                              const result = await createDietRecord({
+                                food_item_id: foodItemId as number,
+                                quantity: Number(quantity),
+                                meal_time: (dietData.meal_time || dietData.mealTime || 'breakfast') as string,
+                                input_source: (dietData.input_source || undefined) as string | undefined,
+                                confidence_score: (dietData.confidence_score || undefined) as number | undefined,
+                                original_audio_path: (dietData.original_audio_path || undefined) as string | undefined,
+                                validation_status: (dietData.validation_status || undefined) as string | undefined,
+                                validation_notes: (dietData.validation_notes || undefined) as string | undefined,
+                                created_at: (dietData.created_at || undefined) as string | undefined,
+                              });
+                              console.log(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 성공]`, result);
+                              toast({
+                                title: "식단 기록 저장 완료",
+                                description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
+                              });
+                              // 그래프/식단 기록 새로고침
+                              if (typeof refetchHealthStats === 'function') await refetchHealthStats();
+                            } catch (err) {
+                              console.error(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 실패]`, err);
+                              toast({
+                                title: "식단 기록 저장 실패",
+                                description: "서버에 데이터를 저장하는 데 실패했습니다.",
+                                variant: "destructive",
+                              });
+                            }
+                          }
+                        } else {
+                          console.warn('[방어] recordType이 diet/exercise가 아님:', recordType, chatStructuredData);
+                        }
                         setChatStructuredData(null);
                         setParsedData(null);
                       } catch (error) {
@@ -479,7 +627,6 @@ const HealthLog: React.FC = () => {
                         });
                       }
                     }}
-                    
                     structuredData={chatStructuredData}
                     conversationHistory={conversationHistory}
                   />

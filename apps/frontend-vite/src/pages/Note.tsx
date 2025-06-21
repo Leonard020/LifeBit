@@ -87,6 +87,7 @@ const Note = () => {
 
   // 운동 기록 타입 정의
   interface ExerciseRecord {
+    exercise_session_id: number;
     name: string;
     weight: string;
     sets: number;
@@ -644,6 +645,37 @@ const Note = () => {
     exercise: 'calendar-dot-exercise',
   };
 
+  const deleteExerciseRecord = async (sessionId: number) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        console.warn('인증 토큰이 없습니다.');
+        return;
+      }
+      const response = await fetch(`/api/py/note/exercise/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('운동 기록 삭제 실패');
+      }
+      setTodayExercise(prev => prev.filter(ex => ex.exercise_session_id !== sessionId));
+      toast({
+        title: "삭제 완료",
+        description: "운동 기록이 삭제되었습니다.",
+      });
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "삭제 실패",
+        description: "기록 삭제 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -767,9 +799,9 @@ const Note = () => {
                         </div>
                         <div className="flex space-x-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8">
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-4 w-4" onClick={() => {/* TODO: 수정 모달 오픈 */}} />
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive">
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exercise_session_id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

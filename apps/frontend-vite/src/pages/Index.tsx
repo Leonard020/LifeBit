@@ -13,6 +13,8 @@ import {
   type MealTimeType
 } from '@/utils/mealTimeMapping';
 import { getUserIdFromToken, getTokenFromStorage } from '@/utils/auth'; // 또는 정확한 경로
+import { useAuth } from '@/AuthContext';
+import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
 
 const Index = () => {
   const { toast } = useToast();
@@ -144,6 +146,13 @@ const Index = () => {
         setChatStep('confirmation');
       }
 
+      // ✅ 저장 키워드가 포함된 경우 자동 저장 실행
+      const saveKeywords = /저장해줘|기록해줘|완료|끝|등록해줘|저장|기록|등록/;
+      if (saveKeywords.test(chatInputText.toLowerCase())) {
+        console.log('[자동 저장 트리거] 저장 키워드 감지, handleRecordSubmit 실행');
+        await handleRecordSubmit(recordType, chatInputText);
+      }
+
     } catch (error) {
       console.error('Failed to process message:', error);
       setChatNetworkError(true);
@@ -190,63 +199,125 @@ const Index = () => {
 
   const handleRecordSubmit = async (type: 'exercise' | 'diet', content: string) => {
     if (!chatStructuredData) return;
-    console.log('[🔍 chatStructuredData]', chatStructuredData);
-
     const userId = getUserIdFromToken();
-    const token = getTokenFromStorage();  // ✅ 이 줄 추가
-    console.log('[✅ token 확인]', token);
-    console.log('[✅ userId 확인]', userId);
-
+    const token = getTokenFromStorage();
 
     if (!userId) {
       console.warn('[⚠️ 유저 ID 없음] 토큰에서 사용자 정보를 가져올 수 없습니다.');
       return;
     }
 
-    const isCardio = chatStructuredData.category === '유산소';
-
-     // ✅ 여기에 콘솔 로그 추가
-     const payload = {
-      user_id: Number(userId),
-      name: chatStructuredData.exercise || '운동기록',
-      weight: isCardio ? null : (chatStructuredData.weight ?? 0),
-      sets: isCardio ? null : (chatStructuredData.sets ?? 0),
-      reps: isCardio ? null : (chatStructuredData.reps ?? 0),
-      duration_minutes: chatStructuredData.duration_min ?? 0,
-      calories_burned: chatStructuredData.calories_burned ?? 0,
-      exercise_date: new Date().toISOString().split('T')[0]
-    };
-      console.log('[📦 POST 데이터]', payload);
-
-    try {
-      const response = await fetch('/api/py/note/exercise', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // ← 이 줄이 꼭 있어야 함
-
-        },
-        body: JSON.stringify(
-          payload
-        )
-      });
-
-      if (!response.ok) {
-        throw new Error('저장 실패');
+    if (type === 'exercise') {
+      const isCardio = chatStructuredData.category === '유산소';
+      const payload = {
+        user_id: Number(userId),
+        name: chatStructuredData.exercise || '운동기록',
+        weight: isCardio ? null : (chatStructuredData.weight ?? 0),
+        sets: isCardio ? null : (chatStructuredData.sets ?? 0),
+        reps: isCardio ? null : (chatStructuredData.reps ?? 0),
+        duration_minutes: chatStructuredData.duration_min ?? 0,
+        calories_burned: chatStructuredData.calories_burned ?? 0,
+        exercise_date: new Date().toISOString().split('T')[0]
+      };
+      console.log('[운동기록 저장] payload:', payload);
+      try {
+        const response = await fetch('/api/py/note/exercise', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('운동 저장 실패');
+        console.log('[운동기록 저장 성공]', await response.json());
+        toast({
+          title: '기록 완료',
+          description: '운동 기록이 저장되었습니다.'
+        });
+      } catch (err) {
+        console.error('[운동기록 저장 실패]', err);
+        toast({
+          title: '저장 오류',
+          description: '운동 데이터를 저장하지 못했습니다.',
+          variant: 'destructive'
+        });
       }
-
-      toast({
-        title: '기록 완료',
-        description: `${type === 'exercise' ? '운동' : '식단'} 기록이 저장되었습니다.`
-      });
-
-    } catch (err) {
-      console.error('[🚨 저장 실패]', err);
-      toast({
-        title: '저장 오류',
-        description: '데이터를 저장하지 못했습니다.',
-        variant: 'destructive'
-      });
+    } else if (type === 'diet') {
+      type DietData = {
+        food_item_id?: number;
+        foodItemId?: number;
+        food_name?: string;
+        amount?: number | string;
+        meal_time?: string;
+        input_source?: string;
+        confidence_score?: number;
+        original_audio_path?: string;
+        validation_status?: string;
+        validation_notes?: string;
+        created_at?: string;
+        log_date?: string;
+      };
+      const dietData: DietData = chatStructuredData as DietData;
+      let foodItemId = dietData.food_item_id || dietData.foodItemId;
+      if (!foodItemId && dietData.food_name) {
+        try {
+          const searchResults = await searchFoodItems(dietData.food_name);
+          foodItemId = searchResults[0]?.foodItemId;
+          console.log('[식단기록] food_item_id 검색 결과:', searchResults);
+        } catch (err) {
+          console.error('[식단기록] food_name으로 food_item_id 검색 실패', err);
+        }
+      }
+      if (!foodItemId) {
+        toast({ title: '식단 기록 저장 실패', description: '음식 정보가 부족합니다.' });
+        console.error('[식단기록 저장 실패] food_item_id 없음', dietData);
+        return;
+      }
+      // MealInput에 맞는 payload 생성
+      function mapMealTimeToEnum(mealTime: string) {
+        switch (mealTime) {
+          case '아침': return 'breakfast';
+          case '점심': return 'lunch';
+          case '저녁': return 'dinner';
+          case '간식': return 'snack';
+          case '야식': return 'snack'; // 임시 매핑
+          default: return 'snack';
+        }
+      }
+      const payload = {
+        user_id: Number(userId),
+        food_item_id: Number(foodItemId),
+        quantity: parseFloat(String(dietData.amount)),
+        log_date: dietData.log_date || new Date().toISOString().slice(0, 10),
+        meal_time: mapMealTimeToEnum(dietData.meal_time), // ENUM 값으로 변환
+      };
+      console.log('[식단기록 저장] payload:', payload);
+      try {
+        const response = await fetch('/api/py/note/diet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('식단 저장 실패');
+        console.log('[식단기록 저장 성공]', await response.json());
+        toast({
+          title: '기록 완료',
+          description: '식단 기록이 저장되었습니다.'
+        });
+      } catch (err) {
+        console.error('[식단기록 저장 실패]', err);
+        toast({
+          title: '저장 오류',
+          description: '식단 데이터를 저장하지 못했습니다.',
+          variant: 'destructive'
+        });
+      }
+    } else {
+      console.warn('[기록 저장] 알 수 없는 recordType:', type, chatStructuredData);
     }
 
     // 초기화
@@ -261,6 +332,9 @@ const Index = () => {
     setIsAddingMoreFood(false);
     setCurrentMealTime(null);
   };
+
+  const { user } = useAuth();
+
 
   return (
     <Layout>

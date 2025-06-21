@@ -932,6 +932,7 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
     results = []
     for record in records:
         results.append(DailyExerciseRecord(
+            exercise_session_id=record.exercise_session_id,
             name=record.notes,
             weight=f"{record.weight}kg" if record.weight else "체중",
             sets=record.sets or 1,
@@ -1044,6 +1045,16 @@ def parse_amount_multiplier(amount: str, food_name: str) -> float:
         return number * 1.0  # 피자 1조각 = 100g 기준
     else:
         return number
+
+# 🗑️ 운동 기록 삭제
+@app.delete("/api/py/note/exercise/{session_id}")
+def delete_exercise_record(session_id: int, db: Session = Depends(get_db)):
+    record = db.query(models.ExerciseSession).filter(models.ExerciseSession.exercise_session_id == session_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
+    db.delete(record)
+    db.commit()
+    return {"message": "운동 기록 삭제 성공"}
 
 # 서버 실행
 if __name__ == "__main__":
