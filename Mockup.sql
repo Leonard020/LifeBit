@@ -84,7 +84,7 @@ INSERT INTO users (email, password_hash, nickname, profile_image_url, height, we
 -- ===================================================================
 -- 2. 운동 카탈로그 50개 (다양한 운동 종류)
 -- ===================================================================
-INSERT INTO exercise_catalog (name, excercise_type, body_part, description, intensity) VALUES
+INSERT INTO exercise_catalog (name, exercise_type, body_part, description, intensity) VALUES
 -- 가슴 운동 (8개)
 ('벤치프레스', 'strength', 'chest', '가슴 운동의 대표적인 기본 운동', 'high'),
 ('인클라인 벤치프레스', 'strength', 'chest', '상부 가슴을 집중적으로 단련하는 운동', 'high'),
@@ -308,62 +308,62 @@ WHERE u.role = 'USER';
 -- ===================================================================
 INSERT INTO achievements (title, description, badge_type, target_days, is_active) VALUES
 -- 브론즈 업적 (15개) - 초급자용
-('첫 걸음', '첫 번째 운동 기록', 'bronze', 1, true),
-('주간 전사', '연속 7일 운동', 'bronze', 7, true),
-('운동 초보자', '10번 운동 완료', 'bronze', 10, true),
-('식단 시작', '첫 번째 식단 기록', 'bronze', 1, true),
-('꾸준함의 시작', '연속 3일 운동', 'bronze', 3, true),
-('아침 운동러', '아침 운동 5회 완료', 'bronze', 5, true),
-('저녁 운동러', '저녁 운동 5회 완료', 'bronze', 5, true),
-('주말 전사', '주말 운동 3회 완료', 'bronze', 3, true),
-('유산소 초보자', '유산소 운동 5회 완료', 'bronze', 5, true),
-('근력 초보자', '근력 운동 5회 완료', 'bronze', 5, true),
-('식단 기록자', '식단 기록 7일 완료', 'bronze', 7, true),
-('목표 설정자', '운동 목표 설정 완료', 'bronze', 1, true),
-('체중 관리자', '체중 기록 5회 완료', 'bronze', 5, true),
-('운동 다양성', '3가지 다른 운동 완료', 'bronze', 3, true),
-('건강한 하루', '하루 운동+식단 기록', 'bronze', 1, true),
+('첫 걸음', '첫 번째 운동 기록', 'FIRST_LOGIN', 1, true),
+('주간 전사', '연속 7일 운동', 'STREAK_7', 7, true),
+('운동 초보자', '10번 운동 완료', 'WORKOUT_GOAL', 10, true),
+('식단 시작', '첫 번째 식단 기록', 'NUTRITION_GOAL', 1, true),
+('꾸준함의 시작', '연속 3일 운동', 'STREAK_7', 3, true),
+('아침 운동러', '아침 운동 5회 완료', 'WORKOUT_GOAL', 5, true),
+('저녁 운동러', '저녁 운동 5회 완료', 'WORKOUT_GOAL', 5, true),
+('주말 전사', '주말 운동 3회 완료', 'WORKOUT_GOAL', 3, true),
+('유산소 초보자', '유산소 운동 5회 완료', 'WORKOUT_GOAL', 5, true),
+('근력 초보자', '근력 운동 5회 완료', 'WORKOUT_GOAL', 5, true),
+('식단 기록자', '식단 기록 7일 완료', 'NUTRITION_GOAL', 7, true),
+('목표 설정자', '운동 목표 설정 완료', 'WORKOUT_GOAL', 1, true),
+('체중 관리자', '체중 기록 5회 완료', 'WEIGHT_GOAL', 5, true),
+('운동 다양성', '3가지 다른 운동 완료', 'WORKOUT_GOAL', 3, true),
+('건강한 하루', '하루 운동+식단 기록', 'PERFECT_WEEK', 1, true),
 
 -- 실버 업적 (15개) - 중급자용
-('2주 챌린지', '연속 14일 운동', 'silver', 14, true),
-('월간 마스터', '연속 30일 운동', 'silver', 30, true),
-('운동 애호가', '총 50회 운동 완료', 'silver', 50, true),
-('식단 전문가', '연속 14일 식단 기록', 'silver', 14, true),
-('체중 감량 성공', '체중 3kg 감량 달성', 'silver', 30, true),
-('근력 향상자', '근력 운동 30회 완료', 'silver', 30, true),
-('유산소 매니아', '유산소 운동 30회 완료', 'silver', 30, true),
-('아침형 인간', '아침 운동 20회 완료', 'silver', 20, true),
-('저녁 루틴 마스터', '저녁 운동 20회 완료', 'silver', 20, true),
-('주말 활동가', '주말 운동 10회 완료', 'silver', 10, true),
-('균형 식단', '균형 식단 14일 유지', 'silver', 14, true),
-('칼로리 버너', '총 10000kcal 소모', 'silver', 30, true),
-('체중 관리 전문가', '체중 기록 30회 완료', 'silver', 30, true),
-('운동 전문가', '5가지 다른 운동 완료', 'silver', 5, true),
-('건강한 생활', '30일 연속 건강관리', 'silver', 30, true),
+('2주 챌린지', '연속 14일 운동', 'STREAK_30', 14, true),
+('월간 마스터', '연속 30일 운동', 'STREAK_30', 30, true),
+('운동 애호가', '총 50회 운동 완료', 'WORKOUT_GOAL', 50, true),
+('식단 전문가', '연속 14일 식단 기록', 'NUTRITION_GOAL', 14, true),
+('체중 감량 성공', '체중 3kg 감량 달성', 'WEIGHT_GOAL', 30, true),
+('근력 향상자', '근력 운동 30회 완료', 'WORKOUT_GOAL', 30, true),
+('유산소 매니아', '유산소 운동 30회 완료', 'WORKOUT_GOAL', 30, true),
+('아침형 인간', '아침 운동 20회 완료', 'WORKOUT_GOAL', 20, true),
+('저녁 루틴 마스터', '저녁 운동 20회 완료', 'WORKOUT_GOAL', 20, true),
+('주말 활동가', '주말 운동 10회 완료', 'WORKOUT_GOAL', 10, true),
+('균형 식단', '균형 식단 14일 유지', 'NUTRITION_GOAL', 14, true),
+('칼로리 버너', '총 10000kcal 소모', 'WORKOUT_GOAL', 30, true),
+('체중 관리 전문가', '체중 기록 30회 완료', 'WEIGHT_GOAL', 30, true),
+('운동 전문가', '5가지 다른 운동 완료', 'WORKOUT_GOAL', 5, true),
+('건강한 생활', '30일 연속 건강관리', 'PERFECT_WEEK', 30, true),
 
 -- 골드 업적 (15개) - 고급자용
-('3개월 챌린지', '연속 90일 운동', 'gold', 90, true),
-('100회 돌파', '총 100회 운동 완료', 'gold', 100, true),
-('체중 관리 마스터', '목표 체중 달성', 'gold', 60, true),
-('근력 킹', '근력 운동 60회 완료', 'gold', 60, true),
-('유산소 킹', '유산소 운동 60회 완료', 'gold', 60, true),
-('식단 완벽주의자', '연속 60일 식단 기록', 'gold', 60, true),
-('아침 운동 마스터', '아침 운동 50회 완료', 'gold', 50, true),
-('저녁 운동 전문가', '저녁 운동 50회 완료', 'gold', 50, true),
-('주말 운동 킹', '주말 운동 30회 완료', 'gold', 30, true),
-('칼로리 소모 킹', '총 30000kcal 소모', 'gold', 90, true),
-('운동 올라운더', '10가지 다른 운동 완료', 'gold', 10, true),
-('체중 변화 추적자', '체중 기록 90회 완료', 'gold', 90, true),
-('건강 생활 마스터', '90일 연속 건강관리', 'gold', 90, true),
-('목표 달성자', '모든 목표 달성', 'gold', 90, true),
-('피트니스 구루', '총 50시간 운동 완료', 'gold', 90, true),
+('3개월 챌린지', '연속 90일 운동', 'STREAK_100', 90, true),
+('100회 돌파', '총 100회 운동 완료', 'WORKOUT_GOAL', 100, true),
+('체중 관리 마스터', '목표 체중 달성', 'WEIGHT_GOAL', 60, true),
+('근력 킹', '근력 운동 60회 완료', 'WORKOUT_GOAL', 60, true),
+('유산소 킹', '유산소 운동 60회 완료', 'WORKOUT_GOAL', 60, true),
+('식단 완벽주의자', '연속 60일 식단 기록', 'NUTRITION_GOAL', 60, true),
+('아침 운동 마스터', '아침 운동 50회 완료', 'WORKOUT_GOAL', 50, true),
+('저녁 운동 전문가', '저녁 운동 50회 완료', 'WORKOUT_GOAL', 50, true),
+('주말 운동 킹', '주말 운동 30회 완료', 'WORKOUT_GOAL', 30, true),
+('칼로리 소모 킹', '총 30000kcal 소모', 'WORKOUT_GOAL', 90, true),
+('운동 올라운더', '10가지 다른 운동 완료', 'WORKOUT_GOAL', 10, true),
+('체중 변화 추적자', '체중 기록 90회 완료', 'WEIGHT_GOAL', 90, true),
+('건강 생활 마스터', '90일 연속 건강관리', 'PERFECT_WEEK', 90, true),
+('목표 달성자', '모든 목표 달성', 'WORKOUT_GOAL', 90, true),
+('피트니스 구루', '총 50시간 운동 완료', 'WORKOUT_GOAL', 90, true),
 
 -- 플래티넘 업적 (5개) - 최고급자용
-('6개월 레전드', '연속 180일 운동', 'platinum', 180, true),
-('운동 매니아', '총 500회 운동 완료', 'platinum', 500, true),
-('완벽한 변화', '목표 체중 6개월 유지', 'platinum', 180, true),
-('칼로리 소모 레전드', '총 100000kcal 소모', 'platinum', 180, true),
-('건강 생활 레전드', '180일 연속 완벽 관리', 'platinum', 180, true);
+('6개월 레전드', '연속 180일 운동', 'STREAK_100', 180, true),
+('운동 매니아', '총 500회 운동 완료', 'WORKOUT_GOAL', 500, true),
+('완벽한 변화', '목표 체중 6개월 유지', 'WEIGHT_GOAL', 180, true),
+('칼로리 소모 레전드', '총 100000kcal 소모', 'WORKOUT_GOAL', 180, true),
+('건강 생활 레전드', '180일 연속 완벽 관리', 'PERFECT_WEEK', 180, true);
 
 -- ===================================================================
 -- 7. 운동 세션 500개+ (현실적인 운동 패턴)
@@ -570,8 +570,8 @@ SELECT
              || '"}')::jsonb
         ELSE -- 부정적 피드백
             ('{"rating": ' || (1 + random())::integer || ', "comment": "' || 
-             (ARRAY['별로였어요', '맞지 않았어요', '효과가 없었어요', 
-                    '아쉬웠습니다', '기대에 못 미쳤어요', '개선이 필요해요'])[1 + (random() * 5)::integer] 
+             (ARRAY['별로였어요', '맞지 않았어요', 
+                    '효과가 없었어요', '아쉬웠습니다', '기대에 못 미쳤어요', '개선이 필요해요'])[1 + (random() * 5)::integer] 
              || '"}')::jsonb
     END,
     r.created_at + (random() * 7)::integer * INTERVAL '1 day' -- 추천 후 1주일 내 피드백
