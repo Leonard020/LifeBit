@@ -195,7 +195,11 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     console.log('📊 Raw data:', {
       healthRecords: safeHealthRecords.length,
       exerciseData: safeExerciseData.length,
-      period
+      period,
+      sampleHealthRecord: safeHealthRecords[0], // 첫 번째 건강 기록 샘플
+      sampleExerciseData: safeExerciseData[0],   // 첫 번째 운동 데이터 샘플
+      healthRecordsStructure: safeHealthRecords.slice(0, 2), // 구조 확인용
+      exerciseDataStructure: safeExerciseData.slice(0, 2)    // 구조 확인용
     });
     
     if (safeHealthRecords.length === 0 && safeExerciseData.length === 0) {

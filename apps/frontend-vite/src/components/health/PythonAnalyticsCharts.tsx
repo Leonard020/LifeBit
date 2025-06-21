@@ -137,11 +137,41 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
   // 오류 상태  
   const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError;
 
+  // 🐛 디버그 로그 추가
+  console.log('🔍 [PythonAnalyticsCharts] 데이터 확인:', {
+    healthRecords: healthRecords,
+    exerciseSessions: exerciseSessions,
+    healthRecordsType: typeof healthRecords,
+    exerciseSessionsType: typeof exerciseSessions,
+    healthRecordsIsArray: Array.isArray(healthRecords),
+    exerciseSessionsIsArray: Array.isArray(exerciseSessions),
+    healthRecordsLength: Array.isArray(healthRecords) ? healthRecords.length : 'not array',
+    exerciseSessionsLength: Array.isArray(exerciseSessions) ? exerciseSessions.length : 'not array',
+    period,
+    userId,
+    healthRecordsSample: Array.isArray(healthRecords) ? healthRecords.slice(0, 2) : 'no data',
+    exerciseSessionsSample: Array.isArray(exerciseSessions) ? exerciseSessions.slice(0, 2) : 'no data',
+    healthError,
+    exerciseError,
+    isHealthLoading,
+    isExerciseLoading
+  });
+
   // 차트 데이터 준비
   const chartData = useMemo(() => {
-    const healthRecordsData = healthRecords?.data || healthRecords || [];
-    const exerciseSessionsData = exerciseSessions?.data || exerciseSessions || [];
-    const mealLogsData = mealLogs?.data || mealLogs || [];
+    // API 응답이 직접 배열인 경우와 data 속성을 가진 경우 모두 처리
+    const healthRecordsData = Array.isArray(healthRecords) 
+      ? healthRecords 
+      : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+    
+    const exerciseSessionsData = Array.isArray(exerciseSessions) 
+      ? exerciseSessions 
+      : (exerciseSessions?.data && Array.isArray(exerciseSessions.data) ? exerciseSessions.data : []);
+    
+    const mealLogsData = Array.isArray(mealLogs) 
+      ? mealLogs 
+      : (mealLogs?.data && Array.isArray(mealLogs.data) ? mealLogs.data : []);
+    
     const goalsData = userGoals?.data || userGoals;
 
     // 기간별 데이터 그룹화
@@ -334,21 +364,27 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     }
   };
 
+  // 로딩 중일 때 표시할 컴포넌트
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">AI 스마트 분석</h2>
-          <Skeleton className="h-10 w-24" />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">AI 스마트 분석</h2>
+            <p className="text-gray-600 mt-2">데이터를 불러오는 중입니다...</p>
+          </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-64 w-full" />
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="h-8 w-8 bg-gray-200 rounded animate-pulse" />
+                  <div className="ml-4">
+                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse mb-2" />
+                    <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -357,23 +393,21 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     );
   }
 
+  // 에러 상태일 때 표시할 컴포넌트
   if (hasError) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">AI 스마트 분석</h2>
-          <Button onClick={handleRefresh} disabled={isRefreshing}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            새로고침
+        <div className="text-center py-16">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h3 className="text-xl font-semibold mb-2">데이터를 불러올 수 없습니다</h3>
+          <p className="text-muted-foreground mb-6">
+            네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.
+          </p>
+          <Button onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            다시 시도
           </Button>
         </div>
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>분석 오류</AlertTitle>
-          <AlertDescription>
-            AI 분석 데이터를 불러오는 중 오류가 발생했습니다. 새로고침을 시도해보세요.
-          </AlertDescription>
-        </Alert>
       </div>
     );
   }
@@ -430,8 +464,21 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">현재 체중</p>
                     <p className="text-2xl font-bold">
-                      {chartData[chartData.length - 1]?.weight || 'N/A'}
-                      {chartData[chartData.length - 1]?.weight && 'kg'}
+                      {(() => {
+                        // health_records 테이블에서 최신 체중 데이터 가져오기
+                        const healthRecordsData = Array.isArray(healthRecords) 
+                          ? healthRecords 
+                          : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                        
+                        const latestRecord = healthRecordsData.length > 0 
+                          ? healthRecordsData[healthRecordsData.length - 1] 
+                          : null;
+                        
+                        if (latestRecord?.weight) {
+                          return `${latestRecord.weight}kg`;
+                        }
+                        return '데이터 없음';
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -445,7 +492,21 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">현재 BMI</p>
                     <p className="text-2xl font-bold">
-                      {chartData[chartData.length - 1]?.bmi || 'N/A'}
+                      {(() => {
+                        // health_records 테이블에서 최신 BMI 데이터 가져오기
+                        const healthRecordsData = Array.isArray(healthRecords) 
+                          ? healthRecords 
+                          : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                        
+                        const latestRecord = healthRecordsData.length > 0 
+                          ? healthRecordsData[healthRecordsData.length - 1] 
+                          : null;
+                        
+                        if (latestRecord?.bmi) {
+                          return latestRecord.bmi.toFixed(1);
+                        }
+                        return 'N/A';
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -457,13 +518,19 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 <div className="flex items-center">
                   <Activity className="h-8 w-8 text-green-600" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">이번 주 운동</p>
+                    <p className="text-sm font-medium text-gray-600">{getPeriodLabel()} 운동</p>
                     <p className="text-2xl font-bold">
                       {(() => {
-                        const statsData = healthStats?.data as Record<string, unknown>;
-                        const weeklyMinutes = statsData?.weeklyExerciseMinutes;
-                        return typeof weeklyMinutes === 'number' ? weeklyMinutes : 0;
-                      })()}분
+                        // exercise_sessions 테이블에서 기간별 운동 시간 계산
+                        // API 응답이 직접 배열인 경우와 data 속성을 가진 경우 모두 처리
+                        const exerciseSessionsData = Array.isArray(exerciseSessions) 
+                          ? exerciseSessions 
+                          : (exerciseSessions?.data && Array.isArray(exerciseSessions.data) ? exerciseSessions.data : []);
+                        
+                        const totalMinutes = exerciseSessionsData.reduce((sum, session) => sum + (session.duration_minutes || 0), 0);
+                        
+                        return `${totalMinutes}분`;
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -477,7 +544,17 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">소모 칼로리</p>
                     <p className="text-2xl font-bold">
-                      {chartData.reduce((sum, item) => sum + (item.exerciseCalories || 0), 0)}
+                      {(() => {
+                        // exercise_sessions 테이블에서 기간별 소모 칼로리 계산
+                        // API 응답이 직접 배열인 경우와 data 속성을 가진 경우 모두 처리
+                        const exerciseSessionsData = Array.isArray(exerciseSessions) 
+                          ? exerciseSessions 
+                          : (exerciseSessions?.data && Array.isArray(exerciseSessions.data) ? exerciseSessions.data : []);
+                        
+                        const totalCalories = exerciseSessionsData.reduce((sum, session) => sum + (session.calories_burned || 0), 0);
+                        
+                        return `${totalCalories}kcal`;
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -578,30 +655,69 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-blue-600">
-                    {chartData.length > 0 && chartData[chartData.length - 1]?.weight 
-                      ? `${chartData[chartData.length - 1].weight}kg` 
-                      : '데이터 없음'
-                    }
+                    {(() => {
+                      // health_records 테이블에서 최신 체중 데이터 가져오기
+                      const healthRecordsData = Array.isArray(healthRecords) 
+                        ? healthRecords 
+                        : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                      
+                      const latestRecord = healthRecordsData.length > 0 
+                        ? healthRecordsData[healthRecordsData.length - 1] 
+                        : null;
+                      
+                      if (latestRecord?.weight) {
+                        return `${latestRecord.weight}kg`;
+                      }
+                      return '데이터 없음';
+                    })()}
                   </p>
                   <p className="text-sm text-gray-600">최근 체중</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600">
-                    {chartData.length >= 2 
-                      ? `${(chartData[chartData.length - 1]?.weight || 0) - (chartData[0]?.weight || 0) > 0 ? '+' : ''}${((chartData[chartData.length - 1]?.weight || 0) - (chartData[0]?.weight || 0)).toFixed(1)}kg`
-                      : '0kg'
-                    }
+                    {(() => {
+                      // health_records 테이블에서 체중 변화 계산
+                      const healthRecordsData = Array.isArray(healthRecords) 
+                        ? healthRecords 
+                        : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                      
+                      if (healthRecordsData.length < 2) {
+                        return '0kg';
+                      }
+                      
+                      const latestWeight = healthRecordsData[healthRecordsData.length - 1]?.weight || 0;
+                      const firstWeight = healthRecordsData[0]?.weight || 0;
+                      const change = latestWeight - firstWeight;
+                      
+                      const sign = change > 0 ? '+' : '';
+                      return `${sign}${change.toFixed(1)}kg`;
+                    })()}
                   </p>
                   <p className="text-sm text-gray-600">기간별 변화</p>
                 </div>
                 <div className="text-center">
                   <Badge variant="outline">
-                    {chartData.length >= 2 
-                      ? (chartData[chartData.length - 1]?.weight || 0) > (chartData[0]?.weight || 0) ? '증가' 
-                        : (chartData[chartData.length - 1]?.weight || 0) < (chartData[0]?.weight || 0) ? '감소' 
-                        : '변화없음'
-                      : '데이터 부족'
-                    }
+                    {(() => {
+                      // health_records 테이블에서 체중 트렌드 계산
+                      const healthRecordsData = Array.isArray(healthRecords) 
+                        ? healthRecords 
+                        : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                      
+                      if (healthRecordsData.length < 2) {
+                        return '데이터 부족';
+                      }
+                      
+                      const latestWeight = healthRecordsData[healthRecordsData.length - 1]?.weight || 0;
+                      const firstWeight = healthRecordsData[0]?.weight || 0;
+                      
+                      if (latestWeight > firstWeight) {
+                        return '증가';
+                      } else if (latestWeight < firstWeight) {
+                        return '감소';
+                      } else {
+                        return '변화없음';
+                      }
+                    })()}
                   </Badge>
                   <p className="text-sm text-gray-600 mt-1">트렌드</p>
                 </div>
@@ -1028,11 +1144,9 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   <p className="text-sm text-gray-500">
                     개인 성향 분석을 통한 맞춤형 동기부여 및 게임화 요소
                   </p>
-            </CardContent>
-          </Card>
-        </div>
-
-
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </CardContent>
       </Card>
