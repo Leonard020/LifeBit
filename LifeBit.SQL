@@ -53,7 +53,7 @@ CREATE TABLE exercise_catalog (
     exercise_catalog_id BIGSERIAL PRIMARY KEY,
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     name VARCHAR(100) NOT NULL,
-    excercise_type excercise_part_type,
+    exercise_type exercise_part_type,
     body_part body_part_type NOT NULL,
     description TEXT,
     intensity VARCHAR(50),
