@@ -1,3 +1,66 @@
+-- ===================================================================
+-- EXTENSIONS
+-- ===================================================================
+
+-- Enable pgcrypto extension for password hashing
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ===================================================================
+-- ENUM TYPE DEFINITIONS
+-- ===================================================================
+
+-- 사용자 역할 타입
+CREATE TYPE user_role AS ENUM ('USER', 'ADMIN');
+
+-- 배지 타입
+CREATE TYPE badge_type AS ENUM ('FIRST_LOGIN', 'STREAK_7', 'STREAK_30', 'STREAK_100', 'WEIGHT_GOAL', 'WORKOUT_GOAL', 'NUTRITION_GOAL', 'SOCIAL_SHARE', 'PERFECT_WEEK', 'MONTHLY_CHAMPION');
+
+-- 신체 부위 타입
+CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio', 'full_body');
+
+-- 운동 부위 타입
+CREATE TYPE exercise_part_type AS ENUM ('strength', 'aerobic', 'flexibility', 'balance');
+
+-- 시간대 타입
+CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');
+
+-- 식사 시간 타입
+CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
+
+-- 입력 소스 타입
+CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
+
+-- 검증 상태 타입
+CREATE TYPE validation_status_type AS ENUM ('PENDING', 'VALIDATED', 'REJECTED', 'NEEDS_REVIEW');
+
+-- 음성 인식 타입
+CREATE TYPE recognition_type AS ENUM ('EXERCISE', 'MEAL', 'HEALTH_RECORD');
+
+-- 기록 타입
+CREATE TYPE record_type AS ENUM ('EXERCISE', 'MEAL', 'HEALTH_RECORD');
+
+-- 기간 타입
+CREATE TYPE period_type AS ENUM ('daily', 'weekly', 'monthly', 'yearly');
+
+-- ===================================================================
+-- CUSTOM FUNCTIONS
+-- ===================================================================
+
+-- BMI 계산 함수
+CREATE OR REPLACE FUNCTION calculate_bmi(weight DECIMAL, height DECIMAL)
+RETURNS DECIMAL AS $$
+BEGIN
+    IF height IS NULL OR height = 0 THEN
+        RETURN NULL;
+    END IF;
+    RETURN ROUND((weight / ((height / 100) * (height / 100)))::DECIMAL, 2);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- ===================================================================
+-- TABLE CREATIONS
+-- ===================================================================
+
 -- users 테이블
 CREATE TABLE users (
     user_id BIGSERIAL PRIMARY KEY,
