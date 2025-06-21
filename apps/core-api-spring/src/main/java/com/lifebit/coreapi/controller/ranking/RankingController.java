@@ -8,6 +8,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.entity.ranking.RankingNotification;
+import com.lifebit.coreapi.dto.ranking.RankingNotificationResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
 
@@ -90,12 +96,24 @@ public class RankingController {
     }
 
     @GetMapping("/notifications")
-    public ResponseEntity<List<RankingNotificationResponse>> getNotifications() {
-        return ResponseEntity.ok(rankingNotificationService.getUserNotifications(getCurrentUserUuid()));
+    public ResponseEntity<Page<RankingNotificationResponse>> getNotifications(@AuthenticationPrincipal User user, Pageable pageable) {
+        return ResponseEntity.ok(rankingNotificationService.getUserNotificationsDto(user.getUuid().toString(), pageable, null));
     }
 
     private String getCurrentUserUuid() {
-        // TODO: Spring Security에서 현재 사용자의 UUID를 가져오는 로직 구현
-        return "current-user-uuid";
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new IllegalStateException("User is not authenticated.");
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof User) {
+            User currentUser = (User) principal;
+            return currentUser.getUuid().toString();
+        } else if (principal instanceof String) {
+            // JWT 토큰에서 직접 userUuid를 가져오는 경우
+            return (String) principal;
+        } else {
+            throw new IllegalStateException("Could not get user UUID from principal.");
+        }
     }
 } 

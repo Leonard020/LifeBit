@@ -23,19 +23,25 @@ public class RankingRewardService {
     @Transactional(readOnly = true)
     public List<RankingRewardResponse> getSeasonRewards(String season) {
         rankingValidator.validateSeason(season);
-        return userRankingRepository.findTopRankingsBySeason(season, RankingConstants.TOP_RANK_REWARD)
-                .stream()
-                .map(this::createReward)
-                .collect(Collectors.toList());
+        return userRankingRepository.findTopRankingsBySeason(
+                season,
+                org.springframework.data.domain.PageRequest.of(0, RankingConstants.TOP_RANK_REWARD)
+        )
+        .stream()
+        .map(this::createReward)
+        .collect(java.util.stream.Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<RankingRewardResponse> getPeriodRewards(PeriodType periodType) {
         rankingValidator.validatePeriodType(periodType);
-        return userRankingRepository.findTopRankingsByPeriodType(periodType, RankingConstants.TOP_RANK_REWARD)
-                .stream()
-                .map(this::createReward)
-                .collect(Collectors.toList());
+        return userRankingRepository.findTopRankingsByPeriodType(
+                periodType,
+                org.springframework.data.domain.PageRequest.of(0, RankingConstants.TOP_RANK_REWARD)
+        )
+        .stream()
+        .map(this::createReward)
+        .collect(java.util.stream.Collectors.toList());
     }
 
     @Transactional(readOnly = true)

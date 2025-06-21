@@ -26,11 +26,11 @@ public interface UserRankingRepository extends JpaRepository<UserRanking, Long> 
     @Query("SELECT ur FROM UserRanking ur WHERE ur.periodType = :periodType AND ur.isActive = true ORDER BY ur.totalScore DESC")
     Page<UserRanking> findAllByPeriodTypeOrderByTotalScoreDesc(@Param("periodType") PeriodType periodType, Pageable pageable);
     
-    @Query("SELECT ur FROM UserRanking ur WHERE ur.season = :season AND ur.isActive = true ORDER BY ur.seasonPoints DESC LIMIT :limit")
-    List<UserRanking> findTopRankingsBySeason(@Param("season") String season, @Param("limit") int limit);
+    @Query("SELECT ur FROM UserRanking ur WHERE ur.season = :season AND ur.isActive = true ORDER BY ur.seasonPoints DESC")
+    List<UserRanking> findTopRankingsBySeason(@Param("season") String season, Pageable pageable);
     
-    @Query("SELECT ur FROM UserRanking ur WHERE ur.periodType = :periodType AND ur.isActive = true ORDER BY ur.totalScore DESC LIMIT :limit")
-    List<UserRanking> findTopRankingsByPeriodType(@Param("periodType") PeriodType periodType, @Param("limit") int limit);
+    @Query("SELECT ur FROM UserRanking ur WHERE ur.periodType = :periodType AND ur.isActive = true ORDER BY ur.totalScore DESC")
+    List<UserRanking> findTopRankingsByPeriodType(@Param("periodType") PeriodType periodType, Pageable pageable);
     
     @Query("SELECT ur FROM UserRanking ur WHERE ur.isActive = true ORDER BY ur.streakDays DESC LIMIT :limit")
     List<UserRanking> findTopRankingsByStreakDays(@Param("limit") int limit);

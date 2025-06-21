@@ -19,6 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.repository.UserRepository;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +30,14 @@ public class RankingService {
     private final UserRankingRepository userRankingRepository;
     private final RankingHistoryRepository rankingHistoryRepository;
     private final RankingValidator rankingValidator;
+    private final UserRepository userRepository;
+    private static final Logger log = LoggerFactory.getLogger(RankingService.class);
 
     @Transactional(readOnly = true)
     public RankingResponse getMyRanking() {
         String userUuid = getCurrentUserUuid();
         UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseThrow(() -> new RankingNotFoundException(userUuid));
+                .orElseGet(() -> createDefaultRanking(userUuid));
         rankingValidator.validateRanking(ranking);
         return convertToRankingResponse(ranking);
     }
@@ -40,7 +46,7 @@ public class RankingService {
     public SeasonRankingResponse getMySeasonRanking() {
         String userUuid = getCurrentUserUuid();
         UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseThrow(() -> new RankingNotFoundException(userUuid));
+                .orElseGet(() -> createDefaultRanking(userUuid));
         rankingValidator.validateRanking(ranking);
         return convertToSeasonRankingResponse(ranking);
     }
@@ -50,7 +56,7 @@ public class RankingService {
         rankingValidator.validatePeriodType(periodType);
         String userUuid = getCurrentUserUuid();
         UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseThrow(() -> new RankingNotFoundException(userUuid));
+                .orElseGet(() -> createDefaultRanking(userUuid));
         rankingValidator.validateRanking(ranking);
         return convertToPeriodRankingResponse(ranking);
     }
@@ -82,9 +88,8 @@ public class RankingService {
     public RankingStatsResponse getRankingStats() {
         String userUuid = getCurrentUserUuid();
         UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseThrow(() -> new RankingNotFoundException(userUuid));
+                .orElseGet(() -> createDefaultRanking(userUuid));
         rankingValidator.validateRanking(ranking);
-
         return RankingStatsResponse.builder()
                 .totalRankings(userRankingRepository.countActiveRankingsByPeriodType(PeriodType.WEEKLY))
                 .myRank(ranking.getRankPosition())
@@ -188,5 +193,54 @@ public class RankingService {
                 .streakDays(history.getStreakDays())
                 .recordedAt(history.getRecordedAt())
                 .build();
+    }
+
+    /**
+     * 랭킹 데이터가 없을 때 자동으로 생성 (최초 기록 시)
+     */
+    private UserRanking createDefaultRanking(String userUuid) {
+        // 사용자 정보 조회 (username 등)
+        com.lifebit.coreapi.entity.User user = userRepository.findAll().stream()
+            .filter(u -> u.getUuid().toString().equals(userUuid))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("User not found for ranking creation: " + userUuid));
+        UserRanking ranking = new UserRanking();
+        ranking.setUserUuid(userUuid);
+        ranking.setUsername(user.getNickname());
+        ranking.setTotalScore(0);
+        ranking.setRankPosition(0);
+        ranking.setStreakDays(0);
+        ranking.setPeriodType(PeriodType.WEEKLY);
+        ranking.setPeriodRank(0);
+        ranking.setPeriodPoints(0);
+        ranking.setSeason("Season 1");
+        ranking.setSeasonRank(0);
+        ranking.setSeasonPoints(0);
+        ranking.setActive(true);
+        ranking.setLastUpdatedAt(java.time.LocalDateTime.now());
+        return userRankingRepository.save(ranking);
+    }
+
+    /**
+     * 매일 새벽 3시에 전체 사용자 랭킹을 자동으로 갱신하는 스케줄러
+     * (실제 랭킹 산정 로직은 프로젝트 정책에 맞게 구현 필요)
+     */
+    @Scheduled(cron = "0 0 3 * * *")
+    public void scheduledRankingUpdate() {
+        log.info("[스케줄러] 전체 사용자 랭킹 자동 갱신 시작");
+        // 예시: 전체 UserRanking을 조회하여 점수/순위/연속기록 등 갱신
+        var allRankings = userRankingRepository.findAll();
+        // 실제 랭킹 산정 알고리즘에 따라 아래 로직 구현
+        int rank = 1;
+        allRankings.sort((a, b) -> Integer.compare(b.getTotalScore(), a.getTotalScore()));
+        for (UserRanking ranking : allRankings) {
+            int oldRank = ranking.getRankPosition();
+            ranking.setRankPosition(rank++);
+            // 연속기록, 점수 등 추가 갱신 로직 필요시 구현
+            ranking.setLastUpdatedAt(java.time.LocalDateTime.now());
+            userRankingRepository.save(ranking);
+            log.info("[랭킹 갱신] {}: {}위 (점수: {})", ranking.getUsername(), ranking.getRankPosition(), ranking.getTotalScore());
+        }
+        log.info("[스케줄러] 전체 사용자 랭킹 자동 갱신 완료");
     }
 } 
