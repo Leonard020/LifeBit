@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 @RestController
-@RequestMapping("/api/chat")
+@RequestMapping("/api/py/chat")
 @RequiredArgsConstructor
 public class ChatController {
 
@@ -25,7 +25,7 @@ public class ChatController {
         try {
             // FastAPI로 요청 전달
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                aiApiUrl + "/api/chat",
+                aiApiUrl + "/api/py/chat",
                 HttpMethod.POST,
                 new org.springframework.http.HttpEntity<>(request),
                 new ParameterizedTypeReference<Map<String, Object>>() {}

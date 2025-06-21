@@ -45,6 +45,17 @@ class DailyExerciseRecord(BaseModel):
     reps: int
     time: str  # 예: "2분" 또는 "30초"
 
+class ExerciseRecord(BaseModel):
+    user_id: int
+    name: str
+    weight: Optional[float]
+    sets: Optional[int]
+    reps: Optional[int]
+    duration_minutes: Optional[int]
+    calories_burned: Optional[float]
+    exercise_date: Optional[date] = date.today()  # ✅ 이걸로 수정
+
+
 # ✅ 챗봇에서 운동 기록 저장용 (name, weight 등 포함)
 class ExerciseChatInput(BaseModel):
     user_id: int

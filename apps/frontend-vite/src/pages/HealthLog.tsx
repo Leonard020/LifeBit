@@ -31,6 +31,8 @@ import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
 import { Message } from '@/api/chatApi';
+import { sendChatMessage } from '@/api/chatApi';
+import { saveExerciseRecord } from '@/api/chatApi';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -195,6 +197,81 @@ const HealthLog: React.FC = () => {
       </Layout>
     );
   }
+  const handleHealthLogSendMessage = async () => {
+    console.log('📌 [HealthLog] handleHealthLogSendMessage 진입');
+
+    if (!chatInputText.trim()) return;
+  
+    try {
+      setChatIsProcessing(true);
+      setChatNetworkError(false);
+  
+      const updatedHistory: Message[] = [
+        ...conversationHistory,
+        { role: 'user', content: chatInputText }
+      ];
+  
+      const response = await sendChatMessage(
+        chatInputText,
+        updatedHistory,
+        recordType
+      );
+  
+      console.log('📦 AI 응답:', response);
+  
+      if (response?.parsed_data) {
+        setChatStructuredData(response.parsed_data);
+        setParsedData(response.parsed_data);
+  
+        // ✅ 응답 직후 저장 키워드가 있는지 검사하여 저장
+        const lowered = chatInputText.toLowerCase();
+        const saveKeywords = /저장해줘|기록해줘|완료|끝|등록해줘|저장|기록|등록/;
+  
+        if (saveKeywords.test(lowered)) {
+          console.log('💾 [자동 저장 조건 충족] 저장 시작');
+  
+          try {
+            await saveExerciseRecord({
+              ...response.parsed_data,
+              exercise_date: new Date().toISOString().slice(0, 10),
+            });
+  
+            toast({
+              title: "운동 기록 저장 완료",
+              description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
+            });
+  
+            setChatStructuredData(null);
+            setParsedData(null);
+          } catch (err) {
+            console.error('❌ 저장 실패:', err);
+            toast({
+              title: "저장 실패",
+              description: "서버에 데이터를 저장하는 데 실패했습니다.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
+  
+      setConversationHistory([
+        ...updatedHistory,
+        { role: 'assistant', content: response.message }
+      ]);
+    } catch (error) {
+      console.error('AI 응답 실패:', error);
+      setChatNetworkError(true);
+      toast({
+        title: 'AI 응답 실패',
+        description: '메시지 처리 중 오류가 발생했습니다.',
+        variant: 'destructive'
+      });
+    } finally {
+      setChatIsProcessing(false);
+    }
+  };
+  
+  
 
   return (
     <Layout>
@@ -372,10 +449,37 @@ const HealthLog: React.FC = () => {
                     isProcessing={chatIsProcessing}
                     networkError={chatNetworkError}
                     onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
-                    onSendMessage={() => {}}
+                    onSendMessage={handleHealthLogSendMessage}
+
+
                     onRetry={() => setChatNetworkError(false)}
                     aiFeedback={null}
-                    onSaveRecord={() => {}}
+                    onSaveRecord={async () => {
+                      console.log('💾 [onSaveRecord] 실행됨');
+                      console.log('💾 [전송 데이터] ', chatStructuredData);
+                      if (!chatStructuredData) return;
+                    
+                      try {
+                        await saveExerciseRecord({
+                          ...chatStructuredData,
+                          exercise_date: new Date().toISOString().slice(0, 10), // 🔥 오늘 날짜 자동 삽입
+                        });
+                        toast({
+                          title: "운동 기록 저장 완료",
+                          description: "AI 분석된 데이터를 성공적으로 저장했습니다."
+                        });
+                        setChatStructuredData(null);
+                        setParsedData(null);
+                      } catch (error) {
+                        console.error('저장 오류:', error);
+                        toast({
+                          title: "저장 실패",
+                          description: "서버에 데이터를 저장하는 데 실패했습니다.",
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                    
                     structuredData={chatStructuredData}
                     conversationHistory={conversationHistory}
                   />

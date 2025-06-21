@@ -52,7 +52,7 @@ const ServerStatus = () => {
       });
 
     // 2. AI API (FastAPI) 상태 확인 - 현재 개발 중
-    axios.get(`${AI_API_URL}/`)
+    axios.get(`${AI_API_URL}/api/py/health`)
       .then(response => {
         if (response.data.status === 'OK') {
           setAiStatus({ status: 'OK', color: 'limegreen' });

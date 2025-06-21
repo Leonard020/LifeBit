@@ -111,7 +111,7 @@ interface ChatResponse {
 const saveDietRecord = async (dietData: DietState) => {
   try {
     // healthApi에서 가져온 함수 사용
-    const response = await fetch('/api/foods/find-or-create', {
+    const response = await fetch('/api/py/foods/find-or-create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -133,7 +133,7 @@ const saveDietRecord = async (dietData: DietState) => {
     const foodItem = await response.json();
 
     // 식단 로그 저장
-    const mealResponse = await fetch('/api/meals/record', {
+    const mealResponse = await fetch('/api/py/meals/record', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

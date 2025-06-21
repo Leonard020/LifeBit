@@ -172,8 +172,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+  
+    // 💬 스크롤 항상 맨 아래로
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversationHistory, aiFeedback]);
+  
+    // ✅ 자동 저장 키워드 감지
+    const lowered = inputText.toLowerCase();
+    const saveKeywords = /저장|기록|완료|끝|등록|저장해줘|기록해줘|등록해줘/;
+  
+    if (saveKeywords.test(lowered) && structuredData) {
+      console.log('💾 [ChatInterface] 자동 저장 조건 감지됨');
+      onSaveRecord();  // 🔥 부모로부터 받은 저장 함수 실행
+    }
+  }, [conversationHistory, aiFeedback, inputText, structuredData, onSaveRecord]);
+  
+  
 
   if (!recordType) {
     return (
@@ -185,6 +198,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }
 
   const handleSendMessageWithFocus = () => {
+    console.log('🟢 [ChatInterface] 전송 버튼 눌림');
+
     onSendMessage();
     setTimeout(() => {
       requestAnimationFrame(() => {
@@ -200,6 +215,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      console.log('⌨️ [ChatInterface] Enter 눌림');
+
       handleSendMessageWithFocus();
     }
   };

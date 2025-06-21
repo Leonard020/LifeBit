@@ -421,7 +421,14 @@ const Note = () => {
           return;
         }
 
-        const res = await fetch(`/api/note/exercise/daily?date=${dateStr}`, {
+        const userInfo = getUserInfo(); // 현재 사용자 정보 가져오기
+        if (!userInfo || !userInfo.userId) {
+          console.warn('사용자 정보를 찾을 수 없습니다.');
+          setTodayExercise([]);
+          return;
+        }
+
+        const res = await fetch(`/api/py/note/exercise/daily?user_id=${userInfo.userId}&date=${dateStr}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -750,7 +757,12 @@ const Note = () => {
                             <Badge variant="outline" className="text-xs">운동</Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {record.weight} × {record.sets}세트 × {record.reps}회 • {record.time}
+                            {[
+                              record.weight && record.weight !== '체중' && record.weight !== '0kg' ? record.weight : null,
+                              record.sets ? `${record.sets}세트` : null,
+                              record.reps ? `${record.reps}회` : null,
+                              record.time ? record.time : null
+                            ].filter(Boolean).join(' • ')}
                           </p>
                         </div>
                         <div className="flex space-x-1">

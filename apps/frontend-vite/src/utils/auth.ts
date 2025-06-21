@@ -206,3 +206,7 @@ export const getTokenSummary = (): {
 export const isAuthenticated = (): boolean => {
   return isTokenValid();
 }; 
+
+export const getTokenFromStorage = () => {
+  return localStorage.getItem('access_token');
+};

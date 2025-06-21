@@ -10,8 +10,9 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
-from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput
+from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, ExerciseRecord
 import models
+from note_routes import router as note_router  # ✅ 상단에 추가
 
 
 # 새로 추가: 차트 분석 서비스 import
@@ -31,6 +32,7 @@ print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
+app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 
 # CORS 설정
 origins = [
@@ -40,7 +42,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,7 +51,7 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(auth_router, prefix="/api/auth")
+app.include_router(auth_router, prefix="/api/py/auth")
 
 # DB 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -565,7 +567,7 @@ class AnalyticsRequest(BaseModel):
     period: str = "month"  # day, week, month, year
 
 # 헬스 체크 엔드포인트
-@app.get("/")
+@app.get("/api/py/health")
 def health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
 
@@ -762,6 +764,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                             exercise_date=date.today()
                         )
                         db.add(new_record)
+                       
 
                 elif record_type == "diet":
                     for food in parsed_data:
@@ -803,7 +806,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
 
 # 채팅 엔드포인트
-@app.post("/api/chat")
+@app.post("/api/py/chat")
 async def chat(request: ChatRequest):
     try:
         if not request.message:
@@ -900,30 +903,27 @@ async def chat(request: ChatRequest):
             detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
         )
 # 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
-@app.post("/api/note/exercise", response_model=ExerciseChatOutput)
-def save_exercise_record(data: ExerciseChatInput, db: Session = Depends(get_db)):
+@app.post("/api/py/note/exercise")
+def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
     exercise = models.ExerciseSession(
         user_id=data.user_id,
         notes=data.name,
-        weight=float(data.weight.replace("kg", "").strip()) if "kg" in data.weight else None,
+        weight=data.weight,
         sets=data.sets,
         reps=data.reps,
-        duration_minutes=int(data.time.replace("분", "").strip()) if "분" in data.time else 0,
-        calories_burned=int(data.calories_burned or 0),
-        exercise_date=data.exercise_date,
-        input_source="VOICE",  # 기본값
-        confidence_score=1.0,
-        validation_status="PENDING"
+        duration_minutes=data.duration_minutes,
+        calories_burned=data.calories_burned,
+        exercise_date=data.exercise_date
     )
     db.add(exercise)
     db.commit()
     db.refresh(exercise)
-    return data
+    return {"message": "운동 기록 저장 성공", "id": exercise.exercise_session_id}
 
 
 # ✅ 오늘 날짜 운동 기록 조회
-@app.get("/api/note/exercise/daily", response_model=list[DailyExerciseRecord])
-def get_today_exercise(date: Optional[date] = date.today(), user_id: Optional[int] = 1, db: Session = Depends(get_db)):
+@app.get("/api/py/note/exercise/daily", response_model=list[DailyExerciseRecord])
+def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Session = Depends(get_db)):
     records = db.query(models.ExerciseSession).filter(
         models.ExerciseSession.user_id == user_id,
         models.ExerciseSession.exercise_date == date

@@ -1,6 +1,8 @@
 import { AxiosError } from 'axios';
 import axiosInstance from '@/utils/axios';
 import { convertTimeToMealType, hasTimeInformation } from '@/utils/mealTimeMapping';
+import { getToken } from '@/utils/auth';
+
 
 // 대화 메시지 타입
 export interface Message {
@@ -92,6 +94,8 @@ export const sendChatMessage = async (
   currentData?: CurrentDataType
 ): Promise<ChatResponse> => {
   try {
+    const token = getToken(); // ✅ 토큰 읽기
+
     const body: ChatRequestBody = {
       message,
       conversation_history: conversationHistory,
@@ -99,7 +103,7 @@ export const sendChatMessage = async (
       ...(chatStep && { chat_step: chatStep }),
     };
 
-    // 식단 기록인 경우 시간 매핑 정보 추가
+    // ✅ 식단 기록인 경우 시간 매핑 정보 포함
     if (recordType === 'diet') {
       const hasTime = hasTimeInformation(message);
       const mappedTime = hasTime ? convertTimeToMealType(message) : null;
@@ -113,7 +117,14 @@ export const sendChatMessage = async (
       };
     }
 
-    const response = await axiosInstance.post<ChatResponse>('/api/chat', body);
+    // ✅ Authorization 헤더 추가
+    const response = await axiosInstance.post<ChatResponse>('/api/py/chat', body, {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      }
+    });
+
     return response.data;
   } catch (error) {
     let errorMessage = '메시지 전송 중 오류가 발생했습니다.';
@@ -130,7 +141,7 @@ export const sendChatMessage = async (
 // 운동 기록 저장 API 호출
 export const saveExerciseRecord = async (exerciseData: ExerciseState) => {
   try {
-    const res = await axiosInstance.post('/api/note/exercise', {
+    const res = await axiosInstance.post('/api/py/note/exercise', {
       user_id: 1,
       name: exerciseData.exercise,
       weight: exerciseData.weight,
