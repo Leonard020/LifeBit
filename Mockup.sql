@@ -213,12 +213,6 @@ INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein,
 ('F049', '올리브오일', 10.0, 90.0, 0.0, 0.0, 10.0),
 ('F050', '견과류 믹스', 30.0, 180.0, 5.0, 6.0, 16.0);
 
-
-
-
-
------------------------------------------
-
 -- ===================================================================
 -- 4. 사용자 목표 설정 (각 사용자당 1개씩, 49개)
 -- ===================================================================
@@ -432,22 +426,39 @@ INSERT INTO meal_logs (
     log_date,
     input_source,
     confidence_score,
-    validation_status
+    validation_status,
+    calories,
+    carbs,
+    protein,
+    fat
 )
 SELECT 
     u.user_id, 
-    1 + (random() * 49)::integer, -- 음식 아이템 ID (1-50)
+    fi.food_item_id,
     (ARRAY['breakfast', 'lunch', 'dinner', 'snack'])[1 + (random() * 3)::integer]::meal_time_type,
-    (50 + random() * 200)::decimal(6,2), -- 섭취량: 50-250g
-    CURRENT_DATE - (random() * 90)::integer, -- 최근 90일 중 랜덤
-    (ARRAY['VOICE', 'TYPING', 'TYPING'])[1 + (random() * 2)::integer]::input_source_type, -- 타이핑이 더 많음
+    q.quantity,
+    q.log_date,
+    (ARRAY['VOICE', 'TYPING', 'TYPING'])[1 + (random() * 2)::integer]::input_source_type,
     CASE 
         WHEN random() > 0.7 THEN (0.75 + random() * 0.25)::decimal(4,2) 
         ELSE NULL 
     END,
-    'VALIDATED'::validation_status_type
+    'VALIDATED'::validation_status_type,
+    ROUND(fi.calories * (q.quantity / fi.serving_size), 2),
+    ROUND(fi.carbs * (q.quantity / fi.serving_size), 2),
+    ROUND(fi.protein * (q.quantity / fi.serving_size), 2),
+    ROUND(fi.fat * (q.quantity / fi.serving_size), 2)
 FROM users u
-CROSS JOIN generate_series(1, 11) AS series -- 사용자당 11개씩
+CROSS JOIN (
+    SELECT 
+        food_item_id, 
+        (50 + random() * 200)::decimal(6,2) AS quantity,
+        CURRENT_DATE - (random() * 90)::integer AS log_date
+    FROM food_items
+    ORDER BY random()
+    LIMIT 1
+) q
+JOIN food_items fi ON fi.food_item_id = q.food_item_id
 WHERE u.role = 'USER'
 LIMIT 500;
 

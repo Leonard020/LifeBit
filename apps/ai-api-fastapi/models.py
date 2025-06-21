@@ -42,6 +42,10 @@ class MealLog(Base):
     quantity = Column(DECIMAL(6, 2))
     log_date = Column(Date, nullable=False)
     meal_time = Column(SqlEnum('breakfast', 'lunch', 'dinner', 'snack', name='meal_time_type'), nullable=False)
+    calories = Column(DECIMAL(6, 2), nullable=True)
+    carbs = Column(DECIMAL(6, 2), nullable=True)
+    protein = Column(DECIMAL(6, 2), nullable=True)
+    fat = Column(DECIMAL(6, 2), nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
 # 👤 사용자 테이블
@@ -70,3 +74,15 @@ class User(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow)
     last_visited = Column(DateTime, nullable=True)
+
+class FoodItem(Base):
+    __tablename__ = "food_items"
+
+    food_item_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    calories = Column(DECIMAL(6, 2), nullable=True)
+    carbs = Column(DECIMAL(6, 2), nullable=True)
+    protein = Column(DECIMAL(6, 2), nullable=True)
+    fat = Column(DECIMAL(6, 2), nullable=True)
+    serving_size = Column(DECIMAL(6, 2), nullable=True)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)

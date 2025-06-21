@@ -15,6 +15,7 @@ import {
 import { getUserIdFromToken, getTokenFromStorage } from '@/utils/auth'; // 또는 정확한 경로
 import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
+import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
   const { toast } = useToast();
@@ -34,6 +35,7 @@ const Index = () => {
   const [isAddingMoreFood, setIsAddingMoreFood] = useState(false);
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 
+  const navigate = useNavigate();
 
   /**
    * 식단 데이터의 완성도를 검증하는 함수
@@ -244,6 +246,14 @@ const Index = () => {
         });
       }
     } else if (type === 'diet') {
+      type Nutrition = {
+        calories: number;
+        carbs: number;
+        protein: number;
+        fat: number;
+        serving_size?: number;
+        carbohydrates?: number;
+      };
       type DietData = {
         food_item_id?: number;
         foodItemId?: number;
@@ -257,9 +267,11 @@ const Index = () => {
         validation_notes?: string;
         created_at?: string;
         log_date?: string;
+        nutrition?: Nutrition;
       };
-      const dietData: DietData = chatStructuredData as DietData;
-      let foodItemId = dietData.food_item_id || dietData.foodItemId;
+      const dietDataRaw: unknown = chatStructuredData;
+      const dietData: DietData = dietDataRaw as DietData;
+      let foodItemId: number | undefined = dietData.food_item_id || dietData.foodItemId;
       if (!foodItemId && dietData.food_name) {
         try {
           const searchResults = await searchFoodItems(dietData.food_name);
@@ -269,10 +281,9 @@ const Index = () => {
           console.error('[식단기록] food_name으로 food_item_id 검색 실패', err);
         }
       }
+      // food_item_id가 없어도 저장 요청을 보냄 (food_name, nutrition 포함)
       if (!foodItemId) {
-        toast({ title: '식단 기록 저장 실패', description: '음식 정보가 부족합니다.' });
-        console.error('[식단기록 저장 실패] food_item_id 없음', dietData);
-        return;
+        console.warn('[식단기록] food_item_id 없이 저장 요청 (자동 등록 시도)');
       }
       // MealInput에 맞는 payload 생성
       function mapMealTimeToEnum(mealTime: string) {
@@ -285,12 +296,80 @@ const Index = () => {
           default: return 'snack';
         }
       }
+      function getKSTDateString() {
+        const now = new Date();
+        now.setHours(now.getHours() + 9); // KST 보정
+        return now.toISOString().slice(0, 10);
+      }
+      function normalizeNutrition(nutrition: Partial<Nutrition>): Nutrition | undefined {
+        if (!nutrition) return undefined;
+        return {
+          calories: nutrition.calories ?? 0,
+          carbs: nutrition.carbohydrates ?? nutrition.carbs ?? 0,
+          protein: nutrition.protein ?? 0,
+          fat: nutrition.fat ?? 0,
+          serving_size: nutrition.serving_size,
+          carbohydrates: nutrition.carbohydrates,
+        };
+      }
+      // [이중체크] 섭취량 단위 환산 함수 추가
+      async function convertAmountToGram(amount: number | string, foodName: string, foodItemId?: number): Promise<number> {
+        // 1. foodItemId가 있으면 DB에서 serving_size 조회
+        let servingSize = 100;
+        if (foodItemId) {
+          const searchResults = await searchFoodItems(foodName);
+          if (searchResults && searchResults.length > 0) {
+            servingSize = searchResults[0].servingSize || 100;
+          }
+        } else if (dietData.nutrition && dietData.nutrition.serving_size) {
+          servingSize = dietData.nutrition.serving_size;
+        } else {
+          // 계란 등 일부 음식은 하드코딩 (예: 계란 1개=50g)
+          if (foodName.includes('계란')) servingSize = 50;
+        }
+        // 2. amount가 "3개" 등 문자열이면 숫자만 추출
+        let num = 1;
+        if (typeof amount === 'string') {
+          const match = amount.match(/\d+(\.\d+)?/);
+          if (match) num = parseFloat(match[0]);
+        } else {
+          num = Number(amount);
+        }
+        // 3. "개" 단위면 개수*servingSize, "g" 단위면 그대로, 그 외는 기본 servingSize 곱
+        if (typeof amount === 'string' && amount.includes('개')) {
+          return num * servingSize;
+        } else if (typeof amount === 'string' && amount.includes('g')) {
+          return num;
+        } else {
+          return num * servingSize;
+        }
+      }
+      // [이중체크] nutrition 환산 함수
+      function calcNutritionByGram(nutrition: Nutrition | undefined, gram: number, servingSize: number = 100): Nutrition | undefined {
+        if (!nutrition) return undefined;
+        const baseServing = nutrition.serving_size || servingSize || 100;
+        const ratio = gram / baseServing;
+        return {
+          calories: Math.round((nutrition.calories || 0) * ratio * 10) / 10,
+          carbs: Math.round((nutrition.carbs || 0) * ratio * 10) / 10,
+          protein: Math.round((nutrition.protein || 0) * ratio * 10) / 10,
+          fat: Math.round((nutrition.fat || 0) * ratio * 10) / 10,
+          serving_size: gram,
+          carbohydrates: nutrition.carbohydrates !== undefined ? Math.round((nutrition.carbohydrates || 0) * ratio * 10) / 10 : undefined,
+        };
+      }
+      // [이중체크] 실제 환산 적용
+      const gramAmount = await convertAmountToGram(dietData.amount, dietData.food_name || '', foodItemId);
+      const normalizedNutrition = normalizeNutrition(dietData.nutrition);
+      const nutritionByGram = calcNutritionByGram(normalizedNutrition, gramAmount, normalizedNutrition?.serving_size);
       const payload = {
         user_id: Number(userId),
-        food_item_id: Number(foodItemId),
-        quantity: parseFloat(String(dietData.amount)),
-        log_date: dietData.log_date || new Date().toISOString().slice(0, 10),
-        meal_time: mapMealTimeToEnum(dietData.meal_time), // ENUM 값으로 변환
+        food_item_id: foodItemId ? Number(foodItemId) : undefined,
+        quantity: gramAmount, // g 단위로 환산
+        log_date: dietData.log_date || getKSTDateString(),
+        meal_time: mapMealTimeToEnum(dietData.meal_time),
+        food_name: dietData.food_name,
+        nutrition: nutritionByGram,
       };
       console.log('[식단기록 저장] payload:', payload);
       try {
@@ -308,6 +387,7 @@ const Index = () => {
           title: '기록 완료',
           description: '식단 기록이 저장되었습니다.'
         });
+        navigate('/note');
       } catch (err) {
         console.error('[식단기록 저장 실패]', err);
         toast({

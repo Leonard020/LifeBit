@@ -116,7 +116,7 @@ CREATE TABLE exercise_catalog (
     exercise_catalog_id BIGSERIAL PRIMARY KEY,
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     name VARCHAR(100) NOT NULL,
-    exercise_type exercise_part_type,
+    exercise_type VARCHAR(50),
     body_part body_part_type NOT NULL,
     description TEXT,
     intensity VARCHAR(50),
@@ -176,6 +176,10 @@ CREATE TABLE meal_logs (
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
+    calories DECIMAL(6,2),
+    carbs DECIMAL(6,2),
+    protein DECIMAL(6,2),
+    fat DECIMAL(6,2),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -397,4 +401,11 @@ CREATE TRIGGER voice_recognition_status_trigger
 BEFORE UPDATE ON voice_recognition_logs
 FOR EACH ROW
 EXECUTE FUNCTION update_processed_at();
+
+
+SELECT * FROM exercise_sessions ORDER BY created_at DESC LIMIT 5;
+  SELECT * FROM meal_logs WHERE user_id = 2 AND log_date = '2025-06-21';
+
+    SELECT * FROM meal_logs WHERE user_id=2 ORDER BY log_date DESC;
+
 
