@@ -17,6 +17,8 @@ class MealInput(BaseModel):
     quantity: float
     log_date: Optional[date] = date.today()
     meal_time: str
+    food_name: Optional[str] = None
+    nutrition: Optional[dict] = None
 
 # (선택) 응답용 모델이 필요하면 아래 추가 가능
 class ExerciseOutput(BaseModel):

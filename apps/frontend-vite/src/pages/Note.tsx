@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from '@/utils/axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid } from '@/utils/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import { toast } from '@/hooks/use-toast';
 
@@ -84,6 +84,7 @@ const Note = () => {
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   // 운동 기록 타입 정의
   interface ExerciseRecord {
@@ -192,41 +193,38 @@ const Note = () => {
     goal: goal * 20,
   }));
 
-  // 식단 데이터 페칭 - 저장된 토큰 사용
+  // ✅ fetchDietData를 useCallback으로 분리
+  const fetchDietData = useCallback(async () => {
+    if (!authToken) return;
+    setIsLoadingDietData(true);
+    setDietError(null);
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    try {
+      const userId = getUserIdFromToken() || 1;
+      const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, { params: { userId } });
+      const nutritionGoalsResponse = await axios.get(`/api/diet/nutrition-goals/${formattedDate}`, { params: { userId } });
+      setDailyDietLogs(dietLogsResponse.data);
+      setDailyNutritionGoals(nutritionGoalsResponse.data);
+    } catch (error) {
+      console.error("식단 데이터를 가져오는 중 오류 발생:", error);
+      setDietError("식단 데이터를 불러오는데 실패했습니다.");
+    } finally {
+      setIsLoadingDietData(false);
+    }
+  }, [authToken, selectedDate]);
+
   useEffect(() => {
-    const fetchDietData = async () => {
-      if (!authToken) return; // 토큰이 없으면 실행하지 않음
-      
-      setIsLoadingDietData(true);
-      setDietError(null);
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-
-      try {
-        const userId = getUserIdFromToken() || 1;
-
-        // 1. 실제 식단 기록 가져오기
-        const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
-          params: { userId }
-        });
-
-        // 2. 실제 영양소 목표 가져오기
-        const nutritionGoalsResponse = await axios.get(`/api/diet/nutrition-goals/${formattedDate}`, {
-          params: { userId }
-        });
-
-        setDailyDietLogs(dietLogsResponse.data);
-        setDailyNutritionGoals(nutritionGoalsResponse.data);
-
-      } catch (error) {
-        console.error("식단 데이터를 가져오는 중 오류 발생:", error);
-        setDietError("식단 데이터를 불러오는데 실패했습니다.");
-      } finally {
-        setIsLoadingDietData(false);
-      }
-    };
-
     fetchDietData();
-  }, [selectedDate, authToken]); // authToken이 변경될 때마다 실행
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, authToken]);
+
+  useEffect(() => {
+    if (location.state?.refreshDiet) {
+      fetchDietData();
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // 음식 검색
   const searchFood = async () => {

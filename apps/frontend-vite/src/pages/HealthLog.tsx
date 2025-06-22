@@ -231,14 +231,14 @@ const HealthLog: React.FC = () => {
             console.log('[저장 함수 진입] recordType:', recordType, 'chatInputText:', chatInputText);
             if (recordType === 'exercise') {
               console.log('[운동기록 저장] payload:', response.parsed_data);
-              await saveExerciseRecord({
-                ...response.parsed_data,
-                exercise_date: new Date().toISOString().slice(0, 10),
-              });
-              toast({
-                title: "운동 기록 저장 완료",
-                description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-              });
+            await saveExerciseRecord({
+              ...response.parsed_data,
+              exercise_date: new Date().toISOString().slice(0, 10),
+            });
+            toast({
+              title: "운동 기록 저장 완료",
+              description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
+            });
             } else if (recordType === 'diet') {
               console.log('[식단기록 저장] payload:', response.parsed_data);
               type DietData = {
@@ -333,7 +333,7 @@ const HealthLog: React.FC = () => {
       setChatIsProcessing(false);
     }
   };
-  
+
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -543,14 +543,14 @@ const HealthLog: React.FC = () => {
                     
                       try {
                         if (recordType === 'exercise') {
-                          await saveExerciseRecord({
-                            ...chatStructuredData,
+                        await saveExerciseRecord({
+                          ...chatStructuredData,
                             exercise_date: new Date().toISOString().slice(0, 10),
-                          });
-                          toast({
-                            title: "운동 기록 저장 완료",
-                            description: "AI 분석된 데이터를 성공적으로 저장했습니다."
-                          });
+                        });
+                        toast({
+                          title: "운동 기록 저장 완료",
+                          description: "AI 분석된 데이터를 성공적으로 저장했습니다."
+                        });
                         } else if (recordType === 'diet') {
                           type DietData = {
                             food_item_id?: number;

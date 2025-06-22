@@ -17,6 +17,32 @@ import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
 import { useNavigate } from 'react-router-dom';
 
+type Nutrition = {
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  serving_size?: number;
+  carbohydrates?: number;
+};
+type DietData = {
+  food_item_id?: number;
+  foodItemId?: number;
+  food_name: string;
+  amount: number | string;
+  meal_time?: string;
+  input_source?: string;
+  confidence_score?: number;
+  original_audio_path?: string;
+  validation_status?: string;
+  validation_notes?: string;
+  created_at?: string;
+  log_date?: string;
+  nutrition?: Nutrition;
+};
+
+type SimpleDietData = Omit<DietData, 'amount'> & { amount: string };
+
 const Index = () => {
   const { toast } = useToast();
   const [recordType, setRecordType] = useState<'exercise' | 'diet' | null>(null);
@@ -31,7 +57,7 @@ const Index = () => {
   const [chatStep, setChatStep] = useState<'extraction' | 'validation' | 'confirmation'>('extraction');
 
   // 식단 기록용 추가 상태들
-  const [currentMealFoods, setCurrentMealFoods] = useState<Array<any>>([]);
+  const [currentMealFoods, setCurrentMealFoods] = useState<SimpleDietData[]>([]);
   const [isAddingMoreFood, setIsAddingMoreFood] = useState(false);
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 
@@ -122,10 +148,27 @@ const Index = () => {
         chatStep
       );
 
-      // AI 응답을 히스토리에 추가 (백엔드 메시지 그대로 사용)
+      // ✅ AI 응답이 JSON(객체)로 보이면 콘솔에만 출력, 사용자에겐 자연어만 노출
+      let displayMessage = response.message;
+      try {
+        // JSON 문자열이거나 객체라면 콘솔에만 출력
+        if (typeof response.message === 'string' && response.message.trim().startsWith('{') && response.message.trim().endsWith('}')) {
+          console.log('[AI 응답 JSON]', response.message);
+          // user_message.text가 있으면 그걸, 없으면 기본 안내
+          if (response.parsed_data && response.parsed_data.food_name) {
+            displayMessage = `${response.parsed_data.food_name}을(를) 드신 것으로 기록할까요?`; // 예시 프롬프트
+          } else {
+            displayMessage = '식단 정보를 확인해주세요.';
+          }
+        }
+      } catch (e) {
+        // 무시
+      }
+
+      // AI 응답을 히스토리에 추가 (자연어만)
       const newHistory: Message[] = [
         ...updatedHistory,
-        { role: 'assistant', content: response.message }
+        { role: 'assistant', content: displayMessage }
       ];
       setConversationHistory(newHistory);
       setChatAiFeedback(response);
@@ -148,9 +191,9 @@ const Index = () => {
         setChatStep('confirmation');
       }
 
-      // ✅ 저장 키워드가 포함된 경우 자동 저장 실행
-      const saveKeywords = /저장해줘|기록해줘|완료|끝|등록해줘|저장|기록|등록/;
-      if (saveKeywords.test(chatInputText.toLowerCase())) {
+      // ✅ 저장 트리거 키워드: '저장', '저장해줘', '기록해줘', '완료', '끝'만 허용
+      const saveKeywords = /^(저장|저장해줘|기록해줘|완료|끝)$/;
+      if (saveKeywords.test(chatInputText.trim().toLowerCase())) {
         console.log('[자동 저장 트리거] 저장 키워드 감지, handleRecordSubmit 실행');
         await handleRecordSubmit(recordType, chatInputText);
       }
@@ -246,31 +289,7 @@ const Index = () => {
         });
       }
     } else if (type === 'diet') {
-      type Nutrition = {
-        calories: number;
-        carbs: number;
-        protein: number;
-        fat: number;
-        serving_size?: number;
-        carbohydrates?: number;
-      };
-      type DietData = {
-        food_item_id?: number;
-        foodItemId?: number;
-        food_name?: string;
-        amount?: number | string;
-        meal_time?: string;
-        input_source?: string;
-        confidence_score?: number;
-        original_audio_path?: string;
-        validation_status?: string;
-        validation_notes?: string;
-        created_at?: string;
-        log_date?: string;
-        nutrition?: Nutrition;
-      };
-      const dietDataRaw: unknown = chatStructuredData;
-      const dietData: DietData = dietDataRaw as DietData;
+      const dietData = chatStructuredData as DietData;
       let foodItemId: number | undefined = dietData.food_item_id || dietData.foodItemId;
       if (!foodItemId && dietData.food_name) {
         try {
@@ -281,7 +300,6 @@ const Index = () => {
           console.error('[식단기록] food_name으로 food_item_id 검색 실패', err);
         }
       }
-      // food_item_id가 없어도 저장 요청을 보냄 (food_name, nutrition 포함)
       if (!foodItemId) {
         console.warn('[식단기록] food_item_id 없이 저장 요청 (자동 등록 시도)');
       }
@@ -381,15 +399,19 @@ const Index = () => {
           },
           body: JSON.stringify(payload)
         });
-        if (!response.ok) throw new Error('식단 저장 실패');
-        console.log('[식단기록 저장 성공]', await response.json());
+        const responseBody = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          console.error('[식단기록 저장 실패] 응답코드:', response.status, responseBody);
+          throw new Error('식단 저장 실패');
+        }
+        console.log('[식단기록 저장 성공]', responseBody);
         toast({
           title: '기록 완료',
           description: '식단 기록이 저장되었습니다.'
         });
-        navigate('/note');
+        navigate('/note', { state: { refreshDiet: true } });
       } catch (err) {
-        console.error('[식단기록 저장 실패]', err);
+        console.error('[식단기록 저장 실패] 예외:', err);
         toast({
           title: '저장 오류',
           description: '식단 데이터를 저장하지 못했습니다.',
@@ -461,7 +483,7 @@ const Index = () => {
               setCurrentMealTime(null);
               setChatAiFeedback({
                 type: 'initial',
-                message: '안녕하세요! 😊 오늘 어떤 음식을 드셨나요?\n\n언제, 무엇을, 얼마나 드셨는지 자유롭게 말씀해 주세요!\n\n예시: "아침에 계란 2개랑 토스트 1개 먹었어요"'
+                message: '안녕하세요! 😊 오늘 어떤 음식을 드셨나요?\n\n언제, 무엇을, 얼마나 드셨는지 자유롭게 말씀해 주세요!\n\n예시: "아침에 계란 2개랑 토스트 1개 먹었어요"\n\n정보 저장이 필요하면 "저장", "기록해줘", "완료", "끝" 중 하나의 문구를 입력해 주세요. 해당 문구를 입력하면 자동으로 기록이 저장됩니다.'
               });
               setChatStep('extraction');
             }}
