@@ -1,31 +1,27 @@
 package com.lifebit.coreapi.service;
 
+import com.lifebit.coreapi.dto.DietCalendarDTO;
 import com.lifebit.coreapi.dto.DietLogDTO;
 import com.lifebit.coreapi.dto.DietNutritionDTO;
-import com.lifebit.coreapi.dto.DietCalendarDTO;
-import com.lifebit.coreapi.entity.FoodItem;
-import com.lifebit.coreapi.entity.MealLog;
-import com.lifebit.coreapi.entity.User;
-import com.lifebit.coreapi.entity.UserGoal;
-import com.lifebit.coreapi.entity.MealTimeType;
-import com.lifebit.coreapi.entity.InputSourceType;
-import com.lifebit.coreapi.entity.ValidationStatusType;
+import com.lifebit.coreapi.entity.*;
 import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
-import com.lifebit.coreapi.repository.UserRepository;
 import com.lifebit.coreapi.repository.UserGoalRepository;
+import com.lifebit.coreapi.repository.UserRepository;
 import com.lifebit.coreapi.service.UserGoalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -39,7 +35,7 @@ public class DietService {
     private final UserGoalRepository userGoalRepository;
     private final UserGoalService userGoalService;
 
-    public List<DietLogDTO> getDailyDietRecords(Long userId, LocalDate date) {
+    public List<DietLogDTO> getDailyDietRecords(LocalDate date, Long userId) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
         
@@ -47,10 +43,11 @@ public class DietService {
         
         return mealLogs.stream()
             .map(this::convertToDietLogDTO)
+            .filter(Objects::nonNull)
             .collect(Collectors.toList());
     }
 
-    public List<DietNutritionDTO> getNutritionGoals(Long userId, LocalDate date) {
+    public List<DietNutritionDTO> getNutritionGoals(LocalDate date, Long userId) {
         // 사용자별 목표 가져오기
         UserGoal userGoal = userGoalRepository.findByUserId(userId)
             .orElse(userGoalService.getDefaultDietGoalByGender(userId));
@@ -68,6 +65,9 @@ public class DietService {
 
         for (MealLog mealLog : dailyMealLogs) {
             FoodItem foodItem = mealLog.getFoodItem();
+            if (foodItem == null) {
+                continue; // 음식이 없는 기록은 건너뛰기
+            }
             BigDecimal quantity = mealLog.getQuantity();
             
             if (foodItem.getCalories() != null) {
@@ -208,30 +208,30 @@ public class DietService {
     }
 
     private DietLogDTO convertToDietLogDTO(MealLog mealLog) {
+        FoodItem foodItem = mealLog.getFoodItem();
+
+        if (foodItem == null) {
+            return null;
+        }
+
         DietLogDTO dto = new DietLogDTO();
         dto.setId(mealLog.getMealLogId());
-        dto.setUserId(mealLog.getUser().getUserId());
-        dto.setFoodItemId(mealLog.getFoodItem().getFoodItemId());
-        dto.setFoodName(mealLog.getFoodItem().getName());
+        dto.setFoodItemId(foodItem.getFoodItemId());
+        dto.setFoodName(foodItem.getName());
         dto.setQuantity(mealLog.getQuantity().doubleValue());
+        dto.setMealTime(mealLog.getMealTime().toString());
+        dto.setUnit("g"); // 기본 단위 설정
         dto.setLogDate(mealLog.getLogDate().toString());
-        dto.setUnit("g");
-        
-        // 영양소 정보 설정 (divide by 100 for per-100g values)
-        FoodItem foodItem = mealLog.getFoodItem();
-        if (foodItem.getCalories() != null) {
-            dto.setCalories(foodItem.getCalories().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
-        }
-        if (foodItem.getCarbs() != null) {
-            dto.setCarbs(foodItem.getCarbs().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
-        }
-        if (foodItem.getProtein() != null) {
-            dto.setProtein(foodItem.getProtein().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
-        }
-        if (foodItem.getFat() != null) {
-            dto.setFat(foodItem.getFat().multiply(mealLog.getQuantity()).divide(new BigDecimal(100)).doubleValue());
-        }
-        
+        dto.setCreatedAt(mealLog.getCreatedAt().toString());
+
+        BigDecimal quantity = mealLog.getQuantity();
+        BigDecimal HUNDRED = new BigDecimal("100.0");
+
+        dto.setCalories(foodItem.getCalories() != null ? foodItem.getCalories().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
+        dto.setCarbs(foodItem.getCarbs() != null ? foodItem.getCarbs().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
+        dto.setProtein(foodItem.getProtein() != null ? foodItem.getProtein().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
+        dto.setFat(foodItem.getFat() != null ? foodItem.getFat().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
+
         return dto;
     }
 
