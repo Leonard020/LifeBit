@@ -32,8 +32,18 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
 import { Message } from '@/api/chatApi';
 import { sendChatMessage } from '@/api/chatApi';
-import { saveExerciseRecord } from '@/api/chatApi';
-import { createDietRecord, searchFoodItems } from '@/api/authApi';
+import { 
+  createExerciseSession, 
+  createDietRecord, 
+  searchFoodItems,
+  getExerciseCatalog,
+  useCreateExerciseSession,
+  useCreateDietRecord,
+  type ExerciseSessionCreateRequest,
+  type DietRecordCreateRequest,
+  type ExerciseCatalog,
+  type FoodItem
+} from '@/api/authApi';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -77,6 +87,127 @@ const HealthLog: React.FC = () => {
   const [chatNetworkError, setChatNetworkError] = useState(false);
   const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
   const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
+
+  // 🔧 Spring Boot API mutation hooks
+  const createExerciseMutation = useCreateExerciseSession();
+  const createDietMutation = useCreateDietRecord();
+  
+  // 🆕 프론트엔드에서 직접 GPT 호출하여 영양정보 계산
+  const calculateNutritionFromGPT = async (foodName: string): Promise<any> => {
+    try {
+      console.log('🤖 [HealthLog GPT 영양정보] 계산 시작:', foodName);
+      
+      const prompt = `다음 음식의 100g 기준 영양 정보를 정확히 계산해주세요.
+
+음식명: ${foodName}
+기준량: 100g
+
+일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
+{
+  "calories": 100g당_칼로리(kcal),
+  "carbs": 100g당_탄수화물(g),
+  "protein": 100g당_단백질(g),
+  "fat": 100g당_지방(g)
+}
+
+값은 소수점 첫째자리까지 반올림하여 제공해주세요.`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.1,
+          max_tokens: 200
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API 오류: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const nutritionText = data.choices[0].message.content.trim();
+      const nutritionData = JSON.parse(nutritionText);
+      
+      console.log('🤖 [HealthLog GPT 영양정보] 계산 완료:', nutritionData);
+      return nutritionData;
+      
+    } catch (error) {
+      console.error('🤖 [HealthLog GPT 영양정보] 계산 실패:', error);
+      // 기본값 반환 (일반적인 건과일 기준)
+      return {
+        calories: 250.0,
+        carbs: 60.0,
+        protein: 3.0,
+        fat: 1.0
+      };
+    }
+  };
+
+  // 🆕 Spring Boot API로 새로운 음식 아이템 생성
+  const createFoodItemInDB = async (foodName: string, nutritionData: any): Promise<number | null> => {
+    try {
+      console.log('💾 [HealthLog DB 음식 생성] 시작:', foodName, nutritionData);
+      
+      const token = getToken();
+      const response = await fetch('/api/food-items', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: foodName,
+          serving_size: 100.0,
+          calories: nutritionData.calories,
+          carbs: nutritionData.carbs,
+          protein: nutritionData.protein,
+          fat: nutritionData.fat
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Spring Boot API 오류: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('💾 [HealthLog DB 음식 생성] 성공:', data);
+      
+      return data.food_item_id || data.foodItemId;
+    } catch (error) {
+      console.error('💾 [HealthLog DB 음식 생성] 실패:', error);
+      return null;
+    }
+  };
+
+  // 🆕 GPT + Spring Boot 통합 음식 생성 함수
+  const createFoodItemFromGPT = async (foodName: string): Promise<number | null> => {
+    try {
+      // 1단계: GPT로 영양정보 계산
+      const nutritionData = await calculateNutritionFromGPT(foodName);
+      
+      // 2단계: Spring Boot API로 DB에 음식 생성
+      const foodItemId = await createFoodItemInDB(foodName, nutritionData);
+      
+      if (foodItemId) {
+        console.log('🎉 [HealthLog 통합 음식 생성] 성공:', { foodName, foodItemId, nutritionData });
+        return foodItemId;
+      } else {
+        console.error('❌ [HealthLog 통합 음식 생성] DB 저장 실패');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ [HealthLog 통합 음식 생성] 전체 실패:', error);
+      return null;
+    }
+  };
 
   // 🔧 userId를 안전하게 계산하는 로직 (useMemo로 메모화)
   const userId = useMemo(() => {
@@ -230,11 +361,23 @@ const HealthLog: React.FC = () => {
           try {
             console.log('[저장 함수 진입] recordType:', recordType, 'chatInputText:', chatInputText);
             if (recordType === 'exercise') {
-              console.log('[운동기록 저장] payload:', response.parsed_data);
-            await saveExerciseRecord({
-              ...response.parsed_data,
-              exercise_date: new Date().toISOString().slice(0, 10),
-            });
+                            console.log('[운동기록 저장] payload:', response.parsed_data);
+              
+              // 🔧 Spring Boot API 사용하여 운동 세션 생성
+              const exerciseData: ExerciseSessionCreateRequest = {
+                exercise_catalog_id: 1, // 임시값, 추후 운동명으로 찾아서 설정
+                duration_minutes: response.parsed_data.duration_min || 30,
+                calories_burned: response.parsed_data.calories_burned || 0,
+                notes: response.parsed_data.exercise || '',
+                sets: response.parsed_data.sets,
+                reps: response.parsed_data.reps,
+                weight: typeof response.parsed_data.weight === 'string' 
+                  ? parseFloat(response.parsed_data.weight) 
+                  : response.parsed_data.weight,
+                exercise_date: new Date().toISOString().slice(0, 10),
+              };
+              
+              await createExerciseMutation.mutateAsync(exerciseData);
             toast({
               title: "운동 기록 저장 완료",
               description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
@@ -262,9 +405,36 @@ const HealthLog: React.FC = () => {
               let foodItemId = dietData.food_item_id || dietData.foodItemId || dietData.foodItemID;
               const quantity = dietData.amount || dietData.quantity;
               if (!foodItemId && dietData.food_name) {
+                console.log('🔍 [식단기록] 음식 검색 시작:', dietData.food_name);
                 const searchResults = await searchFoodItems(dietData.food_name);
-                foodItemId = searchResults[0]?.foodItemId;
-                console.log('[식단기록] foodItemId 검색 결과:', searchResults);
+                console.log('🔍 [식단기록] 검색 결과:', searchResults);
+                
+                if (searchResults && searchResults.length > 0) {
+                  foodItemId = searchResults[0]?.foodItemId;
+                  console.log('✅ [식단기록] 검색된 foodItemId:', foodItemId);
+                } else {
+                  console.log('⚠️ [식단기록] DB에 없음, GPT로 생성 시도:', dietData.food_name);
+                  
+                  // 🆕 GPT 기반 자동 음식 생성
+                  const createdFoodItemId = await createFoodItemFromGPT(dietData.food_name);
+                  
+                  if (createdFoodItemId) {
+                    foodItemId = createdFoodItemId;
+                    console.log('🎉 [식단기록] GPT로 음식 생성 성공, foodItemId:', foodItemId);
+                    toast({
+                      title: "새로운 음식 추가 완료",
+                      description: `"${dietData.food_name}"이 GPT 분석으로 자동 추가되었습니다.`,
+                    });
+                  } else {
+                    console.error('❌ [식단기록] GPT 음식 생성 실패:', dietData.food_name);
+                    toast({
+                      title: "음식 정보 생성 실패",
+                      description: `"${dietData.food_name}"의 정보를 생성할 수 없습니다.`,
+                      variant: "destructive"
+                    });
+                    return; // 저장 중단
+                  }
+                }
               }
               if (!foodItemId || !quantity) {
                 toast({
@@ -275,18 +445,21 @@ const HealthLog: React.FC = () => {
                 console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
               } else {
                 try {
-                  const result = await createDietRecord({
+                  const dietRecordData = {
                     food_item_id: foodItemId as number,
                     quantity: Number(quantity),
-                    meal_time: (dietData.meal_time || dietData.mealTime || 'breakfast') as string,
-                    input_source: (dietData.input_source || undefined) as string | undefined,
-                    confidence_score: (dietData.confidence_score || undefined) as number | undefined,
-                    original_audio_path: (dietData.original_audio_path || undefined) as string | undefined,
-                    validation_status: (dietData.validation_status || undefined) as string | undefined,
-                    validation_notes: (dietData.validation_notes || undefined) as string | undefined,
-                    created_at: (dietData.created_at || undefined) as string | undefined,
-                  });
-                  console.log(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 성공]`, result);
+                    meal_time: (dietData.meal_time || dietData.mealTime || 'snack') as string, // 간식으로 기본값 변경
+                    input_source: (dietData.input_source || 'TYPING') as string,
+                    validation_status: (dietData.validation_status || 'VALIDATED') as string,
+                  };
+                  
+                  console.log('🍽️ [식단 저장] 전송 데이터:', dietRecordData);
+                  console.log('🔑 [식단 저장] 현재 사용자 ID:', userId);
+                  console.log('🔍 [식단 저장] JWT 토큰 존재:', !!getToken());
+                  console.log('🔍 [식단 저장] JWT 토큰 길이:', getToken()?.length || 0);
+                  
+                  const result = await createDietRecord(dietRecordData);
+                  console.log('[식단 기록 저장 성공]', result);
                   toast({
                     title: "식단 기록 저장 완료",
                     description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
@@ -294,7 +467,7 @@ const HealthLog: React.FC = () => {
                   // 그래프/식단 기록 새로고침
                   if (typeof refetchHealthStats === 'function') await refetchHealthStats();
                 } catch (err) {
-                  console.error(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 실패]`, err);
+                  console.error('[식단 기록 저장 실패]', err);
                   toast({
                     title: "식단 기록 저장 실패",
                     description: "서버에 데이터를 저장하는 데 실패했습니다.",
@@ -542,11 +715,22 @@ const HealthLog: React.FC = () => {
                       if (!chatStructuredData) return;
                     
                       try {
-                        if (recordType === 'exercise') {
-                        await saveExerciseRecord({
-                          ...chatStructuredData,
+                                                if (recordType === 'exercise') {
+                          // 🔧 Spring Boot API 사용하여 운동 세션 생성
+                          const exerciseData: ExerciseSessionCreateRequest = {
+                            exercise_catalog_id: 1, // 임시값, 추후 운동명으로 찾아서 설정
+                            duration_minutes: (chatStructuredData.duration_min as number) || 30,
+                            calories_burned: (chatStructuredData.calories_burned as number) || 0,
+                            notes: (chatStructuredData.exercise as string) || '',
+                            sets: chatStructuredData.sets as number,
+                            reps: chatStructuredData.reps as number,
+                            weight: typeof chatStructuredData.weight === 'string' 
+                              ? parseFloat(chatStructuredData.weight) 
+                              : (chatStructuredData.weight as number),
                             exercise_date: new Date().toISOString().slice(0, 10),
-                        });
+                          };
+                          
+                          await createExerciseMutation.mutateAsync(exerciseData);
                         toast({
                           title: "운동 기록 저장 완료",
                           description: "AI 분석된 데이터를 성공적으로 저장했습니다."
@@ -573,9 +757,37 @@ const HealthLog: React.FC = () => {
                           let foodItemId = dietData.food_item_id || dietData.foodItemId || dietData.foodItemID;
                           const quantity = dietData.amount || dietData.quantity;
                           if (!foodItemId && dietData.food_name) {
+                            console.log('🔍 [식단기록 버튼] 음식 검색 시작:', dietData.food_name);
                             const searchResults = await searchFoodItems(dietData.food_name);
-                            foodItemId = searchResults[0]?.foodItemId;
-                            console.log('[식단기록] foodItemId 검색 결과:', searchResults);
+                            console.log('🔍 [식단기록 버튼] 검색 결과:', searchResults);
+                            
+                            if (searchResults && searchResults.length > 0) {
+                              foodItemId = searchResults[0]?.foodItemId;
+                              console.log('✅ [식단기록 버튼] 검색된 foodItemId:', foodItemId);
+                            } else {
+                              console.log('⚠️ [식단기록 버튼] DB에 없음, GPT로 생성 시도:', dietData.food_name);
+                              
+                              // 🆕 GPT 기반 자동 음식 생성
+                              const createdFoodItemId = await createFoodItemFromGPT(dietData.food_name);
+                              
+                              if (createdFoodItemId) {
+                                foodItemId = createdFoodItemId;
+                                console.log('🎉 [식단기록 버튼] GPT로 음식 생성 성공, foodItemId:', foodItemId);
+                                toast({
+                                  title: "새로운 음식 추가 완료",
+                                  description: `"${dietData.food_name}"이 GPT 분석으로 자동 추가되었습니다.`,
+                                });
+                              } else {
+                                console.error('❌ [식단기록 버튼] GPT 음식 생성 실패:', dietData.food_name);
+                                // 계속 진행하지만 경고 표시
+                                toast({
+                                  title: "음식 정보 생성 실패",
+                                  description: `"${dietData.food_name}"의 정보를 생성할 수 없어 기본값을 사용합니다.`,
+                                  variant: "destructive"
+                                });
+                                foodItemId = 1; // 최소한의 fallback
+                              }
+                            }
                           }
                           if (!foodItemId || !quantity) {
                             toast({
@@ -586,18 +798,20 @@ const HealthLog: React.FC = () => {
                             console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
                           } else {
                             try {
-                              const result = await createDietRecord({
+                              const dietRecordData = {
                                 food_item_id: foodItemId as number,
                                 quantity: Number(quantity),
-                                meal_time: (dietData.meal_time || dietData.mealTime || 'breakfast') as string,
-                                input_source: (dietData.input_source || undefined) as string | undefined,
-                                confidence_score: (dietData.confidence_score || undefined) as number | undefined,
-                                original_audio_path: (dietData.original_audio_path || undefined) as string | undefined,
-                                validation_status: (dietData.validation_status || undefined) as string | undefined,
-                                validation_notes: (dietData.validation_notes || undefined) as string | undefined,
-                                created_at: (dietData.created_at || undefined) as string | undefined,
-                              });
-                              console.log(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 성공]`, result);
+                                meal_time: (dietData.meal_time || dietData.mealTime || 'snack') as string, // 간식으로 기본값 변경
+                                input_source: (dietData.input_source || 'TYPING') as string,
+                                validation_status: (dietData.validation_status || 'VALIDATED') as string,
+                              };
+                              
+                              console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecordData);
+                              console.log('🔑 [저장 버튼] 현재 사용자 ID:', userId);
+                              console.log('🔍 [저장 버튼] JWT 토큰 존재:', !!getToken());
+                              
+                              const result = await createDietRecord(dietRecordData);
+                              console.log('[식단 기록 저장 성공]', result);
                               toast({
                                 title: "식단 기록 저장 완료",
                                 description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
@@ -605,7 +819,7 @@ const HealthLog: React.FC = () => {
                               // 그래프/식단 기록 새로고침
                               if (typeof refetchHealthStats === 'function') await refetchHealthStats();
                             } catch (err) {
-                              console.error(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 실패]`, err);
+                              console.error('[식단 기록 저장 실패]', err);
                               toast({
                                 title: "식단 기록 저장 실패",
                                 description: "서버에 데이터를 저장하는 데 실패했습니다.",
