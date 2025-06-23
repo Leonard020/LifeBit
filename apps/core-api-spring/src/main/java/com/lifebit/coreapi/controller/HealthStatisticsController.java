@@ -76,6 +76,14 @@ public class HealthStatisticsController {
             // ✅ 통합된 서비스에서 건강 통계 조회
             Map<String, Object> statistics = healthStatisticsService.getHealthStatistics(tokenUserId, period);
             
+            // 🍽️ period가 'day'인 경우 실제 영양소 통계 추가
+            if ("day".equals(period)) {
+                Map<String, Object> nutritionStats = healthStatisticsService.getRealMealNutritionStatistics(tokenUserId, period);
+                statistics.putAll(nutritionStats);
+                log.info("영양소 통계 추가 완료 - 사용자: {}, 칼로리: {}, 데이터 출처: {}", 
+                        tokenUserId, nutritionStats.get("dailyCalories"), nutritionStats.get("dataSource"));
+            }
+            
             log.info("건강 통계 조회 완료 - 사용자: {}, 기간: {}", tokenUserId, period);
             
             return ResponseEntity.ok(statistics);

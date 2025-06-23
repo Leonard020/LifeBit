@@ -1100,3 +1100,67 @@ export const useExerciseCalendarHeatmap = (userId: string) => {
     gcTime: 1000 * 60 * 10, // 10분간 가비지 컬렉션 지연
   });
 };
+
+// ============================================================================
+// 🍽️ 영양소 통계 API
+// ============================================================================
+
+/**
+ * 일일 영양소 통계 타입 정의
+ */
+export interface DailyNutritionStats {
+  dailyCalories: number;
+  dailyCarbs: number;
+  dailyProtein: number;
+  dailyFat: number;
+  mealLogCount: number;
+  dataSource: string; // "meal_logs_direct" | "fallback"
+  error?: string;
+}
+
+/**
+ * 실제 meal_logs 테이블에서 오늘의 영양소 정보 조회
+ * @param userId 사용자 ID
+ * @returns 오늘의 영양소 통계
+ */
+export const getDailyNutritionStats = async (userId: string): Promise<DailyNutritionStats> => {
+  try {
+    console.log('🍽️ [API] 일일 영양소 통계 조회 요청:', userId);
+    
+    const response = await axiosInstance.get<DailyNutritionStats>(`/api/health-statistics/${userId}`, {
+      params: { period: 'day' }
+    });
+    
+    console.log('✅ [API] 일일 영양소 통계 조회 성공:', response.data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('❌ [API] 일일 영양소 통계 조회 실패:', error);
+    
+    // 에러 시 기본값 반환
+    return {
+      dailyCalories: 0,
+      dailyCarbs: 0,
+      dailyProtein: 0,
+      dailyFat: 0,
+      mealLogCount: 0,
+      dataSource: "fallback",
+      error: error instanceof Error ? error.message : "알 수 없는 오류"
+    };
+  }
+};
+
+/**
+ * 일일 영양소 통계 React Query Hook
+ * @param userId 사용자 ID
+ * @returns 일일 영양소 통계 쿼리 결과
+ */
+export const useDailyNutritionStats = (userId: string) => {
+  return useQuery({
+    queryKey: ['dailyNutritionStats', userId],
+    queryFn: () => getDailyNutritionStats(userId),
+    staleTime: 5 * 60 * 1000, // 5분 캐싱
+    gcTime: 10 * 60 * 1000, // 10분 보관
+    enabled: !!userId,
+    retry: 2
+  });
+};

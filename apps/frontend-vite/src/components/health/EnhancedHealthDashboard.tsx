@@ -35,6 +35,7 @@ import { useExerciseCalendarHeatmap } from '../../api/authApi';
 import { getToken, getUserInfo, isTokenValid } from '../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../hooks/use-toast';
+import { useDailyNutritionStats } from '@/api/authApi';
 
 interface EnhancedHealthDashboardProps {
   userId: string;
@@ -320,13 +321,28 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     error: heatmapError 
   } = useExerciseCalendarHeatmap(userId);
   
+  // 🍽️ 실제 영양소 데이터 조회
+  const { 
+    data: nutritionStats, 
+    isLoading: nutritionLoading, 
+    error: nutritionError 
+  } = useDailyNutritionStats(userId);
+  
+  // 🔍 영양소 데이터 디버깅
+  console.log('🍽️ [DEBUG] 영양소 API 상태:', {
+    nutritionStats,
+    nutritionLoading,
+    nutritionError: nutritionError?.message,
+    userId
+  });
+  
   // API 응답 직접 확인
   console.log('🔥 [DEBUG] healthStats 전체 응답:', healthStats);
   console.log('🔥 [DEBUG] healthStats.data:', healthStats?.data);
 
   // 전체 로딩 상태 계산
-  const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading || heatmapLoading;
-  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError || heatmapError;
+  const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading || heatmapLoading || nutritionLoading;
+  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError || heatmapError || nutritionError;
   
   // 상태 디버깅
   console.log('📊 [EnhancedHealthDashboard] API 로딩 상태:', {
@@ -428,14 +444,21 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       ? mealLogsData.filter(meal => meal.log_date === today)
       : [];
     
-    // 기본값으로 영양소 정보 설정 (실제 구현 시 별도 API 호출 필요)
-    const estimatedCaloriesPerMeal = 200;
-    const totalCalories = todayMeals.length * estimatedCaloriesPerMeal;
+    // 🍽️ 실제 meal_logs 테이블에서 영양소 정보 가져오기
+    console.log('🍽️ [EnhancedHealthDashboard] 영양소 통계 데이터:', nutritionStats);
     
-    // 기본 영양소 비율로 추정 (탄수화물 50%, 단백질 20%, 지방 30%)
-    const totalCarbs = Math.round(totalCalories * 0.5 / 4); // 1g = 4kcal
-    const totalProtein = Math.round(totalCalories * 0.2 / 4); // 1g = 4kcal  
-    const totalFat = Math.round(totalCalories * 0.3 / 9); // 1g = 9kcal
+    const totalCalories = nutritionStats?.dailyCalories || 0;
+    const totalCarbs = nutritionStats?.dailyCarbs || 0;
+    const totalProtein = nutritionStats?.dailyProtein || 0;
+    const totalFat = nutritionStats?.dailyFat || 0;
+    
+    console.log('📊 [EnhancedHealthDashboard] 실제 영양소 데이터:', {
+      totalCalories,
+      totalCarbs,
+      totalProtein,
+      totalFat,
+      dataSource: nutritionStats?.dataSource
+    });
     
     // 식단별 완료 상태 (기본적으로 시간대별 분류 - 실제 구현시 meal_time 필드 사용)
     const mealsByTime = {
@@ -463,7 +486,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
         fat: goalsData?.daily_fat_target || 80
       }
     };
-  }, [exerciseSessions, mealLogs, userGoals, healthStats, allLoading]);
+  }, [exerciseSessions, mealLogs, userGoals, healthStats, nutritionStats, allLoading]);
 
   const handleMealAdd = useCallback((mealType: string) => {
     console.log(`${mealType} 식단 추가`);

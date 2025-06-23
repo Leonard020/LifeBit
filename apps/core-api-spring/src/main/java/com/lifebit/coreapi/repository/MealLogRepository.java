@@ -28,4 +28,7 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     List<Object[]> findDietCountByDateRange(@Param("user") User user, 
                                            @Param("startDate") LocalDate startDate, 
                                            @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT ml FROM MealLog ml WHERE ml.user.userId = :userId AND ml.logDate = :logDate ORDER BY ml.createdAt DESC")
+    List<MealLog> findByUserIdAndLogDateOrderByCreatedAtDesc(@Param("userId") Long userId, @Param("logDate") LocalDate logDate);
 } 
