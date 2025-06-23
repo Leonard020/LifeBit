@@ -39,7 +39,7 @@ public class DietService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
         
-        List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
+        List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateOrderByLogDateDescCreatedAtDesc(user, date);
         
         return mealLogs.stream()
             .map(this::convertToDietLogDTO)
@@ -56,7 +56,7 @@ public class DietService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
         
-        List<MealLog> dailyMealLogs = mealLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
+        List<MealLog> dailyMealLogs = mealLogRepository.findByUserAndLogDateOrderByLogDateDescCreatedAtDesc(user, date);
 
         double totalCalories = 0.0;
         double totalCarbs = 0.0;

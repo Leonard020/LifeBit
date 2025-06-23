@@ -410,21 +410,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     ]);
   };
 
-  // 운동 입력 처리 함수
+  // 운동 입력 처리 함수 수정 (420줄 부근)
   const handleExerciseInput = async (input: string) => {
     try {
       setIsProcessing(true);
       console.log('🏋️ Starting exercise input processing:', input);
+      console.log('🔄 Current exercise state:', exerciseState);
 
+      // 🚨 백엔드가 자동으로 단계를 판단하도록 chat_step 제거
       const response = await sendChatMessage(
         input,
         [
           ...conversationHistory,
-          { role: 'assistant', content: '운동 기록을 분석하여 JSON 형태로 변환합니다.' }
+          { role: 'assistant', content: '운동 기록을 분석하여 처리합니다.' }
         ],
         currentRecordType!,
-        'extraction',
-        exerciseState // 현재 운동 상태 전달
+        undefined, // ← 백엔드가 current_data를 보고 자동 판단
+        exerciseState
       );
 
       console.log('🤖 AI Response:', response);
@@ -440,41 +442,47 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
         if (response.parsed_data) {
           console.log('📊 Parsed data:', response.parsed_data);
           
-          // 운동 상태 업데이트 (타입 변환 포함)
+          // 운동 상태 업데이트 (기존 상태와 새 데이터 누적)
           const newExerciseState: ExerciseState = {
-            exercise: response.parsed_data.exercise!,
-            category: response.parsed_data.category!,
-            target: response.parsed_data.subcategory,
-            sets: response.parsed_data.sets,
-            reps: response.parsed_data.reps,
-            duration_min: response.parsed_data.duration_min,
-            weight: typeof response.parsed_data.weight === 'string' 
+            ...exerciseState, // ← 기존 상태 유지
+            exercise: response.parsed_data.exercise || exerciseState.exercise,
+            category: response.parsed_data.category || exerciseState.category,
+            target: response.parsed_data.subcategory || exerciseState.target,
+            sets: response.parsed_data.sets || exerciseState.sets,
+            reps: response.parsed_data.reps || exerciseState.reps,
+            duration_min: response.parsed_data.duration_min || exerciseState.duration_min,
+            weight: (typeof response.parsed_data.weight === 'string' 
               ? parseFloat(response.parsed_data.weight) || undefined
-              : response.parsed_data.weight
+              : response.parsed_data.weight) || exerciseState.weight
           };
           
           console.log('🔄 New exercise state:', newExerciseState);
           setExerciseState(newExerciseState);
+        }
 
-          // 필요한 정보가 부족한지 확인
-          const missingInfo = checkMissingExerciseInfo(newExerciseState);
-          console.log('❓ Missing info:', missingInfo);
-          
-          if (missingInfo.length > 0) {
-            // validation 단계로 이동
-            console.log('📝 Moving to validation step for:', missingInfo[0]);
-            setCurrentStep('validation');
-            setValidationStep(missingInfo[0]);
-            askForMissingInfo(missingInfo[0], newExerciseState);
-          } else {
-            // 모든 정보가 있으면 바로 확인 단계로
-            console.log('✅ All info complete, moving to confirmation');
-            setCurrentStep('confirmation');
-            const confirmationMessage = formatConfirmationMessage(newExerciseState);
-            addMessage('ai', confirmationMessage);
-            setPendingRecord({ type: 'exercise', content: JSON.stringify(newExerciseState) });
-            setIsAwaitingConfirmation(true);
-          }
+        // 🚨 백엔드 응답 타입에 따라 단계 결정 (프론트엔드 자체 판단 제거)
+        if (response.type === 'success') {
+														
+		  
+									   
+										  
+																			   
+										 
+											  
+																
+				  
+          // 데이터가 완성되었으면 확인 단계로
+          console.log('✅ Data complete, moving to confirmation');
+          setCurrentStep('confirmation');
+          const confirmationMessage = formatConfirmationMessage(exerciseState);
+          addMessage('ai', confirmationMessage);
+          setPendingRecord({ type: 'exercise', content: JSON.stringify(exerciseState) });
+          setIsAwaitingConfirmation(true);
+        } else if (response.type === 'incomplete') {
+          // 데이터가 부족하면 validation 단계로
+          console.log('📝 Data incomplete, staying in validation');
+          setCurrentStep('validation');
+          // 백엔드가 이미 적절한 질문을 보냈으므로 추가 처리 불필요
         }
       } else if (response.type === 'incomplete') {
         console.log('⚠️ Incomplete response');
@@ -695,23 +703,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     }
   };
 
-  // 식단 입력 처리 함수 개선
+  // 식단 입력 처리 함수 수정 (699줄 부근)
   const handleDietInput = async (input: string) => {
     try {
       setIsProcessing(true);
 
-      // 사용자 수정 요청인지 확인
-      const isModificationRequest = /수정|바꿔|변경|고쳐/.test(input);
-      
+      // currentStep에 따라 올바른 chat_step 전달
+      const chatStep = currentStep === 'input' ? 'extraction' :
+                      currentStep === 'validation' ? 'validation' : 
+                      'confirmation';
+
       const response = await sendChatMessage(
         input,
         [
           ...conversationHistory,
-          { role: 'assistant', content: '식단 기록을 분석하여 영양소를 자동 계산합니다.' }
+          { role: 'assistant', content: '식단 기록을 분석하여 영양소를 계산합니다.' }
         ],
         currentRecordType!,
-        isModificationRequest ? 'validation' : 'extraction',
-        dietState // 현재 식단 상태 전달
+        chatStep, // ← 동적으로 설정
+        dietState
       );
 
       if (response.type === 'success' || response.type === 'modified') {

@@ -1,10 +1,7 @@
 package com.lifebit.coreapi.service;
 
-import com.lifebit.coreapi.entity.HealthRecord;
-import com.lifebit.coreapi.entity.ExerciseSession;
-import com.lifebit.coreapi.entity.MealLog;
-import com.lifebit.coreapi.entity.UserGoal;
-import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.entity.*;
+import com.lifebit.coreapi.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,9 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 통합된 건강 통계 서비스
@@ -36,6 +32,8 @@ public class HealthStatisticsService {
     private final MealService mealService;
     private final UserGoalService userGoalService;
     private final UserService userService;
+    private final MealLogRepository mealLogRepository;
+    private final UserRepository userRepository;
 
     /**
      * 사용자의 종합 건강 통계 조회
@@ -76,6 +74,9 @@ public class HealthStatisticsService {
             // 🏋️ 운동 부위별 빈도 데이터 추가
             Map<String, Object> bodyPartStats = getBodyPartFrequencyData(userId, period);
             
+            // 🍽️ 실제 식단 기록 기반 영양소 통계 계산
+            Map<String, Object> realMealNutritionStats = getRealMealNutritionStatistics(userId, period);
+            
             // 종합 통계 구성
             Map<String, Object> statistics = new HashMap<>();
             
@@ -101,6 +102,9 @@ public class HealthStatisticsService {
             
             // 🏋️ 운동 부위별 통계 추가
             statistics.putAll(bodyPartStats);
+            
+            // 🍽️ 실제 영양소 통계 추가
+            statistics.putAll(realMealNutritionStats);
             
             // 목표 관련 정보
             statistics.put("workoutGoal", userGoal.getWeeklyWorkoutTarget());
@@ -683,6 +687,75 @@ public class HealthStatisticsService {
     }
 
     /**
+     * 📅 운동 캘린더 히트맵 데이터 생성
+     * 최근 5주간의 일별 운동 데이터를 반환
+     */
+    public List<Map<String, Object>> getExerciseCalendarHeatmapData(Long userId) {
+        try {
+            log.info("📅 운동 캘린더 히트맵 데이터 생성 시작 - 사용자: {}", userId);
+            
+            // 최근 35일 (5주) 데이터 조회
+            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, 35);
+            
+            // 날짜별로 운동 세션 그룹핑
+            Map<String, List<ExerciseSession>> sessionsByDate = sessions.stream()
+                .filter(session -> session.getExerciseDate() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                    session -> session.getExerciseDate().toString()
+                ));
+            
+            // 히트맵 데이터 구성
+            List<Map<String, Object>> heatmapData = sessionsByDate.entrySet().stream()
+                .map(entry -> {
+                    String date = entry.getKey();
+                    List<ExerciseSession> daySessions = entry.getValue();
+                    
+                    int totalMinutes = daySessions.stream()
+                        .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
+                        .sum();
+                    
+                    int totalCalories = daySessions.stream()
+                        .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
+                        .sum();
+                    
+                    Map<String, Object> dayData = new HashMap<>();
+                    dayData.put("exercise_date", date);
+                    dayData.put("workout_count", daySessions.size());
+                    dayData.put("duration_minutes", totalMinutes);
+                    dayData.put("calories_burned", totalCalories);
+                    
+                    // 대표 운동명 (가장 많이 한 운동)
+                    String primaryExercise = daySessions.stream()
+                        .filter(session -> session.getExerciseCatalog() != null)
+                        .map(session -> session.getExerciseCatalog().getName())
+                        .collect(java.util.stream.Collectors.groupingBy(
+                            name -> name, 
+                            java.util.stream.Collectors.counting()
+                        ))
+                        .entrySet().stream()
+                        .max(java.util.Map.Entry.comparingByValue())
+                        .map(java.util.Map.Entry::getKey)
+                        .orElse("운동");
+                    
+                    dayData.put("exercise_name", primaryExercise);
+                    
+                    return dayData;
+                })
+                .sorted((a, b) -> ((String) a.get("exercise_date")).compareTo((String) b.get("exercise_date")))
+                .toList();
+            
+            log.info("✅ 운동 캘린더 히트맵 데이터 생성 완료 - 사용자: {}, 데이터 일수: {}", 
+                    userId, heatmapData.size());
+            
+            return heatmapData;
+            
+        } catch (Exception e) {
+            log.error("❌ 운동 캘린더 히트맵 데이터 생성 실패: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    /**
      * 기간별 건강 기록 조회 헬퍼 메소드
      */
     private List<HealthRecord> getHealthRecordsByPeriod(Long userId, String period) {
@@ -698,5 +771,89 @@ public class HealthStatisticsService {
             default:
                 return healthRecordService.getRecentHealthRecords(userId, 30);
         }
+    }
+
+    /**
+     * 🍽️ 실제 meal_logs 테이블에서 영양소 통계 조회 (보안 강화)
+     * @param userId 사용자 ID
+     * @param period 조회 기간
+     * @return 실제 영양소 통계 데이터
+     */
+    public Map<String, Object> getRealMealNutritionStatistics(Long userId, String period) {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // 🔒 Service 레벨 보안 검증
+            if (userId == null || userId <= 0) {
+                log.warn("🚨 [SECURITY] 유효하지 않은 사용자 ID: {}", userId);
+                throw new IllegalArgumentException("유효하지 않은 사용자 ID입니다.");
+            }
+            
+            // 🔒 사용자 존재 여부 확인
+            Optional<User> userOptional = userRepository.findById(userId);
+            if (userOptional.isEmpty()) {
+                log.warn("🚨 [SECURITY] 존재하지 않는 사용자 ID로 접근 시도: {}", userId);
+                throw new IllegalArgumentException("존재하지 않는 사용자입니다.");
+            }
+            
+            LocalDate today = LocalDate.now();
+            
+            // 🍽️ userId를 직접 사용하여 오늘의 식단 기록 조회 (log_date 기준)
+            List<MealLog> todayMealLogs = mealLogRepository.findByUserIdAndLogDateOrderByLogDateDescCreatedAtDesc(userId, today);
+            
+            log.info("🍽️ [HealthStatisticsService] 사용자 {} - 오늘의 식단 기록 조회: {} 건", userId, todayMealLogs.size());
+            
+            // 영양소 합계 계산
+            BigDecimal totalCalories = BigDecimal.ZERO;
+            BigDecimal totalCarbs = BigDecimal.ZERO;
+            BigDecimal totalProtein = BigDecimal.ZERO;
+            BigDecimal totalFat = BigDecimal.ZERO;
+            
+            for (MealLog mealLog : todayMealLogs) {
+                // 🔒 데이터 무결성 검증: 음수 값 방지
+                if (mealLog.getCalories() != null && mealLog.getCalories().compareTo(BigDecimal.ZERO) >= 0) {
+                    totalCalories = totalCalories.add(mealLog.getCalories());
+                }
+                if (mealLog.getCarbs() != null && mealLog.getCarbs().compareTo(BigDecimal.ZERO) >= 0) {
+                    totalCarbs = totalCarbs.add(mealLog.getCarbs());
+                }
+                if (mealLog.getProtein() != null && mealLog.getProtein().compareTo(BigDecimal.ZERO) >= 0) {
+                    totalProtein = totalProtein.add(mealLog.getProtein());
+                }
+                if (mealLog.getFat() != null && mealLog.getFat().compareTo(BigDecimal.ZERO) >= 0) {
+                    totalFat = totalFat.add(mealLog.getFat());
+                }
+            }
+            
+            result.put("dailyCalories", totalCalories.doubleValue());
+            result.put("dailyCarbs", totalCarbs.doubleValue());
+            result.put("dailyProtein", totalProtein.doubleValue());
+            result.put("dailyFat", totalFat.doubleValue());
+            result.put("mealLogCount", todayMealLogs.size());
+            result.put("dataSource", "meal_logs_direct");
+            result.put("userId", userId); // 🔒 응답에 사용자 ID 포함하여 검증 가능
+            
+            log.info("🍽️ [HealthStatisticsService] 사용자 {} - 실제 영양소 통계: 칼로리={}, 탄수화물={}g, 단백질={}g, 지방={}g", 
+                    userId, totalCalories, totalCarbs, totalProtein, totalFat);
+            
+        } catch (IllegalArgumentException e) {
+            log.error("🚨 [SECURITY] 영양소 통계 조회 보안 오류 - 사용자: {}, 오류: {}", userId, e.getMessage());
+            throw e; // 보안 오류는 상위로 전파
+            
+        } catch (Exception e) {
+            log.error("🍽️ [HealthStatisticsService] 영양소 통계 조회 실패 - 사용자: {}, 오류: {}", userId, e.getMessage(), e);
+            
+            // 에러 시 기본값 반환
+            result.put("dailyCalories", 0.0);
+            result.put("dailyCarbs", 0.0);
+            result.put("dailyProtein", 0.0);
+            result.put("dailyFat", 0.0);
+            result.put("mealLogCount", 0);
+            result.put("dataSource", "fallback");
+            result.put("userId", userId);
+            result.put("error", "데이터 조회 중 오류가 발생했습니다.");
+        }
+        
+        return result;
     }
 } 

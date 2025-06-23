@@ -76,6 +76,14 @@ public class HealthStatisticsController {
             // ✅ 통합된 서비스에서 건강 통계 조회
             Map<String, Object> statistics = healthStatisticsService.getHealthStatistics(tokenUserId, period);
             
+            // 🍽️ period가 'day'인 경우 실제 영양소 통계 추가
+            if ("day".equals(period)) {
+                Map<String, Object> nutritionStats = healthStatisticsService.getRealMealNutritionStatistics(tokenUserId, period);
+                statistics.putAll(nutritionStats);
+                log.info("영양소 통계 추가 완료 - 사용자: {}, 칼로리: {}, 데이터 출처: {}", 
+                        tokenUserId, nutritionStats.get("dailyCalories"), nutritionStats.get("dataSource"));
+            }
+            
             log.info("건강 통계 조회 완료 - 사용자: {}, 기간: {}", tokenUserId, period);
             
             return ResponseEntity.ok(statistics);
@@ -248,6 +256,41 @@ public class HealthStatisticsController {
         else if (score >= 2500) return "gold";
         else if (score >= 2000) return "silver";
         else return "bronze";
+    }
+
+    /**
+     * 📅 운동 캘린더 히트맵 데이터 조회
+     */
+    @GetMapping("/{userId}/exercise-calendar-heatmap")
+    public ResponseEntity<List<Map<String, Object>>> getExerciseCalendarHeatmap(
+            @PathVariable Long userId,
+            HttpServletRequest request) {
+        
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
+            }
+            
+            // ✅ 운동 캘린더 히트맵 데이터 조회
+            List<Map<String, Object>> heatmapData = healthStatisticsService.getExerciseCalendarHeatmapData(tokenUserId);
+            
+            log.info("운동 캘린더 히트맵 데이터 조회 완료 - 사용자: {}, 데이터 수: {}", tokenUserId, heatmapData.size());
+            
+            return ResponseEntity.ok(heatmapData);
+            
+        } catch (RuntimeException e) {
+            log.error("운동 캘린더 히트맵 조회 중 오류 발생 - 사용자: {}, 오류: {}", userId, e.getMessage());
+            return ResponseEntity.ok(List.of()); // 빈 리스트 반환
+            
+        } catch (Exception e) {
+            log.error("운동 캘린더 히트맵 조회 중 예상치 못한 오류 발생 - 사용자: {}", userId, e);
+            return ResponseEntity.ok(List.of()); // 빈 리스트 반환
+        }
     }
 
     // ============================================================================

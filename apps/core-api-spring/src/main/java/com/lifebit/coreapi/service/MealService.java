@@ -198,7 +198,7 @@ public class MealService {
             user.setUserId(userId);
             
             // 해당 날짜의 모든 식단 기록 조회
-            List<MealLog> dailyMealLogs = mealLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
+            List<MealLog> dailyMealLogs = mealLogRepository.findByUserAndLogDateOrderByLogDateDescCreatedAtDesc(user, date);
             
             double totalCalories = 0.0;
             double totalCarbs = 0.0;

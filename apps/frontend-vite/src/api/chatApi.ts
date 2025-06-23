@@ -16,6 +16,7 @@ interface ChatRequestBody {
   conversation_history: Message[];
   record_type: 'exercise' | 'diet';
   chat_step?: 'extraction' | 'validation' | 'confirmation';
+  current_data?: CurrentDataType;
   meal_time_mapping?: {
     detected_time?: string;
     mapped_meal_type?: string;
@@ -60,6 +61,7 @@ interface ExerciseState {
   reps?: number;
   duration_min?: number;
   weight?: number;
+  calories_burned?: number;
 }
 
 interface DietState {
@@ -100,6 +102,7 @@ export const sendChatMessage = async (
       conversation_history: conversationHistory,
       record_type: recordType,
       ...(chatStep && { chat_step: chatStep }),
+      ...(currentData && { current_data: currentData }),
     };
 
     // ✅ 식단 기록인 경우 시간 매핑 정보 포함
@@ -138,7 +141,7 @@ export const sendChatMessage = async (
 
 
 // 운동 기록 저장 API 호출
-export const saveExerciseRecord = async (exerciseData: any) => {
+export const saveExerciseRecord = async (exerciseData: ExerciseState) => {
   try {
     const res = await axiosInstance.post('/api/py/note/exercise', {
       user_id: 1,

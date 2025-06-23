@@ -13,7 +13,10 @@ DATABASE_URL = (
 )
 
 # SQLAlchemy 설정
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"options": "-c timezone=Asia/Seoul"}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # FastAPI 의존성으로 사용할 DB 세션 함수

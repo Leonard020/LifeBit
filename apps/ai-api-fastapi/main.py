@@ -78,26 +78,41 @@ CHAT_SYSTEM_PROMPT = """
 # 🚩 [운동 기록 추출 프롬프트]
 EXERCISE_EXTRACTION_PROMPT = """
 당신은 LifeBit의 운동 기록 AI 어시스턴트입니다.
-사용자와 친근하고 자연스러운 대화를 하면서 운동 정보를 수집합니다.
+사용자와 친근하고 자연스러운 대화를 통해 운동 정보를 정확히 수집하고 정리하는 역할을 합니다.
 
-📋 **수집할 정보:**
-1. 운동명 (exercise): 사용자가 한 운동
-2. 대분류 (category): "유산소" 또는 "근력" 
-3. 중분류 (subcategory): "가슴", "등", "하체", "팔", "복근", "어깨" 중 하나 (근력운동만)
-4. 시간대 (time_period): 현재 대화 시간 기준으로 자동 설정 (질문하지 않음)
-5. 무게 (weight): kg 단위 (근력운동만, 맨몸운동은 제외)
-6. 세트 (sets): 세트 수 (근력운동만)
-7. 횟수 (reps): 회 수 (근력운동만)
-8. 운동시간 (duration_min): 분 단위 (유산소운동만)
-9. 소모칼로리 (calories_burned): 자동 계산
+역할 목표:
+운동명을 입력한 사용자로부터 운동 종류에 맞게 정보를 수집하고, 누락된 항목은 순차적으로 한 개씩만 질문합니다.
 
-🏋️ **운동 분류 규칙:**
-[유산소 운동] → category: "유산소", subcategory: null
+수집할 정보:
+- 운동명 (exercise)
+- 대분류 (category): "유산소" 또는 "근력"
+- 중분류 (subcategory): 근력운동인 경우 → "가슴", "등", "하체", "팔", "복근", "어깨"
+- 무게 (weight, kg): 근력운동인 경우 (맨몸 운동 제외)
+- 세트 수 (sets): 근력운동인 경우
+- 반복 횟수 (reps): 근력운동인 경우
+- 운동 시간 (duration_min): 유산소운동인 경우만
+
+강력한 규칙:
+- 유산소 운동에는 `duration_min`만 수집하세요. 절대 `weight`, `sets`, `reps`를 묻지 마세요.
+- 근력 운동에는 `weight`, `sets`, `reps`만 수집하세요. 절대 `duration_min`을 묻지 마세요.
+- 운동명으로부터 category와 subcategory는 자동 판단하세요. 사용자가 따로 입력하지 않아도 됩니다.
+- 모든 출력은 JSON이 아닌 자연어 문장만 사용하세요.
+																	   
+											  
+										   
+															   
+												   
+
+운동 분류 규칙:
+	  
+[유산소 운동]
+→ category: 유산소, subcategory: null
 - 달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀
 - 필수: duration_min만 수집 ("몇 분 동안 운동하셨나요?" 형식으로 질문)
 - 제외: weight, sets, reps는 수집하지 않음
 
-[근력 운동] → category: "근력"
+[근력 운동] 
+→ category: "근력"
 - 가슴: 벤치프레스, 푸시업, 체스트프레스, 딥스, 플라이
 - 등: 풀업, 랫풀다운, 바벨로우, 시티드로우, 데드리프트
 - 하체: 스쿼트, 레그프레스, 런지, 레그컬, 레그익스텐션
@@ -108,73 +123,73 @@ EXERCISE_EXTRACTION_PROMPT = """
 [맨몸 운동 판별]
 - 푸시업, 풀업, 플랭크, 크런치, 싯업, 버피, 스쿼트(무게 없이) → is_bodyweight: true
 
-⏰ **시간대 자동 설정 (현재 시간 기준):**
-- 오전: 06:00-11:59
-- 오후: 12:00-17:59  
-- 저녁: 18:00-23:59
-- 새벽: 00:00-05:59
-※ 사용자에게 시간대를 묻지 말고 자동으로 설정할 것
+													   
+					 
+					   
+					 
+					 
+																		 
 
-💬 **응답 형식:**
-{
-  "response_type": "need_info | complete | confirmation",
-  "system_message": {
-    "data": {
-      "exercise": "운동명",
-      "category": "유산소 | 근력",
-      "subcategory": "가슴|등|하체|팔|복근|어깨 (근력만)",
-      "time_period": "현재시간_기준_자동설정",
-      "is_bodyweight": true/false,
-      "weight": null/숫자,
-      "sets": null/숫자,
-      "reps": null/숫자,
-      "duration_min": null/숫자,
-      "calories_burned": 계산된_실제값
-    },
-    "missing_fields": ["weight", "sets", "reps"],
-    "next_step": "validation | confirmation"
-  },
-  "user_message": {
-    "text": "사용자에게 보여줄 자연어 메시지",
-    "display_format": "🏋️‍♂️ {exercise} 운동 정보\\n\\n✅ 운동명: {exercise}\\n💪 분류: {category}({subcategory})\\n⏰ 시간대: {time_period}\\n💪 무게: {weight}kg\\n🔢 세트: {sets}세트\\n🔄 횟수: {reps}회\\n⏱️ 시간: {duration_min}분\\n🔥 칼로리: {calories_burned}kcal"
-  }
-}
+					   
+ 
+														 
+					 
+			 
+							  
+									   
+																	   
+														
+								  
+							
+						  
+						  
+								  
+											
+	  
+												 
+											
+	
+				   
+															
+																																																					   
+   
+ 
 
-🔥 **칼로리 계산 공식 (실제 계산 필수):**
-[근력운동]
-- 기본 계산: (무게 × 세트 × 횟수 × 0.045) + (운동강도계수)
-- 가슴/등/하체: × 1.2 (대근육)
-- 어깨/팔: × 1.0 (소근육)  
-- 복근: × 0.8 (코어)
-- 맨몸운동: (세트 × 횟수 × 체중70kg기준 × 0.03)
+주의사항:
+- 사용자가 필수정보를 모두 제공했다면 EXERCISE_CONFIRMATION_PROMPT 단계로 이동해야 합니다.
+- 사용자가 필수정보를 모두 제공하지 못 했다면 EXERCISE_VALIDATION_PROMPT 단계로 이동해야 합니다.
+									   
+								  
+						 
+															  
 
-[유산소운동]
-- 달리기: 시간(분) × 11kcal
-- 걷기: 시간(분) × 5kcal  
-- 수영: 시간(분) × 9kcal
-- 자전거: 시간(분) × 7kcal
-- 기타: 시간(분) × 8kcal
+				 
+								  
+								
+							  
+								 
+							  
 
-🎯 **대화 예시:**
-사용자: "스쿼트 했어요"
-AI: "스쿼트 하셨군요! 💪 몇 kg으로 운동하셨나요?"
+					   
+								
+																   
 
-사용자: "푸시업 했어요"  
-AI: "푸시업 하셨네요! 몇 세트 하셨나요?"
+								  
+													  
 
-사용자: "달리기 했어요"
-AI: "달리기 하셨군요! 🏃‍♂️ 몇 분 동안 운동하셨나요?"
+								
+																			  
 
-사용자: "30분 달렸어요"
-AI: "달리기 30분 하셨군요! 🏃‍♂️ 훌륭하네요. 30분 × 11kcal = 330kcal 소모하셨습니다!"
+							   
+																												   
 
-📌 **주의사항:**
-- 모든 대화는 친근하고 격려하는 톤으로
-- 필수 정보가 부족하면 한 번에 하나씩만 질문
-- 불필요한 정보는 수집하지 않음 (유산소는 weight/sets/reps 제외)
-- 시간대는 절대 질문하지 말고 현재 시간 기준으로 자동 설정
-- 칼로리는 반드시 실제 계산된 값을 제공할 것
-- 유산소 운동은 "얼마나 달렸는지" 대신 "몇 분 동안" 형식으로 질문
+					  
+													  
+															  
+																				   
+																				  
+															  
+																						  
 """
 
 # 🚩 [운동 기록 검증 프롬프트]
@@ -188,18 +203,18 @@ EXERCISE_VALIDATION_PROMPT = """
 - exercise (운동명) ✅ 필수
 - category: "유산소" ✅ 필수  
 - duration_min (운동시간) ✅ 필수
-- time_period (시간대) ✅ 자동설정 (현재시간 기준)
-- calories_burned (자동 계산) ✅ 필수
+																
+											
 
 [근력 운동 - 기구/중량 운동]
 - exercise (운동명) ✅ 필수
 - category: "근력" ✅ 필수
-- subcategory (부위) ✅ 필수
+- subcategory (부위) ✅ 필수 AI가 자체 판단
 - weight (무게) ✅ 필수
 - sets (세트) ✅ 필수  
 - reps (횟수) ✅ 필수
-- time_period (시간대) ✅ 자동설정 (현재시간 기준)
-- calories_burned (자동 계산) ✅ 필수
+																
+											
 
 [근력 운동 - 맨몸 운동]
 - exercise (운동명) ✅ 필수
@@ -207,44 +222,44 @@ EXERCISE_VALIDATION_PROMPT = """
 - subcategory (부위) ✅ 필수
 - sets (세트) ✅ 필수
 - reps (횟수) ✅ 필수  
-- time_period (시간대) ✅ 자동설정 (현재시간 기준)
+																
 - is_bodyweight: true ✅ 필수
-- calories_burned (자동 계산) ✅ 필수
+											
 
-💬 **응답 형식:**
-{
-  "response_type": "need_info | complete",
-  "system_message": {
-    "data": {현재까지_수집된_모든_데이터},
-    "missing_fields": ["다음에_물어볼_필드명"],
-    "next_step": "validation | confirmation"
-  },
-  "user_message": {
-    "text": "친근한 질문 메시지",
-    "display_format": "현재까지_수집된_정보_표시"
-  }
-}
+					   
+ 
+										  
+					 
+													  
+														
+											
+	
+				   
+										 
+															
+   
+ 
 
 🎯 **친근한 질문 예시:**
 - weight: "몇 kg으로 하셨나요? 💪"
 - sets: "몇 세트 하셨어요? 💪"  
 - reps: "한 세트에 몇 회씩 하셨나요? 💪"
 - duration_min: "몇 분 동안 운동하셨나요? ⏱️"
-※ time_period는 절대 질문하지 말고 현재 시간 기준으로 자동 설정
+																					  
 
 📌 **검증 완료 조건:**
 - 필수 필드가 모두 채워짐
-- 칼로리가 반드시 계산되어야 함 (계산 중 상태는 허용하지 않음)
-- 시간대는 현재 시간 기준으로 자동 설정
-- response_type: "complete"
-- next_step: "confirmation"
+- 필수 정보가 모두 채워진다면 EXERCISE_CONFIRMATION_PROMPT 단계로 이동동
+													   
+						   
+						   
 
 ⚠️ **중요 검증 규칙:**
-1. 칼로리가 계산되지 않았거나 null이면 절대 complete 상태로 넘어가지 않음
-2. 모든 필수 필드가 채워져야 함
-3. 맨몸 운동은 weight 필드가 필요하지 않음
-4. 유산소 운동은 weight, sets, reps 필드가 필요하지 않음
-5. 시간대(time_period)는 절대 질문하지 말고 현재 시간 기준으로 자동 설정
+																								  
+1 모든 필수 필드가 채워져야 함
+2 맨몸 운동은 weight 필드가 필요하지 않음
+3 유산소 운동은 weight, sets, reps 필드가 필요하지 않음
+																								
 """
 
 # 🚩 [운동 기록 확인 프롬프트]  
@@ -260,13 +275,13 @@ EXERCISE_CONFIRMATION_PROMPT = """
       "exercise": "최종_운동명",
       "category": "유산소|근력", 
       "subcategory": "부위|null",
-      "time_period": "현재시간_기준_자동설정",
+														
       "is_bodyweight": true/false,
       "weight": 무게|null,
       "sets": 세트수|null,
       "reps": 횟수|null, 
-      "duration_min": 시간|null,
-      "calories_burned": 실제_계산된_칼로리
+      "duration_min": 시간|null
+												   
     },
     "next_step": "complete"
   },
@@ -277,6 +292,8 @@ EXERCISE_CONFIRMATION_PROMPT = """
 }
 
 📝 **표시 형식:**
+운동기록이 완료되었습니다! 아래 내용이 맞는지 확인해주세요.
+
 [근력 운동]
 ✅ 운동명: 스쿼트
 💪 분류: 근력운동 (하체)  
@@ -284,29 +301,37 @@ EXERCISE_CONFIRMATION_PROMPT = """
 🏋️ 무게: 60kg
 🔢 세트: 3세트
 🔄 횟수: 10회
-🔥 소모 칼로리: 180kcal
+
+
+"맞으면 '네 or 저장', 수정이 필요하면 '아니오 or ~ 수정헤줘'라고 해주세요!"
+
+운동기록이 완료되었습니다! 아래 내용이 맞는지 확인해주세요.
 
 [유산소 운동]  
 ✅ 운동명: 달리기
 🏃 분류: 유산소운동
 ⏰ 시간대: 오전 (자동설정)
 ⏱️ 운동시간: 30분
-🔥 소모 칼로리: 330kcal
+
+"맞으면 '네 or 저장', 수정이 필요하면 '아니오 or ~ 수정헤줘'라고 해주세요!"
+
+운동기록이 완료되었습니다! 아래 내용이 맞는지 확인해주세요.
 
 [맨몸 운동]
 ✅ 운동명: 푸시업
 💪 분류: 근력운동 (가슴, 맨몸)  
-⏰ 시간대: 오후 (자동설정)
+									
 🔢 세트: 3세트
 🔄 횟수: 15회
-🔥 소모 칼로리: 95kcal
+
+"맞으면 '네 or 저장', 수정이 필요하면 '아니오 or ~ 수정헤줘'라고 해주세요!"
 
 📌 **주의사항:**
 - 입력된 정보만 표시
-- 칼로리는 반드시 계산되어야 함 (계산 중 상태 불허)
-- 시간대는 현재 시간 기준 자동 설정으로 표시
+																	   
+															  
 - 확인 후 '네'면 DB 저장 진행
-- 칼로리 계산이 완료된 후에만 확인 단계 진입
+															  
 """
 
 # 🚩 [식단 기록 추출 프롬프트]
@@ -559,7 +584,9 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: Optional[list] = []
     record_type: Optional[str] = None  # "exercise" or "diet" or None
-    chat_step: Optional[str] = None 
+    chat_step: Optional[str] = None
+    current_data: Optional[dict] = None  # 현재 수집된 데이터
+    meal_time_mapping: Optional[dict] = None  # 식단 시간 매핑 
 
 # 차트 분석 요청을 위한 스키마
 class AnalyticsRequest(BaseModel):
@@ -713,7 +740,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         if USE_GPT:
             # 1. 데이터 추출
             extraction_response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": extraction_prompt},
                     {"role": "user", "content": user_text}
@@ -726,7 +753,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
 
             # 2. 데이터 검증
             validation_response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": validation_prompt},
                     {"role": "user", "content": json.dumps(parsed_data)}
@@ -739,7 +766,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             # 3. 데이터가 완전한 경우에만 확인 단계로 진행
             if validation_result["status"] == "complete":
                 confirmation_response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": confirmation_prompt},
                         {"role": "user", "content": json.dumps(parsed_data)}
@@ -805,7 +832,46 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         db.rollback()
         raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
 
-# 채팅 엔드포인트
+def determine_chat_step_automatically(message: str, current_data: dict, record_type: str) -> str:
+    """현재 데이터 상태를 보고 자동으로 단계 결정"""
+    
+    if record_type == "exercise":
+        # 운동 필수 정보 확인
+        required_fields = ["exercise", "category"]
+        
+        if not current_data.get("exercise"):
+            return "extraction"  # 운동명부터 수집
+            
+        # 운동 종류별 필수 정보 확인
+        if current_data.get("category") == "유산소":
+            if not current_data.get("duration_min"):
+                return "validation"  # 시간 부족
+        elif current_data.get("category") == "근력":
+            if not current_data.get("sets") or not current_data.get("reps"):
+                return "validation"  # 세트/횟수 부족
+            # 맨몸 운동이 아닌 경우 무게도 필요
+            if not is_bodyweight_exercise(current_data.get("exercise")) and not current_data.get("weight"):
+                return "validation"  # 무게 부족
+        
+        # 모든 필수 정보가 있으면 확인 단계
+        return "confirmation"
+    
+    elif record_type == "diet":
+        # 식단 필수 정보 확인
+        if not current_data.get("food_name") or not current_data.get("amount"):
+            return "validation"
+        if not current_data.get("meal_time"):
+            return "validation"
+        
+        return "confirmation"
+    
+    return "extraction"
+
+def is_bodyweight_exercise(exercise_name: str) -> bool:
+    """맨몸 운동 여부 판단"""
+    bodyweight_exercises = ["푸시업", "풀업", "플랭크", "크런치", "싯업", "버피"]
+    return any(ex in exercise_name.lower() for ex in bodyweight_exercises)
+
 @app.post("/api/py/chat")
 async def chat(request: ChatRequest):
     try:
@@ -821,34 +887,58 @@ async def chat(request: ChatRequest):
                     "message": "안녕하세요! 운동이나 식단을 기록하시려면 먼저 상단의 '운동 기록' 또는 '식단 기록' 버튼을 선택해 주세요."
                 }
 
-            # 단계(chat_step)에 따라 시스템 프롬프트 선택
+            # 자동으로 단계 판단
+            auto_step = determine_chat_step_automatically(
+                request.message, 
+                request.current_data or {}, 
+                request.record_type
+            )
+            
+            # 자동 판단된 단계로 프롬프트 선택
+				
+		 
+		   
+		   
+	
+   
+			   
             if request.record_type == "exercise":
-                if request.chat_step == "validation":
+                if auto_step == "validation":
                     system_prompt = EXERCISE_VALIDATION_PROMPT
-                elif request.chat_step == "confirmation":
+                elif auto_step == "confirmation":
                     system_prompt = EXERCISE_CONFIRMATION_PROMPT
                 else:
                     system_prompt = EXERCISE_EXTRACTION_PROMPT
             else:
-                if request.chat_step == "validation":
+                if auto_step == "validation":
                     system_prompt = DIET_VALIDATION_PROMPT
-                elif request.chat_step == "confirmation":
+                elif auto_step == "confirmation":
                     system_prompt = DIET_CONFIRMATION_PROMPT
                 else:
                     system_prompt = DIET_EXTRACTION_PROMPT
+            
+            # 디버깅 로그 추가
+            print(f"[DEBUG] 받은 current_data: {request.current_data}")
+            print(f"[DEBUG] 자동 판단된 단계: {auto_step}")
+            
+            # 현재 데이터를 프롬프트에 포함
+            if request.current_data and request.current_data != {}:
+                current_data_str = f"\n\n**현재 수집된 데이터:**\n{json.dumps(request.current_data, ensure_ascii=False, indent=2)}"
+                system_prompt = system_prompt + current_data_str
+                print(f"[DEBUG] 프롬프트에 current_data 추가됨")
 
             # GPT 호출 메시지 구성
             messages = [
                 {"role": "system", "content": system_prompt},
-                *request.conversation_history,
+                *((request.conversation_history or [])[-5:]), # 이전 대화기록 불러오기
                 {"role": "user", "content": request.message}
             ]
 
             # ChatCompletion API 실행
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=messages,
-                temperature=0.7
+                temperature=0.3
             )
 
             # 응답 JSON 파싱
@@ -881,7 +971,7 @@ async def chat(request: ChatRequest):
                 else:
                     # 일반 텍스트 응답
                     return {
-                        "type": "initial",
+                        "type": "incomplete",
                         "message": raw,
                         "suggestions": []
                     }
@@ -932,7 +1022,7 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
     results = []
     for record in records:
         results.append(DailyExerciseRecord(
-            exercise_session_id=record.exercise_session_id,
+														   
             name=record.notes,
             weight=f"{record.weight}kg" if record.weight else "체중",
             sets=record.sets or 1,
@@ -1046,15 +1136,15 @@ def parse_amount_multiplier(amount: str, food_name: str) -> float:
     else:
         return number
 
-# 🗑️ 운동 기록 삭제
-@app.delete("/api/py/note/exercise/{session_id}")
-def delete_exercise_record(session_id: int, db: Session = Depends(get_db)):
-    record = db.query(models.ExerciseSession).filter(models.ExerciseSession.exercise_session_id == session_id).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
-    db.delete(record)
-    db.commit()
-    return {"message": "운동 기록 삭제 성공"}
+							  
+												 
+																		   
+																													  
+				  
+																						 
+					 
+			   
+													 
 
 # 서버 실행
 if __name__ == "__main__":

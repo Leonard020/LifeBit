@@ -22,7 +22,7 @@ public class MealLog {
     @JoinColumn(name = "user_id")
     private User user;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "food_item_id")
     private FoodItem foodItem;
     
@@ -54,4 +54,16 @@ public class MealLog {
     
     @Column(name = "validation_notes")
     private String validationNotes;
+    
+    @Column(name = "calories")
+    private BigDecimal calories;
+    
+    @Column(name = "carbs")
+    private BigDecimal carbs;
+    
+    @Column(name = "protein")
+    private BigDecimal protein;
+    
+    @Column(name = "fat")
+    private BigDecimal fat;
 } 

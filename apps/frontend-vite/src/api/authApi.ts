@@ -1,6 +1,6 @@
 import axiosInstance from '@/utils/axios';
 import { setToken, setUserInfo } from '@/utils/auth';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 
 // ============================================================================
 // 로그인 관련 타입들
@@ -1040,5 +1040,127 @@ export const useDeleteUserGoal = () => {
     onError: (error) => {
       console.error('💥 사용자 목표 삭제 실패:', error);
     }
+  });
+};
+
+// ============================================================================
+// 📅 운동 캘린더 히트맵 API 함수들
+// ============================================================================
+
+/**
+ * 운동 캘린더 히트맵 데이터 인터페이스
+ */
+export interface ExerciseCalendarHeatmapData {
+  exercise_date: string;
+  workout_count: number;
+  duration_minutes: number;
+  calories_burned: number;
+  exercise_name: string;
+}
+
+/**
+ * 운동 캘린더 히트맵 데이터 조회
+ * @param userId 사용자 ID
+ * @returns 최근 84일간의 운동 히트맵 데이터
+ */
+export const getExerciseCalendarHeatmapData = async (userId: string): Promise<ExerciseCalendarHeatmapData[]> => {
+  try {
+    console.log('📅 [API] 운동 캘린더 히트맵 데이터 조회 요청:', userId);
+    
+    const response = await axiosInstance.get<ExerciseCalendarHeatmapData[]>(
+      `/api/health-statistics/${userId}/exercise-calendar-heatmap`
+    );
+    
+    console.log('✅ [API] 운동 캘린더 히트맵 데이터 조회 성공:', response.data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('❌ [API] 운동 캘린더 히트맵 데이터 조회 실패:', error);
+    
+    if (error instanceof Error && 'response' in error) {
+      const axiosError = error as { response?: { data?: ErrorResponse } };
+      if (axiosError.response?.data?.message) {
+        throw new Error(axiosError.response.data.message);
+      }
+    }
+    throw new Error('운동 캘린더 히트맵 데이터 조회 중 오류가 발생했습니다.');
+  }
+};
+
+/**
+ * 운동 캘린더 히트맵 데이터 조회 Hook
+ * @param userId 사용자 ID
+ * @returns 운동 캘린더 히트맵 데이터 쿼리
+ */
+export const useExerciseCalendarHeatmap = (userId: string) => {
+  return useQuery({
+    queryKey: ['exercise-calendar-heatmap', userId],
+    queryFn: () => getExerciseCalendarHeatmapData(userId),
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
+    gcTime: 1000 * 60 * 10, // 10분간 가비지 컬렉션 지연
+  });
+};
+
+// ============================================================================
+// 🍽️ 영양소 통계 API
+// ============================================================================
+
+/**
+ * 일일 영양소 통계 타입 정의
+ */
+export interface DailyNutritionStats {
+  dailyCalories: number;
+  dailyCarbs: number;
+  dailyProtein: number;
+  dailyFat: number;
+  mealLogCount: number;
+  dataSource: string; // "meal_logs_direct" | "fallback"
+  error?: string;
+}
+
+/**
+ * 실제 meal_logs 테이블에서 오늘의 영양소 정보 조회
+ * @param userId 사용자 ID
+ * @returns 오늘의 영양소 통계
+ */
+export const getDailyNutritionStats = async (userId: string): Promise<DailyNutritionStats> => {
+  try {
+    console.log('🍽️ [API] 일일 영양소 통계 조회 요청:', userId);
+    
+    const response = await axiosInstance.get<DailyNutritionStats>(`/api/health-statistics/${userId}`, {
+      params: { period: 'day' }
+    });
+    
+    console.log('✅ [API] 일일 영양소 통계 조회 성공:', response.data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('❌ [API] 일일 영양소 통계 조회 실패:', error);
+    
+    // 에러 시 기본값 반환
+    return {
+      dailyCalories: 0,
+      dailyCarbs: 0,
+      dailyProtein: 0,
+      dailyFat: 0,
+      mealLogCount: 0,
+      dataSource: "fallback",
+      error: error instanceof Error ? error.message : "알 수 없는 오류"
+    };
+  }
+};
+
+/**
+ * 일일 영양소 통계 React Query Hook
+ * @param userId 사용자 ID
+ * @returns 일일 영양소 통계 쿼리 결과
+ */
+export const useDailyNutritionStats = (userId: string) => {
+  return useQuery({
+    queryKey: ['dailyNutritionStats', userId],
+    queryFn: () => getDailyNutritionStats(userId),
+    staleTime: 5 * 60 * 1000, // 5분 캐싱
+    gcTime: 10 * 60 * 1000, // 10분 보관
+    enabled: !!userId,
+    retry: 2
   });
 };

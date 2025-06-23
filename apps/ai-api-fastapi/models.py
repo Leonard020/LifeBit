@@ -4,8 +4,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import DateTime
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import uuid
 import enum
+
+# KST 시간대 함수
+def get_kst_now():
+    return datetime.now(ZoneInfo("Asia/Seoul"))
 
 Base = declarative_base()
 
@@ -29,7 +34,7 @@ class ExerciseSession(Base):
     calories_burned = Column(Integer)
     notes = Column(Text)
     exercise_date = Column(Date, nullable=False)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(TIMESTAMP, default=get_kst_now)
 
 # 🍽️ 식단 기록
 class MealLog(Base):
@@ -46,7 +51,7 @@ class MealLog(Base):
     carbs = Column(DECIMAL(6, 2), nullable=True)
     protein = Column(DECIMAL(6, 2), nullable=True)
     fat = Column(DECIMAL(6, 2), nullable=True)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(TIMESTAMP, default=get_kst_now)
 
 # 👤 사용자 테이블
 class User(Base):
@@ -71,8 +76,8 @@ class User(Base):
     role = Column(SqlEnum(UserRole, name="user_role", create_type=True), 
                   default=UserRole.USER, nullable=False)
 
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(TIMESTAMP, default=get_kst_now)
+    updated_at = Column(TIMESTAMP, default=get_kst_now, onupdate=get_kst_now)
     last_visited = Column(DateTime, nullable=True)
 
 class FoodItem(Base):
@@ -85,4 +90,4 @@ class FoodItem(Base):
     protein = Column(DECIMAL(6, 2), nullable=True)
     fat = Column(DECIMAL(6, 2), nullable=True)
     serving_size = Column(DECIMAL(6, 2), nullable=True)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(TIMESTAMP, default=get_kst_now)
