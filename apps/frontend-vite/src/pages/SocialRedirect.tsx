@@ -46,9 +46,9 @@ export default function SocialRedirect() {
 
         let url = '';
         if (provider === 'kakao') {
-          url = `http://localhost:8001/api/auth/kakao/callback?code=${code}`;
+          url = `http://localhost:8001/api/py/auth/kakao/callback?code=${code}`;
         } else if (provider === 'google') {
-          url = `http://localhost:8001/api/auth/google/callback?code=${code}`;
+          url = `http://localhost:8001/api/py/auth/google/callback?code=${code}`;
         } else {
           throw new Error('지원하지 않는 소셜 로그인 방식입니다.');
         }
