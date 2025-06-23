@@ -13,4 +13,6 @@ public class RankingHistoryDto {
     private final int streakDays;
     private final int season;
     private final String periodType;
+    private final String tier;
+    private final String colorCode;
 } 
