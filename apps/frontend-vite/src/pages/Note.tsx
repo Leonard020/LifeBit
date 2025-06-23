@@ -83,6 +83,14 @@ const Note = () => {
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
+  // 운동 추가 관련 상태
+  const [isAddExerciseDialogOpen, setIsAddExerciseDialogOpen] = useState(false);
+  const [exerciseName, setExerciseName] = useState('');
+  const [sets, setSets] = useState(1);
+  const [reps, setReps] = useState(10);
+  const [weight, setWeight] = useState(0);
+  const [time, setTime] = useState('');
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -211,7 +219,7 @@ const Note = () => {
   useEffect(() => {
     const fetchWeeklySummary = async () => {
       if (!authToken) return; // 토큰이 없으면 실행하지 않음
-      
+
       setIsLoadingSummary(true);
       try {
         const userInfo = getUserInfo();
@@ -224,7 +232,7 @@ const Note = () => {
         monday.setDate(today.getDate() + diffToMonday);
         const weekStart = monday.toISOString().split("T")[0];
 
-        
+
       } catch (err) {
         console.error("주간 운동 집계 불러오기 실패:", err);
       } finally {
@@ -480,7 +488,7 @@ const Note = () => {
             'Content-Type': 'application/json'
           }
         });
-        
+
         if (!res.ok) {
           if (res.status === 403) {
             console.warn('인증이 필요합니다.');
@@ -546,7 +554,7 @@ const Note = () => {
   const customDayContent = (date: Date) => {
     const records = hasRecordOnDate(date);
     const hasBothRecords = records && records.exercise && records.diet;
-  
+
     // 점 스타일: 크게, 색상별
     const dotStyle = {
       width: '14px',
@@ -555,7 +563,7 @@ const Note = () => {
       marginTop: '6px',
       display: 'inline-block',
     };
-  
+
     let dot = null;
     if (hasBothRecords) {
       dot = (
@@ -588,7 +596,7 @@ const Note = () => {
         />
       );
     }
-  
+
     return (
       <div className="flex flex-col items-center justify-center min-h-[44px]">
         <span className={hasBothRecords ? "gradient-text font-medium" : ""}>
@@ -751,6 +759,75 @@ const Note = () => {
     }
   };
 
+  // 💪 일일 운동 추가 - Spring API 사용
+  const [bodyPart, setBodyPart] = useState('chest');         // 선택한 부위
+  const [exerciseOptions, setExerciseOptions] = useState([]); // 드롭다운 운동 목록
+
+  const addExerciseRecord = async () => {
+    try {
+      const token = getToken();
+      const userInfo = getUserInfo();
+      const userId = userInfo?.userId || 1;
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+
+      const request = {
+        userId: userId,
+        exerciseName: exerciseName.trim(),
+        sets: sets || 1,
+        reps: reps || 10,
+        weight: weight || 0.0,
+        time: time || null,
+        exerciseDate: formattedDate
+      };
+      console.log("💪 운동 추가 요청:", request);
+
+      const res = await fetch('/api/note/exercise', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(request)
+      });
+
+      if (!res.ok) throw new Error("운동 기록 추가 실패");
+
+      const data = await res.json();
+      setTodayExercise(prev => [...prev, data]);
+
+      setIsAddExerciseDialogOpen(false);
+      setExerciseName('');
+      setSets(1);
+      setReps(10);
+      setWeight(0);
+      setTime('');
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "운동 추가 실패",
+        description: "기록을 저장하는 중 문제가 발생했습니다.",
+        variant: "destructive"
+      });
+    }
+  };
+
+
+
+  useEffect(() => {
+    const fetchExercises = async () => {
+      try {
+        const res = await fetch(`/api/exercises?bodyPart=${bodyPart}`);
+        const data = await res.json();
+        setExerciseOptions(data);  // 서버에서 문자열 배열을 내려주는 걸로 가정
+      } catch (err) {
+        console.error("운동 불러오기 실패:", err);
+      }
+    };
+
+    fetchExercises();
+  }, [bodyPart]);
+
+
   // 점(●) 표시용 modifiers와 classNames 추가
   function parseDateString(dateStr: string) {
     // 'yyyy-MM-dd' -> Date 객체
@@ -905,6 +982,82 @@ const Note = () => {
                     {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
                   </Button>
                 )}
+                <Dialog open={isAddExerciseDialogOpen} onOpenChange={setIsAddExerciseDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      운동 추가
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>운동 기록 추가</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {/* ✅ 운동 부위 선택 */}
+                      <div>
+                        <Label>운동 부위 선택</Label>
+                        <select
+                          value={bodyPart}
+                          onChange={(e) => setBodyPart(e.target.value as any)}
+                          className="w-full border p-2 rounded"
+                        >
+                          <option value="chest">가슴</option>
+                          <option value="back">등</option>
+                          <option value="legs">하체</option>
+                          <option value="shoulders">어깨</option>
+                          <option value="arms">팔</option>
+                          <option value="abs">복부</option>
+                          <option value="cardio">유산소</option>
+                          <option value="full_body">전신</option>
+                        </select>
+                      </div>
+
+                      {/* ✅ 운동 이름 선택 */}
+                      <div>
+                        <Label>운동 선택</Label>
+                        <select
+                          value={exerciseName}
+                          onChange={(e) => setExerciseName(e.target.value)}
+                          className="w-full border p-2 rounded"
+                          disabled={exerciseOptions.length === 0}
+                        >
+                          <option value="">
+                            {exerciseOptions.length === 0 ? '운동 부위를 먼저 선택하세요' : '운동을 선택하세요'}
+                          </option>
+                          {exerciseOptions.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>세트</Label>
+                          <Input type="number" value={sets} onChange={(e) => setSets(Number(e.target.value))} min={1} />
+                        </div>
+                        <div>
+                          <Label>횟수</Label>
+                          <Input type="number" value={reps} onChange={(e) => setReps(Number(e.target.value))} min={1} />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>무게 (kg)</Label>
+                        <Input type="number" value={weight} onChange={(e) => setWeight(Number(e.target.value))} min={0} />
+                      </div>
+                      <div>
+                        <Label>운동 시간</Label>
+                        <Input value={time} onChange={(e) => setTime(e.target.value)} placeholder="예: 20분" />
+                      </div>
+
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setIsAddExerciseDialogOpen(false)}>취소</Button>
+                        <Button onClick={addExerciseRecord}>추가</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 {todayExercise.length > 0 ? (
@@ -927,7 +1080,7 @@ const Note = () => {
                         </div>
                         <div className="flex space-x-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8">
-                            <Edit className="h-4 w-4" onClick={() => {/* TODO: 수정 모달 오픈 */}} />
+                            <Edit className="h-4 w-4" onClick={() => {/* TODO: 수정 모달 오픈 */ }} />
                           </Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exercise_session_id)}>
                             <Trash2 className="h-4 w-4" />
