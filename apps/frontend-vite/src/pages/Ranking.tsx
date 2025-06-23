@@ -8,6 +8,8 @@ import { getRanking } from '@/api/auth';
 import { getToken, getUserInfo } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Drawer, DrawerContent, DrawerTrigger, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 
 interface RankingUser {
   rank: number;
@@ -46,6 +48,8 @@ const Ranking = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
 
   useEffect(() => {
     const fetchRankingData = async () => {
@@ -274,25 +278,35 @@ const Ranking = () => {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {achievements.map((achievement: Achievement, index: number) => (
-                  <div key={index} className={`p-4 rounded-lg border ${
-                    achievement.achieved 
-                      ? 'border-green-200 bg-green-50' 
-                      : 'border-gray-200 bg-gray-50'
-                  }`}>
+                  <div
+                    key={index}
+                    className={`p-4 rounded-lg border ${achievement.achieved ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer hover:shadow-lg hover:border-primary transition`}
+                    onClick={() => { setSelectedAchievement(achievement); setDrawerOpen(true); }}
+                    tabIndex={0}
+                    role="button"
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setSelectedAchievement(achievement); setDrawerOpen(true); } }}
+                  >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
-                        <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>
-                          {achievement.title}
-                        </h4>
-                        <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>
-                          {achievement.description}
-                        </p>
+                        <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>{achievement.title}</h4>
+                        <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>{achievement.description}</p>
                       </div>
-                      <Badge className={`${getBadgeColor(achievement.badge)} ml-2`}>
-                        {achievement.badge}
-                      </Badge>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            className={`${getBadgeColor(achievement.badge)} ml-2 text-xs px-2 py-0.5`}
+                          >
+                            {achievement.badge}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div>
+                            <div className="font-bold">{achievement.title}</div>
+                            <div className="text-xs text-muted-foreground">{achievement.description}</div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                    
                     {achievement.achieved ? (
                       <div className="flex items-center space-x-2 text-green-600">
                         <Trophy className="h-4 w-4" />
@@ -305,16 +319,50 @@ const Ranking = () => {
                           <span>{achievement.progress}/{achievement.target || 100}</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-primary h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }}
-                          />
+                          <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} />
                         </div>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
+              {/* 업적 상세 Drawer */}
+              <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+                <DrawerContent>
+                  {selectedAchievement && (
+                    <div className="p-0 flex flex-col items-center justify-center w-full">
+                      <div className="mx-auto w-full max-w-sm bg-white rounded-xl shadow-lg p-8 flex flex-col items-center justify-center">
+                        <DrawerTitle>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge className={`${getBadgeColor(selectedAchievement.badge)} text-xs px-2 py-0.5`}>{selectedAchievement.badge}</Badge>
+                            <span className="font-bold text-lg">{selectedAchievement.title}</span>
+                          </div>
+                        </DrawerTitle>
+                        <DrawerDescription>
+                          {selectedAchievement.description}
+                        </DrawerDescription>
+                        {/* 진행 바를 항상 중앙에 표시 */}
+                        <div className="w-full my-6">
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>진행도</span>
+                            <span>{selectedAchievement.progress}/{selectedAchievement.target || 100}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(selectedAchievement.progress / (selectedAchievement.target || 100) * 100, 100)}%` }} />
+                          </div>
+                        </div>
+                        {selectedAchievement.achieved ? (
+                          <div className="flex items-center space-x-2 text-green-600 mb-2">
+                            <Trophy className="h-4 w-4" />
+                            <span className="text-sm">달성: {selectedAchievement.date}</span>
+                          </div>
+                        ) : null}
+                        <button className="mt-4 px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 text-base font-medium" style={{minWidth:'120px'}} onClick={() => setDrawerOpen(false)}>닫기</button>
+                      </div>
+                    </div>
+                  )}
+                </DrawerContent>
+              </Drawer>
             </CardContent>
           </Card>
         )}

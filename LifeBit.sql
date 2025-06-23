@@ -77,6 +77,7 @@ CREATE TABLE users (
     role user_role DEFAULT 'USER',
     created_at TIMESTAMP DEFAULT NOW(), 
     updated_at TIMESTAMP DEFAULT NOW()
+    last_visited TIMESTAMP
 );
 
 CREATE INDEX idx_users_email ON users(email);

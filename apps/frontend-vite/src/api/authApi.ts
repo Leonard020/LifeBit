@@ -892,18 +892,18 @@ export const createUserGoal = async (data: UserGoalCreateRequest): Promise<UserG
 
 /**
  * 사용자 목표 수정
- * @param goalId 수정할 사용자 목표 ID
+ * @param userId 사용자 ID
  * @param data 수정할 데이터
  * @returns 수정된 사용자 목표 정보
  */
 export const updateUserGoal = async (
-  goalId: number, 
+  userId: number, 
   data: UserGoalUpdateRequest
 ): Promise<UserGoal> => {
   try {
-    console.log('🎯 [API] 사용자 목표 수정 요청:', { goalId, data });
+    console.log('🎯 [API] 사용자 목표 수정 요청:', { userId, data });
     
-    const response = await axiosInstance.put<UserGoal>(`/api/user-goals/${goalId}`, data);
+    const response = await axiosInstance.put<UserGoal>(`/api/user-goals/${userId}`, data);
     
     console.log('✅ [API] 사용자 목표 수정 성공:', response.data);
     return response.data;
@@ -1006,8 +1006,8 @@ export const useUpdateUserGoal = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ goalId, data }: { goalId: number; data: UserGoalUpdateRequest }) => 
-      updateUserGoal(goalId, data),
+    mutationFn: ({ userId, data }: { userId: number; data: UserGoalUpdateRequest }) => 
+      updateUserGoal(userId, data),
     onSuccess: (data) => {
       console.log('🎉 사용자 목표 수정 성공:', data);
       
@@ -1098,5 +1098,118 @@ export const useExerciseCalendarHeatmap = (userId: string) => {
     enabled: !!userId,
     staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
     gcTime: 1000 * 60 * 10, // 10분간 가비지 컬렉션 지연
+  });
+};
+
+// ============================================================================
+// 🍽️ 영양소 통계 API
+// ============================================================================
+
+/**
+ * 식단 기록 DTO (노트 페이지와 동일)
+ */
+export interface DietLogDTO {
+  id: number;
+  userId: number;
+  foodItemId: number;
+  foodName: string;
+  quantity: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  logDate: string;
+  unit: string;
+  mealTime?: string;
+  inputSource?: string;
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string;
+  validationNotes?: string;
+  createdAt?: string;
+}
+
+/**
+ * 일일 영양소 통계 타입 정의
+ */
+export interface DailyNutritionStats {
+  dailyCalories: number;
+  dailyCarbs: number;
+  dailyProtein: number;
+  dailyFat: number;
+  mealLogCount: number;
+  dataSource: string; // "meal_logs_direct" | "fallback"
+  error?: string;
+}
+
+/**
+ * 노트 페이지와 동일한 방식으로 diet API에서 직접 영양소 정보 조회
+ * @param userId 사용자 ID
+ * @returns 오늘의 영양소 통계
+ */
+export const getDailyNutritionStats = async (userId: string): Promise<DailyNutritionStats> => {
+  try {
+    console.log('🍽️ [API] 일일 영양소 통계 조회 요청 (노트 페이지 방식):', userId);
+    
+    // 오늘 날짜 포맷
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    console.log('🍽️ [API] 조회 날짜:', today);
+    console.log('🍽️ [API] 요청 URL:', `/api/diet/daily-records/${today}?userId=${userId}`);
+    
+    // 노트 페이지와 동일한 API 사용
+    const response = await axiosInstance.get<DietLogDTO[]>(`/api/diet/daily-records/${today}`, {
+      params: { userId: parseInt(userId) }
+    });
+    
+    console.log('✅ [API] 식단 기록 조회 성공:', response.data);
+    console.log('🔍 [API] 조회된 기록 수:', response.data.length);
+    
+    // 노트 페이지와 동일한 방식으로 합계 계산
+    const dailyCalories = response.data.reduce((sum, log) => sum + log.calories, 0);
+    const dailyCarbs = response.data.reduce((sum, log) => sum + log.carbs, 0);
+    const dailyProtein = response.data.reduce((sum, log) => sum + log.protein, 0);
+    const dailyFat = response.data.reduce((sum, log) => sum + log.fat, 0);
+    
+    const result = {
+      dailyCalories,
+      dailyCarbs,
+      dailyProtein,
+      dailyFat,
+      mealLogCount: response.data.length,
+      dataSource: "diet_api_direct"
+    };
+    
+    console.log('🔍 [API] 계산된 영양소 상세 정보:', result);
+    return result;
+    
+  } catch (error: unknown) {
+    console.error('❌ [API] 일일 영양소 통계 조회 실패:', error);
+    
+    // 에러 시 기본값 반환
+    return {
+      dailyCalories: 0,
+      dailyCarbs: 0,
+      dailyProtein: 0,
+      dailyFat: 0,
+      mealLogCount: 0,
+      dataSource: "fallback",
+      error: error instanceof Error ? error.message : "알 수 없는 오류"
+    };
+  }
+};
+
+/**
+ * 일일 영양소 통계 React Query Hook
+ * @param userId 사용자 ID
+ * @returns 일일 영양소 통계 쿼리 결과
+ */
+export const useDailyNutritionStats = (userId: string) => {
+  return useQuery({
+    queryKey: ['dailyNutritionStats', userId],
+    queryFn: () => getDailyNutritionStats(userId),
+    staleTime: 5 * 60 * 1000, // 5분 캐싱
+    gcTime: 10 * 60 * 1000, // 10분 보관
+    enabled: !!userId,
+    retry: 2
   });
 };

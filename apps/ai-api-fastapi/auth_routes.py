@@ -5,7 +5,7 @@ import models
 import requests, os
 from dotenv import load_dotenv
 from auth_utils import create_access_token
-from models import UserRole  # 상단에 추가
+from models import UserRole, get_kst_now
 from pathlib import Path
 from passlib.hash import bcrypt
 from sqlalchemy import text
@@ -133,7 +133,8 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
         # Always re-fetch the user before updating last_visited
         user = db.query(models.User).filter(models.User.email == email).first()
         print(f"[DEBUG] Kakao before update last_visited: {user.last_visited}")
-        user.last_visited = datetime.utcnow()
+        user.last_visited = get_kst_now()
+        user.updated_at = user.last_visited
         db.commit()
         print(f"[DEBUG] Kakao after update last_visited: {user.last_visited}")
 
@@ -281,7 +282,8 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         # Always re-fetch the user before updating last_visited
         user = db.query(models.User).filter(models.User.email == email).first()
         print(f"[DEBUG] Google before update last_visited: {user.last_visited}")
-        user.last_visited = datetime.utcnow()
+        user.last_visited = get_kst_now()
+        user.updated_at = user.last_visited
         db.commit()
         print(f"[DEBUG] Google after update last_visited: {user.last_visited}")
 

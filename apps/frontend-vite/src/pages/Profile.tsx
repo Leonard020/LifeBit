@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { User, Mail, Ruler, Weight, Calendar, Target, Dumbbell, Heart, Plus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getUserProfile, updateUserProfile } from '@/api/auth';
-import { isLoggedIn } from '@/utils/auth';
+import { getUserProfile, updateUserProfile, useUserGoals } from '@/api/auth';
+import { isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { BasicInfoBox } from '@/components/BasicInfoBox';
 import { API_CONFIG } from '@/config/env';
+import { useUpdateUserGoal, useCreateUserGoal } from '@/api/authApi';
 
 interface StrengthGoal {
   id: string;
@@ -53,6 +54,14 @@ const Profile = () => {
     dailyFat: '60',
   });
 
+  // Get current user ID
+  const currentUserId = getUserIdFromToken();
+
+  // React Query hooks for user goals
+  const { data: userGoalsData, isLoading: goalsLoading } = useUserGoals(currentUserId?.toString() || '');
+  const updateUserGoalMutation = useUpdateUserGoal();
+  const createUserGoalMutation = useCreateUserGoal();
+
   const bodyPartOptions = [
     { value: 'chest', label: '가슴' },
     { value: 'back', label: '등' },
@@ -61,6 +70,20 @@ const Profile = () => {
     { value: 'arms', label: '팔' },
     { value: 'shoulders', label: '어깨' }
   ];
+
+  // Load user goals when data is available
+  useEffect(() => {
+    if (userGoalsData && !goalsLoading) {
+      const goalsData = userGoalsData.data || userGoalsData;
+      setGoals({
+        cardioTraining: goalsData.weekly_workout_target?.toString() || '2',
+        dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
+        dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
+        dailyProtein: goalsData.daily_protein_target?.toString() || '120',
+        dailyFat: goalsData.daily_fat_target?.toString() || '60',
+      });
+    }
+  }, [userGoalsData, goalsLoading]);
 
   const addStrengthGoal = () => {
     const newGoal: StrengthGoal = {
@@ -147,15 +170,48 @@ const Profile = () => {
     }
   };
 
-  const handleGoalsSave = () => {
-    toast({
-      title: "목표 설정 완료",
-      description: "건강 목표가 성공적으로 설정되었습니다.",
-    });
+  const handleGoalsSave = async () => {
+    if (!currentUserId) {
+      toast({
+        variant: 'destructive',
+        title: '사용자 인증 오류',
+        description: '사용자 정보를 찾을 수 없습니다.',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const goalsData = {
+        weekly_workout_target: parseInt(goals.cardioTraining),
+        daily_calories_target: parseInt(goals.dailyCalories),
+        daily_carbs_target: parseInt(goals.dailyCarbs),
+        daily_protein_target: parseInt(goals.dailyProtein),
+        daily_fat_target: parseInt(goals.dailyFat),
+      };
+
+      // Always create a new user goal (POST)
+      await createUserGoalMutation.mutateAsync(goalsData);
+
+      toast({
+        title: "목표 설정 완료",
+        description: "건강 목표가 성공적으로 저장되었습니다.",
+      });
+    } catch (error) {
+      console.error('Failed to save goals:', error);
+      toast({
+        variant: 'destructive',
+        title: '목표 저장 실패',
+        description: '건강 목표 저장에 실패했습니다.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 로딩 중일 때 보여줄 컴포넌트
-  if (loading) {
+  if (loading || goalsLoading) {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-8 pb-24">
@@ -368,8 +424,12 @@ const Profile = () => {
                 </div>
               </div>
 
-              <Button onClick={handleGoalsSave} className="w-full gradient-bg hover:opacity-90 transition-opacity">
-                건강 목표 저장
+              <Button 
+                onClick={handleGoalsSave} 
+                className="w-full gradient-bg hover:opacity-90 transition-opacity"
+                disabled={createUserGoalMutation.isPending}
+              >
+                {createUserGoalMutation.isPending ? '저장 중...' : '건강 목표 저장'}
               </Button>
             </CardContent>
           </Card>

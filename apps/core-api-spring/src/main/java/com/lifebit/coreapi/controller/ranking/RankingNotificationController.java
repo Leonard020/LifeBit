@@ -5,7 +5,7 @@ import com.lifebit.coreapi.service.ranking.RankingNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.lifebit.coreapi.dto.ranking.RankingNotificationResponse;
+import com.lifebit.coreapi.dto.ranking.RankingNotificationDto;
 import com.lifebit.coreapi.entity.User;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.data.domain.Page;
@@ -25,14 +25,14 @@ public class RankingNotificationController {
      * 알림 목록 조회 (페이징/필터링/DTO)
      */
     @GetMapping
-    public ResponseEntity<Page<RankingNotificationResponse>> getMyNotifications(
+    public ResponseEntity<Page<RankingNotificationDto>> getMyNotifications(
             @AuthenticationPrincipal User user,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Boolean isRead
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(notificationService.getUserNotificationsDto(user.getUuid().toString(), pageable, isRead));
+        return ResponseEntity.ok(notificationService.getUserNotificationsDto(user.getUserId(), pageable, isRead));
     }
 
     /**
@@ -40,19 +40,19 @@ public class RankingNotificationController {
      */
     @PostMapping("/read-all")
     public ResponseEntity<Void> markAllAsRead(@AuthenticationPrincipal User user) {
-        notificationService.markAllAsRead(user.getUuid().toString());
+        notificationService.markAllAsRead(user.getUserId());
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{id}/read")
     public ResponseEntity<Void> markAsRead(@AuthenticationPrincipal User user, @PathVariable Long id) {
-        notificationService.markAsRead(id, user.getUuid().toString());
+        notificationService.markAsRead(id, user.getUserId());
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteNotification(@AuthenticationPrincipal User user, @PathVariable Long id) {
-        notificationService.deleteNotification(id, user.getUuid().toString());
+        notificationService.deleteNotification(id, user.getUserId());
         return ResponseEntity.ok().build();
     }
 } 
