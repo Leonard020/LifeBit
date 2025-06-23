@@ -259,15 +259,15 @@ const NutritionChart: React.FC<{
             
             {/* 중앙 칼로리 표시 */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center bg-white rounded-full w-24 h-24 flex flex-col items-center justify-center shadow-md">
-                <div className={`text-2xl font-bold ${getCalorieColor()}`}>
-                  {calories}
-                </div>
-                <div className="text-xs text-gray-500">kcal</div>
-                <div className={`text-xs font-medium ${getCalorieColor()}`}>
-                  {getCalorieStatus()}
-                </div>
+                          <div className="text-center bg-white rounded-full w-24 h-24 flex flex-col items-center justify-center shadow-md">
+              <div className={`text-2xl font-bold ${getCalorieColor()}`}>
+                {Math.round(calories * 10) / 10}
               </div>
+              <div className="text-xs text-gray-500">kcal</div>
+              <div className={`text-xs font-medium ${getCalorieColor()}`}>
+                {getCalorieStatus()}
+              </div>
+            </div>
             </div>
           </div>
           
@@ -283,7 +283,7 @@ const NutritionChart: React.FC<{
                     <span className="font-semibold text-gray-800">{item.name}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-bold text-gray-900">{item.value}g</span>
+                    <span className="text-lg font-bold text-gray-900">{Math.round(item.value * 10) / 10}g</span>
                     <span className="text-sm text-gray-500 ml-2">
                       ({getPercentage(item.value)}%)
                     </span>
@@ -318,7 +318,7 @@ const NutritionChart: React.FC<{
                 <span className="font-medium text-sm">총 열량</span>
               </div>
               <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{calories} kcal</span>
+                <span className="text-sm font-bold text-gray-900">{Math.round(calories * 10) / 10} kcal</span>
                 <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.calories} kcal</span>
               </div>
             </div>
@@ -329,7 +329,7 @@ const NutritionChart: React.FC<{
               />
             </div>
             <div className="text-xs text-red-600 font-medium text-center">
-              {Math.round((calories / nutritionGoals.calories) * 100)}% 달성
+              {Math.round((calories / nutritionGoals.calories) * 1000) / 10}% 달성
             </div>
           </div>
           
@@ -341,7 +341,7 @@ const NutritionChart: React.FC<{
                 <span className="font-medium text-sm">탄수화물</span>
               </div>
               <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{carbs}g</span>
+                <span className="text-sm font-bold text-gray-900">{Math.round(carbs * 10) / 10}g</span>
                 <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.carbs}g</span>
               </div>
             </div>
@@ -352,7 +352,7 @@ const NutritionChart: React.FC<{
               />
             </div>
             <div className="text-xs text-blue-600 font-medium text-center">
-              {Math.round((carbs / nutritionGoals.carbs) * 100)}% 달성
+              {Math.round((carbs / nutritionGoals.carbs) * 1000) / 10}% 달성
             </div>
           </div>
           
@@ -364,7 +364,7 @@ const NutritionChart: React.FC<{
                 <span className="font-medium text-sm">단백질</span>
               </div>
               <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{protein}g</span>
+                <span className="text-sm font-bold text-gray-900">{Math.round(protein * 10) / 10}g</span>
                 <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.protein}g</span>
               </div>
             </div>
@@ -375,7 +375,7 @@ const NutritionChart: React.FC<{
               />
             </div>
             <div className="text-xs text-emerald-600 font-medium text-center">
-              {Math.round((protein / nutritionGoals.protein) * 100)}% 달성
+              {Math.round((protein / nutritionGoals.protein) * 1000) / 10}% 달성
             </div>
           </div>
           
@@ -387,7 +387,7 @@ const NutritionChart: React.FC<{
                 <span className="font-medium text-sm">지방</span>
               </div>
               <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{fat}g</span>
+                <span className="text-sm font-bold text-gray-900">{Math.round(fat * 10) / 10}g</span>
                 <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.fat}g</span>
               </div>
             </div>
@@ -398,7 +398,7 @@ const NutritionChart: React.FC<{
               />
             </div>
             <div className="text-xs text-amber-600 font-medium text-center">
-              {Math.round((fat / nutritionGoals.fat) * 100)}% 달성
+              {Math.round((fat / nutritionGoals.fat) * 1000) / 10}% 달성
             </div>
           </div>
         </div>
@@ -408,25 +408,25 @@ const NutritionChart: React.FC<{
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
             <div className="bg-red-50 rounded-lg p-3">
               <div className="text-lg font-bold text-red-600">
-                {Math.round((calories / nutritionGoals.calories) * 100)}%
+                {Math.round((calories / nutritionGoals.calories) * 1000) / 10}%
               </div>
               <div className="text-xs text-gray-600">열량</div>
             </div>
             <div className="bg-blue-50 rounded-lg p-3">
               <div className="text-lg font-bold text-blue-600">
-                {Math.round((carbs / nutritionGoals.carbs) * 100)}%
+                {Math.round((carbs / nutritionGoals.carbs) * 1000) / 10}%
               </div>
               <div className="text-xs text-gray-600">탄수화물</div>
             </div>
             <div className="bg-emerald-50 rounded-lg p-3">
               <div className="text-lg font-bold text-emerald-600">
-                {Math.round((protein / nutritionGoals.protein) * 100)}%
+                {Math.round((protein / nutritionGoals.protein) * 1000) / 10}%
               </div>
               <div className="text-xs text-gray-600">단백질</div>
             </div>
             <div className="bg-amber-50 rounded-lg p-3">
               <div className="text-lg font-bold text-amber-600">
-                {Math.round((fat / nutritionGoals.fat) * 100)}%
+                {Math.round((fat / nutritionGoals.fat) * 1000) / 10}%
               </div>
               <div className="text-xs text-gray-600">지방</div>
             </div>
@@ -1070,28 +1070,28 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       <Flame className="h-5 w-5 text-red-500" />
                       <span className="font-medium">총 열량</span>
                     </div>
-                    <span className="text-lg font-bold text-red-600">{todayData.totalCalories} kcal</span>
+                    <span className="text-lg font-bold text-red-600">{Math.round(todayData.totalCalories * 10) / 10} kcal</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-full bg-blue-500" />
                       <span className="font-medium">탄수화물</span>
                     </div>
-                    <span className="text-lg font-bold text-blue-600">{todayData.nutrition.carbs}g</span>
+                    <span className="text-lg font-bold text-blue-600">{Math.round(todayData.nutrition.carbs * 10) / 10}g</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-full bg-emerald-500" />
                       <span className="font-medium">단백질</span>
                     </div>
-                    <span className="text-lg font-bold text-emerald-600">{todayData.nutrition.protein}g</span>
+                    <span className="text-lg font-bold text-emerald-600">{Math.round(todayData.nutrition.protein * 10) / 10}g</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-amber-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-full bg-amber-500" />
                       <span className="font-medium">지방</span>
                     </div>
-                    <span className="text-lg font-bold text-amber-600">{todayData.nutrition.fat}g</span>
+                    <span className="text-lg font-bold text-amber-600">{Math.round(todayData.nutrition.fat * 10) / 10}g</span>
                   </div>
                 </div>
               </div>
@@ -1105,7 +1105,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       <Flame className="h-5 w-5 text-orange-500" />
                       <span className="font-medium">소모 칼로리</span>
                     </div>
-                    <span className="text-lg font-bold text-orange-600">{todayData.caloriesBurned} kcal</span>
+                    <span className="text-lg font-bold text-orange-600">{Math.round(todayData.caloriesBurned * 10) / 10} kcal</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                     <div className="flex items-center gap-2">
@@ -1139,12 +1139,12 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               <h4 className="text-lg font-semibold text-center mb-4">⚖️ 칼로리 수지</h4>
               <div className="flex justify-center items-center gap-8">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">+{todayData.totalCalories}</div>
+                  <div className="text-2xl font-bold text-green-600">+{Math.round(todayData.totalCalories * 10) / 10}</div>
                   <div className="text-sm text-gray-600">섭취</div>
                 </div>
                 <div className="text-4xl text-gray-400">-</div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">-{todayData.caloriesBurned}</div>
+                  <div className="text-2xl font-bold text-red-600">-{Math.round(todayData.caloriesBurned * 10) / 10}</div>
                   <div className="text-sm text-gray-600">소모</div>
                 </div>
                 <div className="text-4xl text-gray-400">=</div>
@@ -1155,7 +1155,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       : 'text-blue-600'
                   }`}>
                     {todayData.totalCalories - todayData.caloriesBurned > 0 ? '+' : ''}
-                    {todayData.totalCalories - todayData.caloriesBurned}
+                    {Math.round((todayData.totalCalories - todayData.caloriesBurned) * 10) / 10}
                   </div>
                   <div className="text-sm text-gray-600">순증감</div>
                 </div>
