@@ -160,6 +160,16 @@ type DietData = {
 
 type SimpleDietData = Omit<DietData, 'amount'> & { amount: string };
 
+// 🕐 현재 시간대 판단 함수 (DB ENUM에 맞춤)
+const getCurrentTimePeriod = (): string => {
+  const hour = new Date().getHours();
+  if (hour >= 4 && hour < 8) return 'dawn';      // 새벽 4-8시
+  if (hour >= 8 && hour < 12) return 'morning';   // 오전 8-12시
+  if (hour >= 12 && hour < 18) return 'afternoon'; // 오후 12-18시
+  if (hour >= 18 && hour < 22) return 'evening';   // 저녁 18-22시
+  return 'night'; // 밤 22-4시
+};
+
 const Index = () => {
   const { toast } = useToast();
   const [recordType, setRecordType] = useState<'exercise' | 'diet' | null>(null);
@@ -371,18 +381,59 @@ const Index = () => {
 
     if (type === 'exercise') {
       const isCardio = chatStructuredData.category === '유산소';
-      const payload = {
-        user_id: Number(userId),
-        name: chatStructuredData.exercise || '운동기록',
-        weight: isCardio ? null : (chatStructuredData.weight ?? 0),
-        sets: isCardio ? null : (chatStructuredData.sets ?? 0),
-        reps: isCardio ? null : (chatStructuredData.reps ?? 0),
-        duration_minutes: chatStructuredData.duration_min ?? 0,
-        exercise_date: new Date().toISOString().split('T')[0]
-      };
-      console.log('[운동기록 저장] payload:', payload);
+      const exerciseName = chatStructuredData.exercise || '운동기록';
+      
+      console.log('💪 [Index 운동기록] 운동명 확인:', exerciseName);
+      
       try {
-        const response = await fetch('/api/py/note/exercise', {
+        // 🔍 1단계: 운동 검색 또는 자동 생성
+        let exerciseCatalogId = 1; // 기본값
+        
+        if (exerciseName && exerciseName !== '운동기록') {
+          console.log('🔍 [Index 운동기록] 운동 카탈로그 찾기/생성 시도:', exerciseName);
+          
+          const findOrCreateResponse = await fetch('/api/exercises/find-or-create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: exerciseName,
+              bodyPart: isCardio ? 'cardio' : 'muscle',
+              description: `${exerciseName} 운동`
+            })
+          });
+          
+          if (findOrCreateResponse.ok) {
+            const exerciseCatalog = await findOrCreateResponse.json();
+            exerciseCatalogId = exerciseCatalog.exerciseCatalogId;
+            console.log('✅ [Index 운동기록] 운동 카탈로그 ID 확인:', exerciseCatalogId, exerciseCatalog.name);
+          } else {
+            console.warn('⚠️ [Index 운동기록] 운동 카탈로그 생성 실패, 기본값 사용');
+          }
+        }
+        
+        // ✅ 2단계: Spring Boot API에 맞는 payload 형식
+        const payload = {
+          exercise_catalog_id: exerciseCatalogId,
+          duration_minutes: chatStructuredData.duration_min ?? 30,
+          calories_burned: chatStructuredData.calories_burned ?? 0,
+          notes: exerciseName,
+          sets: isCardio ? null : (chatStructuredData.sets ?? 0),
+          reps: isCardio ? null : (chatStructuredData.reps ?? 0),
+          weight: isCardio ? null : (chatStructuredData.weight ?? 0),
+          exercise_date: new Date().toISOString().split('T')[0],
+          // 🔧 DB 스키마에 맞는 필수 필드들 추가
+          time_period: getCurrentTimePeriod(), // 현재 시간대 자동 판단
+          input_source: 'TYPING', // DB ENUM: VOICE, TYPING
+          confidence_score: 1.0,  // 1.0 = 100% 확신
+          validation_status: 'VALIDATED' // DB ENUM: PENDING, VALIDATED, REJECTED, NEEDS_REVIEW
+        };
+        console.log('💪 [Index 운동기록] Spring Boot API 저장 시작:', payload);
+        
+        // ✅ 3단계: 운동 세션 저장
+        const response = await fetch('/api/exercise-sessions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -391,13 +442,14 @@ const Index = () => {
           body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error('운동 저장 실패');
-        console.log('[운동기록 저장 성공]', await response.json());
+        const result = await response.json();
+        console.log('💪 [Index 운동기록] Spring Boot API 저장 성공:', result);
         toast({
           title: '기록 완료',
-          description: '운동 기록이 저장되었습니다.'
+          description: `${exerciseName} 운동이 저장되었습니다.`
         });
       } catch (err) {
-        console.error('[운동기록 저장 실패]', err);
+        console.error('💪 [Index 운동기록] Spring Boot API 저장 실패:', err);
         toast({
           title: '저장 오류',
           description: '운동 데이터를 저장하지 못했습니다.',
