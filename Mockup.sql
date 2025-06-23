@@ -1,27 +1,6 @@
--- LifeBit 통계 구현용 더미 데이터 생성 - Part 1/2
--- 기본 마스터 데이터 (사용자, 운동카탈로그, 음식, 목표, 건강기록, 업적)
--- 실행 확인 완료: 2024-06-19
-
---BEGIN;
 
 -- 기존 데이터 정리 (의존성 순서 고려)
-DELETE FROM validation_history CASCADE;
-DELETE FROM voice_recognition_logs CASCADE;
-DELETE FROM log CASCADE;
-DELETE FROM feedback CASCADE;
-DELETE FROM recommendation CASCADE;
-DELETE FROM user_achievements CASCADE;
-DELETE FROM achievements CASCADE;
-DELETE FROM ranking_history CASCADE;
-DELETE FROM user_ranking CASCADE;
-DELETE FROM meal_logs CASCADE;
-DELETE FROM food_items CASCADE;
-DELETE FROM exercise_sessions CASCADE;
-DELETE FROM exercise_catalog CASCADE;
-DELETE FROM health_records CASCADE;
-DELETE FROM user_goals CASCADE;
-DELETE FROM policy CASCADE;
-DELETE FROM users CASCADE;
+
 
 -- ===================================================================
 -- 1. 사용자 데이터 50명 (관리자 1명 + 일반 사용자 49명)
@@ -214,11 +193,19 @@ INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein,
 ('F050', '견과류 믹스', 30.0, 180.0, 5.0, 6.0, 16.0);
 
 -- ===================================================================
--- 4. 사용자 목표 설정 (각 사용자당 1개씩, 49개)
+-- 4. -- 사용자 목표 설정 (각 사용자당 10개씩, 500개)
+-- 2025년 2월 1일부터 주별로 1개씩 생성
 -- ===================================================================
 INSERT INTO user_goals (
     user_id,
     weekly_workout_target,
+    weekly_chest,
+    weekly_back,
+    weekly_legs,
+    weekly_shoulders,
+    weekly_arms,
+    weekly_abs,
+    weekly_cardio,
     daily_carbs_target,
     daily_protein_target,
     daily_fat_target,
@@ -227,75 +214,115 @@ INSERT INTO user_goals (
     updated_at
 )
 SELECT 
-    u.user_id,
-
+    user_series.user_id,
+    
     -- 주간 운동 목표 (3-7회, 연령대별 차등)
     CASE 
-        WHEN u.age BETWEEN 20 AND 25 THEN 5 + (random() * 2)::integer
-        WHEN u.age BETWEEN 26 AND 35 THEN 4 + (random() * 2)::integer
+        WHEN COALESCE(u.age, 30) BETWEEN 20 AND 25 THEN 5 + (random() * 2)::integer
+        WHEN COALESCE(u.age, 30) BETWEEN 26 AND 35 THEN 4 + (random() * 2)::integer
         ELSE 3 + (random() * 2)::integer
     END AS weekly_workout_target,
+    
+    -- 주간 운동 부위별 목표
+    (random() * 3)::integer AS weekly_chest,
+    (random() * 3)::integer AS weekly_back,
+    (random() * 3)::integer AS weekly_legs,
+    (random() * 2)::integer AS weekly_shoulders,
+    (random() * 2)::integer AS weekly_arms,
+    (random() * 3)::integer AS weekly_abs,
+    (random() * 5)::integer AS weekly_cardio,
 
-    -- 일일 탄수화물 목표
+    -- 일일 영양소 목표 (NULL 값 처리)
     CASE 
-        WHEN u.gender = 'male' THEN (u.weight * 4 + random() * 50)::integer
-        ELSE (u.weight * 3.5 + random() * 40)::integer
+        WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 4 + random() * 50)::integer
+        ELSE (COALESCE(u.weight, 60) * 3.5 + random() * 40)::integer
     END AS daily_carbs_target,
 
-    -- 일일 단백질 목표
     CASE 
-        WHEN u.gender = 'male' THEN (u.weight * 1.8 + random() * 30)::integer
-        ELSE (u.weight * 1.5 + random() * 25)::integer
+        WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.8 + random() * 30)::integer
+        ELSE (COALESCE(u.weight, 60) * 1.5 + random() * 25)::integer
     END AS daily_protein_target,
 
-    -- 일일 지방 목표
     CASE 
-        WHEN u.gender = 'male' THEN (u.weight * 1.2 + random() * 20)::integer
-        ELSE (u.weight * 1.0 + random() * 15)::integer
+        WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.2 + random() * 20)::integer
+        ELSE (COALESCE(u.weight, 60) * 1.0 + random() * 15)::integer
     END AS daily_fat_target,
 
-    -- 일일 총 칼로리 목표 (단백질*4 + 지방*9 + 탄수화물*4)
+    -- 일일 총 칼로리 목표 계산
     (
         (
             CASE 
-                WHEN u.gender = 'male' THEN (u.weight * 1.8 + random() * 30)
-                ELSE (u.weight * 1.5 + random() * 25)
+                WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.8 + random() * 30)
+                ELSE (COALESCE(u.weight, 60) * 1.5 + random() * 25)
             END * 4
         ) +
         (
             CASE 
-                WHEN u.gender = 'male' THEN (u.weight * 1.2 + random() * 20)
-                ELSE (u.weight * 1.0 + random() * 15)
+                WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.2 + random() * 20)
+                ELSE (COALESCE(u.weight, 60) * 1.0 + random() * 15)
             END * 9
         ) +
         (
             CASE 
-                WHEN u.gender = 'male' THEN (u.weight * 4 + random() * 50)
-                ELSE (u.weight * 3.5 + random() * 40)
+                WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 4 + random() * 50)
+                ELSE (COALESCE(u.weight, 60) * 3.5 + random() * 40)
             END * 4
         )
     )::integer AS daily_calory_target,
 
-    NOW() AS created_at,
-    NOW() AS updated_at
+    CURRENT_TIMESTAMP AS created_at,
+    CURRENT_TIMESTAMP AS updated_at
 
-FROM users u
-WHERE u.role = 'USER';
+FROM (
+    -- 실제 존재하는 사용자에 대해서만 생성
+    SELECT 
+        u.user_id,
+        week_num
+    FROM users u
+    CROSS JOIN generate_series(0, 9) AS week_num
+    WHERE u.user_id IS NOT NULL
+    LIMIT 500  -- 최대 500개로 제한
+) user_series
+JOIN users u ON u.user_id = user_series.user_id
+-- WHERE 조건 제거하여 모든 사용자 대상
+ORDER BY user_series.user_id, user_series.week_num; 
+
 
 -- ===================================================================
 -- 5. 건강 기록 490개 (체중 변화 추적)
 -- ===================================================================
 INSERT INTO health_records (user_id, weight, height, record_date)
 SELECT 
-    u.user_id,
+        -- 사용자 ID: 2~50 사이
+    2 + (row_number() OVER () - 1) % 49 AS user_id,
     -- 체중 변화 (초기 체중 ± 5kg 범위에서 점진적 변화)
     u.weight + (random() - 0.5) * 10, -- ±5kg 변화
     u.height, -- 키는 고정
-    -- 기록 날짜 (최근 180일 중 랜덤)
-    CURRENT_DATE - (random() * 180)::integer
+    -- 🔧 기록 날짜를 2025-02-01부터 시작하도록 수정
+    DATE '2025-02-01' + (random() * 180)::integer * INTERVAL '1 day'
 FROM users u 
 CROSS JOIN generate_series(1, 10) AS series -- 사용자당 10개씩
-WHERE u.role = 'USER';
+WHERE u.role = 'USER'; 
+
+
+-- ===================================================================
+-- 5. 건강 기록 900개 (체중 변화 추적)
+-- ===================================================================
+-- 사용자 ID: 2~50 (49명)
+-- 기간: 2025년 2월 1일부터
+-- 기록 날짜: 균일하게 분포
+-- ===================================================================
+INSERT INTO health_records (user_id, weight, height, record_date)
+SELECT 
+    -- 사용자 ID: 2~50 사이
+    2 + (row_number() OVER () - 1) % 49 AS user_id,
+    -- 체중 변화 (60~90kg 범위에서 ±5kg 변화)
+    65 + (random() * 20) + (random() - 0.5) * 10 AS weight,
+    -- 키 (160~185cm 범위)
+    160 + (random() * 25) AS height,
+    -- 기록 날짜: 2025년 2월 1일부터 균일하게 분포
+    '2025-02-01'::date + (row_number() OVER () - 1) * INTERVAL '1 day' / 5 AS record_date
+FROM generate_series(1, 900) AS series;
 
 -- ===================================================================
 -- 6. 업적 시스템 50개 (다양한 배지 타입과 목표)
@@ -360,7 +387,12 @@ INSERT INTO achievements (title, description, badge_type, target_days, is_active
 ('건강 생활 레전드', '180일 연속 완벽 관리', 'PERFECT_WEEK', 180, true);
 
 -- ===================================================================
--- 7. 운동 세션 500개+ (현실적인 운동 패턴)
+-- 7. 운동 세션 900개+ (현실적인 운동 패턴)
+-- ===================================================================
+-- 운동 세션 900개 생성
+-- 사용자 ID: 2~50 (49명)
+-- 기간: 2025년 2월 1일부터
+-- 기록 날짜: 균일하게 분포
 -- ===================================================================
 INSERT INTO exercise_sessions (
     user_id, 
@@ -378,7 +410,8 @@ INSERT INTO exercise_sessions (
     notes
 )
 SELECT 
-    u.user_id, 
+    -- 사용자 ID: 2~50 사이 (49명)
+    2 + (row_number() OVER () - 1) % 49 AS user_id,
     1 + (random() * 49)::integer, -- 운동 카탈로그 ID (1-50)
     45 + (random() * 45)::integer, -- 운동 시간: 45-90분
     200 + (random() * 400)::integer, -- 칼로리: 200-600
@@ -394,7 +427,8 @@ SELECT
         WHEN random() > 0.5 THEN 2 + (random() * 4)::integer -- 세트수: 2-6세트
         ELSE NULL 
     END,
-    CURRENT_DATE - (random() * 90)::integer, -- 최근 90일 중 랜덤
+    -- 기록 날짜: 2025년 2월 1일부터 균일하게 분포
+    ('2025-02-01'::date + (row_number() OVER () - 1) * INTERVAL '1 day' / 5)::date AS exercise_date,
     (ARRAY['dawn', 'morning', 'afternoon', 'night'])[1 + (random() * 3)::integer]::time_period_type,
     (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
     CASE 
@@ -410,14 +444,14 @@ SELECT
         '완벽한 자세로 운동 완료',
         '집중력이 좋았던 운동'
     ])[1 + (random() * 5)::integer]
-FROM users u
-CROSS JOIN generate_series(1, 11) AS series -- 사용자당 11개씩
-WHERE u.role = 'USER'
-LIMIT 500;
+FROM generate_series(1, 900) AS series;
 
 -- ===================================================================
--- 8. 식단 로그 500개+ (현실적인 식사 패턴)
+-- 8. 식단 로그 900개+ (현실적인 식사 패턴)
+-- 사용자 ID: 2~50 (49명)
+-- 기간: 2025년 2월 1일부터
 -- ===================================================================
+
 INSERT INTO meal_logs (
     user_id,
     food_item_id,
@@ -427,40 +461,26 @@ INSERT INTO meal_logs (
     input_source,
     confidence_score,
     validation_status,
-    calories,
-    carbs,
-    protein,
-    fat
+    created_at
 )
 SELECT 
-    u.user_id, 
-    fi.food_item_id,
+    u.user_id,
+    1 + (random() * 49)::integer AS food_item_id, -- 1~50 범위
     (ARRAY['breakfast', 'lunch', 'dinner', 'snack'])[1 + (random() * 3)::integer]::meal_time_type,
-    q.quantity,
-    q.log_date,
-    (ARRAY['VOICE', 'TYPING', 'TYPING'])[1 + (random() * 2)::integer]::input_source_type,
+    (50 + random() * 200)::decimal(6,2) AS quantity,
+    DATE '2025-02-01' + (random() * 180)::integer * INTERVAL '1 day' AS log_date,
+    (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
     CASE 
         WHEN random() > 0.7 THEN (0.75 + random() * 0.25)::decimal(4,2) 
         ELSE NULL 
-    END,
+    END AS confidence_score,
     'VALIDATED'::validation_status_type,
-    ROUND(fi.calories * (q.quantity / fi.serving_size), 2),
-    ROUND(fi.carbs * (q.quantity / fi.serving_size), 2),
-    ROUND(fi.protein * (q.quantity / fi.serving_size), 2),
-    ROUND(fi.fat * (q.quantity / fi.serving_size), 2)
+    CURRENT_TIMESTAMP AS created_at
 FROM users u
-CROSS JOIN (
-    SELECT 
-        food_item_id, 
-        (50 + random() * 200)::decimal(6,2) AS quantity,
-        CURRENT_DATE - (random() * 90)::integer AS log_date
-    FROM food_items
-    ORDER BY random()
-    LIMIT 1
-) q
-JOIN food_items fi ON fi.food_item_id = q.food_item_id
-WHERE u.role = 'USER'
-LIMIT 500;
+CROSS JOIN generate_series(1, 18) AS series -- 각 사용자당 18개씩 (50명 × 18 = 900개)
+WHERE u.user_id IS NOT NULL
+ORDER BY u.user_id, series
+LIMIT 900; 
 
 -- ===================================================================
 -- 9. 사용자 랭킹 49개 (각 사용자당 1개)
@@ -663,8 +683,9 @@ SELECT
     CURRENT_DATE - (random() * 60)::integer * INTERVAL '1 day'
 FROM generate_series(1, 300);
 
+
 -- ===================================================================
--- 16. 음성 인식 로그 200개+ (음성 입력 처리 이력)
+-- 16. 음성 인식 로그 200개+ (음성 입력 처리 이력) - 수정된 버전
 -- ===================================================================
 INSERT INTO voice_recognition_logs (
     user_id,
@@ -720,6 +741,6 @@ SELECT
                    '지원하지 않는 언어입니다', '음성 파일이 손상되었습니다'])[1 + (random() * 3)::integer]
         ELSE NULL
     END,
-    -- 최근 30일 내로 제한하되 현재 날짜 기준으로 설정
+    -- 🔧 누락된 created_at 값 추가
     CURRENT_DATE - (random() * 30)::integer * INTERVAL '1 day'
-FROM generate_series(1, 200);
+FROM generate_series(1, 200); 

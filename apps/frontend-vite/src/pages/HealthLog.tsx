@@ -56,8 +56,13 @@ const HealthLog: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // State hooks
-  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
+  // State hooks - localStorage를 사용하여 새로고침 후에도 탭 상태 유지
+  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>(() => {
+    const savedTab = localStorage.getItem('healthlog-active-tab');
+    return (savedTab === 'enhanced' || savedTab === 'react' || savedTab === 'python') 
+      ? savedTab as 'enhanced' | 'react' | 'python'
+      : 'enhanced';
+  });
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('week');
   
   // 각 탭별 독립적인 기간 상태
@@ -286,7 +291,7 @@ const HealthLog: React.FC = () => {
                     validation_notes: (dietData.validation_notes || undefined) as string | undefined,
                     created_at: (dietData.created_at || undefined) as string | undefined,
                   });
-                  console.log(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 성공]`, result);
+                  console.log('[식단 기록 저장 성공]', result);
                   toast({
                     title: "식단 기록 저장 완료",
                     description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
@@ -294,7 +299,7 @@ const HealthLog: React.FC = () => {
                   // 그래프/식단 기록 새로고침
                   if (typeof refetchHealthStats === 'function') await refetchHealthStats();
                 } catch (err) {
-                  console.error(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 실패]`, err);
+                  console.error('[식단 기록 저장 실패]', err);
                   toast({
                     title: "식단 기록 저장 실패",
                     description: "서버에 데이터를 저장하는 데 실패했습니다.",
@@ -409,7 +414,11 @@ const HealthLog: React.FC = () => {
           */}
 
           {/* 차트 분석 탭 */}
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'enhanced' | 'react' | 'python')} className="mb-6">
+          <Tabs value={activeTab} onValueChange={(value) => {
+            const newTab = value as 'enhanced' | 'react' | 'python';
+            setActiveTab(newTab);
+            localStorage.setItem('healthlog-active-tab', newTab);
+          }} className="mb-6">
             <TabsList className="grid w-full grid-cols-3 max-w-2xl">
               <TabsTrigger value="enhanced" className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4" />
@@ -597,7 +606,7 @@ const HealthLog: React.FC = () => {
                                 validation_notes: (dietData.validation_notes || undefined) as string | undefined,
                                 created_at: (dietData.created_at || undefined) as string | undefined,
                               });
-                              console.log(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 성공]`, result);
+                              console.log('[식단 기록 저장 성공]', result);
                               toast({
                                 title: "식단 기록 저장 완료",
                                 description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
@@ -605,7 +614,7 @@ const HealthLog: React.FC = () => {
                               // 그래프/식단 기록 새로고침
                               if (typeof refetchHealthStats === 'function') await refetchHealthStats();
                             } catch (err) {
-                              console.error(`[${recordType === 'exercise' ? '운동' : '식단'} 기록 저장 실패]`, err);
+                              console.error('[식단 기록 저장 실패]', err);
                               toast({
                                 title: "식단 기록 저장 실패",
                                 description: "서버에 데이터를 저장하는 데 실패했습니다.",

@@ -76,7 +76,7 @@ CREATE TABLE users (
     gender VARCHAR(10) CHECK (gender IN ('male', 'female')),
     role user_role DEFAULT 'USER',
     created_at TIMESTAMP DEFAULT NOW(), 
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
     last_visited TIMESTAMP
 );
 
@@ -90,6 +90,13 @@ CREATE TABLE user_goals (
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     weekly_workout_target INTEGER DEFAULT 3,
+	weekly_chest INTEGER DEFAULT 0,
+	weekly_back INTEGER DEFAULT 0,
+	weekly_legs INTEGER DEFAULT 0,
+	weekly_shoulders INTEGER DEFAULT 0,
+	weekly_arms INTEGER DEFAULT 0,
+	weekly_abs INTEGER DEFAULT 0,
+	weekly_cardio INTEGER DEFAULT 0,
     daily_carbs_target INTEGER DEFAULT 200,
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
@@ -177,10 +184,6 @@ CREATE TABLE meal_logs (
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
-    calories DECIMAL(6,2),
-    carbs DECIMAL(6,2),
-    protein DECIMAL(6,2),
-    fat DECIMAL(6,2),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
