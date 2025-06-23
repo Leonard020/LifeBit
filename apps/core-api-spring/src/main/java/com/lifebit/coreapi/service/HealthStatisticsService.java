@@ -684,14 +684,14 @@ public class HealthStatisticsService {
 
     /**
      * 📅 운동 캘린더 히트맵 데이터 생성
-     * 최근 84일간의 일별 운동 데이터를 반환
+     * 최근 5주간의 일별 운동 데이터를 반환
      */
     public List<Map<String, Object>> getExerciseCalendarHeatmapData(Long userId) {
         try {
             log.info("📅 운동 캘린더 히트맵 데이터 생성 시작 - 사용자: {}", userId);
             
-            // 최근 84일 (12주) 데이터 조회
-            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, 84);
+            // 최근 35일 (5주) 데이터 조회
+            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, 35);
             
             // 날짜별로 운동 세션 그룹핑
             Map<String, List<ExerciseSession>> sessionsByDate = sessions.stream()

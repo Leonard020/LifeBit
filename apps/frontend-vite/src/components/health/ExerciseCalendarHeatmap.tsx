@@ -54,13 +54,21 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
     return grouped;
   }, [exerciseSessions]);
 
-  // 캘린더 데이터 생성 (최근 12주 = 84일)
+  // 캘린더 데이터 생성 (완전한 5주 = 현재 주가 마지막에 오도록)
   const calendarData = useMemo(() => {
     const data: DayData[] = [];
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - 83); // 12주 전부터
-
-    for (let i = 0; i < 84; i++) {
+    
+    // 현재 주의 일요일을 찾기
+    const currentSunday = new Date(today);
+    const currentDayOfWeek = today.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+    currentSunday.setDate(today.getDate() - currentDayOfWeek); // 이번 주 일요일로 이동
+    
+    // 4주 전 일요일부터 시작 (현재 주가 5주차가 되도록)
+    const startDate = new Date(currentSunday);
+    startDate.setDate(currentSunday.getDate() - 28); // 4주 전 일요일
+    
+    // 완전한 5주 = 35일 (5 * 7)
+    for (let i = 0; i < 35; i++) {
       const currentDate = new Date(startDate);
       currentDate.setDate(startDate.getDate() + i);
       
@@ -129,14 +137,36 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
     }
   };
 
-  // 주별로 데이터 그룹핑 (7개씩)
+  // 주별로 데이터 그룹핑 (완전한 주 단위)
   const weeklyData = useMemo(() => {
+    if (calendarData.length === 0) return [];
+    
     const weeks = [];
+    // 정확히 35일(5주)이므로 7일씩 나누기만 하면 됨
     for (let i = 0; i < calendarData.length; i += 7) {
       weeks.push(calendarData.slice(i, i + 7));
     }
+    
     return weeks;
   }, [calendarData]);
+
+  // 주별 통계 계산
+  const weeklyStats = useMemo(() => {
+    return weeklyData.map(week => {
+      const totalWorkouts = week.reduce((sum, day) => sum + day.workouts, 0);
+      const totalMinutes = week.reduce((sum, day) => sum + day.totalMinutes, 0);
+      const totalCalories = week.reduce((sum, day) => sum + day.totalCalories, 0);
+      const activeDays = week.filter(day => day.workouts > 0).length;
+      
+      return {
+        totalWorkouts,
+        totalMinutes,
+        totalCalories,
+        activeDays,
+        daysInWeek: 7 // 항상 7일
+      };
+    });
+  }, [weeklyData]);
 
   // 통계 계산
   const stats = useMemo(() => {
@@ -158,7 +188,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
             </div>
             <div>
               <div className="text-xl font-bold text-gray-800">🔥 운동 캘린더 히트맵</div>
-              <div className="text-sm text-gray-600 font-normal">최근 12주간의 운동 기록</div>
+              <div className="text-sm text-gray-600 font-normal">최근 5주간의 운동 기록</div>
             </div>
           </CardTitle>
           <div className="flex gap-2">
@@ -175,14 +205,19 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
       </CardHeader>
       <CardContent className="space-y-6">
         {/* 월별 구분 히트맵 그리드 */}
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-green-100">
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-green-100">
           {/* 요일 라벨 */}
-          <div className="flex items-center gap-1 text-xs font-medium text-gray-600 mb-3 ml-8">
-            {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
-              <div key={index} className="w-5 h-5 flex items-center justify-center">
-                {day}
-              </div>
-            ))}
+          <div className="flex items-center gap-3 text-sm font-medium text-gray-600 mb-4">
+            <div className="w-24 flex items-center justify-center text-xs text-blue-600 font-semibold">
+              주별 통계
+            </div>
+            <div className="flex gap-2">
+              {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
+                <div key={index} className="w-8 h-8 flex items-center justify-center">
+                  {day}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 히트맵 그리드 */}
@@ -204,23 +239,42 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
                     </div>
                   )}
                   
-                  <div className="flex gap-1 items-center">
-                    {/* 주차 표시 */}
-                    <div className="w-6 text-xs text-gray-400 text-center">
-                      {weekIndex % 4 + 1}
+                  <div className="flex gap-3 items-center">
+                    {/* 주차 정보 박스 */}
+                    <div className="w-24 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-2 border border-blue-200 hover:shadow-md hover:scale-105 transition-all duration-200 cursor-pointer group relative">
+                      <div className="text-xs font-bold text-blue-700 text-center mb-1">
+                        {weekIndex + 1}주차
+                      </div>
+                      <div className="text-xs text-blue-600 text-center space-y-0.5">
+                        <div>🏃 {weeklyStats[weekIndex]?.totalWorkouts || 0}회</div>
+                        <div>⏱️ {weeklyStats[weekIndex]?.totalMinutes || 0}분</div>
+                        <div className="text-blue-500">📈 {weeklyStats[weekIndex]?.activeDays || 0}/{weeklyStats[weekIndex]?.daysInWeek || 0}일</div>
+                      </div>
+                      
+                      {/* 호버 시 상세 주별 정보 */}
+                      <div className="opacity-0 group-hover:opacity-100 absolute -top-20 left-1/2 transform -translate-x-1/2 bg-blue-800 text-white text-xs rounded-lg px-3 py-2 pointer-events-none z-20 transition-opacity duration-200 whitespace-nowrap">
+                        <div className="font-semibold text-center mb-1">{weekIndex + 1}주차 상세</div>
+                        <div className="space-y-1">
+                          <div>운동 횟수: {weeklyStats[weekIndex]?.totalWorkouts || 0}회</div>
+                          <div>운동 시간: {weeklyStats[weekIndex]?.totalMinutes || 0}분</div>
+                          <div>칼로리: {weeklyStats[weekIndex]?.totalCalories || 0}kcal</div>
+                          <div>활동일: {weeklyStats[weekIndex]?.activeDays || 0}일</div>
+                        </div>
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-blue-800"></div>
+                      </div>
                     </div>
                     
                     {/* 일별 히트맵 */}
-                    <div className="flex gap-1">
+                    <div className="flex gap-2">
                       {week.map((day, dayIndex) => (
                         <div
                           key={`${weekIndex}-${dayIndex}`}
-                          className={`w-5 h-5 rounded-md cursor-pointer relative group ${getIntensityColor(day.intensity, day.isToday, day.isWeekend)}`}
+                          className={`w-8 h-8 rounded-lg cursor-pointer relative group ${getIntensityColor(day.intensity, day.isToday, day.isWeekend)}`}
                           title={`${day.date.toLocaleDateString('ko-KR')} (${day.monthName} ${day.dayOfMonth}일)\n${day.workouts}회 운동 • ${day.totalMinutes}분 • ${day.totalCalories}kcal`}
                         >
                           {/* 강도별 이모지 */}
                           {day.intensity !== 'none' && (
-                            <div className="absolute inset-0 flex items-center justify-center text-xs">
+                            <div className="absolute inset-0 flex items-center justify-center text-sm">
                               {getIntensityEmoji(day.intensity)}
                             </div>
                           )}
@@ -228,13 +282,13 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
                           {/* 오늘 표시 */}
                           {day.isToday && (
                             <div className="absolute -top-1 -right-1">
-                              <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                              <Star className="h-4 w-4 text-yellow-400 fill-current" />
                             </div>
                           )}
                           
                           {/* 월초 날짜 표시 */}
                           {(day.dayOfMonth === 1 || (weekIndex === 0 && dayIndex === 0)) && (
-                            <div className="absolute -top-4 left-0 text-xs font-medium text-gray-500">
+                            <div className="absolute -top-5 left-0 text-sm font-semibold text-gray-600">
                               {day.dayOfMonth}
                             </div>
                           )}
@@ -255,18 +309,18 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
           </div>
 
           {/* 개선된 범례 */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-green-100">
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <span className="font-medium">운동 강도:</span>
-              <div className="flex gap-1">
-                <div className="w-3 h-3 rounded bg-gray-100 border border-gray-200" title="운동 안함"></div>
-                <div className="w-3 h-3 rounded bg-gradient-to-br from-green-200 to-green-300 border border-green-300" title="가벼운 운동 (15분 미만)"></div>
-                <div className="w-3 h-3 rounded bg-gradient-to-br from-green-400 to-green-500 border border-green-500" title="보통 운동 (15-30분)"></div>
-                <div className="w-3 h-3 rounded bg-gradient-to-br from-green-600 to-green-700 border border-green-700" title="강한 운동 (30-60분)"></div>
-                <div className="w-3 h-3 rounded bg-gradient-to-br from-green-800 to-green-900 border border-green-800" title="매우 강한 운동 (60분 이상)"></div>
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-green-100">
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <span className="font-semibold">운동 강도:</span>
+              <div className="flex gap-2">
+                <div className="w-4 h-4 rounded-lg bg-gray-100 border border-gray-200" title="운동 안함"></div>
+                <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-green-200 to-green-300 border border-green-300" title="가벼운 운동 (15분 미만)"></div>
+                <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-green-400 to-green-500 border border-green-500" title="보통 운동 (15-30분)"></div>
+                <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-green-600 to-green-700 border border-green-700" title="강한 운동 (30-60분)"></div>
+                <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-green-800 to-green-900 border border-green-800" title="매우 강한 운동 (60분 이상)"></div>
               </div>
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-sm text-gray-500 font-medium">
               💡 하루 운동 시간에 따라 색상이 달라져요
             </div>
           </div>
@@ -281,10 +335,10 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
               </div>
               <span className="text-xs font-semibold">총 운동 횟수</span>
             </div>
-            <div className="text-3xl font-bold text-blue-700 mb-1">{stats.totalWorkouts}</div>
-            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-              🎯 목표 달성률 {Math.round((stats.totalWorkouts / 84) * 100)}%
-            </div>
+                         <div className="text-3xl font-bold text-blue-700 mb-1">{stats.totalWorkouts}</div>
+             <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+               🎯 목표 달성률 {Math.round((stats.totalWorkouts / 35) * 100)}%
+             </div>
             <div className="absolute top-2 right-2 text-2xl opacity-20">💪</div>
           </div>
           
@@ -323,10 +377,10 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
               </div>
               <span className="text-xs font-semibold">활동 일수</span>
             </div>
-            <div className="text-3xl font-bold text-purple-700 mb-1">{stats.activeDays}</div>
-            <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-              📈 연속성 {Math.round((stats.activeDays / 84) * 100)}%
-            </div>
+                         <div className="text-3xl font-bold text-purple-700 mb-1">{stats.activeDays}</div>
+             <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+               📈 연속성 {Math.round((stats.activeDays / 35) * 100)}%
+             </div>
             <div className="absolute top-2 right-2 text-2xl opacity-20">📅</div>
           </div>
         </div>

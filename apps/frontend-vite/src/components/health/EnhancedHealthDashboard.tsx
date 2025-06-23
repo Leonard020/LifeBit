@@ -723,12 +723,12 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             />
           </div>
           
-          {/* 운동 요약 통계 */}
+          {/* 주별 운동 요약 통계 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Dumbbell className="h-5 w-5" />
-                운동 요약
+                주별 운동 요약
               </CardTitle>
             </CardHeader>
             <CardContent>
