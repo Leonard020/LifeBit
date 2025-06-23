@@ -683,6 +683,75 @@ public class HealthStatisticsService {
     }
 
     /**
+     * 📅 운동 캘린더 히트맵 데이터 생성
+     * 최근 84일간의 일별 운동 데이터를 반환
+     */
+    public List<Map<String, Object>> getExerciseCalendarHeatmapData(Long userId) {
+        try {
+            log.info("📅 운동 캘린더 히트맵 데이터 생성 시작 - 사용자: {}", userId);
+            
+            // 최근 84일 (12주) 데이터 조회
+            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, 84);
+            
+            // 날짜별로 운동 세션 그룹핑
+            Map<String, List<ExerciseSession>> sessionsByDate = sessions.stream()
+                .filter(session -> session.getExerciseDate() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                    session -> session.getExerciseDate().toString()
+                ));
+            
+            // 히트맵 데이터 구성
+            List<Map<String, Object>> heatmapData = sessionsByDate.entrySet().stream()
+                .map(entry -> {
+                    String date = entry.getKey();
+                    List<ExerciseSession> daySessions = entry.getValue();
+                    
+                    int totalMinutes = daySessions.stream()
+                        .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
+                        .sum();
+                    
+                    int totalCalories = daySessions.stream()
+                        .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
+                        .sum();
+                    
+                    Map<String, Object> dayData = new HashMap<>();
+                    dayData.put("exercise_date", date);
+                    dayData.put("workout_count", daySessions.size());
+                    dayData.put("duration_minutes", totalMinutes);
+                    dayData.put("calories_burned", totalCalories);
+                    
+                    // 대표 운동명 (가장 많이 한 운동)
+                    String primaryExercise = daySessions.stream()
+                        .filter(session -> session.getExerciseCatalog() != null)
+                        .map(session -> session.getExerciseCatalog().getName())
+                        .collect(java.util.stream.Collectors.groupingBy(
+                            name -> name, 
+                            java.util.stream.Collectors.counting()
+                        ))
+                        .entrySet().stream()
+                        .max(java.util.Map.Entry.comparingByValue())
+                        .map(java.util.Map.Entry::getKey)
+                        .orElse("운동");
+                    
+                    dayData.put("exercise_name", primaryExercise);
+                    
+                    return dayData;
+                })
+                .sorted((a, b) -> ((String) a.get("exercise_date")).compareTo((String) b.get("exercise_date")))
+                .toList();
+            
+            log.info("✅ 운동 캘린더 히트맵 데이터 생성 완료 - 사용자: {}, 데이터 일수: {}", 
+                    userId, heatmapData.size());
+            
+            return heatmapData;
+            
+        } catch (Exception e) {
+            log.error("❌ 운동 캘린더 히트맵 데이터 생성 실패: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    /**
      * 기간별 건강 기록 조회 헬퍼 메소드
      */
     private List<HealthRecord> getHealthRecordsByPeriod(Long userId, String period) {
