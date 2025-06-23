@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -51,6 +52,9 @@ public class UserGoalService {
         }
         if (request.getDailyFatTarget() != null) {
             existingGoal.setDailyFatTarget(request.getDailyFatTarget());
+        }
+        if (request.getDailyCaloriesTarget() != null) {
+            existingGoal.setDailyCaloriesTarget(request.getDailyCaloriesTarget());
         }
 
         existingGoal.setUpdatedAt(LocalDateTime.now());
@@ -165,5 +169,20 @@ public class UserGoalService {
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return defaultGoal;
+    }
+
+    @Transactional(readOnly = true)
+    public UserGoal getLatestUserGoal(Long userId) {
+        return userGoalRepository.findTopByUserIdOrderByCreatedAtDesc(userId).orElse(null);
+    }
+
+    public boolean isSameGoal(UserGoal a, UserGoal b) {
+        if (a == null || b == null) return false;
+        return
+            Objects.equals(a.getWeeklyWorkoutTarget(), b.getWeeklyWorkoutTarget()) &&
+            Objects.equals(a.getDailyCarbsTarget(), b.getDailyCarbsTarget()) &&
+            Objects.equals(a.getDailyProteinTarget(), b.getDailyProteinTarget()) &&
+            Objects.equals(a.getDailyFatTarget(), b.getDailyFatTarget()) &&
+            Objects.equals(a.getDailyCaloriesTarget(), b.getDailyCaloriesTarget());
     }
 } 

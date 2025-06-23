@@ -25,12 +25,15 @@ public class UserGoal {
     private Integer weeklyWorkoutTarget;
     
     @Column(name = "daily_carbs_target")
+    @JsonProperty("daily_carbs_target")
     private Integer dailyCarbsTarget;
     
     @Column(name = "daily_protein_target")
+    @JsonProperty("daily_protein_target")
     private Integer dailyProteinTarget;
     
     @Column(name = "daily_fat_target")
+    @JsonProperty("daily_fat_target")
     private Integer dailyFatTarget;
     
     @Column(name = "daily_calory_target")

@@ -892,18 +892,18 @@ export const createUserGoal = async (data: UserGoalCreateRequest): Promise<UserG
 
 /**
  * 사용자 목표 수정
- * @param goalId 수정할 사용자 목표 ID
+ * @param userId 사용자 ID
  * @param data 수정할 데이터
  * @returns 수정된 사용자 목표 정보
  */
 export const updateUserGoal = async (
-  goalId: number, 
+  userId: number, 
   data: UserGoalUpdateRequest
 ): Promise<UserGoal> => {
   try {
-    console.log('🎯 [API] 사용자 목표 수정 요청:', { goalId, data });
+    console.log('🎯 [API] 사용자 목표 수정 요청:', { userId, data });
     
-    const response = await axiosInstance.put<UserGoal>(`/api/user-goals/${goalId}`, data);
+    const response = await axiosInstance.put<UserGoal>(`/api/user-goals/${userId}`, data);
     
     console.log('✅ [API] 사용자 목표 수정 성공:', response.data);
     return response.data;
@@ -1006,8 +1006,8 @@ export const useUpdateUserGoal = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ goalId, data }: { goalId: number; data: UserGoalUpdateRequest }) => 
-      updateUserGoal(goalId, data),
+    mutationFn: ({ userId, data }: { userId: number; data: UserGoalUpdateRequest }) => 
+      updateUserGoal(userId, data),
     onSuccess: (data) => {
       console.log('🎉 사용자 목표 수정 성공:', data);
       
