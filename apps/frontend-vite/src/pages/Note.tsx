@@ -77,7 +77,7 @@ const Note = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [quantity, setQuantity] = useState(100);
+  const [quantity, setQuantity] = useState('100');
   const [isSearching, setIsSearching] = useState(false);
   const [mealTime, setMealTime] = useState('breakfast');
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
@@ -106,6 +106,23 @@ const Note = () => {
   const [dietRecordedDates, setDietRecordedDates] = useState<string[]>([]);
   const [exerciseRecordedDates, setExerciseRecordedDates] = useState<string[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+
+  const mealTimeMap: Record<string, string> = {
+    breakfast: '아침',
+    lunch: '점심',
+    dinner: '저녁',
+    snack: '간식',
+  };
+  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+  const groupedDietLogs = dailyDietLogs.reduce((acc, log) => {
+    const meal = log.mealTime || 'snack';
+    if (!acc[meal]) {
+      acc[meal] = [];
+    }
+    acc[meal].push(log);
+    return acc;
+  }, {} as Record<string, DietLogDTO[]>);
 
   // ✅ 인증 토큰을 맨 처음에 가져오기
   useEffect(() => {
@@ -246,50 +263,45 @@ const Note = () => {
 
   // 식단 기록 추가
   const addDietRecord = async () => {
-    if (!selectedFood) return;
-
+    if (!selectedFood || !quantity) {
+      alert('음식과 양을 입력해주세요.');
+      return;
+    }
     try {
-      const userId = getUserIdFromToken() || 1;
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      const userId = getUserIdFromToken();
+      if (!userId) {
+        toast({
+          title: "사용자 정보를 찾을 수 없습니다.",
+          description: "다시 로그인 해주세요.",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
 
       const request = {
-        userId: userId,
+        userId,
         foodItemId: selectedFood.foodItemId,
-        foodName: selectedFood.name,
-        quantity: quantity,
-        calories: (selectedFood.calories * quantity) / 100,
-        carbs: (selectedFood.carbs * quantity) / 100,
-        protein: (selectedFood.protein * quantity) / 100,
-        fat: (selectedFood.fat * quantity) / 100,
-        logDate: formattedDate,
-        unit: "g",
-        meal_time: mealTime,
-        input_source: null, // 기본값, 추후 VOICE/TYPING 등으로 확장 가능
-        confidence_score: null,
-        original_audio_path: null,
-        validation_status: null,
-        validation_notes: null,
-        created_at: null
+        quantity: parseFloat(quantity),
+        logDate: selectedDate.toISOString().split('T')[0],
+        mealTime: mealTime,
+        unit: 'g',
       };
 
-      await axios.post('/api/diet/record', request);
+      const token = localStorage.getItem('token');
+      await axios.post('/api/diet/record', request, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       // 데이터 새로고침
-      const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
-        params: { userId }
-      });
-      setDailyDietLogs(dietLogsResponse.data);
-
-      // 다이얼로그 닫기 및 상태 초기화
-      setIsAddDietDialogOpen(false);
-      setSelectedFood(null);
-      setQuantity(100);
+      fetchDietData();
       setSearchKeyword('');
       setSearchResults([]);
-      setMealTime('breakfast');
-
+      setQuantity('100');
+      setIsSearching(false);
     } catch (error) {
-      console.error("식단 기록 추가 중 오류:", error);
+      console.error('식단 기록 추가 중 오류:', error);
+      alert('식단 기록 추가에 실패했습니다.');
     }
   };
 
@@ -299,13 +311,7 @@ const Note = () => {
       await axios.delete(`/api/diet/record/${id}`);
 
       // 데이터 새로고침
-      const userId = getUserIdFromToken() || 1;
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-
-      const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, {
-        params: { userId }
-      });
-      setDailyDietLogs(dietLogsResponse.data);
+      fetchDietData();
 
     } catch (error) {
       console.error("식단 기록 삭제 중 오류:", error);
@@ -546,13 +552,90 @@ const Note = () => {
   // 식단 수정 관련 상태
   const [isEditDietDialogOpen, setIsEditDietDialogOpen] = useState(false);
   const [editingDietLog, setEditingDietLog] = useState<DietLogDTO | null>(null);
-  const [editQuantity, setEditQuantity] = useState(100);
+  const [editFormData, setEditFormData] = useState({
+    foodItemId: null as number | null,
+    foodName: '',
+    quantity: 0,
+    calories: 0, // 100g당
+    carbs: 0,    // 100g당
+    protein: 0,  // 100g당
+    fat: 0,      // 100g당
+  });
   const [isUpdatingDiet, setIsUpdatingDiet] = useState(false);
+  
+  // 수정 팝업 내 검색 관련 상태
+  const [editSearchKeyword, setEditSearchKeyword] = useState('');
+  const [editSearchResults, setEditSearchResults] = useState<FoodItem[]>([]);
+  const [isEditSearching, setIsEditSearching] = useState(false);
+
+
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
+    const isNutrientField = ['foodName', 'calories', 'carbs', 'protein', 'fat'].includes(name);
+
+    setEditFormData(prev => ({
+      ...prev,
+      // 이름이나 영양성분 수정 시, foodItemId를 null로 만들어 '커스텀 음식'으로 전환
+      foodItemId: isNutrientField ? null : prev.foodItemId,
+      [name]: name === 'foodName' ? value : (Number(value) >= 0 ? Number(value) : 0)
+    }));
+  };
+  
+  // 수정 팝업 내 음식 검색
+  const searchFoodForEdit = async () => {
+    if (!editSearchKeyword.trim()) return;
+    setIsEditSearching(true);
+    try {
+      const response = await axios.get(`/api/diet/food-items/search`, {
+        params: { keyword: editSearchKeyword }
+      });
+      setEditSearchResults(response.data);
+    } catch (error) {
+      console.error("음식 검색 중 오류:", error);
+      setEditSearchResults([]);
+    } finally {
+      setIsEditSearching(false);
+    }
+  };
+
+  // 수정 팝업에서 검색 결과 선택
+  const handleSelectFoodForEdit = (food: FoodItem) => {
+    setEditFormData(prev => ({
+      ...prev, // quantity는 유지
+      foodItemId: food.foodItemId,
+      foodName: food.name,
+      // 검색된 음식의 영양성분은 100g 기준
+      calories: food.calories,
+      carbs: food.carbs,
+      protein: food.protein,
+      fat: food.fat,
+    }));
+    setEditSearchResults([]);
+    setEditSearchKeyword(food.name);
+  };
 
   // 식단 수정 시작
   const startEditDiet = (dietLog: DietLogDTO) => {
     setEditingDietLog(dietLog);
-    setEditQuantity(dietLog.quantity);
+    
+    // API에서 받은 값(총 섭취량)을 100g 기준으로 변환
+    const per100gFactor = dietLog.quantity > 0 ? 100 / dietLog.quantity : 0;
+    
+    setEditFormData({
+      foodItemId: dietLog.foodItemId,
+      foodName: dietLog.foodName,
+      quantity: dietLog.quantity,
+      calories: dietLog.calories * per100gFactor,
+      carbs: dietLog.carbs * per100gFactor,
+      protein: dietLog.protein * per100gFactor,
+      fat: dietLog.fat * per100gFactor,
+    });
+    
+    setEditSearchKeyword(dietLog.foodName);
+    setEditSearchResults([]);
+    setIsEditSearching(false);
+
     setIsEditDietDialogOpen(true);
   };
 
@@ -562,32 +645,26 @@ const Note = () => {
 
     setIsUpdatingDiet(true);
     try {
-      const updateData = {
-        ...editingDietLog,
-        quantity: editQuantity,
-        meal_time: editingDietLog.mealTime || mealTime,
-        input_source: editingDietLog.inputSource || null,
-        confidence_score: editingDietLog.confidenceScore || null,
-        original_audio_path: editingDietLog.originalAudioPath || null,
-        validation_status: editingDietLog.validationStatus || null,
-        validation_notes: editingDietLog.validationNotes || null,
-        created_at: editingDietLog.createdAt || null
+      // 서버에는 foodItemId 유무와 100g 기준 영양성분을 보냄
+      const submissionData = {
+        foodItemId: editFormData.foodItemId,
+        foodName: editFormData.foodName,
+        quantity: editFormData.quantity,
+        calories: editFormData.calories,
+        carbs: editFormData.carbs,
+        protein: editFormData.protein,
+        fat: editFormData.fat,
       };
 
-      const response = await axios.put(`/api/diet/record/${editingDietLog.id}`, updateData);
+      await axios.put(`/api/diet/record/${editingDietLog.id}`, submissionData, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
 
-      // 로컬 상태 업데이트
-      setDailyDietLogs(prev => 
-        prev.map(log => 
-          log.id === editingDietLog.id 
-            ? response.data
-            : log
-        )
-      );
-
+      // 데이터 새로고침으로 일관성 유지
+      fetchDietData();
+      
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
-      setEditQuantity(100);
       
       toast({
         title: "식단이 수정되었습니다.",
@@ -870,115 +947,113 @@ const Note = () => {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 식단 기록</CardTitle>
                 <div className="flex space-x-2">
-                  {isToday(selectedDate) && (
-                    <Dialog open={isAddDietDialogOpen} onOpenChange={setIsAddDietDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
-                          <Plus className="h-4 w-4 mr-1" />
-                          식단 추가
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>식단 기록 추가</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="search">음식 검색</Label>
-                            <div className="flex space-x-2 mt-1">
-                              <Input
-                                id="search"
-                                value={searchKeyword}
-                                onChange={(e) => setSearchKeyword(e.target.value)}
-                                placeholder="음식명을 입력하세요"
-                                onKeyPress={(e) => e.key === 'Enter' && searchFood()}
-                              />
-                              <Button onClick={searchFood} disabled={isSearching}>
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="h-4 w-4"
-                                >
-                                  <circle cx="11" cy="11" r="8" />
-                                  <path d="m21 21-4.3-4.3" />
-                                </svg>
-                              </Button>
-                            </div>
-                          </div>
-
-                          {searchResults.length > 0 && (
-                            <div>
-                              <Label>검색 결과</Label>
-                              <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
-                                {searchResults.map((food) => (
-                                  <div
-                                    key={food.foodItemId}
-                                    className={`p-2 border rounded cursor-pointer hover:bg-accent ${selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
-                                      }`}
-                                    onClick={() => setSelectedFood(food)}
-                                  >
-                                    <div className="font-medium">{food.name}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                      {Math.round(food.calories)}kcal / 100g
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {selectedFood && (
-                            <div>
-                              <Label htmlFor="quantity">섭취량 (g)</Label>
-                              <Input
-                                id="quantity"
-                                type="number"
-                                value={quantity}
-                                onChange={(e) => setQuantity(Number(e.target.value))}
-                                min="1"
-                                className="mt-1"
-                              />
-                              <div className="text-sm text-muted-foreground mt-1">
-                                예상 칼로리: {Math.round((selectedFood.calories * quantity) / 100)}kcal
-                              </div>
-                              <div className="mt-3">
-                                <Label htmlFor="mealTime">식사 시간</Label>
-                                <select
-                                  id="mealTime"
-                                  title="식사 시간 선택"
-                                  value={mealTime}
-                                  onChange={e => setMealTime(e.target.value)}
-                                  className="mt-1 block w-full border rounded px-2 py-1"
-                                >
-                                  <option value="breakfast">아침</option>
-                                  <option value="lunch">점심</option>
-                                  <option value="dinner">저녁</option>
-                                  <option value="snack">간식</option>
-                                </select>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="flex justify-end space-x-2">
-                            <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
-                              취소
-                            </Button>
-                            <Button onClick={addDietRecord} disabled={!selectedFood}>
-                              추가
+                  <Dialog open={isAddDietDialogOpen} onOpenChange={setIsAddDietDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        식단 추가
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>식단 기록 추가</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="search">음식 검색</Label>
+                          <div className="flex space-x-2 mt-1">
+                            <Input
+                              id="search"
+                              value={searchKeyword}
+                              onChange={(e) => setSearchKeyword(e.target.value)}
+                              placeholder="음식명을 입력하세요"
+                              onKeyPress={(e) => e.key === 'Enter' && searchFood()}
+                            />
+                            <Button onClick={searchFood} disabled={isSearching}>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-4 w-4"
+                              >
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.3-4.3" />
+                              </svg>
                             </Button>
                           </div>
                         </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                  {isToday(selectedDate) && todayRecords.diet.length > 0 && (
+
+                        {searchResults.length > 0 && (
+                          <div>
+                            <Label>검색 결과</Label>
+                            <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
+                              {searchResults.map((food) => (
+                                <div
+                                  key={food.foodItemId}
+                                  className={`p-2 border rounded cursor-pointer hover:bg-accent ${selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
+                                    }`}
+                                  onClick={() => setSelectedFood(food)}
+                                >
+                                  <div className="font-medium">{food.name}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {Math.round(food.calories)}kcal / 100g
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedFood && (
+                          <div>
+                            <Label htmlFor="quantity">섭취량 (g)</Label>
+                            <Input
+                              id="quantity"
+                              type="number"
+                              value={quantity}
+                              onChange={(e) => setQuantity(e.target.value)}
+                              min="1"
+                              className="mt-1"
+                            />
+                            <div className="text-sm text-muted-foreground mt-1">
+                              예상 칼로리: {Math.round((selectedFood.calories * parseFloat(quantity)) / 100)}kcal
+                            </div>
+                            <div className="mt-3">
+                              <Label htmlFor="mealTime">식사 시간</Label>
+                              <select
+                                id="mealTime"
+                                title="식사 시간 선택"
+                                value={mealTime}
+                                onChange={e => setMealTime(e.target.value)}
+                                className="mt-1 block w-full border rounded px-2 py-1"
+                              >
+                                <option value="breakfast">아침</option>
+                                <option value="lunch">점심</option>
+                                <option value="dinner">저녁</option>
+                                <option value="snack">간식</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-end space-x-2">
+                          <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
+                            취소
+                          </Button>
+                          <Button onClick={addDietRecord} disabled={!selectedFood}>
+                            추가
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
                     <Button
                       onClick={handleClaimDietScore}
                       disabled={hasClaimedDietScore}
@@ -1000,43 +1075,54 @@ const Note = () => {
                   <div className="text-center py-8 text-destructive">
                     {dietError}
                   </div>
-                ) : todayRecords.diet.length > 0 ? (
-                  <div className="space-y-3">
-                    {todayRecords.diet.map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h4 className="font-medium">{record.food}</h4>
-                            <Badge variant="secondary" className="text-xs">{record.meal}</Badge>
+                ) : dailyDietLogs.length > 0 ? (
+                  <div className="space-y-6">
+                    {mealOrder.map((meal) => {
+                      const logs = groupedDietLogs[meal];
+                      if (!logs || logs.length === 0) return null;
+
+                      return (
+                        <div key={meal}>
+                          <h3 className="font-semibold text-lg mb-3 pb-2 border-b">{mealTimeMap[meal]}</h3>
+                          <div className="space-y-3">
+                            {logs.map((record) => (
+                              <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <h4 className="font-medium">{record.foodName}</h4>
+                                    <Badge variant="secondary" className="text-xs">{mealTimeMap[record.mealTime || 'snack']}</Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {record.quantity}{record.unit} • {Math.round(record.calories)}kcal
+                                    {typeof record.carbs === 'number' && ` • 탄수화물: ${record.carbs.toFixed(1)}g`}
+                                    {typeof record.protein === 'number' && ` • 단백질: ${record.protein.toFixed(1)}g`}
+                                    {typeof record.fat === 'number' && ` • 지방: ${record.fat.toFixed(1)}g`}
+                                  </p>
+                                </div>
+                                <div className="flex space-x-1">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => startEditDiet(record)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-destructive"
+                                    onClick={() => deleteDietRecord(record.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {record.amount} • {Math.round(record.calories)}kcal
-                            {typeof dailyDietLogs[index]?.carbs === 'number' && ` • 탄수화물: ${dailyDietLogs[index].carbs.toFixed(1)}g`}
-                            {typeof dailyDietLogs[index]?.protein === 'number' && ` • 단백질: ${dailyDietLogs[index].protein.toFixed(1)}g`}
-                            {typeof dailyDietLogs[index]?.fat === 'number' && ` • 지방: ${dailyDietLogs[index].fat.toFixed(1)}g`}
-                            {record.time && ` • ${record.time}`}
-                          </p>
                         </div>
-                        <div className="flex space-x-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => startEditDiet(dailyDietLogs[index])}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => deleteDietRecord(dailyDietLogs[index].id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {isToday(selectedDate) && !hasClaimedDietScore && (
                       <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
                         <p className="text-sm text-green-700 text-center">
@@ -1057,59 +1143,135 @@ const Note = () => {
 
         {/* 식단 수정 다이얼로그 */}
         <Dialog open={isEditDietDialogOpen} onOpenChange={setIsEditDietDialogOpen}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>식단 수정</DialogTitle>
             </DialogHeader>
             {editingDietLog && (
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="foodName">음식명</Label>
-                  <Input
-                    id="foodName"
-                    value={editingDietLog.foodName}
-                    disabled
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="quantity">수량 (g)</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={editQuantity}
-                    onChange={(e) => setEditQuantity(Number(e.target.value))}
-                    min="1"
-                    step="1"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">칼로리:</span>
-                    <span className="ml-2 font-medium">
-                      {((editingDietLog.calories / editingDietLog.quantity) * editQuantity).toFixed(0)}kcal
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">탄수화물:</span>
-                    <span className="ml-2 font-medium">
-                      {((editingDietLog.carbs / editingDietLog.quantity) * editQuantity).toFixed(1)}g
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">단백질:</span>
-                    <span className="ml-2 font-medium">
-                      {((editingDietLog.protein / editingDietLog.quantity) * editQuantity).toFixed(1)}g
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">지방:</span>
-                    <span className="ml-2 font-medium">
-                      {((editingDietLog.fat / editingDietLog.quantity) * editQuantity).toFixed(1)}g
-                    </span>
+                  <Label htmlFor="editSearch">음식 검색</Label>
+                  <div className="flex space-x-2 mt-1">
+                    <Input
+                      id="editSearch"
+                      value={editSearchKeyword}
+                      onChange={(e) => setEditSearchKeyword(e.target.value)}
+                      placeholder="음식명 검색으로 변경"
+                      onKeyPress={(e) => e.key === 'Enter' && searchFoodForEdit()}
+                    />
+                    <Button onClick={searchFoodForEdit} disabled={isEditSearching}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                    </Button>
                   </div>
                 </div>
+
+                {editSearchResults.length > 0 && (
+                  <div>
+                    <Label>검색 결과</Label>
+                    <div className="max-h-40 overflow-y-auto space-y-2 mt-1 border rounded-md p-2">
+                      {editSearchResults.map((food) => (
+                        <div
+                          key={food.foodItemId}
+                          className="p-2 border rounded cursor-pointer hover:bg-accent"
+                          onClick={() => handleSelectFoodForEdit(food)}
+                        >
+                          <div className="font-medium">{food.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {Math.round(food.calories)}kcal / 100g
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="border-t pt-4 space-y-4">
+                  <div>
+                    <Label htmlFor="foodName" className="text-muted-foreground">음식명 (직접 수정 시 커스텀 음식으로 저장)</Label>
+                    <Input
+                      id="foodName"
+                      name="foodName"
+                      value={editFormData.foodName}
+                      onChange={handleEditFormChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="quantity">섭취량 (g)</Label>
+                      <Input
+                        id="quantity"
+                        name="quantity"
+                        type="number"
+                        value={editFormData.quantity}
+                        onChange={handleEditFormChange}
+                        min="0"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="calories" className="text-muted-foreground">100g당 칼로리</Label>
+                      <Input
+                        id="calories"
+                        name="calories"
+                        type="number"
+                        value={editFormData.calories}
+                        onChange={handleEditFormChange}
+                        min="0"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="carbs" className="text-muted-foreground">100g당 탄수화물</Label>
+                      <Input
+                        id="carbs"
+                        name="carbs"
+                        type="number"
+                        value={editFormData.carbs}
+                        onChange={handleEditFormChange}
+                        step="0.1"
+                        min="0"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="protein" className="text-muted-foreground">100g당 단백질</Label>
+                      <Input
+                        id="protein"
+                        name="protein"
+                        type="number"
+                        value={editFormData.protein}
+                        onChange={handleEditFormChange}
+                        step="0.1"
+                        min="0"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="fat" className="text-muted-foreground">100g당 지방</Label>
+                      <Input
+                        id="fat"
+                        name="fat"
+                        type="number"
+                        value={editFormData.fat}
+                        onChange={handleEditFormChange}
+                        step="0.1"
+                        min="0"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+  
+                  <div className="text-sm text-muted-foreground mt-2 p-2 bg-slate-50 rounded-md">
+                    <h4 className="font-medium mb-1">총 섭취량</h4>
+                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(0)} kcal<br/>
+                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(1)} g<br/>
+                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(1)} g<br/>
+                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(1)} g
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     variant="outline"
