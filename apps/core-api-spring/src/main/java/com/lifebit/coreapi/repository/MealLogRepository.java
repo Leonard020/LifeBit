@@ -31,4 +31,7 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     
     @Query("SELECT ml FROM MealLog ml WHERE ml.user.userId = :userId AND ml.logDate = :logDate ORDER BY ml.logDate DESC, ml.createdAt DESC")
     List<MealLog> findByUserIdAndLogDateOrderByLogDateDescCreatedAtDesc(@Param("userId") Long userId, @Param("logDate") LocalDate logDate);
+    
+    @Query("SELECT ml FROM MealLog ml WHERE ml.user.userId = :userId AND ml.logDate BETWEEN :startDate AND :endDate ORDER BY ml.logDate DESC, ml.createdAt DESC")
+    List<MealLog> findByUserIdAndLogDateBetweenOrderByLogDateDescCreatedAtDesc(@Param("userId") Long userId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 } 

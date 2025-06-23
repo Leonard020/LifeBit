@@ -16,80 +16,34 @@ public class RankingScoreService {
     private final RankingValidator rankingValidator;
 
     @Transactional
-    public void updateScore(String userUuid, int score) {
-        UserRanking ranking = findAndValidateRanking(userUuid);
+    public void updateScore(Long userId, int score) {
+        UserRanking ranking = findAndValidateRanking(userId);
         rankingValidator.validatePoints(score);
         ranking.setTotalScore(score);
         userRankingRepository.save(ranking);
     }
 
     @Transactional
-    public void updateStreakDays(String userUuid, int streakDays) {
-        UserRanking ranking = findAndValidateRanking(userUuid);
+    public void updateStreakDays(Long userId, int streakDays) {
+        UserRanking ranking = findAndValidateRanking(userId);
         rankingValidator.validateStreakDays(streakDays);
         ranking.setStreakDays(streakDays);
         userRankingRepository.save(ranking);
     }
 
-    @Transactional
-    public void updatePeriodRank(String userUuid, PeriodType periodType, int rank) {
-        UserRanking ranking = findAndValidateRanking(userUuid);
-        rankingValidator.validatePeriodType(periodType);
-        rankingValidator.validateRank(rank);
-        ranking.setPeriodType(periodType);
-        ranking.setPeriodRank(rank);
-        userRankingRepository.save(ranking);
-    }
-
-    @Transactional
-    public void updateSeasonRank(String userUuid, String season, int rank) {
-        UserRanking ranking = findAndValidateRanking(userUuid);
-        rankingValidator.validateSeason(season);
-        rankingValidator.validateRank(rank);
-        ranking.setSeason(season);
-        ranking.setSeasonRank(rank);
-        userRankingRepository.save(ranking);
-    }
-
-    @Transactional
-    public void resetPeriodRanking(PeriodType periodType) {
-        rankingValidator.validatePeriodType(periodType);
-        userRankingRepository.resetPeriodRanking(periodType);
-    }
-
-    @Transactional
-    public void resetSeasonRanking(String season) {
-        rankingValidator.validateSeason(season);
-        userRankingRepository.resetSeasonRanking(season);
+    @Transactional(readOnly = true)
+    public int getTotalScore(Long userId) {
+        return findAndValidateRanking(userId).getTotalScore();
     }
 
     @Transactional(readOnly = true)
-    public int getTotalScore(String userUuid) {
-        return findAndValidateRanking(userUuid).getTotalScore();
+    public int getStreakDays(Long userId) {
+        return findAndValidateRanking(userId).getStreakDays();
     }
 
-    @Transactional(readOnly = true)
-    public int getStreakDays(String userUuid) {
-        return findAndValidateRanking(userUuid).getStreakDays();
-    }
-
-    @Transactional(readOnly = true)
-    public int getPeriodRank(String userUuid, PeriodType periodType) {
-        UserRanking ranking = findAndValidateRanking(userUuid);
-        rankingValidator.validatePeriodType(periodType);
-        return ranking.getPeriodRank();
-    }
-
-    @Transactional(readOnly = true)
-    public int getSeasonRank(String userUuid, String season) {
-        UserRanking ranking = findAndValidateRanking(userUuid);
-        rankingValidator.validateSeason(season);
-        return ranking.getSeasonRank();
-    }
-
-    private UserRanking findAndValidateRanking(String userUuid) {
-        UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseThrow(() -> new RankingNotFoundException(userUuid));
+    private UserRanking findAndValidateRanking(Long userId) {
+        UserRanking ranking = userRankingRepository.findByUserId(userId)
+                .orElseThrow(() -> new RankingNotFoundException(userId));
         rankingValidator.validateRanking(ranking);
         return ranking;
     }

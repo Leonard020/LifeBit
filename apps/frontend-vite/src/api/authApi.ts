@@ -1106,6 +1106,30 @@ export const useExerciseCalendarHeatmap = (userId: string) => {
 // ============================================================================
 
 /**
+ * 식단 기록 DTO (노트 페이지와 동일)
+ */
+export interface DietLogDTO {
+  id: number;
+  userId: number;
+  foodItemId: number;
+  foodName: string;
+  quantity: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  logDate: string;
+  unit: string;
+  mealTime?: string;
+  inputSource?: string;
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string;
+  validationNotes?: string;
+  createdAt?: string;
+}
+
+/**
  * 일일 영양소 통계 타입 정의
  */
 export interface DailyNutritionStats {
@@ -1119,20 +1143,45 @@ export interface DailyNutritionStats {
 }
 
 /**
- * 실제 meal_logs 테이블에서 오늘의 영양소 정보 조회
+ * 노트 페이지와 동일한 방식으로 diet API에서 직접 영양소 정보 조회
  * @param userId 사용자 ID
  * @returns 오늘의 영양소 통계
  */
 export const getDailyNutritionStats = async (userId: string): Promise<DailyNutritionStats> => {
   try {
-    console.log('🍽️ [API] 일일 영양소 통계 조회 요청:', userId);
+    console.log('🍽️ [API] 일일 영양소 통계 조회 요청 (노트 페이지 방식):', userId);
     
-    const response = await axiosInstance.get<DailyNutritionStats>(`/api/health-statistics/${userId}`, {
-      params: { period: 'day' }
+    // 오늘 날짜 포맷
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    console.log('🍽️ [API] 조회 날짜:', today);
+    console.log('🍽️ [API] 요청 URL:', `/api/diet/daily-records/${today}?userId=${userId}`);
+    
+    // 노트 페이지와 동일한 API 사용
+    const response = await axiosInstance.get<DietLogDTO[]>(`/api/diet/daily-records/${today}`, {
+      params: { userId: parseInt(userId) }
     });
     
-    console.log('✅ [API] 일일 영양소 통계 조회 성공:', response.data);
-    return response.data;
+    console.log('✅ [API] 식단 기록 조회 성공:', response.data);
+    console.log('🔍 [API] 조회된 기록 수:', response.data.length);
+    
+    // 노트 페이지와 동일한 방식으로 합계 계산
+    const dailyCalories = response.data.reduce((sum, log) => sum + log.calories, 0);
+    const dailyCarbs = response.data.reduce((sum, log) => sum + log.carbs, 0);
+    const dailyProtein = response.data.reduce((sum, log) => sum + log.protein, 0);
+    const dailyFat = response.data.reduce((sum, log) => sum + log.fat, 0);
+    
+    const result = {
+      dailyCalories,
+      dailyCarbs,
+      dailyProtein,
+      dailyFat,
+      mealLogCount: response.data.length,
+      dataSource: "diet_api_direct"
+    };
+    
+    console.log('🔍 [API] 계산된 영양소 상세 정보:', result);
+    return result;
+    
   } catch (error: unknown) {
     console.error('❌ [API] 일일 영양소 통계 조회 실패:', error);
     

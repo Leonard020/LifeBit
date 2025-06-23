@@ -7,7 +7,7 @@ import com.lifebit.coreapi.service.ranking.RankingService;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.entity.UserRanking;
 import com.lifebit.coreapi.security.JwtTokenProvider;
-import com.lifebit.coreapi.dto.ranking.RankingResponse;
+import com.lifebit.coreapi.dto.ranking.RankingUserDto;
 import com.lifebit.coreapi.repository.ranking.UserRankingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,9 +78,11 @@ public class HealthStatisticsController {
             
             // 🍽️ period가 'day'인 경우 실제 영양소 통계 추가
             if ("day".equals(period)) {
+                log.info("🍽️ [Controller] 영양소 통계 조회 시작 - 사용자: {}, 기간: {}", tokenUserId, period);
                 Map<String, Object> nutritionStats = healthStatisticsService.getRealMealNutritionStatistics(tokenUserId, period);
+                log.info("🍽️ [Controller] 영양소 통계 조회 결과: {}", nutritionStats);
                 statistics.putAll(nutritionStats);
-                log.info("영양소 통계 추가 완료 - 사용자: {}, 칼로리: {}, 데이터 출처: {}", 
+                log.info("🍽️ [Controller] 영양소 통계 추가 완료 - 사용자: {}, 칼로리: {}, 데이터 출처: {}", 
                         tokenUserId, nutritionStats.get("dailyCalories"), nutritionStats.get("dataSource"));
             }
             
@@ -172,8 +174,13 @@ public class HealthStatisticsController {
                     .map(ranking -> {
                         Map<String, Object> rankerMap = new HashMap<>();
                         rankerMap.put("rank", ranking.getRankPosition());
-                        rankerMap.put("userId", ranking.getUserUuid());
-                        rankerMap.put("nickname", ranking.getUsername() != null ? ranking.getUsername() : "사용자" + ranking.getUserUuid());
+                        rankerMap.put("userId", ranking.getUserId());
+                        String nickname = "사용자" + ranking.getUserId();
+                        try {
+                            User user = userService.getUserById(ranking.getUserId());
+                            if (user != null && user.getNickname() != null) nickname = user.getNickname();
+                        } catch (Exception ignore) {}
+                        rankerMap.put("nickname", nickname);
                         rankerMap.put("score", ranking.getTotalScore());
                         rankerMap.put("badge", getBadgeFromScore(ranking.getTotalScore()));
                         rankerMap.put("streakDays", ranking.getStreakDays());
@@ -183,25 +190,26 @@ public class HealthStatisticsController {
                 
                 // 현재 사용자의 랭킹 정보 조회
                 User currentUser = userService.getUserById(currentUserId);
-                Optional<UserRanking> userRankingOpt = userRankingRepository.findByUserUuid(currentUser.getUuid().toString());
-                
+                Optional<UserRanking> userRankingOpt = userRankingRepository.findByUserId(currentUserId);
                 if (userRankingOpt.isPresent()) {
                     UserRanking userRanking = userRankingOpt.get();
+                    String nickname = currentUser != null && currentUser.getNickname() != null ? currentUser.getNickname() : ("사용자" + currentUserId);
                     myRanking = Map.of(
                         "rank", userRanking.getRankPosition(),
                         "score", userRanking.getTotalScore(),
                         "streakDays", userRanking.getStreakDays(),
                         "totalUsers", userRankingRepository.count(),
-                        "userId", currentUserId
+                        "userId", currentUserId,
+                        "nickname", nickname
                     );
                 } else {
-                    // 사용자 랭킹이 없는 경우 기본값
                     myRanking = Map.of(
                         "rank", 0,
                         "score", 0,
                         "streakDays", 0,
                         "totalUsers", userRankingRepository.count(),
-                        "userId", currentUserId
+                        "userId", currentUserId,
+                        "nickname", "사용자" + currentUserId
                     );
                 }
                 
