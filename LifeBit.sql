@@ -75,8 +75,9 @@ CREATE TABLE users (
     age INTEGER,
     gender VARCHAR(10) CHECK (gender IN ('male', 'female')),
     role user_role DEFAULT 'USER',
-    created_at TIMESTAMP DEFAULT NOW(), 
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(), 
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_visited TIMESTAMPTZ
 );
 
 CREATE INDEX idx_users_email ON users(email);
@@ -93,8 +94,8 @@ CREATE TABLE user_goals (
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
     daily_calory_target INTEGER DEFAULT 1500,
-    created_at TIMESTAMP DEFAULT NOW(), 
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(), 
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- health_records
@@ -106,7 +107,7 @@ CREATE TABLE health_records (
     height DECIMAL(5,2),
     bmi DECIMAL(4,2) GENERATED ALWAYS AS (calculate_bmi(weight, height)) STORED,
     record_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_health_records_user_date ON health_records(user_id, record_date);
@@ -120,7 +121,7 @@ CREATE TABLE exercise_catalog (
     body_part body_part_type NOT NULL,
     description TEXT,
     intensity VARCHAR(50),
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- exercise_sessions
@@ -141,7 +142,7 @@ CREATE TABLE exercise_sessions (
     confidence_score DECIMAL(4,2),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_exercise_sessions_user_date ON exercise_sessions(user_id, exercise_date);
@@ -159,7 +160,7 @@ CREATE TABLE food_items (
     carbs DECIMAL(6,2),
     protein DECIMAL(6,2),
     fat DECIMAL(6,2),
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- meal_logs
@@ -180,7 +181,7 @@ CREATE TABLE meal_logs (
     carbs DECIMAL(6,2),
     protein DECIMAL(6,2),
     fat DECIMAL(6,2),
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_meal_logs_user_date ON meal_logs(user_id, log_date);
@@ -196,8 +197,8 @@ CREATE TABLE user_ranking (
     rank_position INTEGER NOT NULL DEFAULT 0,
     previous_rank INTEGER NOT NULL DEFAULT 0,
     season INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
@@ -214,7 +215,7 @@ CREATE TABLE ranking_history (
     rank_position INTEGER NOT NULL,
     season INTEGER NOT NULL,
     period_type VARCHAR(10) NOT NULL,
-    recorded_at TIMESTAMP NOT NULL DEFAULT NOW()
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_ranking_history_user_ranking_id ON ranking_history(user_ranking_id);
@@ -230,7 +231,7 @@ CREATE TABLE achievements (
     badge_type badge_type NOT NULL,
     target_days INTEGER,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- user_achievements
@@ -242,7 +243,7 @@ CREATE TABLE user_achievements (
     is_achieved BOOLEAN DEFAULT FALSE,
     progress INTEGER DEFAULT 0,
     achieved_date DATE,
-    created_at TIMESTAMP DEFAULT NOW(), 
+    created_at TIMESTAMPTZ DEFAULT NOW(), 
     UNIQUE(user_id, achievement_id)
 );
 
@@ -253,7 +254,7 @@ CREATE TABLE recommendation (
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     item_id BIGINT,
     recommendation_data JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_recommendation_user ON recommendation(user_id);
@@ -266,7 +267,7 @@ CREATE TABLE feedback (
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     feedback_type VARCHAR(100),
     feedback_data JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_feedback_recommendation ON feedback(recommendation_id);
@@ -278,8 +279,8 @@ CREATE TABLE policy (
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     policy_name VARCHAR(255) NOT NULL,
     policy_data JSONB,
-    created_at TIMESTAMP DEFAULT NOW(), 
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(), 
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- voice_recognition_logs
@@ -293,8 +294,8 @@ CREATE TABLE voice_recognition_logs (
     recognition_type recognition_type NOT NULL,
     status validation_status_type DEFAULT 'PENDING',
     error_message TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    processed_at TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_voice_recognition_logs_user ON voice_recognition_logs(user_id);
@@ -311,7 +312,7 @@ CREATE TABLE validation_history (
     validation_status validation_status_type NOT NULL,
     validation_notes TEXT,
     validated_by VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_validation_history_record ON validation_history(record_type, record_id);
@@ -324,7 +325,7 @@ CREATE TABLE log (
     uuid UUID NOT NULL DEFAULT gen_random_uuid(), 
     event_type VARCHAR(100),
     event_data JSONB,
-    created_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (log_id, created_at)
 ) PARTITION BY RANGE (created_at);
 
