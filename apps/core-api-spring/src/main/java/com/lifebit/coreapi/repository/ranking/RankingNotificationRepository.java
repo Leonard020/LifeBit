@@ -13,14 +13,15 @@ import java.util.List;
 
 @Repository
 public interface RankingNotificationRepository extends JpaRepository<RankingNotification, Long> {
-    List<RankingNotification> findByUserUuidOrderByCreatedAtDesc(String userUuid);
-    Page<RankingNotification> findByUserUuidOrderByCreatedAtDesc(String userUuid, Pageable pageable);
-    Page<RankingNotification> findByUserUuidAndIsReadOrderByCreatedAtDesc(String userUuid, boolean isRead, Pageable pageable);
+    @org.springframework.data.jpa.repository.Query("SELECT n FROM RankingNotification n WHERE n.userId = :userId ORDER BY n.createdAt DESC")
+    java.util.List<RankingNotification> findByUserIdOrderByCreatedAtDesc(@org.springframework.data.repository.query.Param("userId") Long userId);
+    Page<RankingNotification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    Page<RankingNotification> findByUserIdAndIsReadOrderByCreatedAtDesc(Long userId, boolean isRead, Pageable pageable);
 
     /**
-     * userUuid 기준 전체 알림 일괄 읽음 처리
+     * userId 기준 전체 알림 일괄 읽음 처리
      */
     @Modifying
-    @Query("UPDATE RankingNotification n SET n.isRead = true WHERE n.userUuid = :userUuid AND n.isRead = false")
-    void markAllAsReadByUserUuid(@Param("userUuid") String userUuid);
+    @Query("UPDATE RankingNotification n SET n.isRead = true WHERE n.userId = :userId AND n.isRead = false")
+    void markAllAsReadByUserId(@Param("userId") Long userId);
 } 
