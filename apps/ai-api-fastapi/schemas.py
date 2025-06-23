@@ -43,7 +43,7 @@ class MealOutput(BaseModel):
         # 🔽 오늘 운동 기록 조회용 (프론트엔드 Note.tsx 사용 타입과 일치)
 class DailyExerciseRecord(BaseModel):
     exercise_session_id: int
-    name: str
+    name: Optional[str] = "기타 운동"  # ← fallback
     weight: str
     sets: int
     reps: int
