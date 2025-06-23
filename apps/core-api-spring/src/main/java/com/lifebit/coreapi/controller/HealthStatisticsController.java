@@ -78,9 +78,11 @@ public class HealthStatisticsController {
             
             // 🍽️ period가 'day'인 경우 실제 영양소 통계 추가
             if ("day".equals(period)) {
+                log.info("🍽️ [Controller] 영양소 통계 조회 시작 - 사용자: {}, 기간: {}", tokenUserId, period);
                 Map<String, Object> nutritionStats = healthStatisticsService.getRealMealNutritionStatistics(tokenUserId, period);
+                log.info("🍽️ [Controller] 영양소 통계 조회 결과: {}", nutritionStats);
                 statistics.putAll(nutritionStats);
-                log.info("영양소 통계 추가 완료 - 사용자: {}, 칼로리: {}, 데이터 출처: {}", 
+                log.info("🍽️ [Controller] 영양소 통계 추가 완료 - 사용자: {}, 칼로리: {}, 데이터 출처: {}", 
                         tokenUserId, nutritionStats.get("dailyCalories"), nutritionStats.get("dataSource"));
             }
             
