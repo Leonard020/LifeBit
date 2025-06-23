@@ -630,7 +630,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   console.log('🚀 [EnhancedHealthDashboard] 컴포넌트 렌더링 시작!', { userId, period });
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'ai' | 'calendar'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'calendar'>('dashboard');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -951,8 +951,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   return (
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'exercise' | 'ai' | 'calendar')}>
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'exercise' | 'calendar')}>
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="dashboard" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             대시보드
@@ -964,10 +964,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           <TabsTrigger value="exercise" className="flex items-center gap-2">
             <Dumbbell className="h-4 w-4" />
             운동 분석
-          </TabsTrigger>
-          <TabsTrigger value="ai" className="flex items-center gap-2">
-            <span className="text-sm">🤖</span>
-            AI 분석
           </TabsTrigger>
           <TabsTrigger value="calendar" className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
@@ -1167,50 +1163,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               </div>
             </div>
           </div>
-        </TabsContent>
-
-        {/* 🤖 AI 분석 탭 */}
-        <TabsContent value="ai" className="space-y-6">
-          {/* AI 스마트 분석 헤더 */}
-          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-8 shadow-lg border-0">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
-                <span className="text-2xl">🤖</span>
-                AI 스마트 분석
-              </h3>
-              <p className="text-gray-600">인공지능이 건강 데이터를 종합 분석한 맞춤형 인사이트를 제공합니다</p>
-            </div>
-            
-            {/* AI 분석 상태 표시 */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xl">🧠</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-800">AI 건강 인사이트</h4>
-                    <p className="text-sm text-gray-600">실시간 데이터 분석 중...</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-green-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium">활성</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI 맞춤 추천 */}
-          <AIRecommendations
-            calories={todayData.totalCalories}
-            carbs={todayData.nutrition.carbs}
-            protein={todayData.nutrition.protein}
-            fat={todayData.nutrition.fat}
-            exerciseMinutes={todayData.exerciseMinutes}
-            caloriesBurned={todayData.caloriesBurned}
-            nutritionGoals={todayData.nutritionGoals}
-          />
 
           {/* 칼로리 섭취 추이 차트 */}
           <div className="bg-white rounded-2xl p-6 shadow-lg border-0">
@@ -1356,6 +1308,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             </div>
           </div>
         </TabsContent>
+
+
 
         {/* 🏋️ 운동 분석 탭 */}
         <TabsContent value="exercise" className="space-y-6">
