@@ -10,4 +10,6 @@ public class MyRankingDto {
     private final int score;
     private final int streakDays;
     private final long totalUsers;
+    private final String tier;
+    private final String colorCode;
 } 

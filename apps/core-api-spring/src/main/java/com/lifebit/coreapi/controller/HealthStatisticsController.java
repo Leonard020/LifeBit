@@ -184,6 +184,8 @@ public class HealthStatisticsController {
                         rankerMap.put("score", ranking.getTotalScore());
                         rankerMap.put("badge", getBadgeFromScore(ranking.getTotalScore()));
                         rankerMap.put("streakDays", ranking.getStreakDays());
+                        rankerMap.put("tier", ranking.getTier() != null ? ranking.getTier().name() : null);
+                        rankerMap.put("colorCode", ranking.getTier() != null ? ranking.getTier().getColorCode() : null);
                         return rankerMap;
                     })
                     .toList();
@@ -200,7 +202,9 @@ public class HealthStatisticsController {
                         "streakDays", userRanking.getStreakDays(),
                         "totalUsers", userRankingRepository.count(),
                         "userId", currentUserId,
-                        "nickname", nickname
+                        "nickname", nickname,
+                        "tier", userRanking.getTier() != null ? userRanking.getTier().name() : null,
+                        "colorCode", userRanking.getTier() != null ? userRanking.getTier().getColorCode() : null
                     );
                 } else {
                     myRanking = Map.of(
@@ -209,7 +213,9 @@ public class HealthStatisticsController {
                         "streakDays", 0,
                         "totalUsers", userRankingRepository.count(),
                         "userId", currentUserId,
-                        "nickname", "사용자" + currentUserId
+                        "nickname", "사용자" + currentUserId,
+                        "tier", null,
+                        "colorCode", null
                     );
                 }
                 
@@ -224,7 +230,9 @@ public class HealthStatisticsController {
                     "score", 0,
                     "streakDays", 0,
                     "totalUsers", 0,
-                    "userId", currentUserId
+                    "userId", currentUserId,
+                    "tier", null,
+                    "colorCode", null
                 );
             }
 

@@ -12,4 +12,6 @@ public class MyRankingResponseDto {
     private final long totalUsers;
     private final Long userId;
     private final String nickname;
+    private final String tier;
+    private final String colorCode;
 } 

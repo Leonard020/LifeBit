@@ -19,6 +19,7 @@ import java.util.List;
 import com.lifebit.coreapi.entity.ranking.RankingNotification;
 import com.lifebit.coreapi.dto.ranking.RankingNotificationDto;
 import com.lifebit.coreapi.service.UserService;
+import com.lifebit.coreapi.entity.enums.RankingTier;
 
 @Service
 @RequiredArgsConstructor
@@ -161,5 +162,14 @@ public class RankingNotificationService {
         notification.setRead(false);
         notification.setCreatedAt(java.time.LocalDateTime.now());
         rankingNotificationRepository.save(notification);
+    }
+
+    /**
+     * 등급 변화 알림 전송
+     */
+    @Transactional
+    public void sendTierChangeNotification(Long userId, RankingTier prevTier, RankingTier newTier) {
+        String message = String.format("등급이 %s에서 %s로 변경되었습니다.", prevTier.name(), newTier.name());
+        saveNotification(userId, RankingNotification.NotificationType.RANK_CHANGE, "등급 변화 알림", message);
     }
 } 
