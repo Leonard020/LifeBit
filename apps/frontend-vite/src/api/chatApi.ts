@@ -1,7 +1,7 @@
 import { AxiosError } from 'axios';
 import axiosInstance from '@/utils/axios';
 import { convertTimeToMealType, hasTimeInformation } from '@/utils/mealTimeMapping';
-import { getToken, isTokenValid, getUserIdFromToken } from '@/utils/auth';
+import { getToken } from '@/utils/auth';
 
 
 // 대화 메시지 타입
@@ -16,6 +16,7 @@ interface ChatRequestBody {
   conversation_history: Message[];
   record_type: 'exercise' | 'diet';
   chat_step?: 'extraction' | 'validation' | 'confirmation';
+  current_data?: CurrentDataType;
   meal_time_mapping?: {
     detected_time?: string;
     mapped_meal_type?: string;
@@ -60,6 +61,7 @@ interface ExerciseState {
   reps?: number;
   duration_min?: number;
   weight?: number;
+  calories_burned?: number;
 }
 
 interface DietState {
@@ -100,6 +102,7 @@ export const sendChatMessage = async (
       conversation_history: conversationHistory,
       record_type: recordType,
       ...(chatStep && { chat_step: chatStep }),
+      ...(currentData && { current_data: currentData }),
     };
 
     // ✅ 식단 기록인 경우 시간 매핑 정보 포함
@@ -136,30 +139,17 @@ export const sendChatMessage = async (
   }
 };
 
-interface ExerciseData {
-  exercise: string;
-  weight?: number | string;
-  sets?: number;
-  reps?: number;
-  duration_min?: number;
-  calories_burned?: number;
-}
 
 // 운동 기록 저장 API 호출
-export const saveExerciseRecord = async (exerciseData: ExerciseData) => {
+export const saveExerciseRecord = async (exerciseData: ExerciseState) => {
   try {
-    const userId = getUserIdFromToken(); // 토큰에서 userId 가져오기
-    if (!userId) {
-      throw new Error('사용자 인증 정보를 찾을 수 없습니다. 다시 로그인해주세요.');
-    }
-    
     const res = await axiosInstance.post('/api/py/note/exercise', {
-      user_id: userId, // 하드코딩된 user_id 교체
+      user_id: 1,
       name: exerciseData.exercise,
       weight: exerciseData.weight,
       sets: exerciseData.sets,
       reps: exerciseData.reps,
-      duration_minutes: exerciseData.duration_min,
+      time: `${exerciseData.duration_min}분`,
       calories_burned: exerciseData.calories_burned || 0,
       exercise_date: new Date().toISOString().split('T')[0]
     });

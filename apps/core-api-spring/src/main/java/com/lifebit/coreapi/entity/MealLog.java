@@ -22,7 +22,7 @@ public class MealLog {
     @JoinColumn(name = "user_id")
     private User user;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "food_item_id")
     private FoodItem foodItem;
     
