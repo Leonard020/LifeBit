@@ -798,8 +798,8 @@ public class HealthStatisticsService {
             
             LocalDate today = LocalDate.now();
             
-            // 🍽️ userId를 직접 사용하여 오늘의 식단 기록 조회 (성능 최적화)
-            List<MealLog> todayMealLogs = mealLogRepository.findByUserIdAndLogDateOrderByCreatedAtDesc(userId, today);
+            // 🍽️ userId를 직접 사용하여 오늘의 식단 기록 조회 (log_date 기준)
+            List<MealLog> todayMealLogs = mealLogRepository.findByUserIdAndLogDateOrderByLogDateDescCreatedAtDesc(userId, today);
             
             log.info("🍽️ [HealthStatisticsService] 사용자 {} - 오늘의 식단 기록 조회: {} 건", userId, todayMealLogs.size());
             

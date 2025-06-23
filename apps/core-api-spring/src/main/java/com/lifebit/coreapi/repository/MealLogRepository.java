@@ -17,9 +17,9 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     List<MealLog> findByUserOrderByLogDateDesc(User user);
     List<MealLog> findByUserAndLogDateBetweenOrderByLogDateDesc(
         User user, LocalDate startDate, LocalDate endDate);
-    List<MealLog> findByUserAndLogDateOrderByCreatedAtDesc(User user, LocalDate logDate);
+    List<MealLog> findByUserAndLogDateOrderByLogDateDescCreatedAtDesc(User user, LocalDate logDate);
     
-    @Query("SELECT ml FROM MealLog ml WHERE ml.user = :user AND ml.logDate = :logDate ORDER BY ml.createdAt DESC")
+    @Query("SELECT ml FROM MealLog ml WHERE ml.user = :user AND ml.logDate = :logDate ORDER BY ml.logDate DESC, ml.createdAt DESC")
     List<MealLog> findDailyMealLogs(@Param("user") User user, @Param("logDate") LocalDate logDate);
     
     @Query("SELECT ml.logDate as date, COUNT(ml) as count FROM MealLog ml " +
@@ -29,6 +29,6 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
                                            @Param("startDate") LocalDate startDate, 
                                            @Param("endDate") LocalDate endDate);
     
-    @Query("SELECT ml FROM MealLog ml WHERE ml.user.userId = :userId AND ml.logDate = :logDate ORDER BY ml.createdAt DESC")
-    List<MealLog> findByUserIdAndLogDateOrderByCreatedAtDesc(@Param("userId") Long userId, @Param("logDate") LocalDate logDate);
+    @Query("SELECT ml FROM MealLog ml WHERE ml.user.userId = :userId AND ml.logDate = :logDate ORDER BY ml.logDate DESC, ml.createdAt DESC")
+    List<MealLog> findByUserIdAndLogDateOrderByLogDateDescCreatedAtDesc(@Param("userId") Long userId, @Param("logDate") LocalDate logDate);
 } 
