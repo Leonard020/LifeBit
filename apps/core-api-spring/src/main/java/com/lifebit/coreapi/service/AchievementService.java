@@ -155,4 +155,13 @@ public class AchievementService {
             updateUserAchievementProgress(userId, "1년 연속 기록", streakDays);
         }
     }
+    
+    /**
+     * 유저별 달성 업적 개수 반환
+     */
+    @Transactional(readOnly = true)
+    public int getUserAchievementCount(Long userId) {
+        return (int) userAchievementRepository.findByUserIdWithAchievements(userId)
+            .stream().filter(ua -> Boolean.TRUE.equals(ua.getIsAchieved())).count();
+    }
 } 

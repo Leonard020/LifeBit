@@ -245,4 +245,41 @@ public class MealService {
         
         return summary;
     }
+
+    /**
+     * 유저의 최근 7일간 식단 목표 영양소 달성률(%)을 반환합니다.
+     * (목표 대비 실제 섭취량의 평균 비율, 0~100)
+     */
+    public int getWeeklyNutritionAchievementRate(Long userId) {
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(6);
+        User user = new User();
+        user.setUserId(userId);
+        List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
+        if (mealLogs.isEmpty()) return 0;
+
+        // 목표값(예시: 1일 200g 탄수, 120g 단백질, 60g 지방, 1500kcal)
+        double targetCarbs = 200 * 7;
+        double targetProtein = 120 * 7;
+        double targetFat = 60 * 7;
+        double targetCalories = 1500 * 7;
+
+        double totalCarbs = 0, totalProtein = 0, totalFat = 0, totalCalories = 0;
+        for (MealLog log : mealLogs) {
+            FoodItem food = log.getFoodItem();
+            if (food == null) continue;
+            double qty = log.getQuantity() != null ? log.getQuantity().doubleValue() : 1.0;
+            totalCarbs += food.getCarbs() != null ? food.getCarbs().doubleValue() * qty / 100.0 : 0;
+            totalProtein += food.getProtein() != null ? food.getProtein().doubleValue() * qty / 100.0 : 0;
+            totalFat += food.getFat() != null ? food.getFat().doubleValue() * qty / 100.0 : 0;
+            totalCalories += food.getCalories() != null ? food.getCalories().doubleValue() * qty / 100.0 : 0;
+        }
+        double carbsRate = Math.min(100, totalCarbs / targetCarbs * 100);
+        double proteinRate = Math.min(100, totalProtein / targetProtein * 100);
+        double fatRate = Math.min(100, totalFat / targetFat * 100);
+        double caloriesRate = Math.min(100, totalCalories / targetCalories * 100);
+        // 4개 항목 평균
+        int avgRate = (int) Math.round((carbsRate + proteinRate + fatRate + caloriesRate) / 4.0);
+        return avgRate;
+    }
 } 

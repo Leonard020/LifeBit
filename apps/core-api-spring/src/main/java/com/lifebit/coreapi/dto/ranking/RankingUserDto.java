@@ -12,4 +12,6 @@ public class RankingUserDto {
     private final int score;
     private final String badge;
     private final int streakDays;
+    private final String tier;
+    private final String colorCode;
 } 

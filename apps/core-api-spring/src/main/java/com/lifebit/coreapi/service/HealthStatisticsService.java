@@ -125,7 +125,7 @@ public class HealthStatisticsService {
     /**
      * 운동 관련 통계 조회
      */
-    private Map<String, Object> getExerciseStatistics(Long userId, String period) {
+    public Map<String, Object> getExerciseStatistics(Long userId, String period) {
         Map<String, Object> stats = new HashMap<>();
         
         try {
