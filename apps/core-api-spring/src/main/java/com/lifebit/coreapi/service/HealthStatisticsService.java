@@ -70,6 +70,12 @@ public class HealthStatisticsService {
             // 식단 관련 통계
             Map<String, Object> mealStats = getMealStatistics(userId, period);
             
+            // ✨ 차트용 시계열 데이터 추가
+            Map<String, Object> chartData = getChartTimeSeriesData(userId, period);
+            
+            // 🏋️ 운동 부위별 빈도 데이터 추가
+            Map<String, Object> bodyPartStats = getBodyPartFrequencyData(userId, period);
+            
             // 종합 통계 구성
             Map<String, Object> statistics = new HashMap<>();
             
@@ -89,6 +95,12 @@ public class HealthStatisticsService {
             if (mealStats != null && !mealStats.isEmpty()) {
                 statistics.putAll(mealStats);
             }
+            
+            // ✨ 차트 데이터 추가
+            statistics.putAll(chartData);
+            
+            // 🏋️ 운동 부위별 통계 추가
+            statistics.putAll(bodyPartStats);
             
             // 목표 관련 정보
             statistics.put("workoutGoal", userGoal.getWeeklyWorkoutTarget());
@@ -370,9 +382,20 @@ public class HealthStatisticsService {
      */
     public List<Map<String, Object>> getHealthRecords(Long userId, String period) {
         try {
+            log.info("🏥 [getHealthRecords] 건강 기록 조회 시작 - 사용자: {}, 기간: {}", userId, period);
+            
             List<HealthRecord> healthRecords = getHealthRecordsByPeriod(userId, period);
             
-            return healthRecords.stream()
+            log.info("📊 [getHealthRecords] 조회 결과 - 사용자: {}, 기간: {}, 건수: {}", 
+                userId, period, healthRecords.size());
+            
+            if (!healthRecords.isEmpty()) {
+                HealthRecord sample = healthRecords.get(0);
+                log.info("📋 [getHealthRecords] 샘플 데이터 - ID: {}, 체중: {}, BMI: {}, 날짜: {}", 
+                    sample.getHealthRecordId(), sample.getWeight(), sample.getBmi(), sample.getRecordDate());
+            }
+            
+            List<Map<String, Object>> result = healthRecords.stream()
                 .map(record -> {
                     Map<String, Object> recordMap = new HashMap<>();
                     recordMap.put("health_record_id", record.getHealthRecordId());
@@ -387,8 +410,12 @@ public class HealthStatisticsService {
                 })
                 .toList();
                 
+            log.info("✅ [getHealthRecords] 변환 완료 - 사용자: {}, 반환 건수: {}", userId, result.size());
+            return result;
+                
         } catch (Exception e) {
-            log.error("건강 기록 조회 실패: {}", e.getMessage());
+            log.error("❌ [getHealthRecords] 건강 기록 조회 실패 - 사용자: {}, 기간: {}, 오류: {}", 
+                userId, period, e.getMessage(), e);
             return List.of();
         }
     }
@@ -398,9 +425,23 @@ public class HealthStatisticsService {
      */
     public List<Map<String, Object>> getExerciseSessions(Long userId, String period) {
         try {
+            log.info("🏃 [getExerciseSessions] 운동 세션 조회 시작 - 사용자: {}, 기간: {}", userId, period);
+            
             List<ExerciseSession> exerciseSessions = exerciseService.getRecentExerciseSessions(userId, period);
             
-            return exerciseSessions.stream()
+            log.info("📊 [getExerciseSessions] 조회 결과 - 사용자: {}, 기간: {}, 건수: {}", 
+                userId, period, exerciseSessions.size());
+            
+            if (!exerciseSessions.isEmpty()) {
+                ExerciseSession sample = exerciseSessions.get(0);
+                log.info("📋 [getExerciseSessions] 샘플 데이터 - ID: {}, 운동: {}, 시간: {}분, 날짜: {}", 
+                    sample.getExerciseSessionId(), 
+                    sample.getExerciseCatalog() != null ? sample.getExerciseCatalog().getName() : "알 수 없음",
+                    sample.getDurationMinutes(), 
+                    sample.getExerciseDate());
+            }
+            
+            List<Map<String, Object>> result = exerciseSessions.stream()
                 .map(session -> {
                     Map<String, Object> sessionMap = new HashMap<>();
                     sessionMap.put("exercise_session_id", session.getExerciseSessionId());
@@ -420,9 +461,224 @@ public class HealthStatisticsService {
                 })
                 .toList();
                 
+            log.info("✅ [getExerciseSessions] 변환 완료 - 사용자: {}, 반환 건수: {}", userId, result.size());
+            return result;
+                
         } catch (Exception e) {
-            log.error("운동 세션 조회 실패: {}", e.getMessage());
+            log.error("❌ [getExerciseSessions] 운동 세션 조회 실패 - 사용자: {}, 기간: {}, 오류: {}", 
+                userId, period, e.getMessage(), e);
             return List.of();
+        }
+    }
+
+    /**
+     * 차트용 시계열 데이터 생성
+     * 프론트엔드 차트에서 사용할 날짜별 데이터 구조
+     */
+    private Map<String, Object> getChartTimeSeriesData(Long userId, String period) {
+        Map<String, Object> chartData = new HashMap<>();
+        
+        try {
+            log.info("📊 차트 시계열 데이터 생성 시작 - 사용자: {}, 기간: {}", userId, period);
+            
+            // 건강 기록 차트 데이터
+            List<Map<String, Object>> healthChartData = createHealthChartData(userId, period);
+            chartData.put("healthChartData", healthChartData);
+            
+            // 운동 차트 데이터
+            List<Map<String, Object>> exerciseChartData = createExerciseChartData(userId, period);
+            chartData.put("exerciseChartData", exerciseChartData);
+            
+            log.info("✅ 차트 시계열 데이터 생성 완료 - 건강기록: {}, 운동: {}", 
+                    healthChartData.size(), exerciseChartData.size());
+            
+        } catch (Exception e) {
+            log.error("❌ 차트 시계열 데이터 생성 실패: {}", e.getMessage(), e);
+            chartData.put("healthChartData", List.of());
+            chartData.put("exerciseChartData", List.of());
+        }
+        
+        return chartData;
+    }
+    
+    /**
+     * 건강 기록 차트 데이터 생성 (체중, BMI 추이)
+     */
+    private List<Map<String, Object>> createHealthChartData(Long userId, String period) {
+        try {
+            List<HealthRecord> records = getHealthRecordsByPeriod(userId, period);
+            
+            return records.stream()
+                .map(record -> {
+                    Map<String, Object> dataPoint = new HashMap<>();
+                    dataPoint.put("date", record.getRecordDate().toString());
+                    dataPoint.put("weight", record.getWeight() != null ? record.getWeight().doubleValue() : null);
+                    dataPoint.put("bmi", record.getBmi() != null ? record.getBmi().doubleValue() : null);
+                    dataPoint.put("height", record.getHeight() != null ? record.getHeight().doubleValue() : null);
+                    return dataPoint;
+                })
+                .sorted((a, b) -> ((String) a.get("date")).compareTo((String) b.get("date")))
+                .toList();
+                
+        } catch (Exception e) {
+            log.error("건강 기록 차트 데이터 생성 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+    
+    /**
+     * 운동 차트 데이터 생성 (일별/주별 운동 시간 추이)
+     */
+    private List<Map<String, Object>> createExerciseChartData(Long userId, String period) {
+        try {
+            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, period);
+            
+            // 날짜별로 그룹핑하여 운동 시간 합계 계산
+            Map<String, Integer> dailyExerciseMinutes = sessions.stream()
+                .filter(session -> session.getExerciseDate() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                    session -> session.getExerciseDate().toString(),
+                    java.util.stream.Collectors.summingInt(
+                        session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0
+                    )
+                ));
+                
+            // 날짜별로 칼로리 합계 계산
+            Map<String, Integer> dailyCaloriesBurned = sessions.stream()
+                .filter(session -> session.getExerciseDate() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                    session -> session.getExerciseDate().toString(),
+                    java.util.stream.Collectors.summingInt(
+                        session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0
+                    )
+                ));
+            
+            // 차트 데이터 포인트 생성
+            return dailyExerciseMinutes.entrySet().stream()
+                .map(entry -> {
+                    Map<String, Object> dataPoint = new HashMap<>();
+                    String date = entry.getKey();
+                    dataPoint.put("date", date);
+                    dataPoint.put("duration_minutes", entry.getValue());
+                    dataPoint.put("calories_burned", dailyCaloriesBurned.getOrDefault(date, 0));
+                    return dataPoint;
+                })
+                .sorted((a, b) -> ((String) a.get("date")).compareTo((String) b.get("date")))
+                .toList();
+                
+        } catch (Exception e) {
+            log.error("운동 차트 데이터 생성 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 🏋️ 운동 부위별 빈도 데이터 생성
+     * 사용자의 운동 부위별 운동 횟수와 비율을 계산
+     */
+    private Map<String, Object> getBodyPartFrequencyData(Long userId, String period) {
+        Map<String, Object> bodyPartData = new HashMap<>();
+        
+        try {
+            log.info("🏋️ 운동 부위별 빈도 데이터 생성 시작 - 사용자: {}, 기간: {}", userId, period);
+            
+            // 운동 세션 데이터 조회
+            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, period);
+            
+            if (sessions.isEmpty()) {
+                log.info("운동 세션 데이터가 없음 - 사용자: {}", userId);
+                bodyPartData.put("bodyPartFrequency", List.of());
+                bodyPartData.put("totalExerciseSessions", 0);
+                return bodyPartData;
+            }
+            
+            // 운동 부위별 빈도 계산
+            Map<String, Integer> bodyPartCounts = new HashMap<>();
+            Map<String, Integer> bodyPartDuration = new HashMap<>();
+            
+            for (ExerciseSession session : sessions) {
+                if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                    String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                    
+                    // 운동 횟수 카운트
+                    bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1);
+                    
+                    // 운동 시간 합계 (분)
+                    int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
+                    bodyPartDuration.put(bodyPart, bodyPartDuration.getOrDefault(bodyPart, 0) + duration);
+                }
+            }
+            
+            // 총 운동 세션 수
+            int totalSessions = sessions.size();
+            
+            // 운동 부위별 데이터 구성
+            List<Map<String, Object>> bodyPartFrequency = bodyPartCounts.entrySet().stream()
+                .map(entry -> {
+                    String bodyPart = entry.getKey();
+                    int count = entry.getValue();
+                    int duration = bodyPartDuration.getOrDefault(bodyPart, 0);
+                    double percentage = (double) count / totalSessions * 100;
+                    
+                    Map<String, Object> bodyPartInfo = new HashMap<>();
+                    bodyPartInfo.put("bodyPart", bodyPart);
+                    bodyPartInfo.put("bodyPartKorean", getBodyPartKoreanName(bodyPart));
+                    bodyPartInfo.put("count", count);
+                    bodyPartInfo.put("duration", duration);
+                    bodyPartInfo.put("percentage", Math.round(percentage * 10.0) / 10.0);
+                    bodyPartInfo.put("color", getBodyPartColor(bodyPart));
+                    
+                    return bodyPartInfo;
+                })
+                .sorted((a, b) -> Integer.compare((Integer) b.get("count"), (Integer) a.get("count")))
+                .toList();
+            
+            bodyPartData.put("bodyPartFrequency", bodyPartFrequency);
+            bodyPartData.put("totalExerciseSessions", totalSessions);
+            
+            log.info("✅ 운동 부위별 빈도 데이터 생성 완료 - 사용자: {}, 총 세션: {}, 부위 수: {}", 
+                    userId, totalSessions, bodyPartFrequency.size());
+            
+        } catch (Exception e) {
+            log.error("❌ 운동 부위별 빈도 데이터 생성 실패: {}", e.getMessage(), e);
+            bodyPartData.put("bodyPartFrequency", List.of());
+            bodyPartData.put("totalExerciseSessions", 0);
+        }
+        
+        return bodyPartData;
+    }
+    
+    /**
+     * 운동 부위 한글명 반환
+     */
+    private String getBodyPartKoreanName(String bodyPart) {
+        switch (bodyPart.toLowerCase()) {
+            case "chest": return "가슴";
+            case "back": return "등";
+            case "legs": return "하체";
+            case "shoulders": return "어깨";
+            case "arms": return "팔";
+            case "abs": return "복근";
+            case "cardio": return "유산소";
+            case "full_body": return "전신";
+            default: return bodyPart;
+        }
+    }
+    
+    /**
+     * 운동 부위별 차트 색상 반환
+     */
+    private String getBodyPartColor(String bodyPart) {
+        switch (bodyPart.toLowerCase()) {
+            case "chest": return "#FF6B6B";    // 빨간색
+            case "back": return "#4ECDC4";     // 청록색
+            case "legs": return "#45B7D1";     // 파란색
+            case "shoulders": return "#FFA07A"; // 주황색
+            case "arms": return "#98D8C8";     // 민트색
+            case "abs": return "#F7DC6F";      // 노란색
+            case "cardio": return "#BB8FCE";   // 보라색
+            case "full_body": return "#85C1E9"; // 하늘색
+            default: return "#BDC3C7";         // 회색
         }
     }
 

@@ -1,5 +1,5 @@
 import React, { useMemo, memo, useCallback } from 'react';
-import { useHealthRecords, useExerciseSessions, useUserGoals } from '../../api/auth';
+import { useHealthRecords, useExerciseSessions, useUserGoals, useHealthStatistics } from '../../api/auth';
 import { TrendingUp, TrendingDown, Activity, Weight, BarChart3 } from 'lucide-react';
 import {
   LineChart,
@@ -82,6 +82,53 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
   const { data: healthRecords, isLoading: healthLoading, error: healthError } = useHealthRecords(userId.toString(), apiPeriod);
   const { data: exerciseData, isLoading: exerciseLoading, error: exerciseError } = useExerciseSessions(userId.toString(), apiPeriod);
   const { data: userGoals, isLoading: goalsLoading, error: goalsError } = useUserGoals(userId.toString());
+  
+  // ✨ 새로운 건강 통계 API 호출 (차트 데이터 포함)
+  const { data: healthStatistics, isLoading: statisticsLoading, error: statisticsError } = useHealthStatistics(userId.toString(), apiPeriod);
+
+  // 🔧 API 호출 상태 디버깅 로그 추가
+  console.log('🔍 [StatisticsCharts] API 호출 상태:', {
+    userId,
+    apiPeriod,
+    healthRecords: {
+      data: healthRecords,
+      loading: healthLoading,
+      error: healthError,
+      hasData: !!healthRecords,
+      dataLength: Array.isArray(healthRecords) ? healthRecords.length : 'not array'
+    },
+    exerciseData: {
+      data: exerciseData,
+      loading: exerciseLoading,
+      error: exerciseError,
+      hasData: !!exerciseData,
+      dataLength: Array.isArray(exerciseData) ? exerciseData.length : 'not array'
+    },
+    userGoals: {
+      data: userGoals,
+      loading: goalsLoading,
+      error: goalsError,
+      hasData: !!userGoals
+    },
+    healthStatistics: {
+      data: healthStatistics,
+      loading: statisticsLoading,
+      error: statisticsError,
+      hasData: !!healthStatistics,
+      hasChartData: !!(healthStatistics?.healthChartData || healthStatistics?.exerciseChartData)
+    }
+  });
+
+  // 🔧 에러 상태 확인
+  if (healthError) {
+    console.error('❌ [StatisticsCharts] 건강 기록 API 오류:', healthError);
+  }
+  if (exerciseError) {
+    console.error('❌ [StatisticsCharts] 운동 세션 API 오류:', exerciseError);
+  }
+  if (goalsError) {
+    console.error('❌ [StatisticsCharts] 사용자 목표 API 오류:', goalsError);
+  }
 
   // 날짜 포맷팅 함수 메모이제이션 - period별 처리
   const formatDateForChart = useCallback((dateString: string, period: 'day' | 'week' | 'month' | 'year'): string => {
@@ -184,26 +231,82 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     return result.slice(-maxDataPoints);
   }, [formatDateForChart]);
 
-  // 차트 데이터 변환 및 계산
+  // ✨ 백엔드 차트 데이터 우선 사용, 없으면 기존 로직으로 폴백
   const chartData = useMemo(() => {
     console.log('🔄 Chart data recalculating with period:', period);
     
-    // 데이터 타입 안전성 검사 추가
+    // 1️⃣ 백엔드에서 제공하는 차트 데이터 확인
+    if (healthStatistics?.healthChartData || healthStatistics?.exerciseChartData) {
+      console.log('✨ Using backend chart data from HealthStatistics API');
+      
+      const backendHealthData = healthStatistics.healthChartData || [];
+      const backendExerciseData = healthStatistics.exerciseChartData || [];
+      
+      // 백엔드 데이터를 프론트엔드 차트 형식으로 변환
+      const weightData = backendHealthData
+        .filter((item: any) => item.weight !== null)
+        .map((item: any) => ({
+          date: item.date,
+          value: item.weight,
+          displayDate: formatDateForChart(item.date, period)
+        }));
+        
+      const bmiData = backendHealthData
+        .filter((item: any) => item.bmi !== null)
+        .map((item: any) => ({
+          date: item.date,
+          value: item.bmi,
+          displayDate: formatDateForChart(item.date, period)
+        }));
+        
+      const exerciseChartData = backendExerciseData.map((item: any) => ({
+        date: item.date,
+        value: item.duration_minutes || 0,
+        displayDate: formatDateForChart(item.date, period),
+        calories: item.calories_burned || 0
+      }));
+      
+      // 통계 계산
+      const avgWeight = weightData.length > 0 
+        ? weightData.reduce((sum, item) => sum + item.value, 0) / weightData.length 
+        : healthStatistics.currentWeight || 0;
+      
+      const avgBMI = bmiData.length > 0 
+        ? bmiData.reduce((sum, item) => sum + item.value, 0) / bmiData.length 
+        : healthStatistics.currentBMI || 0;
+      
+      const totalExerciseTime = exerciseChartData.reduce((sum, item) => sum + item.value, 0);
+      
+      console.log('📊 Backend chart data processed:', {
+        weightData: weightData.length,
+        bmiData: bmiData.length,
+        exerciseData: exerciseChartData.length,
+        avgWeight,
+        avgBMI,
+        totalExerciseTime
+      });
+      
+      return {
+        weight: weightData,
+        bmi: bmiData,
+        exercise: exerciseChartData,
+        stats: {
+          avgWeight: Number(avgWeight.toFixed(1)),
+          avgBMI: Number(avgBMI.toFixed(1)),
+          totalExerciseTime: Number(totalExerciseTime.toFixed(0)),
+          weightTrend: healthStatistics.weightChange || 0,
+          bmiTrend: healthStatistics.bmiChange || 0
+        }
+      };
+    }
+    
+    // 2️⃣ 백엔드 차트 데이터가 없으면 기존 로직 사용 (폴백)
+    console.log('📊 Using fallback chart data processing');
+    
     const safeHealthRecords = Array.isArray(healthRecords) ? healthRecords : [];
     const safeExerciseData = Array.isArray(exerciseData) ? exerciseData : [];
     
-    console.log('📊 Raw data:', {
-      healthRecords: safeHealthRecords.length,
-      exerciseData: safeExerciseData.length,
-      period,
-      sampleHealthRecord: safeHealthRecords[0], // 첫 번째 건강 기록 샘플
-      sampleExerciseData: safeExerciseData[0],   // 첫 번째 운동 데이터 샘플
-      healthRecordsStructure: safeHealthRecords.slice(0, 2), // 구조 확인용
-      exerciseDataStructure: safeExerciseData.slice(0, 2)    // 구조 확인용
-    });
-    
     if (safeHealthRecords.length === 0 && safeExerciseData.length === 0) {
-      // 데이터가 없을 때 기본값 반환
       return {
         weight: [],
         bmi: [],
@@ -218,20 +321,11 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
       };
     }
 
-    // Period별 데이터 그룹핑 사용
+    // Period별 데이터 그룹핑 사용 (기존 로직)
     const weightData = groupDataByPeriod(safeHealthRecords, period, 'record_date', 'weight');
     const bmiData = groupDataByPeriod(safeHealthRecords, period, 'record_date', 'bmi');
     const exerciseChartData = groupDataByPeriod(safeExerciseData, period, 'exercise_date', 'duration_minutes');
 
-    console.log('📈 Grouped data:', {
-      weightData: weightData.length,
-      bmiData: bmiData.length,
-      exerciseChartData: exerciseChartData.length,
-      period,
-      sampleWeightData: weightData.slice(0, 2)
-    });
-
-    // 통계 계산
     const avgWeight = weightData.length > 0 
       ? weightData.reduce((sum, item) => sum + item.value, 0) / weightData.length 
       : 0;
@@ -241,23 +335,6 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
       : 0;
     
     const totalExerciseTime = exerciseChartData.reduce((sum, item) => sum + item.value, 0);
-    
-    // 트렌드 계산 (최근 데이터 vs 이전 데이터)
-    const recentWeight = weightData.slice(-Math.min(3, weightData.length));
-    const previousWeight = weightData.slice(-Math.min(6, weightData.length), -Math.min(3, weightData.length));
-    
-    const weightTrend = recentWeight.length > 0 && previousWeight.length > 0
-      ? ((recentWeight.reduce((sum, item) => sum + item.value, 0) / recentWeight.length) - 
-         (previousWeight.reduce((sum, item) => sum + item.value, 0) / previousWeight.length))
-      : 0;
-    
-    const recentBMI = bmiData.slice(-Math.min(3, bmiData.length));
-    const previousBMI = bmiData.slice(-Math.min(6, bmiData.length), -Math.min(3, bmiData.length));
-    
-    const bmiTrend = recentBMI.length > 0 && previousBMI.length > 0
-      ? ((recentBMI.reduce((sum, item) => sum + item.value, 0) / recentBMI.length) - 
-         (previousBMI.reduce((sum, item) => sum + item.value, 0) / previousBMI.length))
-      : 0;
 
     return {
       weight: weightData,
@@ -267,11 +344,11 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
         avgWeight: Number(avgWeight.toFixed(1)),
         avgBMI: Number(avgBMI.toFixed(1)),
         totalExerciseTime: Number(totalExerciseTime.toFixed(0)),
-        weightTrend: Number(weightTrend.toFixed(1)),
-        bmiTrend: Number(bmiTrend.toFixed(2))
+        weightTrend: 0,
+        bmiTrend: 0
       }
     };
-  }, [healthRecords, exerciseData, groupDataByPeriod, period]);
+  }, [healthStatistics, healthRecords, exerciseData, groupDataByPeriod, period, formatDateForChart]);
 
   // Period에 따른 차트 제목 생성
   const getChartTitle = useCallback((baseTitle: string, period: 'day' | 'week' | 'month' | 'year'): string => {

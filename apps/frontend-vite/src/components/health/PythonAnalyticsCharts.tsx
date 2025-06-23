@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { BodyPartFrequencyChart } from './BodyPartFrequencyChart';
 import { Progress } from '../ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { 
@@ -846,6 +847,22 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
               </div>
             </CardContent>
           </Card>
+
+          {/* 🏋️ 운동 부위별 빈도 차트 추가 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <BodyPartFrequencyChart 
+              bodyPartFrequency={healthStats?.bodyPartFrequency || []}
+              totalExerciseSessions={healthStats?.totalExerciseSessions || 0}
+              period={period}
+              chartType="bar"
+            />
+            <BodyPartFrequencyChart 
+              bodyPartFrequency={healthStats?.bodyPartFrequency || []}
+              totalExerciseSessions={healthStats?.totalExerciseSessions || 0}
+              period={period}
+              chartType="pie"
+            />
+          </div>
         </TabsContent>
 
         {/* 영양 분석 탭 */}

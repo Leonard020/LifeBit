@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Calendar } from '../ui/calendar';
 import { Progress } from '../ui/progress';
 import { WeightTrendChart } from './WeightTrendChart';
+import { BodyPartFrequencyChart } from './BodyPartFrequencyChart';
 import { 
   Activity, 
   Apple, 
@@ -24,7 +25,8 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Dumbbell
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, UserGoal } from '../../api/auth';
@@ -258,7 +260,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   console.log('🚀 [EnhancedHealthDashboard] 컴포넌트 렌더링 시작!', { userId, period });
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'calendar'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'calendar'>('dashboard');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -533,8 +535,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   return (
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'calendar')}>
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'exercise' | 'calendar')}>
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="dashboard" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             대시보드
@@ -542,6 +544,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           <TabsTrigger value="nutrition" className="flex items-center gap-2">
             <Apple className="h-4 w-4" />
             영양 분석
+          </TabsTrigger>
+          <TabsTrigger value="exercise" className="flex items-center gap-2">
+            <Dumbbell className="h-4 w-4" />
+            운동 분석
           </TabsTrigger>
           <TabsTrigger value="calendar" className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
@@ -687,6 +693,62 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   <p>운동 시간: {todayData.exerciseMinutes}분</p>
                   <p>목표 운동: {todayData.targetMinutes}분</p>
                   <p>달성률: {Math.round((todayData.exerciseMinutes / todayData.targetMinutes) * 100)}%</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 🏋️ 운동 분석 탭 */}
+        <TabsContent value="exercise" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <BodyPartFrequencyChart 
+              bodyPartFrequency={healthStats?.bodyPartFrequency || []}
+              totalExerciseSessions={healthStats?.totalExerciseSessions || 0}
+              period={period}
+              chartType="bar"
+            />
+            <BodyPartFrequencyChart 
+              bodyPartFrequency={healthStats?.bodyPartFrequency || []}
+              totalExerciseSessions={healthStats?.totalExerciseSessions || 0}
+              period={period}
+              chartType="pie"
+            />
+          </div>
+          
+          {/* 운동 요약 통계 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Dumbbell className="h-5 w-5" />
+                운동 요약
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {healthStats?.totalExerciseSessions || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">총 운동 세션</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-green-600">
+                    {healthStats?.weeklyWorkouts || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">주간 운동 횟수</div>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {healthStats?.totalCaloriesBurned || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">소모 칼로리</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {healthStats?.streak || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">연속 운동일</div>
                 </div>
               </div>
             </CardContent>
