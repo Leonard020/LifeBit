@@ -107,6 +107,37 @@ const Note = () => {
   const [exerciseRecordedDates, setExerciseRecordedDates] = useState<string[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
 
+  // ✅ 달력의 기록된 날짜(점)를 가져오는 로직을 async/await로 변경하여 안정성 확보
+  const fetchCalendarRecords = useCallback(async () => {
+    const userId = getUserIdFromToken() || 1;
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth() + 1;
+    const token = getToken();
+    if (!token || !userId) return;
+
+    try {
+      const dietPromise = axios.get(`/api/diet/calendar-records/${year}/${month}`, {
+        params: { userId },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const exercisePromise = axios.get(`/api/exercise-sessions/${userId}`, {
+        params: { period: 'month' }, // 현재 월의 운동 기록을 가져온다고 가정
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const [dietResponse, exerciseResponse] = await Promise.all([dietPromise, exercisePromise]);
+      
+      setDietRecordedDates(Object.keys(dietResponse.data));
+      // exercise_date가 없을 경우를 대비하여 방어 코드 추가
+      setExerciseRecordedDates(exerciseResponse.data?.map((item: any) => item.exercise_date) || []);
+    } catch (err) {
+      console.error("달력 기록 조회 실패:", err);
+      setDietRecordedDates([]);
+      setExerciseRecordedDates([]);
+    }
+  }, [calendarMonth]);
+
   const mealTimeMap: Record<string, string> = {
     breakfast: '아침',
     lunch: '점심',
@@ -261,7 +292,7 @@ const Note = () => {
     }
   };
 
-  // 식단 기록 추가
+  // 식단 추가
   const addDietRecord = async () => {
     if (!selectedFood || !quantity) {
       alert('음식과 양을 입력해주세요.');
@@ -289,19 +320,34 @@ const Note = () => {
       };
 
       const token = localStorage.getItem('token');
-      await axios.post('/api/diet/record', request, {
+      const response = await axios.post('/api/diet/record', request, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const newRecord = response.data as DietLogDTO;
 
-      // 데이터 새로고침
-      fetchDietData();
+      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태를 직접 업데이트
+      setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
+      await fetchCalendarRecords(); // 달력 점은 여전히 새로고침
+
+      // ✅ 상태 초기화 및 팝업 닫기
+      setIsAddDietDialogOpen(false);
       setSearchKeyword('');
       setSearchResults([]);
+      setSelectedFood(null);
       setQuantity('100');
-      setIsSearching(false);
+      setMealTime('breakfast');
+
+      toast({
+        title: "식단 기록 추가 완료",
+        description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
+      });
     } catch (error) {
       console.error('식단 기록 추가 중 오류:', error);
-      alert('식단 기록 추가에 실패했습니다.');
+      toast({
+        title: "식단 기록 추가 실패",
+        description: "기록 추가 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -310,11 +356,22 @@ const Note = () => {
     try {
       await axios.delete(`/api/diet/record/${id}`);
 
-      // 데이터 새로고침
-      fetchDietData();
+      // 데이터 새로고침 (목록과 달력 모두)
+      await fetchDietData();
+      await fetchCalendarRecords();
+
+      toast({
+        title: "삭제 완료",
+        description: "식단 기록이 삭제되었습니다."
+      });
 
     } catch (error) {
       console.error("식단 기록 삭제 중 오류:", error);
+      toast({
+        title: "삭제 실패",
+        description: "기록 삭제 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -453,7 +510,15 @@ const Note = () => {
 
   const changeDate = (days: number) => {
     const newDate = new Date(selectedDate);
+    const currentMonth = selectedDate.getMonth();
+
     newDate.setDate(newDate.getDate() + days);
+
+    // 월이 변경되었는지 확인하여 calendarMonth 동기화
+    if (newDate.getMonth() !== currentMonth) {
+      setCalendarMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
+    }
+
     setSelectedDate(newDate);
   };
 
@@ -656,12 +721,16 @@ const Note = () => {
         fat: editFormData.fat,
       };
 
-      await axios.put(`/api/diet/record/${editingDietLog.id}`, submissionData, {
+      const response = await axios.put(`/api/diet/record/${editingDietLog.id}`, submissionData, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
+      const updatedRecord = response.data as DietLogDTO;
 
-      // 데이터 새로고침으로 일관성 유지
-      fetchDietData();
+      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태 직접 업데이트
+      setDailyDietLogs(prevLogs =>
+        prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
+      );
+      await fetchCalendarRecords(); // 달력 점 새로고침
       
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
