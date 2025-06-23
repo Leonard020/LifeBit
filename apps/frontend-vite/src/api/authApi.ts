@@ -1,6 +1,6 @@
 import axiosInstance from '@/utils/axios';
 import { setToken, setUserInfo } from '@/utils/auth';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 
 // ============================================================================
 // 로그인 관련 타입들
@@ -1040,5 +1040,63 @@ export const useDeleteUserGoal = () => {
     onError: (error) => {
       console.error('💥 사용자 목표 삭제 실패:', error);
     }
+  });
+};
+
+// ============================================================================
+// 📅 운동 캘린더 히트맵 API 함수들
+// ============================================================================
+
+/**
+ * 운동 캘린더 히트맵 데이터 인터페이스
+ */
+export interface ExerciseCalendarHeatmapData {
+  exercise_date: string;
+  workout_count: number;
+  duration_minutes: number;
+  calories_burned: number;
+  exercise_name: string;
+}
+
+/**
+ * 운동 캘린더 히트맵 데이터 조회
+ * @param userId 사용자 ID
+ * @returns 최근 84일간의 운동 히트맵 데이터
+ */
+export const getExerciseCalendarHeatmapData = async (userId: string): Promise<ExerciseCalendarHeatmapData[]> => {
+  try {
+    console.log('📅 [API] 운동 캘린더 히트맵 데이터 조회 요청:', userId);
+    
+    const response = await axiosInstance.get<ExerciseCalendarHeatmapData[]>(
+      `/api/health-statistics/${userId}/exercise-calendar-heatmap`
+    );
+    
+    console.log('✅ [API] 운동 캘린더 히트맵 데이터 조회 성공:', response.data);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('❌ [API] 운동 캘린더 히트맵 데이터 조회 실패:', error);
+    
+    if (error instanceof Error && 'response' in error) {
+      const axiosError = error as { response?: { data?: ErrorResponse } };
+      if (axiosError.response?.data?.message) {
+        throw new Error(axiosError.response.data.message);
+      }
+    }
+    throw new Error('운동 캘린더 히트맵 데이터 조회 중 오류가 발생했습니다.');
+  }
+};
+
+/**
+ * 운동 캘린더 히트맵 데이터 조회 Hook
+ * @param userId 사용자 ID
+ * @returns 운동 캘린더 히트맵 데이터 쿼리
+ */
+export const useExerciseCalendarHeatmap = (userId: string) => {
+  return useQuery({
+    queryKey: ['exercise-calendar-heatmap', userId],
+    queryFn: () => getExerciseCalendarHeatmapData(userId),
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
+    gcTime: 1000 * 60 * 10, // 10분간 가비지 컬렉션 지연
   });
 };
