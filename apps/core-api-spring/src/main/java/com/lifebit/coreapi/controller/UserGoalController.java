@@ -23,43 +23,24 @@ public class UserGoalController {
     public ResponseEntity<UserGoal> getUserGoals(
             @PathVariable Long userId,
             HttpServletRequest request) {
-        
         try {
-            // JWT에서 사용자 ID 추출하여 권한 확인
             String bearerToken = request.getHeader("Authorization");
             if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
                 String token = bearerToken.substring(7);
                 Long tokenUserId = jwtTokenProvider.getUserIdFromToken(token);
-                
-                log.info("사용자 목표 조회 요청 - 요청 사용자: {}, 토큰 사용자: {}", userId, tokenUserId);
-                
-                // 권한 확인: 자신의 목표만 조회 가능
                 if (!tokenUserId.equals(userId)) {
-                    log.warn("권한 없음 - 요청 사용자: {}, 토큰 사용자: {}", userId, tokenUserId);
                     return ResponseEntity.status(403).build();
                 }
-                
-                // 사용자 목표 조회 또는 생성
-                UserGoal userGoal = userGoalService.getOrCreateUserGoal(userId);
-                log.info("사용자 목표 조회 성공 - 사용자: {}, 목표: {}", userId, userGoal);
-                
+                UserGoal userGoal = userGoalService.getLatestUserGoal(userId);
+                if (userGoal == null) {
+                    return ResponseEntity.ok().build(); // or return default if you want
+                }
                 return ResponseEntity.ok(userGoal);
             } else {
-                log.warn("Authorization 헤더가 없거나 잘못된 형식 - 사용자: {}", userId);
                 return ResponseEntity.status(401).build();
             }
-            
         } catch (Exception e) {
-            log.error("사용자 목표 조회 중 오류 발생 - 사용자: {}, 오류: {}", userId, e.getMessage(), e);
-            
-            // 오류 발생 시에도 기본 목표 반환
-            try {
-                UserGoal defaultGoal = userGoalService.getOrCreateUserGoal(userId);
-                return ResponseEntity.ok(defaultGoal);
-            } catch (Exception ex) {
-                log.error("기본 목표 생성 실패 - 사용자: {}, 오류: {}", userId, ex.getMessage());
-                return ResponseEntity.status(500).build();
-            }
+            return ResponseEntity.status(500).build();
         }
     }
 
@@ -97,27 +78,30 @@ public class UserGoalController {
     public ResponseEntity<UserGoal> createUserGoal(
             @RequestBody UserGoal request,
             HttpServletRequest httpRequest) {
-        
         try {
-            // JWT에서 사용자 ID 추출하여 권한 확인
             String bearerToken = httpRequest.getHeader("Authorization");
             if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
                 String token = bearerToken.substring(7);
                 Long tokenUserId = jwtTokenProvider.getUserIdFromToken(token);
-                
-                log.info("사용자 목표 생성 요청 - 사용자: {}, 데이터: {}", tokenUserId, request);
-                
+
                 // 요청 데이터에 사용자 ID 설정
                 request.setUserId(tokenUserId);
-                
+
+                // 1. Get latest goal
+                UserGoal latestGoal = userGoalService.getLatestUserGoal(tokenUserId);
+
+                // 2. If same, return latest (do not insert)
+                if (userGoalService.isSameGoal(request, latestGoal)) {
+                    return ResponseEntity.ok(latestGoal);
+                }
+
+                // 3. Else, insert new
                 UserGoal createdGoal = userGoalService.createUserGoal(request);
                 return ResponseEntity.ok(createdGoal);
             } else {
                 return ResponseEntity.status(401).build();
             }
-            
         } catch (Exception e) {
-            log.error("사용자 목표 생성 중 오류 발생 - 오류: {}", e.getMessage(), e);
             return ResponseEntity.status(500).build();
         }
     }

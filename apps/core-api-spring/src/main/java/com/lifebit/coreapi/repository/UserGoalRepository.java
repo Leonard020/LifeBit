@@ -8,4 +8,5 @@ import java.util.Optional;
 @Repository
 public interface UserGoalRepository extends JpaRepository<UserGoal, Long> {
     Optional<UserGoal> findByUserId(Long userId);
+    Optional<UserGoal> findTopByUserIdOrderByCreatedAtDesc(Long userId);
 } 
