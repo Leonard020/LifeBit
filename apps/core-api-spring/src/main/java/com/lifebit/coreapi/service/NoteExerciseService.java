@@ -11,6 +11,7 @@ import com.lifebit.coreapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -26,8 +27,7 @@ public class NoteExerciseService {
     public List<NoteExerciseDTO> getWeeklyExerciseSummary(Long userId, LocalDate weekStart) {
         LocalDate weekEnd = weekStart.plusDays(6);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
-                userId, weekStart, weekEnd
-        );
+                userId, weekStart, weekEnd);
 
         Map<LocalDate, NoteExerciseDTO> summaryMap = new TreeMap<>();
         for (ExerciseSession session : sessions) {
@@ -48,8 +48,8 @@ public class NoteExerciseService {
                 .toList();
     }
 
-    // ✅ 운동 기록 추가
-    public void addExercise(ExerciseRecordDTO dto) {
+    // ✅ 운동 기록 추가 + DTO 리턴
+    public ExerciseRecordDTO addExercise(ExerciseRecordDTO dto) {
         ExerciseSession session = new ExerciseSession();
 
         // 🔸 User 객체 설정
@@ -70,18 +70,45 @@ public class NoteExerciseService {
         session.setExerciseDate(dto.getExerciseDate());
         session.setSets(dto.getSets());
         session.setReps(dto.getReps());
-        session.setWeight(dto.getWeight());
+        session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
+        session.setDurationMinutes(dto.getDurationMinutes());
 
-        // 🔸 "20분" → 숫자 파싱
-        if (dto.getDurationFormatted() != null && dto.getDurationFormatted().endsWith("분")) {
-            try {
-                int minutes = Integer.parseInt(dto.getDurationFormatted().replace("분", "").trim());
-                session.setDurationMinutes(minutes);
-            } catch (NumberFormatException e) {
-                session.setDurationMinutes(null);
-            }
+        // ✅ 저장
+        ExerciseSession saved = exerciseSessionRepository.save(session);
+
+        // ✅ DTO 반환
+        return new ExerciseRecordDTO(saved);
+    }
+
+    // ✅ 운동 기록 삭제 기능
+    public void deleteExercise(Long sessionId, Long userId) {
+        ExerciseSession session = exerciseSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("운동 기록을 찾을 수 없습니다."));
+
+        if (!session.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("삭제 권한이 없습니다.");
         }
 
-        exerciseSessionRepository.save(session);
+        exerciseSessionRepository.delete(session);
+    }
+
+    // ✅ 운동 기록 수정
+    public ExerciseRecordDTO updateExercise(Long sessionId, Long userId, ExerciseRecordDTO dto) {
+        ExerciseSession session = exerciseSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("운동 기록이 존재하지 않습니다."));
+
+        if (!session.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("수정 권한이 없습니다.");
+        }
+
+        // ✏️ 수정 가능한 필드만 갱신
+        session.setSets(dto.getSets());
+        session.setReps(dto.getReps());
+        session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
+        session.setDurationMinutes(dto.getDurationMinutes());
+
+        // 💾 저장 후 DTO 변환하여 반환
+        ExerciseSession saved = exerciseSessionRepository.save(session);
+        return new ExerciseRecordDTO(saved);
     }
 }

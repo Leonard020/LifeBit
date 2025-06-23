@@ -4,12 +4,11 @@ import com.lifebit.coreapi.dto.ExerciseRecordRequest;
 import com.lifebit.coreapi.entity.ExerciseCatalog;
 import com.lifebit.coreapi.entity.ExerciseSession;
 import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.security.JwtTokenProvider;
 import com.lifebit.coreapi.service.ExerciseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,13 +20,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ExerciseController {
     private final ExerciseService exerciseService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @PostMapping("/record")
     public ResponseEntity<ExerciseSession> recordExercise(
-            @RequestBody ExerciseRecordRequest request,
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @RequestHeader("Authorization") String token,
+            @RequestBody ExerciseRecordRequest request) {
+        Long userId = jwtTokenProvider.getUserIdFromToken(token);
         ExerciseSession session = exerciseService.recordExercise(
-            Long.parseLong(userDetails.getUsername()),
+            userId,
             request.getCatalogId(),
             request.getDurationMinutes(),
             request.getCaloriesBurned(),
@@ -38,26 +39,22 @@ public class ExerciseController {
 
     @GetMapping("/history")
     public ResponseEntity<List<ExerciseSession>> getExerciseHistory(
+            @RequestHeader("Authorization") String token,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        Long userId = jwtTokenProvider.getUserIdFromToken(token);
         List<ExerciseSession> history = exerciseService.getExerciseHistory(
-            new User(Long.parseLong(userDetails.getUsername())),
-            startDate,
-            endDate
-        );
+            new User(userId), startDate, endDate);
         return ResponseEntity.ok(history);
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<ExerciseCatalog>> searchExercises(
-            @RequestParam String keyword) {
+    public ResponseEntity<List<ExerciseCatalog>> searchExercises(@RequestParam String keyword) {
         return ResponseEntity.ok(exerciseService.searchExercises(keyword));
     }
 
     @GetMapping("/by-body-part/{bodyPart}")
-    public ResponseEntity<List<ExerciseCatalog>> getExercisesByBodyPart(
-            @PathVariable String bodyPart) {
+    public ResponseEntity<List<ExerciseCatalog>> getExercisesByBodyPart(@PathVariable String bodyPart) {
         return ResponseEntity.ok(exerciseService.getExercisesByBodyPart(bodyPart));
     }
 
@@ -66,7 +63,7 @@ public class ExerciseController {
         String name = (String) request.get("name");
         String bodyPart = (String) request.get("bodyPart");
         String description = (String) request.get("description");
-        
+
         ExerciseCatalog exercise = exerciseService.findOrCreateExercise(name, bodyPart, description);
         return ResponseEntity.ok(exercise);
     }
@@ -77,16 +74,3 @@ public class ExerciseController {
         return ResponseEntity.ok(catalog);
     }
 }
-
-@RestController
-@RequestMapping("/api")
-@RequiredArgsConstructor
-class ExerciseCatalogController {
-    private final ExerciseService exerciseService;
-
-    @GetMapping("/exercise-catalog")
-    public ResponseEntity<List<ExerciseCatalog>> getExerciseCatalog() {
-        List<ExerciseCatalog> catalog = exerciseService.getAllExerciseCatalog();
-        return ResponseEntity.ok(catalog);
-    }
-} 

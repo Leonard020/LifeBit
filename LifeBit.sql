@@ -76,7 +76,7 @@ CREATE TABLE users (
     gender VARCHAR(10) CHECK (gender IN ('male', 'female')),
     role user_role DEFAULT 'USER',
     created_at TIMESTAMP DEFAULT NOW(), 
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
     last_visited TIMESTAMP
 );
 
