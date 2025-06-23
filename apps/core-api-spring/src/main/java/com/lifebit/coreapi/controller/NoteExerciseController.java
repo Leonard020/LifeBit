@@ -20,9 +20,9 @@ public class NoteExerciseController {
 
     private final NoteExerciseService noteExerciseService;
 
-    // ✅ 일일 운동 기록 (개별 세션 반환)
+    // ✅ 1. 일일 운동 기록 조회 (개별 세션 목록)
     @GetMapping("/daily")
-    public ResponseEntity<List<ExerciseRecordDTO>> getTodayExerciseSessions(
+    public ResponseEntity<List<ExerciseRecordDTO>> getDailyExerciseRecords(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         Long userId = Long.parseLong(userDetails.getUsername());
@@ -30,7 +30,7 @@ public class NoteExerciseController {
         return ResponseEntity.ok(sessions);
     }
 
-    // ✅ 주간 운동 요약 (집계 요약)
+    // ✅ 2. 주간 운동 요약 조회
     @GetMapping("/summary")
     public ResponseEntity<List<NoteExerciseDTO>> getWeeklyExerciseSummary(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -38,5 +38,12 @@ public class NoteExerciseController {
         Long userId = Long.parseLong(userDetails.getUsername());
         List<NoteExerciseDTO> summary = noteExerciseService.getWeeklyExerciseSummary(userId, weekStart);
         return ResponseEntity.ok(summary);
+    }
+
+    // ✅ 3. 운동 기록 추가
+    @PostMapping
+    public ResponseEntity<String> addExercise(@RequestBody ExerciseRecordDTO dto) {
+        noteExerciseService.addExercise(dto);
+        return ResponseEntity.ok("운동 기록 추가 성공");
     }
 }
