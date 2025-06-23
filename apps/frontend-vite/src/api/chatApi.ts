@@ -1,7 +1,7 @@
 import { AxiosError } from 'axios';
 import axiosInstance from '@/utils/axios';
 import { convertTimeToMealType, hasTimeInformation } from '@/utils/mealTimeMapping';
-import { getToken } from '@/utils/auth';
+import { getToken, isTokenValid, getUserIdFromToken } from '@/utils/auth';
 
 
 // 대화 메시지 타입
@@ -136,17 +136,30 @@ export const sendChatMessage = async (
   }
 };
 
+interface ExerciseData {
+  exercise: string;
+  weight?: number | string;
+  sets?: number;
+  reps?: number;
+  duration_min?: number;
+  calories_burned?: number;
+}
 
 // 운동 기록 저장 API 호출
-export const saveExerciseRecord = async (exerciseData: any) => {
+export const saveExerciseRecord = async (exerciseData: ExerciseData) => {
   try {
+    const userId = getUserIdFromToken(); // 토큰에서 userId 가져오기
+    if (!userId) {
+      throw new Error('사용자 인증 정보를 찾을 수 없습니다. 다시 로그인해주세요.');
+    }
+    
     const res = await axiosInstance.post('/api/py/note/exercise', {
-      user_id: 1,
+      user_id: userId, // 하드코딩된 user_id 교체
       name: exerciseData.exercise,
       weight: exerciseData.weight,
       sets: exerciseData.sets,
       reps: exerciseData.reps,
-      time: `${exerciseData.duration_min}분`,
+      duration_minutes: exerciseData.duration_min,
       calories_burned: exerciseData.calories_burned || 0,
       exercise_date: new Date().toISOString().split('T')[0]
     });

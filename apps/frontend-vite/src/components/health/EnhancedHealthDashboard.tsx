@@ -7,6 +7,7 @@ import { Calendar } from '../ui/calendar';
 import { Progress } from '../ui/progress';
 import { WeightTrendChart } from './WeightTrendChart';
 import { BodyPartFrequencyChart } from './BodyPartFrequencyChart';
+import { ExerciseCalendarHeatmap } from './ExerciseCalendarHeatmap';
 import { 
   Activity, 
   Apple, 
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, UserGoal } from '../../api/auth';
+import { useExerciseCalendarHeatmap } from '../../api/authApi';
 import { getToken, getUserInfo, isTokenValid } from '../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../hooks/use-toast';
@@ -310,14 +312,21 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     error: healthStatsError,
     refetch: refetchHealthStats
   } = useHealthStatistics(userId, 'week');
+
+  // 📅 운동 캘린더 히트맵 데이터 조회
+  const { 
+    data: exerciseHeatmapData, 
+    isLoading: heatmapLoading, 
+    error: heatmapError 
+  } = useExerciseCalendarHeatmap(userId);
   
   // API 응답 직접 확인
   console.log('🔥 [DEBUG] healthStats 전체 응답:', healthStats);
   console.log('🔥 [DEBUG] healthStats.data:', healthStats?.data);
 
   // 전체 로딩 상태 계산
-  const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading;
-  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError;
+  const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading || heatmapLoading;
+  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError || heatmapError;
   
   // 상태 디버깅
   console.log('📊 [EnhancedHealthDashboard] API 로딩 상태:', {
@@ -708,11 +717,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               period={period}
               chartType="bar"
             />
-            <BodyPartFrequencyChart 
-              bodyPartFrequency={healthStats?.bodyPartFrequency || []}
-              totalExerciseSessions={healthStats?.totalExerciseSessions || 0}
+            <ExerciseCalendarHeatmap 
+              exerciseSessions={exerciseHeatmapData || []}
               period={period}
-              chartType="pie"
             />
           </div>
           
