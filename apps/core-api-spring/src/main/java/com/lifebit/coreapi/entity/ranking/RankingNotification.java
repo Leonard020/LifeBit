@@ -18,8 +18,8 @@ public class RankingNotification {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String userUuid;
+    @Column(nullable = false, name = "user_id")
+    private Long userId;
 
     /** 알림 타입 (랭킹 변동, 보상, 업적 등) */
     @Enumerated(EnumType.STRING)

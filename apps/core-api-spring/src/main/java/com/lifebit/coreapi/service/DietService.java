@@ -141,7 +141,12 @@ public class DietService {
 
         // 추가: DTO의 필드를 Entity에 매핑
         if (request.getMealTime() != null) {
-            mealLog.setMealTime(MealTimeType.valueOf(request.getMealTime()));
+            try {
+                mealLog.setMealTime(MealTimeType.valueOf(request.getMealTime().toLowerCase()));
+            } catch (IllegalArgumentException e) {
+                // 잘못된 mealTime 값이 들어올 경우 로그를 남기고 무시 (또는 기본값 설정)
+                System.err.println("Invalid mealTime value received: " + request.getMealTime());
+            }
         }
         if (request.getInputSource() != null) {
             mealLog.setInputSource(InputSourceType.valueOf(request.getInputSource()));
@@ -167,12 +172,31 @@ public class DietService {
     @Transactional
     public DietLogDTO updateDietRecord(Long id, DietLogDTO request) {
         MealLog mealLog = mealLogRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Diet record not found"));
+                .orElseThrow(() -> new RuntimeException("해당 ID의 식단 기록을 찾을 수 없습니다: " + id));
+
+        FoodItem foodToLink;
+
+        // foodItemId가 요청에 포함되어 있으면, 기존 FoodItem을 찾아 연결합니다.
+        if (request.getFoodItemId() != null) {
+            foodToLink = foodItemRepository.findById(request.getFoodItemId())
+                    .orElseThrow(() -> new RuntimeException("Food item not found with id: " + request.getFoodItemId()));
+        } else {
+            // foodItemId가 없으면, 새로운 FoodItem을 생성합니다 (사용자 커스텀 음식).
+            FoodItem newFoodItem = new FoodItem();
+            newFoodItem.setUuid(UUID.randomUUID());
+            newFoodItem.setCreatedAt(LocalDateTime.now());
+            newFoodItem.setName(request.getFoodName());
+            newFoodItem.setServingSize(BigDecimal.valueOf(100)); // 100g 기준
+            newFoodItem.setCalories(BigDecimal.valueOf(request.getCalories()));
+            newFoodItem.setCarbs(BigDecimal.valueOf(request.getCarbs()));
+            newFoodItem.setProtein(BigDecimal.valueOf(request.getProtein()));
+            newFoodItem.setFat(BigDecimal.valueOf(request.getFat()));
+            
+            foodToLink = foodItemRepository.save(newFoodItem);
+        }
         
-        FoodItem foodItem = foodItemRepository.findById(request.getFoodItemId())
-            .orElseThrow(() -> new RuntimeException("Food item not found"));
-        
-        mealLog.setFoodItem(foodItem);
+        // MealLog가 최종 FoodItem을 가리키도록 설정하고 섭취량 업데이트
+        mealLog.setFoodItem(foodToLink);
         mealLog.setQuantity(BigDecimal.valueOf(request.getQuantity()));
         
         MealLog updatedMealLog = mealLogRepository.save(mealLog);
@@ -219,7 +243,7 @@ public class DietService {
         dto.setFoodItemId(foodItem.getFoodItemId());
         dto.setFoodName(foodItem.getName());
         dto.setQuantity(mealLog.getQuantity().doubleValue());
-        dto.setMealTime(mealLog.getMealTime().toString());
+        dto.setMealTime(mealLog.getMealTime().name());
         dto.setUnit("g"); // 기본 단위 설정
         dto.setLogDate(mealLog.getLogDate().toString());
         dto.setCreatedAt(mealLog.getCreatedAt().toString());

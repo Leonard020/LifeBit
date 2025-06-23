@@ -1,246 +1,317 @@
 package com.lifebit.coreapi.service.ranking;
 
-import com.lifebit.coreapi.constant.ranking.RankingConstants;
-import com.lifebit.coreapi.dto.ranking.*;
+import com.lifebit.coreapi.dto.ranking.MyRankingDto;
+import com.lifebit.coreapi.dto.ranking.RankingResponseDto;
+import com.lifebit.coreapi.dto.ranking.RankingUserDto;
+import com.lifebit.coreapi.dto.ranking.MyRankingResponseDto;
+import com.lifebit.coreapi.dto.ranking.RankingHistoryDto;
+import com.lifebit.coreapi.dto.ranking.RankingStatsDto;
+import com.lifebit.coreapi.dto.ranking.RankingRewardDto;
+import com.lifebit.coreapi.dto.ranking.RankingNotificationDto;
+import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.entity.UserRanking;
-import com.lifebit.coreapi.entity.RankingHistory;
-import com.lifebit.coreapi.entity.enums.PeriodType;
-import com.lifebit.coreapi.exception.ranking.RankingNotFoundException;
+import com.lifebit.coreapi.repository.UserRepository;
 import com.lifebit.coreapi.repository.ranking.UserRankingRepository;
 import com.lifebit.coreapi.repository.ranking.RankingHistoryRepository;
-import com.lifebit.coreapi.validator.ranking.RankingValidator;
+import com.lifebit.coreapi.repository.ranking.RankingNotificationRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import com.lifebit.coreapi.entity.User;
-import com.lifebit.coreapi.repository.UserRepository;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RankingService {
+
     private final UserRankingRepository userRankingRepository;
-    private final RankingHistoryRepository rankingHistoryRepository;
-    private final RankingValidator rankingValidator;
     private final UserRepository userRepository;
-    private static final Logger log = LoggerFactory.getLogger(RankingService.class);
+    private final RankingHistoryRepository rankingHistoryRepository;
+    private final RankingNotificationRepository rankingNotificationRepository;
 
     @Transactional(readOnly = true)
-    public RankingResponse getMyRanking() {
-        String userUuid = getCurrentUserUuid();
-        UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseGet(() -> createDefaultRanking(userUuid));
-        rankingValidator.validateRanking(ranking);
-        return convertToRankingResponse(ranking);
-    }
+    public RankingResponseDto getRankingData() {
+        User currentUser = getCurrentUser();
+        Long currentUserId = currentUser.getUserId();
 
-    @Transactional(readOnly = true)
-    public SeasonRankingResponse getMySeasonRanking() {
-        String userUuid = getCurrentUserUuid();
-        UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseGet(() -> createDefaultRanking(userUuid));
-        rankingValidator.validateRanking(ranking);
-        return convertToSeasonRankingResponse(ranking);
-    }
+        // 1. 상위 10명 랭커 조회
+        List<UserRanking> topRankings = userRankingRepository.findTopRankingsByStreakDays(PageRequest.of(0, 10));
+        List<RankingUserDto> topRankers = new java.util.ArrayList<>();
+        int rank = 1;
+        for (UserRanking ranking : topRankings) {
+            User user = userRepository.findById(ranking.getUserId()).orElse(new User());
+            topRankers.add(RankingUserDto.builder()
+                    .rank(rank++)
+                    .userId(ranking.getUserId())
+                    .nickname(user.getNickname())
+                    .score(ranking.getTotalScore())
+                    .badge("default")
+                    .streakDays(ranking.getStreakDays())
+                    .build());
+        }
 
-    @Transactional(readOnly = true)
-    public PeriodRankingResponse getMyPeriodRanking(PeriodType periodType) {
-        rankingValidator.validatePeriodType(periodType);
-        String userUuid = getCurrentUserUuid();
-        UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseGet(() -> createDefaultRanking(userUuid));
-        rankingValidator.validateRanking(ranking);
-        return convertToPeriodRankingResponse(ranking);
-    }
+        // 2. 나의 랭킹 정보 조회
+        UserRanking myRankingEntity = userRankingRepository.findByUserId(currentUserId)
+                .orElseGet(() -> createDefaultRanking(currentUserId));
+        // 내 랭킹의 실시간 순위 계산
+        int myRank = 0;
+        List<UserRanking> allRankings = userRankingRepository.findTopRankings(PageRequest.of(0, 1000)).getContent();
+        for (int i = 0; i < allRankings.size(); i++) {
+            if (allRankings.get(i).getUserId().equals(currentUserId)) {
+                myRank = i + 1;
+                break;
+            }
+        }
+        MyRankingDto myRanking = MyRankingDto.builder()
+                .rank(myRank)
+                .score(myRankingEntity.getTotalScore())
+                .streakDays(myRankingEntity.getStreakDays())
+                .totalUsers(userRankingRepository.count())
+                .build();
 
-    @Transactional(readOnly = true)
-    public Page<RankingResponse> getTopRankings(Pageable pageable) {
-        Pageable validatedPageable = validateAndCreatePageable(pageable);
-        return userRankingRepository.findTopRankings(validatedPageable)
-                .map(this::convertToRankingResponse);
-    }
-
-    @Transactional(readOnly = true)
-    public Page<SeasonRankingResponse> getTopSeasonRankings(String season, Pageable pageable) {
-        rankingValidator.validateSeason(season);
-        Pageable validatedPageable = validateAndCreatePageable(pageable);
-        return userRankingRepository.findAllBySeasonOrderBySeasonPointsDesc(season, validatedPageable)
-                .map(this::convertToSeasonRankingResponse);
-    }
-
-    @Transactional(readOnly = true)
-    public Page<PeriodRankingResponse> getTopPeriodRankings(PeriodType periodType, Pageable pageable) {
-        rankingValidator.validatePeriodType(periodType);
-        Pageable validatedPageable = validateAndCreatePageable(pageable);
-        return userRankingRepository.findAllByPeriodTypeOrderByTotalScoreDesc(periodType, validatedPageable)
-                .map(this::convertToPeriodRankingResponse);
-    }
-
-    @Transactional(readOnly = true)
-    public RankingStatsResponse getRankingStats() {
-        String userUuid = getCurrentUserUuid();
-        UserRanking ranking = userRankingRepository.findByUserUuid(userUuid)
-                .orElseGet(() -> createDefaultRanking(userUuid));
-        rankingValidator.validateRanking(ranking);
-        return RankingStatsResponse.builder()
-                .totalRankings(userRankingRepository.countActiveRankingsByPeriodType(PeriodType.WEEKLY))
-                .myRank(ranking.getRankPosition())
-                .myTotalScore(ranking.getTotalScore())
-                .myStreakDays(ranking.getStreakDays())
-                .mySeasonRank(ranking.getSeasonRank())
-                .mySeasonPoints(ranking.getSeasonPoints())
-                .myPeriodRank(ranking.getPeriodRank())
-                .myPeriodPoints(ranking.getPeriodPoints())
+        // 3. 최종 응답 생성
+        return RankingResponseDto.builder()
+                .topRankers(topRankers)
+                .myRanking(myRanking)
                 .build();
     }
 
     @Transactional(readOnly = true)
-    public Page<RankingHistoryResponse> getRankingHistory(PeriodType periodType, String season, Pageable pageable) {
-        Pageable validatedPageable = validateAndCreatePageable(pageable);
-        if (periodType != null) {
-            rankingValidator.validatePeriodType(periodType);
-        }
-        if (season != null) {
-            rankingValidator.validateSeason(season);
-        }
-        return rankingHistoryRepository.findByPeriodTypeOrderByRecordedAtDesc(periodType, validatedPageable)
-                .map(this::convertToHistoryResponse);
+    public MyRankingResponseDto getMyRanking() {
+        User currentUser = getCurrentUser();
+        Long currentUserId = currentUser.getUserId();
+        UserRanking myRankingEntity = userRankingRepository.findByUserId(currentUserId)
+                .orElseGet(() -> createDefaultRanking(currentUserId));
+        return MyRankingResponseDto.builder()
+                .rank(myRankingEntity.getRankPosition())
+                .score(myRankingEntity.getTotalScore())
+                .streakDays(myRankingEntity.getStreakDays())
+                .totalUsers(userRankingRepository.count())
+                .userId(currentUserId)
+                .nickname(currentUser.getNickname())
+                .build();
     }
 
-    private String getCurrentUserUuid() {
+    @Transactional(readOnly = true)
+    public List<RankingUserDto> getSeasonRankings(int season) {
+        List<UserRanking> seasonRankings = userRankingRepository.findAllBySeasonOrderByTotalScoreDesc(season, PageRequest.of(0, 10)).getContent();
+        return seasonRankings.stream()
+                .map(ranking -> {
+                    User user = userRepository.findById(ranking.getUserId()).orElse(new User());
+                    return RankingUserDto.builder()
+                            .rank(ranking.getRankPosition())
+                            .userId(ranking.getUserId())
+                            .nickname(user.getNickname())
+                            .score(ranking.getTotalScore())
+                            .badge("default")
+                            .streakDays(ranking.getStreakDays())
+                            .build();
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RankingUserDto> getPeriodRankings(String periodType) {
+        // 최근 기록 기준, ranking_history에서 periodType별로 상위 10명 추출
+        List<com.lifebit.coreapi.entity.RankingHistory> histories = rankingHistoryRepository.findByPeriodTypeOrderByRecordedAtDesc(periodType, PageRequest.of(0, 10)).getContent();
+        return histories.stream()
+                .map(history -> {
+                    UserRanking ranking = history.getUserRanking();
+                    User user = userRepository.findById(ranking.getUserId()).orElse(new User());
+                    return RankingUserDto.builder()
+                            .rank(history.getRankPosition())
+                            .userId(ranking.getUserId())
+                            .nickname(user.getNickname())
+                            .score(history.getTotalScore())
+                            .badge("default")
+                            .streakDays(history.getStreakDays())
+                            .build();
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RankingUserDto> getTopRankings() {
+        List<UserRanking> topRankings = userRankingRepository.findTopRankings(PageRequest.of(0, 10)).getContent();
+        return topRankings.stream()
+                .map(ranking -> {
+                    User user = userRepository.findById(ranking.getUserId()).orElse(new User());
+                    return RankingUserDto.builder()
+                            .rank(ranking.getRankPosition())
+                            .userId(ranking.getUserId())
+                            .nickname(user.getNickname())
+                            .score(ranking.getTotalScore())
+                            .badge("default")
+                            .streakDays(ranking.getStreakDays())
+                            .build();
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<RankingHistoryDto> getRankingHistory(String periodType, Integer season) {
+        java.util.List<com.lifebit.coreapi.entity.RankingHistory> histories;
+        if (periodType != null && season != null) {
+            histories = rankingHistoryRepository.findByPeriodTypeAndSeasonOrderByRecordedAtDesc(periodType, season);
+        } else if (periodType != null) {
+            histories = rankingHistoryRepository.findByPeriodTypeOrderByRecordedAtDesc(periodType, org.springframework.data.domain.PageRequest.of(0, 30)).getContent();
+        } else if (season != null) {
+            histories = rankingHistoryRepository.findBySeasonOrderByRecordedAtDesc(season, org.springframework.data.domain.PageRequest.of(0, 30)).getContent();
+        } else {
+            histories = rankingHistoryRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "recordedAt"));
+        }
+        return histories.stream().map(h -> RankingHistoryDto.builder()
+                .recordedAt(h.getRecordedAt())
+                .totalScore(h.getTotalScore())
+                .rankPosition(h.getRankPosition())
+                .streakDays(h.getStreakDays())
+                .season(h.getSeason())
+                .periodType(h.getPeriodType())
+                .build()).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public RankingStatsDto getRankingStats() {
+        User currentUser = getCurrentUser();
+        Long currentUserId = currentUser.getUserId();
+        UserRanking myRankingEntity = userRankingRepository.findByUserId(currentUserId)
+                .orElseGet(() -> createDefaultRanking(currentUserId));
+        return RankingStatsDto.builder()
+                .totalRankings(userRankingRepository.count())
+                .myRank(myRankingEntity.getRankPosition())
+                .myTotalScore(myRankingEntity.getTotalScore())
+                .myStreakDays(myRankingEntity.getStreakDays())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<RankingRewardDto> getSeasonRewards(int season) {
+        // 예시: 시즌 상위 3명에게만 보상 지급
+        java.util.List<UserRanking> seasonRankings = userRankingRepository.findAllBySeasonOrderByTotalScoreDesc(season, org.springframework.data.domain.PageRequest.of(0, 3)).getContent();
+        int[] rewards = {10000, 5000, 2000};
+        java.util.List<RankingRewardDto> result = new java.util.ArrayList<>();
+        for (int i = 0; i < seasonRankings.size(); i++) {
+            UserRanking ranking = seasonRankings.get(i);
+            com.lifebit.coreapi.entity.User user = userRepository.findById(ranking.getUserId()).orElse(new com.lifebit.coreapi.entity.User());
+            result.add(RankingRewardDto.builder()
+                    .userId(ranking.getUserId())
+                    .nickname(user.getNickname())
+                    .rankPosition(ranking.getRankPosition())
+                    .totalScore(ranking.getTotalScore())
+                    .rewardType("season")
+                    .rewardPoints(rewards[i])
+                    .build());
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<RankingRewardDto> getPeriodRewards(String periodType) {
+        // 예시: 기간 상위 3명에게만 보상 지급
+        java.util.List<com.lifebit.coreapi.entity.RankingHistory> histories = rankingHistoryRepository.findByPeriodTypeOrderByRecordedAtDesc(periodType, org.springframework.data.domain.PageRequest.of(0, 3)).getContent();
+        int[] rewards = {3000, 2000, 1000};
+        java.util.List<RankingRewardDto> result = new java.util.ArrayList<>();
+        for (int i = 0; i < histories.size(); i++) {
+            com.lifebit.coreapi.entity.RankingHistory history = histories.get(i);
+            UserRanking ranking = history.getUserRanking();
+            com.lifebit.coreapi.entity.User user = userRepository.findById(ranking.getUserId()).orElse(new com.lifebit.coreapi.entity.User());
+            result.add(RankingRewardDto.builder()
+                    .userId(ranking.getUserId())
+                    .nickname(user.getNickname())
+                    .rankPosition(history.getRankPosition())
+                    .totalScore(history.getTotalScore())
+                    .rewardType("period")
+                    .rewardPoints(rewards[i])
+                    .build());
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<RankingRewardDto> getStreakRewards() {
+        // 예시: 연속 기록 상위 3명에게만 보상 지급
+        java.util.List<UserRanking> streakRankings = userRankingRepository.findTopRankingsByStreakDays(org.springframework.data.domain.PageRequest.of(0, 3));
+        int[] rewards = {2000, 1000, 500};
+        java.util.List<RankingRewardDto> result = new java.util.ArrayList<>();
+        for (int i = 0; i < streakRankings.size(); i++) {
+            UserRanking ranking = streakRankings.get(i);
+            com.lifebit.coreapi.entity.User user = userRepository.findById(ranking.getUserId()).orElse(new com.lifebit.coreapi.entity.User());
+            result.add(RankingRewardDto.builder()
+                    .userId(ranking.getUserId())
+                    .nickname(user.getNickname())
+                    .rankPosition(ranking.getRankPosition())
+                    .totalScore(ranking.getTotalScore())
+                    .rewardType("streak")
+                    .rewardPoints(rewards[i])
+                    .build());
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public RankingRewardDto getMyReward() {
+        User currentUser = getCurrentUser();
+        Long currentUserId = currentUser.getUserId();
+        UserRanking myRanking = userRankingRepository.findByUserId(currentUserId).orElseGet(() -> createDefaultRanking(currentUserId));
+        // 예시: 내 순위에 따라 보상 계산
+        int reward = 0;
+        if (myRanking.getRankPosition() == 1) reward = 10000;
+        else if (myRanking.getRankPosition() == 2) reward = 5000;
+        else if (myRanking.getRankPosition() == 3) reward = 2000;
+        return RankingRewardDto.builder()
+                .userId(currentUserId)
+                .nickname(currentUser.getNickname())
+                .rankPosition(myRanking.getRankPosition())
+                .totalScore(myRanking.getTotalScore())
+                .rewardType("personal")
+                .rewardPoints(reward)
+                .build();
+    }
+
+    private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new IllegalStateException("User is not authenticated.");
         }
-
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof User) {
-            User currentUser = (User) principal;
-            return currentUser.getUuid().toString();
-        } else if (principal instanceof String) {
-            // JWT 토큰에서 직접 userUuid를 가져오는 경우 (예: UserDetailsService 구현에서 userUuid를 principal로 반환)
-            return (String) principal;
-        } else {
-            throw new IllegalStateException("Could not get user UUID from principal.");
-        }
+        String email = authentication.getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("User not found in repository."));
     }
 
-    private Pageable validateAndCreatePageable(Pageable pageable) {
-        int pageSize = Math.min(pageable.getPageSize(), RankingConstants.MAX_PAGE_SIZE);
-        return PageRequest.of(
-            pageable.getPageNumber(),
-            pageSize,
-            Sort.by(Sort.Direction.DESC, "totalScore")
-        );
-    }
-
-    private RankingResponse convertToRankingResponse(UserRanking ranking) {
-        return RankingResponse.builder()
-                .userUuid(ranking.getUserUuid())
-                .username(ranking.getUsername())
-                .totalScore(ranking.getTotalScore())
-                .rankPosition(ranking.getRankPosition())
-                .streakDays(ranking.getStreakDays())
-                .build();
-    }
-
-    private SeasonRankingResponse convertToSeasonRankingResponse(UserRanking ranking) {
-        return SeasonRankingResponse.builder()
-                .userUuid(ranking.getUserUuid())
-                .username(ranking.getUsername())
-                .totalScore(ranking.getTotalScore())
-                .rankPosition(ranking.getRankPosition())
-                .streakDays(ranking.getStreakDays())
-                .season(ranking.getSeason())
-                .seasonRank(ranking.getSeasonRank())
-                .seasonPoints(ranking.getSeasonPoints())
-                .build();
-    }
-
-    private PeriodRankingResponse convertToPeriodRankingResponse(UserRanking ranking) {
-        return PeriodRankingResponse.builder()
-                .userUuid(ranking.getUserUuid())
-                .username(ranking.getUsername())
-                .totalScore(ranking.getTotalScore())
-                .rankPosition(ranking.getRankPosition())
-                .streakDays(ranking.getStreakDays())
-                .periodType(ranking.getPeriodType())
-                .periodRank(ranking.getPeriodRank())
-                .periodPoints(ranking.getPeriodPoints())
-                .build();
-    }
-
-    private RankingHistoryResponse convertToHistoryResponse(RankingHistory history) {
-        return RankingHistoryResponse.builder()
-                .userUuid(history.getUserUuid())
-                .username(history.getUsername())
-                .totalScore(history.getTotalScore())
-                .rankPosition(history.getRankPosition())
-                .periodType(history.getPeriodType())
-                .periodRank(history.getPeriodRank())
-                .periodPoints(history.getPeriodPoints())
-                .season(history.getSeason())
-                .seasonRank(history.getSeasonRank())
-                .seasonPoints(history.getSeasonPoints())
-                .streakDays(history.getStreakDays())
-                .recordedAt(history.getRecordedAt())
-                .build();
-    }
-
-    /**
-     * 랭킹 데이터가 없을 때 자동으로 생성 (최초 기록 시)
-     */
-    private UserRanking createDefaultRanking(String userUuid) {
-        // 사용자 정보 조회 (username 등)
-        com.lifebit.coreapi.entity.User user = userRepository.findAll().stream()
-            .filter(u -> u.getUuid().toString().equals(userUuid))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("User not found for ranking creation: " + userUuid));
+    private UserRanking createDefaultRanking(Long userId) {
         UserRanking ranking = new UserRanking();
-        ranking.setUserUuid(userUuid);
-        ranking.setUsername(user.getNickname());
+        ranking.setUserId(userId);
         ranking.setTotalScore(0);
         ranking.setRankPosition(0);
         ranking.setStreakDays(0);
-        ranking.setPeriodType(PeriodType.WEEKLY);
-        ranking.setPeriodRank(0);
-        ranking.setPeriodPoints(0);
-        ranking.setSeason("Season 1");
-        ranking.setSeasonRank(0);
-        ranking.setSeasonPoints(0);
+        ranking.setPreviousRank(0);
+        ranking.setSeason(1); // 기본 시즌
         ranking.setActive(true);
-        ranking.setLastUpdatedAt(java.time.LocalDateTime.now());
         return userRankingRepository.save(ranking);
     }
 
-    /**
-     * 매일 새벽 3시에 전체 사용자 랭킹을 자동으로 갱신하는 스케줄러
-     * (실제 랭킹 산정 로직은 프로젝트 정책에 맞게 구현 필요)
-     */
     @Scheduled(cron = "0 0 3 * * *")
+    @Transactional
     public void scheduledRankingUpdate() {
         log.info("[스케줄러] 전체 사용자 랭킹 자동 갱신 시작");
-        // 예시: 전체 UserRanking을 조회하여 점수/순위/연속기록 등 갱신
-        var allRankings = userRankingRepository.findAll();
-        // 실제 랭킹 산정 알고리즘에 따라 아래 로직 구현
+        List<UserRanking> allRankings = userRankingRepository.findAll(Sort.by(Sort.Direction.DESC, "totalScore"));
+
         int rank = 1;
-        allRankings.sort((a, b) -> Integer.compare(b.getTotalScore(), a.getTotalScore()));
         for (UserRanking ranking : allRankings) {
-            int oldRank = ranking.getRankPosition();
+            ranking.setPreviousRank(ranking.getRankPosition());
             ranking.setRankPosition(rank++);
-            // 연속기록, 점수 등 추가 갱신 로직 필요시 구현
-            ranking.setLastUpdatedAt(java.time.LocalDateTime.now());
-            userRankingRepository.save(ranking);
-            log.info("[랭킹 갱신] {}: {}위 (점수: {})", ranking.getUsername(), ranking.getRankPosition(), ranking.getTotalScore());
+            ranking.setLastUpdatedAt(LocalDateTime.now());
         }
-        log.info("[스케줄러] 전체 사용자 랭킹 자동 갱신 완료");
+        userRankingRepository.saveAll(allRankings);
+        log.info("[스케줄러] 전체 사용자 랭킹 자동 갱신 완료: {}명", allRankings.size());
     }
 } 
