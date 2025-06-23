@@ -801,7 +801,26 @@ public class HealthStatisticsService {
             // 🍽️ userId를 직접 사용하여 오늘의 식단 기록 조회 (log_date 기준)
             List<MealLog> todayMealLogs = mealLogRepository.findByUserIdAndLogDateOrderByLogDateDescCreatedAtDesc(userId, today);
             
-            log.info("🍽️ [HealthStatisticsService] 사용자 {} - 오늘의 식단 기록 조회: {} 건", userId, todayMealLogs.size());
+            log.info("🍽️ [HealthStatisticsService] 사용자 {} - 오늘({})의 식단 기록 조회: {} 건", userId, today, todayMealLogs.size());
+            
+            // 🔍 디버깅: 만약 오늘 데이터가 없다면 최근 7일 데이터 확인
+            if (todayMealLogs.isEmpty()) {
+                log.warn("🚨 [HealthStatisticsService] 오늘 데이터가 없음. 최근 데이터 확인 중...");
+                
+                // 최근 7일간의 모든 데이터 조회
+                LocalDate sevenDaysAgo = today.minusDays(7);
+                List<MealLog> recentMealLogs = mealLogRepository.findByUserIdAndLogDateBetweenOrderByLogDateDescCreatedAtDesc(userId, sevenDaysAgo, today);
+                log.info("🔍 [HealthStatisticsService] 최근 7일({} ~ {}) 식단 기록: {} 건", sevenDaysAgo, today, recentMealLogs.size());
+                
+                // 최근 데이터가 있다면 가장 최근 날짜의 데이터 사용
+                if (!recentMealLogs.isEmpty()) {
+                    LocalDate latestDate = recentMealLogs.get(0).getLogDate();
+                    todayMealLogs = recentMealLogs.stream()
+                        .filter(meal -> meal.getLogDate().equals(latestDate))
+                        .collect(java.util.stream.Collectors.toList());
+                    log.info("🔄 [HealthStatisticsService] 가장 최근 날짜({})의 데이터 사용: {} 건", latestDate, todayMealLogs.size());
+                }
+            }
             
             // 영양소 합계 계산
             BigDecimal totalCalories = BigDecimal.ZERO;
