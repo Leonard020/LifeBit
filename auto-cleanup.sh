@@ -211,6 +211,118 @@ cleanup_lifebit_docker() {
     fi
 }
 
+# Terraform 상태 및 캐시 정리
+cleanup_terraform() {
+    log_cleanup "Terraform 상태 및 캐시 정리 중..."
+    
+    local terraform_dir="$SCRIPT_DIR/infrastructure"
+    
+    if [[ ! -d "$terraform_dir" ]]; then
+        log_warning "infrastructure 디렉토리를 찾을 수 없습니다"
+        return 0
+    fi
+    
+    cd "$terraform_dir"
+    
+    # Terraform 상태 파일 백업 및 삭제
+    if [[ -f "terraform.tfstate" ]]; then
+        local backup_name="terraform.tfstate.cleanup-backup-$(date +%Y%m%d_%H%M%S)"
+        log_info "Terraform 상태 파일 백업: $backup_name"
+        cp "terraform.tfstate" "$backup_name" 2>/dev/null || true
+        rm -f "terraform.tfstate" 2>/dev/null || true
+        log_success "Terraform 상태 파일 정리 완료"
+    fi
+    
+    # Terraform 백업 상태 파일 삭제
+    if [[ -f "terraform.tfstate.backup" ]]; then
+        local backup_name="terraform.tfstate.backup.cleanup-backup-$(date +%Y%m%d_%H%M%S)"
+        log_info "Terraform 백업 상태 파일 백업: $backup_name"
+        cp "terraform.tfstate.backup" "$backup_name" 2>/dev/null || true
+        rm -f "terraform.tfstate.backup" 2>/dev/null || true
+        log_success "Terraform 백업 상태 파일 정리 완료"
+    fi
+    
+    # .terraform 캐시 디렉토리 삭제
+    if [[ -d ".terraform" ]]; then
+        log_info ".terraform 캐시 디렉토리 삭제 중..."
+        rm -rf ".terraform" 2>/dev/null || true
+        log_success ".terraform 캐시 정리 완료"
+    fi
+    
+    # .terraform.lock.hcl 파일 삭제
+    if [[ -f ".terraform.lock.hcl" ]]; then
+        log_info ".terraform.lock.hcl 파일 삭제 중..."
+        rm -f ".terraform.lock.hcl" 2>/dev/null || true
+        log_success ".terraform.lock.hcl 정리 완료"
+    fi
+    
+    # Terraform 계획 파일들 삭제
+    local plan_files=$(ls tfplan-* 2>/dev/null || true)
+    if [[ -n "$plan_files" ]]; then
+        log_info "Terraform 계획 파일들 삭제 중..."
+        rm -f tfplan-* 2>/dev/null || true
+        log_success "Terraform 계획 파일 정리 완료"
+    fi
+    
+    # Terraform 로그 파일들 정리
+    if ls terraform.log* 1> /dev/null 2>&1; then
+        log_info "Terraform 로그 파일 삭제 중..."
+        rm -f terraform.log* 2>/dev/null || true
+        log_success "Terraform 로그 파일 정리 완료"
+    fi
+    
+    cd "$SCRIPT_DIR"
+    log_success "Terraform 정리 완료"
+}
+
+# Terraform destroy 실행 (위험한 작업)
+terraform_destroy() {
+    log_cleanup "Terraform 인프라 삭제 중..."
+    
+    local terraform_dir="$SCRIPT_DIR/infrastructure"
+    
+    if [[ ! -d "$terraform_dir" ]]; then
+        log_warning "infrastructure 디렉토리를 찾을 수 없습니다"
+        return 0
+    fi
+    
+    cd "$terraform_dir"
+    
+    # terraform.tfstate 파일이 있는지 확인
+    if [[ ! -f "terraform.tfstate" ]]; then
+        log_warning "Terraform 상태 파일이 없습니다. 삭제할 인프라가 없을 수 있습니다."
+        cd "$SCRIPT_DIR"
+        return 0
+    fi
+    
+    # 환경 변수 확인
+    if [[ -z "$ACCESS_KEY" && -z "$NCP_ACCESS_KEY" ]]; then
+        log_warning "NCP 인증 정보가 없어 Terraform destroy를 건너뜁니다."
+        cd "$SCRIPT_DIR"
+        return 0
+    fi
+    
+    # NCP 키 변수명 호환성 처리
+    export NCP_ACCESS_KEY="${NCP_ACCESS_KEY:-$ACCESS_KEY}"
+    export NCP_SECRET_KEY="${NCP_SECRET_KEY:-$SECRET_KEY}"
+    
+    log_info "Terraform 인프라 삭제 시작..."
+    
+    # terraform destroy 실행 (자동 승인)
+    if terraform destroy \
+        -var="ncp_access_key=$NCP_ACCESS_KEY" \
+        -var="ncp_secret_key=$NCP_SECRET_KEY" \
+        -var="environment=${ENVIRONMENT:-demo}" \
+        -var-file="single-server.tfvars" \
+        -auto-approve 2>/dev/null; then
+        log_success "Terraform 인프라 삭제 완료"
+    else
+        log_warning "Terraform 인프라 삭제 중 일부 오류가 발생했습니다. 상태 파일은 정리됩니다."
+    fi
+    
+    cd "$SCRIPT_DIR"
+}
+
 # LifeBit 로컬 파일 정리
 cleanup_local_files() {
     log_cleanup "LifeBit 로컬 파일 정리 중..."
@@ -709,21 +821,37 @@ cleanup_all() {
     
     local total_deleted=0
     
-    # 1. Docker Compose 정리
+    # 1. Terraform 인프라 삭제 (가장 먼저 - 실제 클라우드 리소스 삭제)
+    if check_required_vars; then
+        terraform_destroy
+        total_deleted=$((total_deleted + 10))
+    else
+        log_info "NCP 인증 정보가 없어 Terraform destroy를 건너뜁니다."
+    fi
+    
+    # 2. Docker Compose 정리
     cleanup_docker_compose
     total_deleted=$((total_deleted + 1))
     
-    # 2. LifeBit Docker 리소스 정리
+    # 3. LifeBit Docker 리소스 정리
     cleanup_lifebit_docker
     total_deleted=$((total_deleted + 5))
     
-    # 3. 로컬 파일 정리
+    # 4. 로컬 파일 정리
     cleanup_local_files
     total_deleted=$((total_deleted + 3))
     
-    # 4. 네이버클라우드 리소스 정리 (CLI가 설정된 경우)
+    # 5. Terraform 상태 및 캐시 정리 (인프라 삭제 후)
+    cleanup_terraform
+    total_deleted=$((total_deleted + 5))
+    
+    # 6. 네이버클라우드 CLI를 통한 추가 정리 (보험용)
     if check_required_vars && check_cli && configure_cli; then
-        log_info "네이버클라우드 리소스 정리를 시작합니다."
+        log_info "네이버클라우드 CLI를 통한 잔여 리소스 정리를 시작합니다."
+        
+        # 잠시 대기 (Terraform destroy 완료 대기)
+        log_info "Terraform 삭제 완료 대기 중... (30초)"
+        sleep 30
         
         # 1. 서버 인스턴스 삭제 (가장 먼저)
         delete_server_instances
@@ -769,9 +897,9 @@ cleanup_all() {
         delete_vpcs
         total_deleted=$((total_deleted + 1))
         
-        log_success "네이버클라우드 리소스 정리 완료"
+        log_success "네이버클라우드 잔여 리소스 정리 완료"
     else
-        log_info "네이버클라우드 CLI 설정이 없어 로컬 정리만 수행됩니다."
+        log_info "네이버클라우드 CLI 설정이 없어 CLI 정리는 건너뜁니다."
     fi
     
     log_success "LifeBit 전체 리소스 정리 완료 (총 $total_deleted개 항목)"
@@ -790,6 +918,12 @@ cleanup_specific() {
             ;;
         "local")
             cleanup_local_files
+            ;;
+        "terraform")
+            cleanup_terraform
+            ;;
+        "terraform-destroy")
+            terraform_destroy
             ;;
         "servers")
             if check_required_vars && check_cli && configure_cli; then
@@ -928,10 +1062,12 @@ show_help() {
 사용법: $SCRIPT_NAME [옵션]
 
 옵션:
-    all                          모든 리소스 삭제 (로컬 Docker + 파일 + 클라우드)
+    all                          모든 리소스 삭제 (Terraform + Docker + 파일 + 클라우드)
     docker                       LifeBit Docker 리소스만 정리
     compose                      Docker Compose 정리
     local                        로컬 파일 정리
+    terraform                    Terraform 상태 및 캐시 정리
+    terraform-destroy            Terraform 인프라 삭제 (위험!)
     cloud                        네이버클라우드 리소스만 정리 (올바른 순서)
     
     클라우드 개별 리소스:
@@ -952,10 +1088,12 @@ show_help() {
     --help, -h                   이 도움말 표시
 
 예시:
-    $SCRIPT_NAME all                    # 전체 리소스 삭제 (로컬+클라우드, 올바른 순서)
+    $SCRIPT_NAME all                    # 전체 리소스 삭제 (Terraform+Docker+로컬+클라우드, 올바른 순서)
     $SCRIPT_NAME docker                 # LifeBit Docker만 정리
     $SCRIPT_NAME compose                # Docker Compose 정리
     $SCRIPT_NAME local                  # 로컬 파일만 정리
+    $SCRIPT_NAME terraform              # Terraform 상태 및 캐시만 정리
+    $SCRIPT_NAME terraform-destroy      # Terraform 인프라만 삭제 (위험!)
     $SCRIPT_NAME cloud                  # 네이버클라우드 리소스만 정리 (올바른 순서)
     $SCRIPT_NAME servers                # 클라우드 서버만 삭제
     $SCRIPT_NAME lbs                    # 클라우드 로드밸런서만 삭제
@@ -1059,7 +1197,7 @@ main() {
             cleanup_all
             notify_cleanup_success "$PROJECT_NAME" "전체 리소스" "전체"
             ;;
-        "docker"|"compose"|"local"|"cloud"|"servers"|"ips"|"acgs"|"subnets"|"vpcs"|"loadbalancers"|"lbs"|"natgateways"|"nats"|"networkinterfaces"|"nis"|"routetables"|"routes"|"internetgateways"|"igws")
+        "docker"|"compose"|"local"|"terraform"|"terraform-destroy"|"cloud"|"servers"|"ips"|"acgs"|"subnets"|"vpcs"|"loadbalancers"|"lbs"|"natgateways"|"nats"|"networkinterfaces"|"nis"|"routetables"|"routes"|"internetgateways"|"igws")
             notify_cleanup_start "$PROJECT_NAME" "$1"
             cleanup_specific "$1"
             notify_cleanup_success "$PROJECT_NAME" "$1" "선택된 리소스"
