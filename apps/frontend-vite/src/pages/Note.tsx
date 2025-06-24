@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
@@ -18,6 +18,8 @@ import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, d
 import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { useUserGoals } from '@/api/auth';
+import type { TooltipProps } from 'recharts';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -195,16 +197,31 @@ const Note = () => {
     diet: boolean;
   }
 
-  // Exercise goals from profile (mock data) (유지)
-  const exerciseGoals: { [key: string]: number } = {
-    '가슴': 3,
-    '등': 2,
-    '하체': 4,
-    '어깨': 2,
-    '복근': 3,
-    '팔': 2,
-    '유산소': 5,
-  };
+  const userId = getUserIdFromToken();
+  const { data: userGoalsData, isLoading: goalsLoading } = useUserGoals(userId ? userId.toString() : '');
+
+  // 3. Map backend fields to radar chart axes
+  const bodyPartMap = [
+    { key: 'weekly_chest', label: '가슴' },
+    { key: 'weekly_back', label: '등' },
+    { key: 'weekly_legs', label: '하체' },
+    { key: 'weekly_shoulders', label: '어깨' },
+    { key: 'weekly_abs', label: '복근' },
+    { key: 'weekly_arms', label: '팔' },
+    { key: 'weekly_cardio', label: '유산소' },
+  ];
+
+  const exerciseGoals = React.useMemo(() => {
+    if (!userGoalsData) return {};
+    // If array, pick the latest
+    const goals = Array.isArray(userGoalsData)
+      ? userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0])
+      : userGoalsData.data || userGoalsData;
+    return bodyPartMap.reduce((acc, { key, label }) => {
+      acc[label] = goals[key] ?? 0;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [userGoalsData]);
 
   // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
@@ -233,10 +250,10 @@ const Note = () => {
     fetchWeeklySummary();
   }, [authToken]); // authToken이 변경될 때마다 실행
 
-  const exerciseData = Object.entries(exerciseGoals).map(([part, goal]) => ({
-    subject: part,
-    value: (weeklySummary[part] || 0) * 20, // 1회 = 20%
-    goal: goal * 20,
+  const exerciseData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: (weeklySummary[label] || 0) * 20, // 1회 = 20%
+    goal: (exerciseGoals[label] || 0) * 20,
   }));
 
   // ✅ fetchDietData를 useCallback으로 분리
@@ -951,7 +968,20 @@ const Note = () => {
     }
   };
 
-
+  // Custom tooltip for radar chart
+  const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
+    if (active && payload && payload.length > 0) {
+      // Find the goal value
+      const part = payload[0].payload.subject;
+      const goal = payload[0].payload.goal;
+      return (
+        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
+          <strong>{part}</strong>: {goal / 20}회
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <Layout>
@@ -1019,12 +1049,31 @@ const Note = () => {
           {/* Exercise Tab - 기존 코드 유지 */}
           <TabsContent value="exercise" className="space-y-6">
             <Card className="hover-lift">
-              <CardHeader>
-                <CardTitle>운동 부위별 목표</CardTitle>
-                <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <>
+                  <div>
+                    <CardTitle>운동 부위별 목표</CardTitle>
+                    <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+                  </div>
+                  {/* 총 주간 운동 목표 - no box, just text on background */}
+                  <div className="ml-auto text-right">
+                    <div className="text-base font-bold text-blue-700">
+                      {(() => {
+                        // Calculate total weekly workout target
+                        const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
+                        const cardio = exerciseGoals['유산소'] || 0;
+                        const total = strength + cardio;
+                        return `목표 : ${total}회 / 주`;
+                      })()}
+                    </div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      (근력운동: {(exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0)}회, 유산소: {exerciseGoals['유산소'] || 0}회)
+                    </div>
+                  </div>
+                </>
               </CardHeader>
               <CardContent>
-                {isLoadingSummary ? (
+                {(isLoadingSummary || goalsLoading) ? (
                   <div className="text-center py-8 text-muted-foreground">
                     운동 집계 데이터를 불러오는 중...
                   </div>
@@ -1034,6 +1083,7 @@ const Note = () => {
                       <RadarChart data={exerciseData}>
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
+                        <Tooltip content={<RadarGoalTooltip />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                       </RadarChart>
