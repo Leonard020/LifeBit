@@ -36,14 +36,39 @@ public class UserGoalService {
         return createDefaultUserGoal(userId);
     }
 
+    /**
+     * Calculate total weekly workout target as sum of all exercise goals
+     */
+    private Integer calculateTotalWeeklyWorkoutTarget(UserGoal goal) {
+        int total = 0;
+        if (goal.getWeeklyChest() != null) total += goal.getWeeklyChest();
+        if (goal.getWeeklyBack() != null) total += goal.getWeeklyBack();
+        if (goal.getWeeklyLegs() != null) total += goal.getWeeklyLegs();
+        if (goal.getWeeklyShoulders() != null) total += goal.getWeeklyShoulders();
+        if (goal.getWeeklyArms() != null) total += goal.getWeeklyArms();
+        if (goal.getWeeklyAbs() != null) total += goal.getWeeklyAbs();
+        if (goal.getWeeklyCardio() != null) total += goal.getWeeklyCardio();
+        return total;
+    }
+
     @Transactional
     public UserGoal updateUserGoal(Long userId, UserGoal request) {
         UserGoal existingGoal = getOrCreateUserGoal(userId);
 
-        // 목표 값 업데이트
-        if (request.getWeeklyWorkoutTarget() != null) {
-            existingGoal.setWeeklyWorkoutTarget(request.getWeeklyWorkoutTarget());
-        }
+        // Update individual exercise goals first
+        if (request.getWeeklyChest() != null) existingGoal.setWeeklyChest(request.getWeeklyChest());
+        if (request.getWeeklyBack() != null) existingGoal.setWeeklyBack(request.getWeeklyBack());
+        if (request.getWeeklyLegs() != null) existingGoal.setWeeklyLegs(request.getWeeklyLegs());
+        if (request.getWeeklyShoulders() != null) existingGoal.setWeeklyShoulders(request.getWeeklyShoulders());
+        if (request.getWeeklyArms() != null) existingGoal.setWeeklyArms(request.getWeeklyArms());
+        if (request.getWeeklyAbs() != null) existingGoal.setWeeklyAbs(request.getWeeklyAbs());
+        if (request.getWeeklyCardio() != null) existingGoal.setWeeklyCardio(request.getWeeklyCardio());
+
+        // Automatically calculate and set the total weekly workout target
+        Integer totalWorkoutTarget = calculateTotalWeeklyWorkoutTarget(existingGoal);
+        existingGoal.setWeeklyWorkoutTarget(totalWorkoutTarget);
+
+        // Update diet goals
         if (request.getDailyCarbsTarget() != null) {
             existingGoal.setDailyCarbsTarget(request.getDailyCarbsTarget());
         }
@@ -71,6 +96,13 @@ public class UserGoalService {
         defaultGoal.setDailyProteinTarget(null);
         defaultGoal.setDailyFatTarget(null);
         defaultGoal.setDailyCaloriesTarget(null);
+        defaultGoal.setWeeklyChest(null);
+        defaultGoal.setWeeklyBack(null);
+        defaultGoal.setWeeklyLegs(null);
+        defaultGoal.setWeeklyShoulders(null);
+        defaultGoal.setWeeklyArms(null);
+        defaultGoal.setWeeklyAbs(null);
+        defaultGoal.setWeeklyCardio(null);
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return userGoalRepository.save(defaultGoal);
@@ -95,6 +127,13 @@ public class UserGoalService {
         defaultGoal.setDailyProteinTarget(null);
         defaultGoal.setDailyFatTarget(null);
         defaultGoal.setDailyCaloriesTarget(null);
+        defaultGoal.setWeeklyChest(null);
+        defaultGoal.setWeeklyBack(null);
+        defaultGoal.setWeeklyLegs(null);
+        defaultGoal.setWeeklyShoulders(null);
+        defaultGoal.setWeeklyArms(null);
+        defaultGoal.setWeeklyAbs(null);
+        defaultGoal.setWeeklyCardio(null);
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         
@@ -108,6 +147,10 @@ public class UserGoalService {
     public UserGoal createUserGoal(UserGoal userGoal) {
         // UUID 설정
         userGoal.setUuid(UUID.randomUUID());
+        
+        // Automatically calculate and set the total weekly workout target
+        Integer totalWorkoutTarget = calculateTotalWeeklyWorkoutTarget(userGoal);
+        userGoal.setWeeklyWorkoutTarget(totalWorkoutTarget);
         
         // 생성/수정 시간 설정
         LocalDateTime now = LocalDateTime.now();
@@ -166,6 +209,13 @@ public class UserGoalService {
             defaultGoal.setDailyFatTarget(45);
             defaultGoal.setDailyCaloriesTarget(2100);
         }
+        defaultGoal.setWeeklyChest(null);
+        defaultGoal.setWeeklyBack(null);
+        defaultGoal.setWeeklyLegs(null);
+        defaultGoal.setWeeklyShoulders(null);
+        defaultGoal.setWeeklyArms(null);
+        defaultGoal.setWeeklyAbs(null);
+        defaultGoal.setWeeklyCardio(null);
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return defaultGoal;
@@ -183,6 +233,13 @@ public class UserGoalService {
             Objects.equals(a.getDailyCarbsTarget(), b.getDailyCarbsTarget()) &&
             Objects.equals(a.getDailyProteinTarget(), b.getDailyProteinTarget()) &&
             Objects.equals(a.getDailyFatTarget(), b.getDailyFatTarget()) &&
-            Objects.equals(a.getDailyCaloriesTarget(), b.getDailyCaloriesTarget());
+            Objects.equals(a.getDailyCaloriesTarget(), b.getDailyCaloriesTarget()) &&
+            Objects.equals(a.getWeeklyChest(), b.getWeeklyChest()) &&
+            Objects.equals(a.getWeeklyBack(), b.getWeeklyBack()) &&
+            Objects.equals(a.getWeeklyLegs(), b.getWeeklyLegs()) &&
+            Objects.equals(a.getWeeklyShoulders(), b.getWeeklyShoulders()) &&
+            Objects.equals(a.getWeeklyArms(), b.getWeeklyArms()) &&
+            Objects.equals(a.getWeeklyAbs(), b.getWeeklyAbs()) &&
+            Objects.equals(a.getWeeklyCardio(), b.getWeeklyCardio());
     }
 } 

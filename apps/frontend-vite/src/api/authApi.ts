@@ -191,6 +191,13 @@ export interface UserGoal {
   uuid: string;
   user_id: number;
   weekly_workout_target: number;
+  weekly_chest: number;
+  weekly_back: number;
+  weekly_legs: number;
+  weekly_shoulders: number;
+  weekly_arms: number;
+  weekly_abs: number;
+  weekly_cardio: number;
   daily_carbs_target: number;
   daily_protein_target: number;
   daily_fat_target: number;
@@ -202,7 +209,14 @@ export interface UserGoal {
 
 // 사용자 목표 생성 요청 타입
 export interface UserGoalCreateRequest {
-  weekly_workout_target: number;
+  weekly_workout_target?: number; // Optional - calculated automatically by backend
+  weekly_chest: number;
+  weekly_back: number;
+  weekly_legs: number;
+  weekly_shoulders: number;
+  weekly_arms: number;
+  weekly_abs: number;
+  weekly_cardio: number;
   daily_carbs_target: number;
   daily_protein_target: number;
   daily_fat_target: number;
@@ -212,7 +226,14 @@ export interface UserGoalCreateRequest {
 
 // 사용자 목표 수정 요청 타입
 export interface UserGoalUpdateRequest {
-  weekly_workout_target?: number;
+  weekly_workout_target?: number; // Optional - calculated automatically by backend
+  weekly_chest?: number;
+  weekly_back?: number;
+  weekly_legs?: number;
+  weekly_shoulders?: number;
+  weekly_arms?: number;
+  weekly_abs?: number;
+  weekly_cardio?: number;
   daily_carbs_target?: number;
   daily_protein_target?: number;
   daily_fat_target?: number;

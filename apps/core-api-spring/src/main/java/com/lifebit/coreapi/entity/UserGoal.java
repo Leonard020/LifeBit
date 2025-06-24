@@ -22,6 +22,7 @@ public class UserGoal {
     private Long userId;
     
     @Column(name = "weekly_workout_target")
+    @JsonProperty("weekly_workout_target")
     private Integer weeklyWorkoutTarget;
     
     @Column(name = "daily_carbs_target")
@@ -39,6 +40,34 @@ public class UserGoal {
     @Column(name = "daily_calory_target")
     @JsonProperty("daily_calories_target")
     private Integer dailyCaloriesTarget;
+    
+    @Column(name = "weekly_chest")
+    @JsonProperty("weekly_chest")
+    private Integer weeklyChest;
+    
+    @Column(name = "weekly_back")
+    @JsonProperty("weekly_back")
+    private Integer weeklyBack;
+    
+    @Column(name = "weekly_legs")
+    @JsonProperty("weekly_legs")
+    private Integer weeklyLegs;
+    
+    @Column(name = "weekly_shoulders")
+    @JsonProperty("weekly_shoulders")
+    private Integer weeklyShoulders;
+    
+    @Column(name = "weekly_arms")
+    @JsonProperty("weekly_arms")
+    private Integer weeklyArms;
+    
+    @Column(name = "weekly_abs")
+    @JsonProperty("weekly_abs")
+    private Integer weeklyAbs;
+    
+    @Column(name = "weekly_cardio")
+    @JsonProperty("weekly_cardio")
+    private Integer weeklyCardio;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;

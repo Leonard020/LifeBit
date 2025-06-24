@@ -42,6 +42,15 @@ public class HealthStatisticsResponse {
     private Integer streak;
     private Integer totalWorkoutDays;
     
+    // 운동 목표 상세 (주간)
+    private Integer weeklyChest;
+    private Integer weeklyBack;
+    private Integer weeklyLegs;
+    private Integer weeklyShoulders;
+    private Integer weeklyArms;
+    private Integer weeklyAbs;
+    private Integer weeklyCardio;
+    
     // 목표 관련 정보
     private Integer dailyCarbsTarget;
     private Integer dailyProteinTarget;

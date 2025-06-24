@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,12 +47,29 @@ const Profile = () => {
   ]);
 
   const [goals, setGoals] = useState({
-    cardioTraining: '2',
     dailyCalories: '2000',
     dailyCarbs: '200',
     dailyProtein: '120',
     dailyFat: '60',
+    weeklyChest: '0',
+    weeklyBack: '0',
+    weeklyLegs: '0',
+    weeklyShoulders: '0',
+    weeklyArms: '0',
+    weeklyAbs: '0',
+    weeklyCardio: '0',
   });
+
+  // Calculate total weekly workout target
+  const totalWeeklyWorkoutTarget = useMemo(() => {
+    return parseInt(goals.weeklyChest) + 
+           parseInt(goals.weeklyBack) + 
+           parseInt(goals.weeklyLegs) + 
+           parseInt(goals.weeklyShoulders) + 
+           parseInt(goals.weeklyArms) + 
+           parseInt(goals.weeklyAbs) + 
+           parseInt(goals.weeklyCardio);
+  }, [goals]);
 
   // Get current user ID
   const currentUserId = getUserIdFromToken();
@@ -71,24 +88,46 @@ const Profile = () => {
     { value: 'shoulders', label: '어깨' }
   ];
 
+  // Compute available body parts for adding
+  const availableBodyParts = useMemo(() => {
+    const selected = strengthGoals.map(g => g.bodyPart);
+    return bodyPartOptions.filter(opt => !selected.includes(opt.value));
+  }, [strengthGoals, bodyPartOptions]);
+
   // Load user goals when data is available
   useEffect(() => {
     if (userGoalsData && !goalsLoading) {
       const goalsData = userGoalsData.data || userGoalsData;
       setGoals({
-        cardioTraining: goalsData.weekly_workout_target?.toString() || '2',
         dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
         dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
         dailyProtein: goalsData.daily_protein_target?.toString() || '120',
         dailyFat: goalsData.daily_fat_target?.toString() || '60',
+        weeklyChest: goalsData.weekly_chest?.toString() || '0',
+        weeklyBack: goalsData.weekly_back?.toString() || '0',
+        weeklyLegs: goalsData.weekly_legs?.toString() || '0',
+        weeklyShoulders: goalsData.weekly_shoulders?.toString() || '0',
+        weeklyArms: goalsData.weekly_arms?.toString() || '0',
+        weeklyAbs: goalsData.weekly_abs?.toString() || '0',
+        weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
       });
+      // Also update strengthGoals state from loaded data (excluding cardio)
+      setStrengthGoals([
+        { id: 'chest', bodyPart: 'chest', weeklyCount: goalsData.weekly_chest?.toString() || '0' },
+        { id: 'back', bodyPart: 'back', weeklyCount: goalsData.weekly_back?.toString() || '0' },
+        { id: 'legs', bodyPart: 'legs', weeklyCount: goalsData.weekly_legs?.toString() || '0' },
+        { id: 'shoulders', bodyPart: 'shoulders', weeklyCount: goalsData.weekly_shoulders?.toString() || '0' },
+        { id: 'arms', bodyPart: 'arms', weeklyCount: goalsData.weekly_arms?.toString() || '0' },
+        { id: 'abs', bodyPart: 'abs', weeklyCount: goalsData.weekly_abs?.toString() || '0' },
+      ]);
     }
   }, [userGoalsData, goalsLoading]);
 
   const addStrengthGoal = () => {
+    if (availableBodyParts.length === 0) return;
     const newGoal: StrengthGoal = {
       id: Date.now().toString(),
-      bodyPart: 'chest',
+      bodyPart: availableBodyParts[0].value,
       weeklyCount: '1'
     };
     setStrengthGoals([...strengthGoals, newGoal]);
@@ -103,6 +142,23 @@ const Profile = () => {
       goal.id === id ? { ...goal, [field]: value } : goal
     ));
   };
+
+  // Sync goals state with strengthGoals changes (excluding cardio)
+  useEffect(() => {
+    const newGoals = { ...goals };
+    strengthGoals.forEach(goal => {
+      switch (goal.bodyPart) {
+        case 'chest': newGoals.weeklyChest = goal.weeklyCount; break;
+        case 'back': newGoals.weeklyBack = goal.weeklyCount; break;
+        case 'legs': newGoals.weeklyLegs = goal.weeklyCount; break;
+        case 'shoulders': newGoals.weeklyShoulders = goal.weeklyCount; break;
+        case 'arms': newGoals.weeklyArms = goal.weeklyCount; break;
+        case 'abs': newGoals.weeklyAbs = goal.weeklyCount; break;
+        default: break;
+      }
+    });
+    setGoals(newGoals);
+  }, [strengthGoals]);
 
   // 컴포넌트 마운트 시 사용자 프로필 로드
   useEffect(() => {
@@ -183,20 +239,34 @@ const Profile = () => {
     try {
       setLoading(true);
 
+      // Map strengthGoals to backend fields (excluding cardio)
+      const strengthGoalMap = strengthGoals.reduce((acc, goal) => {
+        switch (goal.bodyPart) {
+          case 'chest': acc.weekly_chest = parseInt(goal.weeklyCount); break;
+          case 'back': acc.weekly_back = parseInt(goal.weeklyCount); break;
+          case 'legs': acc.weekly_legs = parseInt(goal.weeklyCount); break;
+          case 'shoulders': acc.weekly_shoulders = parseInt(goal.weeklyCount); break;
+          case 'arms': acc.weekly_arms = parseInt(goal.weeklyCount); break;
+          case 'abs': acc.weekly_abs = parseInt(goal.weeklyCount); break;
+          default: break;
+        }
+        return acc;
+      }, { weekly_chest: 0, weekly_back: 0, weekly_legs: 0, weekly_shoulders: 0, weekly_arms: 0, weekly_abs: 0 });
+
       const goalsData = {
-        weekly_workout_target: parseInt(goals.cardioTraining),
         daily_calories_target: parseInt(goals.dailyCalories),
         daily_carbs_target: parseInt(goals.dailyCarbs),
         daily_protein_target: parseInt(goals.dailyProtein),
         daily_fat_target: parseInt(goals.dailyFat),
+        ...strengthGoalMap,
+        weekly_cardio: parseInt(goals.weeklyCardio), // Cardio as separate field
       };
 
-      // Always create a new user goal (POST)
       await createUserGoalMutation.mutateAsync(goalsData);
 
       toast({
-        title: "목표 설정 완료",
-        description: "건강 목표가 성공적으로 저장되었습니다.",
+        title: '목표 설정 완료',
+        description: '건강 목표가 성공적으로 저장되었습니다.',
       });
     } catch (error) {
       console.error('Failed to save goals:', error);
@@ -288,6 +358,7 @@ const Profile = () => {
                       variant="outline"
                       onClick={addStrengthGoal}
                       className="flex items-center gap-1"
+                      disabled={availableBodyParts.length === 0}
                     >
                       <Plus className="h-4 w-4" />
                       추가
@@ -295,68 +366,75 @@ const Profile = () => {
                   </div>
                   
                   <div className="space-y-3">
-                    {strengthGoals.map((goal) => (
-                      <div key={goal.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                        <div className="flex-1">
-                          <Select 
-                            value={goal.bodyPart} 
-                            onValueChange={(value) => updateStrengthGoal(goal.id, 'bodyPart', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="부위 선택" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {bodyPartOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                    {strengthGoals.map((goal, idx) => {
+                      // Filter options for this row: allow current value + unselected
+                      const selected = strengthGoals.map((g, i) => i !== idx && g.bodyPart).filter(Boolean);
+                      const options = bodyPartOptions.filter(opt => !selected.includes(opt.value) || opt.value === goal.bodyPart);
+                      return (
+                        <div key={goal.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div className="flex-1">
+                            <Select 
+                              value={goal.bodyPart} 
+                              onValueChange={(value) => updateStrengthGoal(goal.id, 'bodyPart', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="부위 선택" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {options.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex-1">
+                            <Select 
+                              value={goal.weeklyCount} 
+                              onValueChange={(value) => updateStrengthGoal(goal.id, 'weeklyCount', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="주간 횟수" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">주 0회</SelectItem>
+                                <SelectItem value="1">주 1회</SelectItem>
+                                <SelectItem value="2">주 2회</SelectItem>
+                                <SelectItem value="3">주 3회</SelectItem>
+                                <SelectItem value="4">주 4회</SelectItem>
+                                <SelectItem value="5">주 5회</SelectItem>
+                                <SelectItem value="6">주 6회</SelectItem>
+                                <SelectItem value="7">매일</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {strengthGoals.length > 1 && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeStrengthGoal(goal.id)}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <Select 
-                            value={goal.weeklyCount} 
-                            onValueChange={(value) => updateStrengthGoal(goal.id, 'weeklyCount', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="주간 횟수" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">주 1회</SelectItem>
-                              <SelectItem value="2">주 2회</SelectItem>
-                              <SelectItem value="3">주 3회</SelectItem>
-                              <SelectItem value="4">주 4회</SelectItem>
-                              <SelectItem value="5">주 5회</SelectItem>
-                              <SelectItem value="6">주 6회</SelectItem>
-                              <SelectItem value="7">매일</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {strengthGoals.length > 1 && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeStrengthGoal(goal.id)}
-                            className="h-8 w-8"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Cardio Training */}
                 <div className="space-y-2">
                   <Label htmlFor="cardioTraining">유산소 운동 (회/주)</Label>
-                  <Select value={goals.cardioTraining} onValueChange={(value) => setGoals({...goals, cardioTraining: value})}>
+                  <Select value={goals.weeklyCardio} onValueChange={(value) => setGoals({...goals, weeklyCardio: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="유산소 운동 횟수" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="0">주 0회</SelectItem>
                       <SelectItem value="1">주 1회</SelectItem>
                       <SelectItem value="2">주 2회</SelectItem>
                       <SelectItem value="3">주 3회</SelectItem>
@@ -366,6 +444,19 @@ const Profile = () => {
                       <SelectItem value="7">매일</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Total Weekly Workout Target Display */}
+                <div className="space-y-2">
+                  <Label>총 주간 운동 목표</Label>
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-lg font-semibold text-blue-700">
+                      {totalWeeklyWorkoutTarget}회 / 주
+                    </div>
+                    <div className="text-sm text-blue-600">
+                      (근력운동: {totalWeeklyWorkoutTarget - parseInt(goals.weeklyCardio)}회, 유산소: {goals.weeklyCardio}회)
+                    </div>
+                  </div>
                 </div>
               </div>
 
