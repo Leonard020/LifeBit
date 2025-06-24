@@ -20,6 +20,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
 import type { TooltipProps } from 'recharts';
+import { useQueryClient } from '@tanstack/react-query';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -199,6 +200,14 @@ const Note = () => {
 
   const userId = getUserIdFromToken();
   const { data: userGoalsData, isLoading: goalsLoading } = useUserGoals(userId ? userId.toString() : '');
+  const queryClient = useQueryClient();
+
+  // Force refetch of user goals when Note page mounts or userId changes
+  React.useEffect(() => {
+    if (userId) {
+      queryClient.refetchQueries({ queryKey: ['userGoals', userId.toString()] });
+    }
+  }, [userId, queryClient]);
 
   // 3. Map backend fields to radar chart axes
   const bodyPartMap = [
@@ -211,17 +220,26 @@ const Note = () => {
     { key: 'weekly_cardio', label: '유산소' },
   ];
 
+  // Always show all 7 body parts in the graph, with 0 for unselected
   const exerciseGoals = React.useMemo(() => {
     if (!userGoalsData) return {};
     // If array, pick the latest
     const goals = Array.isArray(userGoalsData)
       ? userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0])
       : userGoalsData.data || userGoalsData;
+    // Always include all body parts, use 0 if not set
     return bodyPartMap.reduce((acc, { key, label }) => {
       acc[label] = goals[key] ?? 0;
       return acc;
     }, {} as Record<string, number>);
   }, [userGoalsData]);
+
+  // Always show all 7 body parts in the radar chart
+  const exerciseData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: (weeklySummary[label] || 0) * 20, // 1회 = 20%
+    goal: (exerciseGoals[label] || 0) * 20,
+  }));
 
   // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
@@ -249,12 +267,6 @@ const Note = () => {
 
     fetchWeeklySummary();
   }, [authToken]); // authToken이 변경될 때마다 실행
-
-  const exerciseData = bodyPartMap.map(({ label }) => ({
-    subject: label,
-    value: (weeklySummary[label] || 0) * 20, // 1회 = 20%
-    goal: (exerciseGoals[label] || 0) * 20,
-  }));
 
   // ✅ fetchDietData를 useCallback으로 분리
   const fetchDietData = useCallback(async () => {
