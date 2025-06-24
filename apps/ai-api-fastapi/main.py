@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import engine, get_db
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 import openai, os, json
 from dotenv import load_dotenv
 import tempfile
@@ -14,6 +15,48 @@ from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, 
 import models
 from note_routes import router as note_router  # ✅ 상단에 추가
 
+# 🔧 Docker 환경 감지 및 데이터베이스 설정 오버라이드
+def setup_database():
+    """환경에 따른 데이터베이스 설정"""
+    # Docker 환경인지 확인 (환경변수 또는 컨테이너 감지)
+    is_docker = os.getenv("DATABASE_URL") or os.getenv("DB_HOST") or os.path.exists("/.dockerenv")
+    
+    if is_docker:
+        print("[DB] Docker environment detected - Using container database settings")
+        # Docker 환경용 데이터베이스 URL
+        db_user = os.getenv("DB_USER", "lifebit_user")
+        db_password = os.getenv("DB_PASSWORD", "lifebit_password")
+        db_name = os.getenv("DB_NAME", "lifebit_db")
+        db_host = os.getenv("DB_HOST", "postgres-db")
+        db_port = os.getenv("DB_PORT", "5432")
+        
+        docker_database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        print(f"[DB] Using Docker database URL: {docker_database_url.replace(db_password, '***')}")
+        
+        # 새로운 엔진과 세션 생성
+        docker_engine = create_engine(
+            docker_database_url,
+            connect_args={"options": "-c timezone=Asia/Seoul"}
+        )
+        docker_session = sessionmaker(autocommit=False, autoflush=False, bind=docker_engine)
+        
+        return docker_engine, docker_session
+    else:
+        print("[DB] Local environment detected - Using default database settings")
+        # 로컬 환경에서는 기존 database.py 사용
+        from database import engine, SessionLocal
+        return engine, SessionLocal
+
+# 환경별 데이터베이스 설정
+engine, SessionLocal = setup_database()
+
+# FastAPI 의존성으로 사용할 DB 세션 함수 (오버라이드)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # 새로 추가: 차트 분석 서비스 import
 from analytics_service import HealthAnalyticsService
@@ -41,14 +84,16 @@ app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 # CORS 설정
 origins = [
     "http://localhost:3000",
-    "http://localhost:5173",
+    "http://localhost:5173", 
+    "http://localhost:8082",  # Nginx 프록시
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:8082",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,  # 수정: origins 배열 사용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

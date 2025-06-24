@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres-db}:${DB_PORT:5432}/${DB_NAME:lifebit_db}?stringtype=unspecified
+    username: ${DB_USER:lifebit_user}
+    password: ${DB_PASSWORD:lifebit_password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        globally_quoted_identifiers: true
+        globally_quoted_identifiers_skip_column_definitions: true
+    open-in-view: false
+  sql:
+    init:
+      mode: never
+
+logging:
+  level:
+    com.lifebit: INFO
+    org.hibernate.SQL: INFO
+    root: INFO 
