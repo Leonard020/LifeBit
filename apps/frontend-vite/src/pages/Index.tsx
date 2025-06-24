@@ -12,6 +12,7 @@ import {
   getMealTimeDescription,
   type MealTimeType
 } from '@/utils/mealTimeMapping';
+import { safeConvertMealTime } from '../utils/mealTimeConverter';
 import { getUserIdFromToken, getToken } from '@/utils/auth'; // 또는 정확한 경로
 import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
@@ -589,6 +590,11 @@ const Index = () => {
           }
         }
 
+        // 한글 식사시간을 영어로 변환 (공통 유틸리티 사용)
+        const englishMealTime = safeConvertMealTime(dietData.meal_time);
+
+        console.log('🔄 [Index 식단기록] 식사시간 변환:', dietData.meal_time, '→', englishMealTime);
+
         // Spring Boot CRUD API 호출 (/api/diet/record)
         const response = await fetch('/api/diet/record', {
           method: 'POST',
@@ -597,13 +603,13 @@ const Index = () => {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            userId,
+            // userId 제거 - Spring Boot에서 토큰으로 사용자 ID 추출
             food_item_id: foodItemId,
             quantity: Number(dietData.amount),
-            meal_time: dietData.meal_time,
-            input_source: dietData.input_source || 'chat',
+            meal_time: englishMealTime,        // 영어로 변환된 meal_time
+            input_source: "TYPING",            // 올바른 enum 값
             confidence_score: dietData.confidence_score || 1.0,
-            validation_status: dietData.validation_status || 'confirmed'
+            validation_status: "VALIDATED"     // 올바른 enum 값
           })
         });
         

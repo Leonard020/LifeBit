@@ -1483,6 +1483,7 @@ const Note = () => {
                                 <option value="breakfast">아침</option>
                                 <option value="lunch">점심</option>
                                 <option value="dinner">저녁</option>
+                                <option value="midnight">야식</option>
                                 <option value="snack">간식</option>
                                 <option value="midnight">야식</option>
 

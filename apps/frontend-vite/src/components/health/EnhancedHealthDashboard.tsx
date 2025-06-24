@@ -1053,11 +1053,17 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       }
     });
     
+    const mealTypeNames = {
+      'breakfast': '아침',
+      'lunch': '점심', 
+      'dinner': '저녁',
+      'midnight': '야식',
+      'snack': '간식'
+    };
+    
     toast({
       title: '식단 기록',
-      description: `${mealType === 'breakfast' ? '아침' : 
-                   mealType === 'lunch' ? '점심' : 
-                   mealType === 'dinner' ? '저녁' : '간식'} 식단 기록 페이지로 이동합니다.`,
+      description: `${mealTypeNames[mealType as keyof typeof mealTypeNames] || '식사'} 식단 기록 페이지로 이동합니다.`,
     });
   }, [navigate]);
 
