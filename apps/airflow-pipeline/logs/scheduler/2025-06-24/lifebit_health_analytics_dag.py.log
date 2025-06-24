@@ -837,3 +837,171 @@
 [2025-06-24T01:00:11.291+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:00:11.290+0000] {dag.py:3036} INFO - Sync 1 DAGs
 [2025-06-24T01:00:11.309+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:00:11.309+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
 [2025-06-24T01:00:11.326+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.087 seconds
+[2025-06-24T01:00:41.512+0000] {processor.py:161} INFO - Started process (PID=88800) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:00:41.513+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:00:41.513+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:00:41.513+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:00:41.531+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:00:41.550+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:00:41.550+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:00:41.567+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:00:41.567+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:00:41.582+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.073 seconds
+[2025-06-24T01:01:11.748+0000] {processor.py:161} INFO - Started process (PID=88811) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:01:11.749+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:01:11.750+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:01:11.750+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:01:11.767+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:01:11.788+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:01:11.788+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:01:11.806+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:01:11.806+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:01:11.826+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.080 seconds
+[2025-06-24T01:01:42.071+0000] {processor.py:161} INFO - Started process (PID=88822) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:01:42.073+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:01:42.075+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:01:42.075+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:01:42.127+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:01:42.148+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:01:42.148+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:01:42.171+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:01:42.171+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:01:42.189+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.123 seconds
+[2025-06-24T01:02:12.303+0000] {processor.py:161} INFO - Started process (PID=88833) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:02:12.304+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:02:12.306+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:02:12.305+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:02:12.341+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:02:12.363+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:02:12.363+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:02:12.382+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:02:12.382+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:02:12.402+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.103 seconds
+[2025-06-24T01:02:42.620+0000] {processor.py:161} INFO - Started process (PID=88844) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:02:42.621+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:02:42.622+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:02:42.622+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:02:42.637+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:02:42.658+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:02:42.658+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:02:42.677+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:02:42.677+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:02:42.699+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.082 seconds
+[2025-06-24T01:03:12.901+0000] {processor.py:161} INFO - Started process (PID=88855) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:03:12.902+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:03:12.904+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:03:12.903+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:03:12.926+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:03:12.946+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:03:12.946+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:03:12.964+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:03:12.964+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:03:12.986+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.089 seconds
+[2025-06-24T01:03:43.173+0000] {processor.py:161} INFO - Started process (PID=88866) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:03:43.174+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:03:43.175+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:03:43.175+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:03:43.194+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:03:43.213+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:03:43.213+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:03:43.231+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:03:43.230+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:03:43.252+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.081 seconds
+[2025-06-24T01:04:13.444+0000] {processor.py:161} INFO - Started process (PID=88877) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:04:13.446+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:04:13.447+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:04:13.447+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:04:13.471+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:04:13.493+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:04:13.493+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:04:13.511+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:04:13.511+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:04:13.525+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.086 seconds
+[2025-06-24T01:04:43.736+0000] {processor.py:161} INFO - Started process (PID=88888) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:04:43.737+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:04:43.738+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:04:43.737+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:04:43.755+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:04:43.774+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:04:43.773+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:04:43.790+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:04:43.790+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:04:43.813+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.079 seconds
+[2025-06-24T01:05:14.064+0000] {processor.py:161} INFO - Started process (PID=88899) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:05:14.066+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:05:14.068+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:05:14.067+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:05:14.136+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:05:14.169+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:05:14.168+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:05:14.186+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:05:14.186+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:05:14.207+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.151 seconds
+[2025-06-24T01:05:44.302+0000] {processor.py:161} INFO - Started process (PID=88910) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:05:44.303+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:05:44.305+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:05:44.304+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:05:44.354+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:05:44.375+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:05:44.375+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:05:44.392+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:05:44.392+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:05:44.413+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.118 seconds
+[2025-06-24T01:06:14.597+0000] {processor.py:161} INFO - Started process (PID=88921) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:06:14.598+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:06:14.599+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:06:14.598+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:06:14.615+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:06:14.634+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:06:14.634+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:06:14.653+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:06:14.653+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:06:14.669+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.075 seconds
+[2025-06-24T01:06:44.902+0000] {processor.py:161} INFO - Started process (PID=88932) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:06:44.903+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:06:44.904+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:06:44.904+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:06:44.918+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:06:44.936+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:06:44.936+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:06:44.953+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:06:44.953+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:06:44.972+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.072 seconds
+[2025-06-24T01:07:15.154+0000] {processor.py:161} INFO - Started process (PID=88943) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:07:15.155+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:07:15.156+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:07:15.156+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:07:15.176+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:07:15.196+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:07:15.195+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:07:15.211+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:07:15.211+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:07:15.225+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.074 seconds
+[2025-06-24T01:07:45.438+0000] {processor.py:161} INFO - Started process (PID=88954) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:07:45.439+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:07:45.440+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:07:45.439+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:07:45.458+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:07:45.481+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:07:45.480+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:07:45.499+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:07:45.499+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:07:45.515+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.080 seconds
+[2025-06-24T01:08:15.675+0000] {processor.py:161} INFO - Started process (PID=88965) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:08:15.676+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:08:15.677+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:08:15.677+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:08:15.696+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:08:15.715+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:08:15.715+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:08:15.732+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:08:15.732+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:08:15.748+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.075 seconds
+[2025-06-24T01:08:45.977+0000] {processor.py:161} INFO - Started process (PID=88976) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:08:45.978+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:08:45.979+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:08:45.979+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:08:46.004+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:08:46.031+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:08:46.030+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:08:46.052+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:08:46.052+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:08:46.074+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.099 seconds
+[2025-06-24T01:09:16.204+0000] {processor.py:161} INFO - Started process (PID=88987) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:09:16.204+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:09:16.205+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:09:16.205+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:09:16.224+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:09:16.244+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:09:16.244+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:09:16.261+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:09:16.261+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:09:16.285+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.084 seconds
+[2025-06-24T01:09:46.512+0000] {processor.py:161} INFO - Started process (PID=88998) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:09:46.513+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:09:46.514+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:09:46.514+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:09:46.534+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:09:46.566+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:09:46.566+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:09:46.593+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:09:46.592+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:09:46.613+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.105 seconds
+[2025-06-24T01:10:16.758+0000] {processor.py:161} INFO - Started process (PID=89009) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:10:16.760+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:10:16.761+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:10:16.760+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:10:16.778+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:10:16.802+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:10:16.801+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:10:16.824+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:10:16.824+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:10:16.840+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.086 seconds
+[2025-06-24T01:10:47.060+0000] {processor.py:161} INFO - Started process (PID=89020) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:10:47.062+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:10:47.066+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:10:47.066+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:10:47.088+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:10:47.114+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:10:47.114+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:10:47.133+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:10:47.133+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:10:47.148+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.090 seconds
+[2025-06-24T01:11:17.316+0000] {processor.py:161} INFO - Started process (PID=89031) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:11:17.317+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:11:17.318+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:11:17.318+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:11:17.335+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:11:17.353+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:11:17.353+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:11:17.370+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:11:17.370+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:11:17.389+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.076 seconds
+[2025-06-24T01:11:47.549+0000] {processor.py:161} INFO - Started process (PID=89042) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:11:47.550+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:11:47.551+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:11:47.551+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:11:47.570+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:11:47.591+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:11:47.590+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:11:47.608+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:11:47.608+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:11:47.623+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.077 seconds
+[2025-06-24T01:12:17.841+0000] {processor.py:161} INFO - Started process (PID=89053) to work on /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:12:17.842+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/lifebit_health_analytics_dag.py for tasks to queue
+[2025-06-24T01:12:17.843+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:12:17.842+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:12:17.858+0000] {processor.py:840} INFO - DAG(s) 'lifebit_health_analytics_pipeline' retrieved from /opt/airflow/dags/lifebit_health_analytics_dag.py
+[2025-06-24T01:12:17.876+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:12:17.876+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2025-06-24T01:12:17.893+0000] {logging_mixin.py:188} INFO - [2025-06-24T01:12:17.893+0000] {dag.py:3823} INFO - Setting next_dagrun for lifebit_health_analytics_pipeline to 2025-06-24 00:00:00+00:00, run_after=2025-06-25 00:00:00+00:00
+[2025-06-24T01:12:17.909+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/lifebit_health_analytics_dag.py took 0.070 seconds
