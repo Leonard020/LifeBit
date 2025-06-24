@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
@@ -145,8 +145,9 @@ const Note = () => {
     lunch: '점심',
     dinner: '저녁',
     snack: '간식',
+    midnight: '야식',
   };
-  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack', 'midnight'];
 
   const groupedDietLogs = dailyDietLogs.reduce((acc, log) => {
     const meal = log.mealTime || 'snack';
@@ -360,10 +361,8 @@ const Note = () => {
 
     setIsSearching(true);
     try {
-      const response = await axios.get(`/api/diet/food-items/search`, {
-        params: { keyword: searchKeyword }
-      });
-      setSearchResults(response.data);
+      const results = await searchFoodItems(searchKeyword);
+      setSearchResults(results);
     } catch (error) {
       console.error("음식 검색 중 오류:", error);
       setSearchResults([]);
@@ -391,25 +390,19 @@ const Note = () => {
       }
 
       const request = {
-        userId,
         foodItemId: selectedFood.foodItemId,
         quantity: parseFloat(quantity),
-        logDate: selectedDate.toISOString().split('T')[0],
         mealTime: mealTime,
         unit: 'g',
+        logDate: selectedDate.toISOString().split('T')[0],
+        userId: userId,
       };
 
-      const token = localStorage.getItem('token');
-      const response = await axios.post('/api/diet/record', request, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const newRecord = response.data as DietLogDTO;
+      const newRecord = await createDietRecord(request);
 
-      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태를 직접 업데이트
       setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
-      await fetchCalendarRecords(); // 달력 점은 여전히 새로고침
+      await fetchCalendarRecords();
 
-      // ✅ 상태 초기화 및 팝업 닫기
       setIsAddDietDialogOpen(false);
       setSearchKeyword('');
       setSearchResults([]);
@@ -421,7 +414,17 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        toast({
+          title: "권한 오류",
+          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
+          variant: "destructive"
+        });
+        removeToken();
+        navigate('/login');
+        return;
+      }
       console.error('식단 기록 추가 중 오류:', error);
       toast({
         title: "식단 기록 추가 실패",
@@ -432,19 +435,15 @@ const Note = () => {
   };
 
   // 식단 기록 삭제
-  const deleteDietRecord = async (id: number) => {
+  const handleDeleteDietRecord = async (id: number) => {
     try {
-      await axios.delete(`/api/diet/record/${id}`);
-
-      // 데이터 새로고침 (목록과 달력 모두)
+      await deleteDietRecord(id);
       await fetchDietData();
       await fetchCalendarRecords();
-
       toast({
         title: "삭제 완료",
         description: "식단 기록이 삭제되었습니다."
       });
-
     } catch (error) {
       console.error("식단 기록 삭제 중 오류:", error);
       toast({
@@ -551,9 +550,10 @@ const Note = () => {
     }
 
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-    console.log('[운동기록 조회 호출]', formattedDate, authToken);
+    console.log('[운동기록 조회 호출]', formattedDate);
 
     try {
+      // exercise_sessions 테이블의 모든 필드를 포함하여 요청
       const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
         method: 'GET',
         headers: {
@@ -561,15 +561,45 @@ const Note = () => {
           'Content-Type': 'application/json'
         }
       });
+
+      if (!res.ok) {
+        throw new Error(`API 요청 실패: ${res.status}`);
+      }
+
       const data = await res.json();
-      console.log('[운동기록 조회 응답]', data);
+      console.log('[운동기록 원본 데이터]', JSON.stringify(data, null, 2));
+
       // 날짜 필터 적용 (exerciseDate 기준)
-      const filtered = data.filter(
-        (e: ExerciseRecordDTO) =>
-          e.exerciseDate && e.exerciseDate.startsWith(formattedDate)
-      );
-      setTodayExercise(filtered);
-      console.log('[운동기록 날짜 필터링 결과]', filtered);
+      const filtered = data.filter((e: ExerciseRecordDTO) => {
+        const matches = e.exerciseDate && e.exerciseDate.startsWith(formattedDate);
+        // 각 레코드의 세부 정보 로깅
+        console.log('[운동 기록 상세]', {
+          id: e.exerciseSessionId,
+          name: e.exerciseName,
+          bodyPart: e.bodyPart,
+          sets: e.sets,
+          reps: e.reps,
+          weight: e.weight,
+          duration: e.durationMinutes,
+          calories: e.calories_burned
+        });
+        return matches;
+      });
+
+      console.log('[필터링된 운동기록]', filtered);
+      
+      // 데이터 정제: undefined나 null이 아닌 값만 포함
+      const cleanedData = filtered.map(record => ({
+        ...record,
+        sets: record.sets || undefined,
+        reps: record.reps || undefined,
+        weight: record.weight || undefined,
+        durationMinutes: record.durationMinutes || undefined,
+        calories_burned: record.calories_burned || undefined
+      }));
+
+      setTodayExercise(cleanedData);
+
       if (!filtered || filtered.length === 0) {
         console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
       }
@@ -711,6 +741,7 @@ const Note = () => {
     carbs: 0,    // 100g당
     protein: 0,  // 100g당
     fat: 0,      // 100g당
+    mealTime: 'breakfast', // 추가: 식사 시간
   });
   const [isUpdatingDiet, setIsUpdatingDiet] = useState(false);
 
@@ -720,7 +751,7 @@ const Note = () => {
   const [isEditSearching, setIsEditSearching] = useState(false);
 
 
-  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
 
     const isNutrientField = ['foodName', 'calories', 'carbs', 'protein', 'fat'].includes(name);
@@ -729,7 +760,7 @@ const Note = () => {
       ...prev,
       // 이름이나 영양성분 수정 시, foodItemId를 null로 만들어 '커스텀 음식'으로 전환
       foodItemId: isNutrientField ? null : prev.foodItemId,
-      [name]: name === 'foodName' ? value : (Number(value) >= 0 ? Number(value) : 0)
+      [name]: name === 'foodName' ? value : (name === 'mealTime' ? value : (Number(value) >= 0 ? Number(value) : 0))
     }));
   };
 
@@ -738,10 +769,8 @@ const Note = () => {
     if (!editSearchKeyword.trim()) return;
     setIsEditSearching(true);
     try {
-      const response = await axios.get(`/api/diet/food-items/search`, {
-        params: { keyword: editSearchKeyword }
-      });
-      setEditSearchResults(response.data);
+      const results = await searchFoodItems(editSearchKeyword);
+      setEditSearchResults(results);
     } catch (error) {
       console.error("음식 검색 중 오류:", error);
       setEditSearchResults([]);
@@ -781,6 +810,7 @@ const Note = () => {
       carbs: dietLog.carbs * per100gFactor,
       protein: dietLog.protein * per100gFactor,
       fat: dietLog.fat * per100gFactor,
+      mealTime: dietLog.mealTime || 'breakfast', // 추가: 식사 시간
     });
 
     setEditSearchKeyword(dietLog.foodName);
@@ -793,34 +823,24 @@ const Note = () => {
   // 식단 수정 저장
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
-
     setIsUpdatingDiet(true);
     try {
-      // 서버에는 foodItemId 유무와 100g 기준 영양성분을 보냄
-      const submissionData = {
-        foodItemId: editFormData.foodItemId,
-        foodName: editFormData.foodName,
+      const submissionData: any = {
         quantity: editFormData.quantity,
-        calories: editFormData.calories,
-        carbs: editFormData.carbs,
-        protein: editFormData.protein,
-        fat: editFormData.fat,
+        mealTime: editFormData.mealTime,
+        unit: 'g',
+        logDate: selectedDate.toISOString().split('T')[0],
       };
-
-      const response = await axios.put(`/api/diet/record/${editingDietLog.id}`, submissionData, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const updatedRecord = response.data as DietLogDTO;
-
-      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태 직접 업데이트
+      if (editFormData.foodItemId) {
+        submissionData['foodItemId'] = editFormData.foodItemId;
+      }
+      const updatedRecord = await updateDietRecord(editingDietLog.id, submissionData);
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
-      await fetchCalendarRecords(); // 달력 점 새로고침
-
+      await fetchCalendarRecords();
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
-
       toast({
         title: "식단이 수정되었습니다.",
         description: "식단 기록이 성공적으로 업데이트되었습니다.",
@@ -1196,30 +1216,56 @@ const Note = () => {
               <CardContent>
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
-                    {todayExercise.map((record) => (
-                      <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">
-                            {record.exerciseName}
-                            {record.bodyPart && (
-                              <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
-                            )}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {/* 세트/횟수/무게 */}
-                            {record.sets && record.reps ? `${record.sets}세트 × ${record.reps}회` : ''}
-                            {record.weight ? ` (${record.weight}kg)` : ''}
-                            {/* 시간 */}
-                            {record.durationMinutes ? ` • ${record.durationMinutes}분` : ''}
-                            {/* 칼로리 정보가 있다면 */}
-                            {typeof record.calories_burned === 'number' && ` • ${record.calories_burned}kcal`}
-                          </p>
+                    {todayExercise.map((record) => {
+                      const parts = [];
+                      
+                      // 세트, 횟수가 있으면 근력 운동으로 간주
+                      const isStrengthExercise = record.sets !== undefined || record.reps !== undefined;
+                      
+                      if (isStrengthExercise) {
+                        // 근력 운동 정보
+                        const strengthInfo = [];
+                        if (record.sets !== undefined) strengthInfo.push(`${record.sets}세트`);
+                        if (record.reps !== undefined) strengthInfo.push(`${record.reps}회`);
+                        if (strengthInfo.length > 0) {
+                          parts.push(strengthInfo.join(' × '));
+                        }
+                        
+                        // 무게 정보
+                        if (record.weight !== undefined) {
+                          parts.push(`${record.weight}kg`);
+                        }
+                      }
+                      
+                      // 시간 정보 (모든 운동 타입에 표시)
+                      if (record.durationMinutes !== undefined) {
+                        parts.push(`${record.durationMinutes}분`);
+                      }
+                      
+                      // 칼로리 정보
+                      if (record.calories_burned !== undefined) {
+                        parts.push(`${record.calories_burned}kcal`);
+                      }
+
+                      return (
+                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <p className="font-medium">
+                              {record.exerciseName}
+                              {record.bodyPart && (
+                                <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
+                              )}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {parts.length > 0 ? parts.join(' • ') : '기록 없음'}
+                            </p>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {isToday(selectedDate) && !hasClaimedExerciseScore && (
                       <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
                         <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
@@ -1425,7 +1471,7 @@ const Note = () => {
                               <Label htmlFor="mealTime">식사 시간</Label>
                               <select
                                 id="mealTime"
-                                title="식사 시간 선택"
+                                name="mealTime"
                                 value={mealTime}
                                 onChange={e => setMealTime(e.target.value)}
                                 className="mt-1 block w-full border rounded px-2 py-1"
@@ -1434,6 +1480,8 @@ const Note = () => {
                                 <option value="lunch">점심</option>
                                 <option value="dinner">저녁</option>
                                 <option value="snack">간식</option>
+                                <option value="midnight">야식</option>
+
                               </select>
                             </div>
                           </div>
@@ -1509,7 +1557,7 @@ const Note = () => {
                                     size="icon"
                                     variant="ghost"
                                     className="h-8 w-8 text-destructive"
-                                    onClick={() => deleteDietRecord(record.id)}
+                                    onClick={() => handleDeleteDietRecord(record.id)}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>

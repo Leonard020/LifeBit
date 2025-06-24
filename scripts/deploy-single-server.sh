@@ -190,10 +190,12 @@ deploy_services() {
     log_info "서비스 시작 중..."
     docker-compose -f docker-compose.single-server.yml up -d
     
-    # 서비스 상태 확인
-    log_info "서비스 상태 확인 중..."
+    # 기본 서비스 시작 대기
+    log_info "기본 서비스 초기화 대기 중... (30초)"
     sleep 30
     
+    # 서비스 상태 확인
+    log_info "서비스 상태 확인 중..."
     docker-compose -f docker-compose.single-server.yml ps
     
     log_success "서비스 배포 완료"
@@ -205,13 +207,18 @@ deploy_services() {
 health_check() {
     log_step "서비스 헬스체크"
     
+    # Spring Boot는 시작 시간이 오래 걸리므로 먼저 대기
+    log_info "Spring Boot 시작 대기 중... (약 60초)"
+    sleep 60
+    
     local services=(
         "http://localhost:8082:Nginx Proxy"
-        "http://localhost:8080/actuator/health:Spring Boot API"
         "http://localhost:8001/api/py/health:FastAPI"
         "http://localhost:3000:Frontend"
-        "http://localhost:9090:Prometheus"
         "http://localhost:3001:Grafana"
+        "http://localhost:8080/actuator/health:Spring Boot API"
+        "http://localhost:8082/api/actuator/health:Spring Boot via Proxy"
+        "http://localhost:9090:Prometheus"
     )
     
     for service_info in "${services[@]}"; do
@@ -220,37 +227,64 @@ health_check() {
         
         log_info "헬스체크: $name"
         
-        # 최대 5번 시도
-        for i in {1..5}; do
+        # Spring Boot 관련 서비스는 더 긴 대기 시간
+        local max_attempts=5
+        local wait_time=10
+        if [[ "$name" == *"Spring Boot"* ]]; then
+            max_attempts=8
+            wait_time=15
+        fi
+        
+        # 최대 시도
+        for i in $(seq 1 $max_attempts); do
             if curl -f -s --max-time 10 "$url" > /dev/null 2>&1; then
                 log_success "✓ $name 정상"
                 break
             else
-                log_warning "헬스체크 재시도 ($i/5): $name"
-                sleep 10
+                log_warning "헬스체크 재시도 ($i/$max_attempts): $name"
+                sleep $wait_time
             fi
             
-            if [ $i -eq 5 ]; then
-                log_error "✗ $name 헬스체크 실패"
+            if [ $i -eq $max_attempts ]; then
+                log_error "✗ $name 헬스체크 실패 (계속 진행)"
             fi
         done
     done
 }
 
 # ================================================
-# 리소스 사용량 확인
+# 리소스 사용량 확인 (수정된 버전)
 # ================================================
 check_resource_usage() {
     log_step "리소스 사용량 확인"
     
     echo "=== 컨테이너 리소스 사용량 ==="
-    docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}"
+    # Docker stats 명령어 호환성 개선
+    if docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" 2>/dev/null; then
+        echo "Docker stats 정상 출력"
+    else
+        log_warning "Docker stats 형식 호환성 문제 - 기본 형식 사용"
+        docker stats --no-stream | head -10
+    fi
     echo
     
     echo "=== 시스템 리소스 ==="
-    echo "CPU 사용량: $(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | awk -F'%' '{print $1}')"
-    echo "메모리 사용량: $(free -h | awk 'NR==2{printf "%.1f%%", $3*100/$2}')"
-    echo "디스크 사용량: $(df -h / | awk 'NR==2{print $5}')"
+    # CPU 사용량 (더 호환성 있는 방식)
+    if command -v top &> /dev/null; then
+        echo "CPU 사용량: $(top -bn1 | grep -i "cpu" | head -1 | awk '{print $2}' | awk -F'%' '{print $1}' || echo "확인 불가")"
+    fi
+    
+    # 메모리 사용량
+    if command -v free &> /dev/null; then
+        echo "메모리 사용량: $(free -h | awk 'NR==2{printf "%.1f%% (%s/%s)", $3*100/$2, $3, $2}' || echo "확인 불가")"
+    fi
+    
+    # 디스크 사용량
+    echo "디스크 사용량: $(df -h / | awk 'NR==2{print $5 " (" $3 "/" $2 ")"}')"
+    
+    echo
+    echo "=== Docker 컨테이너 상태 ==="
+    docker-compose -f docker-compose.single-server.yml ps
     echo
     
     log_success "리소스 사용량 확인 완료"
@@ -266,10 +300,12 @@ show_access_info() {
 
 🌐 통합 접속 (권장):
    - Nginx Proxy:        http://localhost:8082
+   - AI API (프록시):    http://localhost:8082/ai/api/py/health
+   - Spring API (프록시): http://localhost:8082/api/actuator/health
 
 📱 개별 서비스:
    - Frontend (React):   http://localhost:3000
-   - Spring Boot API:    http://localhost:8080
+   - Spring Boot API:    http://localhost:8080 (시작까지 1-2분 소요)
    - FastAPI (AI):       http://localhost:8001
    - Airflow:            http://localhost:8081 (admin/admin123)
    - Grafana:            http://localhost:3001 (admin/grafana_secure_password)
@@ -282,8 +318,19 @@ show_access_info() {
 📋 유용한 명령어:
    - 서비스 상태:        docker-compose -f docker-compose.single-server.yml ps
    - 로그 보기:          docker-compose -f docker-compose.single-server.yml logs -f [service]
+   - Spring Boot 로그:   docker-compose -f docker-compose.single-server.yml logs -f spring-app
    - 서비스 재시작:      docker-compose -f docker-compose.single-server.yml restart [service]
    - 전체 중지:          docker-compose -f docker-compose.single-server.yml down
+
+🔧 문제 해결:
+   - Spring Boot 시작 확인: curl http://localhost:8080/actuator/health
+   - AI API 테스트:        curl http://localhost:8082/ai/api/py/health
+   - 프론트엔드 확인:      curl -I http://localhost:3000
+
+⚠️  참고사항:
+   - Spring Boot API는 시작까지 1-2분 정도 소요됩니다
+   - 모든 서비스가 완전히 시작되면 프론트엔드에서 정상 작동합니다
+   - Docker 환경에서는 컨테이너명으로 내부 통신합니다
 
 🚀 클라우드 배포 준비:
    로컬 테스트가 완료되면 다음 명령어로 클라우드 배포:
@@ -317,9 +364,16 @@ main() {
     echo
     echo "⚠️  주의사항:"
     echo "- 모든 서비스가 Docker 컨테이너로 실행됩니다"
+    echo "- Spring Boot API는 시작까지 1-2분 소요 (정상)"
     echo "- 데이터는 Docker 볼륨에 저장됩니다"
     echo "- 백업은 로컬에만 저장됩니다"
     echo "- SSL/HTTPS는 비활성화되어 있습니다"
+    echo "- Prometheus 설정 파일 권한 문제 가능성 있음"
+    echo
+    echo "🔧 문제 해결:"
+    echo "- Spring Boot 시작 안됨: docker-compose -f docker-compose.single-server.yml logs spring-app"
+    echo "- 502 에러 발생: Spring Boot 완전 시작 대기 (1-2분)"
+    echo "- 포트 충돌: 기존 서비스 종료 후 재시도"
     echo
 }
 

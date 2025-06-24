@@ -12,7 +12,7 @@ import {
   getMealTimeDescription,
   type MealTimeType
 } from '@/utils/mealTimeMapping';
-import { getUserIdFromToken, getTokenFromStorage } from '@/utils/auth'; // 또는 정확한 경로
+import { getUserIdFromToken, getToken } from '@/utils/auth'; // 또는 정확한 경로
 import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
 import { useNavigate } from 'react-router-dom';
@@ -26,10 +26,32 @@ type NutritionData = {
   fat: number;
 };
 
+type FoodItemCreateRequest = {
+  name: string;
+  serving_size: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+};
+
+type FoodItemResponse = {
+  food_item_id?: number;
+  foodItemId?: number;
+  name: string;
+  serving_size: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+};
+
 // 🆕 프론트엔드에서 직접 GPT 호출하여 영양정보 계산
-const calculateNutritionFromGPT = async (foodName: string): Promise<NutritionData> => {
+const calculateNutritionFromGPT = async (foodName: string, retryCount = 0): Promise<NutritionData> => {
+  const maxRetries = 2;
+  
   try {
-    console.log('🤖 [Index GPT 영양정보] 계산 시작:', foodName);
+    console.log(`🤖 [Index GPT 영양정보] 계산 시작 (시도: ${retryCount + 1}/${maxRetries + 1}):`, foodName);
     
     const prompt = `다음 음식의 100g 기준 영양 정보를 정확히 계산해주세요.
 
@@ -74,8 +96,17 @@ const calculateNutritionFromGPT = async (foodName: string): Promise<NutritionDat
     return nutritionData;
     
   } catch (error) {
-    console.error('🤖 [Index GPT 영양정보] 계산 실패:', error);
-    // 기본값 반환 (일반적인 건과일 기준)
+    console.error(`🤖 [Index GPT 영양정보] 계산 실패 (시도: ${retryCount + 1}):`, error);
+    
+    // 재시도 횟수가 남아있으면 재시도
+    if (retryCount < maxRetries) {
+      console.log(`🔄 [Index GPT 영양정보] 재시도 중... (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+      return calculateNutritionFromGPT(foodName, retryCount + 1);
+    }
+    
+    // 최대 재시도 횟수 초과 시 기본값 반환
+    console.log('❌ [Index GPT 영양정보] 최대 재시도 횟수 초과, 기본값 반환');
     return {
       calories: 250.0,
       carbs: 60.0,
@@ -85,46 +116,70 @@ const calculateNutritionFromGPT = async (foodName: string): Promise<NutritionDat
   }
 };
 
-// 🆕 Spring Boot API로 새로운 음식 아이템 생성
-const createFoodItemInDB = async (foodName: string, nutritionData: NutritionData): Promise<number | null> => {
+// 🆕 Spring Boot API로 새로운 음식 아이템 생성 (DB 스키마 기반)
+const createFoodItemInDB = async (foodName: string, nutritionData: NutritionData, retryCount = 0): Promise<number | null> => {
+  const maxRetries = 2;
+  
   try {
-    console.log('💾 [Index DB 음식 생성] 시작:', foodName, nutritionData);
+    console.log(`💾 [Index DB 음식 생성] 시작 (시도: ${retryCount + 1}/${maxRetries + 1}):`, foodName, nutritionData);
     
-    const token = getTokenFromStorage();
-    console.log('토큰:', token);
+    const token = getToken();
+    
+    const requestData: FoodItemCreateRequest = {
+      name: foodName,
+      serving_size: nutritionData.serving_size || 100.0,
+      calories: Number(nutritionData.calories.toFixed(2)),
+      carbs: Number(nutritionData.carbs.toFixed(2)),
+      protein: Number(nutritionData.protein.toFixed(2)),
+      fat: Number(nutritionData.fat.toFixed(2))
+    };
+    
+    console.log('📝 [DB 요청 데이터]:', requestData);
+    
     const response = await fetch('/api/diet/food-items', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({
-        name: foodName,
-        serving_size: 100.0,
-        calories: nutritionData.calories,
-        carbs: nutritionData.carbs,
-        protein: nutritionData.protein,
-        fat: nutritionData.fat
-      })
+      body: JSON.stringify(requestData)
     });
 
     if (!response.ok) {
-      throw new Error(`Spring Boot API 오류: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Spring Boot API 오류: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
+    const data: FoodItemResponse = await response.json();
     console.log('💾 [Index DB 음식 생성] 성공:', data);
     
     return data.food_item_id || data.foodItemId;
   } catch (error) {
-    console.error('💾 [Index DB 음식 생성] 실패:', error);
+    console.error(`💾 [Index DB 음식 생성] 실패 (시도: ${retryCount + 1}):`, error);
+    
+    // 재시도 횟수가 남아있고 네트워크 오류인 경우만 재시도
+    if (retryCount < maxRetries && (error instanceof Error && 
+        (error.message.includes('Failed to fetch') || 
+         error.message.includes('ERR_CONNECTION_REFUSED') ||
+         error.message.includes('Network Error')))) {
+      console.log(`🔄 [Index DB 음식 생성] 재시도 중... (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+      return createFoodItemInDB(foodName, nutritionData, retryCount + 1);
+    }
+    
+    // 최대 재시도 횟수 초과 또는 재시도 불가능한 오류
+    console.log('❌ [Index DB 음식 생성] 재시도 중단');
     return null;
   }
 };
 
 // 🆕 GPT + Spring Boot 통합 음식 생성 함수
-const createFoodItemFromGPT = async (foodName: string): Promise<number | null> => {
+const createFoodItemFromGPT = async (foodName: string, retryCount = 0): Promise<number | null> => {
+  const maxRetries = 2;
+  
   try {
+    console.log(`🎯 [Index 통합 음식 생성] 시작 (시도: ${retryCount + 1}/${maxRetries + 1}):`, foodName);
+    
     // 1단계: GPT로 영양정보 계산
     const nutritionData = await calculateNutritionFromGPT(foodName);
     
@@ -135,11 +190,20 @@ const createFoodItemFromGPT = async (foodName: string): Promise<number | null> =
       console.log('🎉 [Index 통합 음식 생성] 성공:', { foodName, foodItemId, nutritionData });
       return foodItemId;
     } else {
-      console.error('❌ [Index 통합 음식 생성] DB 저장 실패');
-      return null;
+      throw new Error('DB 저장 실패');
     }
   } catch (error) {
-    console.error('❌ [Index 통합 음식 생성] 전체 실패:', error);
+    console.error(`❌ [Index 통합 음식 생성] 실패 (시도: ${retryCount + 1}):`, error);
+    
+    // 재시도 횟수가 남아있으면 재시도
+    if (retryCount < maxRetries) {
+      console.log(`🔄 [Index 통합 음식 생성] 재시도 중... (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
+      return createFoodItemFromGPT(foodName, retryCount + 1);
+    }
+    
+    // 최대 재시도 횟수 초과
+    console.log('❌ [Index 통합 음식 생성] 최대 재시도 횟수 초과');
     return null;
   }
 };
@@ -256,10 +320,13 @@ const Index = () => {
     // 최소한의 테스트 메시지 → 나중에 자동저장 로직이 완성되면 제거 가능
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (retryCount = 0) => {
+    const maxRetries = 2;
+    
     if (!chatInputText.trim() || !recordType) return;
 
     try {
+      console.log(`📤 [Index handleSendMessage] 시작 (시도: ${retryCount + 1}/${maxRetries + 1})`);
       setChatIsProcessing(true);
       setChatNetworkError(false);
 
@@ -311,33 +378,43 @@ const Index = () => {
         }
       }
 
+      console.log('✅ [Index handleSendMessage] 성공');
+
       // 단계별 처리 로직 수정
-      if (response.type === 'incomplete' || response.missingFields?.length) {
-        // 정보가 누락된 경우: 검증 → 확인 → 저장
-        setChatStep('validation');
-      } else if (response.type === 'success' || response.type === 'confirmation') {
-        // 완벽한 정보 제공 또는 확인 단계: 확인 → 저장
+      if (response.type === 'incomplete') {
+        setChatStep('extraction');
+      } else if (response.type === 'success') {
         setChatStep('confirmation');
       }
-
-      // ✅ 저장 트리거 키워드: '저장', '저장해줘', '기록해줘', '완료', '끝'만 허용
-      const saveKeywords = /^(저장|저장해줘|기록해줘|완료|끝)$/;
-      if (saveKeywords.test(chatInputText.trim().toLowerCase())) {
-        console.log('[자동 저장 트리거] 저장 키워드 감지, handleRecordSubmit 실행');
-        await handleRecordSubmit(recordType, chatInputText);
-      }
-
     } catch (error) {
-      console.error('Failed to process message:', error);
+      console.error(`❌ [Index handleSendMessage] 실패 (시도: ${retryCount + 1}):`, error);
+      
+      // 재시도 가능한 오류인지 확인
+      const isRetryableError = error instanceof Error && (
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('Network Error') ||
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('서버 연결에 실패')
+      );
+      
+      // 재시도 횟수가 남아있고 재시도 가능한 오류인 경우
+      if (retryCount < maxRetries && isRetryableError) {
+        console.log(`🔄 [Index handleSendMessage] 재시도 중... (${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+        return handleSendMessage(retryCount + 1);
+      }
+      
+      // 최대 재시도 횟수 초과 또는 재시도 불가능한 오류
+      console.log('❌ [Index handleSendMessage] 재시도 중단');
       setChatNetworkError(true);
-      toast({
-        title: '오류 발생',
-        description: '메시지 처리 중 오류가 발생했습니다. 다시 시도해주세요.',
-        variant: 'destructive'
+      setChatAiFeedback({
+        type: 'error',
+        message: retryCount >= maxRetries ? 
+          '서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.' : 
+          '메시지 전송 중 오류가 발생했습니다.'
       });
     } finally {
       setChatIsProcessing(false);
-      setChatInputText('');
     }
   };
 
@@ -374,7 +451,7 @@ const Index = () => {
   const handleRecordSubmit = async (type: 'exercise' | 'diet', content: string) => {
     if (!chatStructuredData) return;
     const userId = getUserIdFromToken();
-    const token = getTokenFromStorage();
+    const token = getToken();
     console.log('식단 저장 토큰:', token);
 
     if (!userId) {
@@ -644,7 +721,7 @@ const Index = () => {
 
             onRetry={() => {
               setChatNetworkError(false);
-              handleSendMessage(); // 오류 재시도 시에도 전송함
+              handleSendMessage(0); // 재시도 시 카운터 초기화
             }}
             aiFeedback={chatAiFeedback}
             onSaveRecord={() => handleRecordSubmit(recordType!, chatInputText)}

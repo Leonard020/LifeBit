@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import engine, get_db
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 import openai, os, json
 from dotenv import load_dotenv
 import tempfile
@@ -14,6 +15,48 @@ from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, 
 import models
 from note_routes import router as note_router  # ✅ 상단에 추가
 
+# 🔧 Docker 환경 감지 및 데이터베이스 설정 오버라이드
+def setup_database():
+    """환경에 따른 데이터베이스 설정"""
+    # Docker 환경인지 확인 (환경변수 또는 컨테이너 감지)
+    is_docker = os.getenv("DATABASE_URL") or os.getenv("DB_HOST") or os.path.exists("/.dockerenv")
+    
+    if is_docker:
+        print("[DB] Docker environment detected - Using container database settings")
+        # Docker 환경용 데이터베이스 URL
+        db_user = os.getenv("DB_USER", "lifebit_user")
+        db_password = os.getenv("DB_PASSWORD", "lifebit_password")
+        db_name = os.getenv("DB_NAME", "lifebit_db")
+        db_host = os.getenv("DB_HOST", "postgres-db")
+        db_port = os.getenv("DB_PORT", "5432")
+        
+        docker_database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        print(f"[DB] Using Docker database URL: {docker_database_url.replace(db_password, '***')}")
+        
+        # 새로운 엔진과 세션 생성
+        docker_engine = create_engine(
+            docker_database_url,
+            connect_args={"options": "-c timezone=Asia/Seoul"}
+        )
+        docker_session = sessionmaker(autocommit=False, autoflush=False, bind=docker_engine)
+        
+        return docker_engine, docker_session
+    else:
+        print("[DB] Local environment detected - Using default database settings")
+        # 로컬 환경에서는 기존 database.py 사용
+        from database import engine, SessionLocal
+        return engine, SessionLocal
+
+# 환경별 데이터베이스 설정
+engine, SessionLocal = setup_database()
+
+# FastAPI 의존성으로 사용할 DB 세션 함수 (오버라이드)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # 새로 추가: 차트 분석 서비스 import
 from analytics_service import HealthAnalyticsService
@@ -41,14 +84,16 @@ app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 # CORS 설정
 origins = [
     "http://localhost:3000",
-    "http://localhost:5173",
+    "http://localhost:5173", 
+    "http://localhost:8082",  # Nginx 프록시
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:8082",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,  # 수정: origins 배열 사용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -395,7 +440,8 @@ class ChatRequest(BaseModel):
     record_type: Optional[str] = None  # "exercise" or "diet" or None
     chat_step: Optional[str] = None
     current_data: Optional[dict] = None  # 현재 수집된 데이터
-    meal_time_mapping: Optional[dict] = None  # 식단 시간 매핑 
+    meal_time_mapping: Optional[dict] = None  # 식단 시간 매핑
+    user_id: Optional[int] = None  # 사용자 ID 추가 
 
 # 차트 분석 요청을 위한 스키마
 class AnalyticsRequest(BaseModel):
@@ -795,6 +841,67 @@ async def chat(request: ChatRequest):
                             calories_burned = calculate_exercise_calories_from_gpt(data)
                             data["calories_burned"] = calories_burned
                     
+                    # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
+                    response_type = parsed_response.get("response_type", "success")
+                    
+                    if (response_type == "confirmation" and 
+                        request.message.strip().lower() in ["네", "yes", "y"] and 
+                        request.current_data and 
+                        request.record_type):
+                        
+                        print(f"[🚀 AUTO-SAVE] 확인 응답 받음 → 실제 DB 저장 시작")
+                        print(f"  기록 타입: {request.record_type}")
+                        print(f"  수집된 데이터: {request.current_data}")
+                        
+                        try:
+                            if request.record_type == "diet":
+                                # 🍽️ 식단 자동 저장
+                                # user_id 우선순위: request.user_id > current_data.user_id > 기본값 3
+                                user_id = (request.user_id or 
+                                          request.current_data.get("user_id") or 
+                                          3)
+                                user_id = int(user_id)
+                                diet_data = DietRecord(
+                                    user_id=user_id,
+                                    food_name=request.current_data.get("food_name", ""),
+                                    amount=request.current_data.get("amount", "1개"),
+                                    meal_time=request.current_data.get("meal_time", "간식")
+                                )
+                                
+                                # DB 객체 생성 (FastAPI의 Depends와 동일한 방식)
+                                from database import SessionLocal
+                                db = SessionLocal()
+                                
+                                try:
+                                    save_result = save_diet_record(diet_data, db)
+                                    print(f"[✅ SUCCESS] 식단 자동 저장 완료: {save_result}")
+                                    
+                                    return {
+                                        "type": "saved",
+                                        "message": f"✅ 식단 기록이 성공적으로 저장되었습니다!\n\n📋 저장된 정보:\n• 음식명: {diet_data.food_name}\n• 섭취량: {diet_data.amount}\n• 식사시간: {diet_data.meal_time}",
+                                        "parsed_data": request.current_data,
+                                        "save_result": save_result,
+                                        "missing_fields": [],
+                                        "suggestions": []
+                                    }
+                                finally:
+                                    db.close()
+                                    
+                            elif request.record_type == "exercise":
+                                # 🏋️ 운동 자동 저장 (향후 구현)
+                                print(f"[INFO] 운동 자동 저장은 향후 구현 예정")
+                                
+                        except Exception as save_error:
+                            print(f"[❌ ERROR] 자동 저장 실패: {save_error}")
+                            return {
+                                "type": "save_error",
+                                "message": f"저장 중 오류가 발생했습니다: {str(save_error)}\n다시 시도해 주세요.",
+                                "parsed_data": request.current_data,
+                                "missing_fields": [],
+                                "suggestions": []
+                            }
+                    
+                    # 일반적인 응답 (저장하지 않는 경우)
                     return {
                         "type": parsed_response.get("response_type", "success"),
                         "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
@@ -848,55 +955,115 @@ def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
 class DietRecord(BaseModel):
     user_id: int
     food_name: str
-    amount: str
-    meal_time: str
-    calories: float
-    carbs: float
-    protein: float
-    fat: float
+    amount: str  # 섭취량 (예: "5개", "100g", "1그릇")
+    meal_time: str  # "아침|점심|저녁|야식|간식"
 
 @app.post("/api/py/note/diet")
 def save_diet_record(data: DietRecord, db: Session = Depends(get_db)):
-    """채팅에서 수집된 식단 데이터를 저장합니다."""
+    """
+    사용자 요구사항에 맞는 식단 기록 저장:
+    1. food_name이 food_items에 없으면 GPT로 자동 생성
+    2. food_item에 저장 후 다시 검색하여 food_item_id 획득
+    3. meal_logs에 저장 (amount → quantity, meal_time 매핑)
+    """
     try:
-        # 음식 아이템 찾기 또는 생성
+        print(f"[DEBUG] 식단 기록 저장 시작:")
+        print(f"  사용자 ID: {data.user_id}")
+        print(f"  음식명: {data.food_name}")
+        print(f"  섭취량: {data.amount}")
+        print(f"  식사시간: {data.meal_time}")
+        
+        # 🔍 1단계: food_items 테이블에서 음식 검색
         food_item = db.query(models.FoodItem).filter(
             models.FoodItem.name == data.food_name
         ).first()
         
         if not food_item:
-            # 새로운 음식 아이템 생성
+            print(f"[INFO] '{data.food_name}' 음식이 DB에 없음 → GPT로 자동 생성")
+            
+            # 🤖 2단계: GPT로 100g 기준 영양정보 계산
+            nutrition_data = calculate_nutrition_from_gpt_for_100g(data.food_name)
+            
+            # 💾 3단계: 새로운 food_item 생성
             food_item = models.FoodItem(
                 name=data.food_name,
-                calories_per_100g=int(data.calories * 100 / 100),  # 100g 기준으로 변환
-                carbs_per_100g=data.carbs * 100 / 100,
-                protein_per_100g=data.protein * 100 / 100,
-                fat_per_100g=data.fat * 100 / 100
+                serving_size=100.0,  # 기본 100g
+                calories=nutrition_data['calories'],
+                carbs=nutrition_data['carbs'], 
+                protein=nutrition_data['protein'],
+                fat=nutrition_data['fat']
             )
             db.add(food_item)
             db.commit()
             db.refresh(food_item)
+            print(f"[SUCCESS] 새로운 음식 생성 완료 - food_item_id: {food_item.food_item_id}")
+        else:
+            print(f"[INFO] 기존 음식 발견 - food_item_id: {food_item.food_item_id}")
         
-        # 식단 로그 생성
-        diet_log = models.DietLog(
+        # 🔄 4단계: food_item에서 다시 검색하여 확실한 food_item_id 획득
+        confirmed_food_item = db.query(models.FoodItem).filter(
+            models.FoodItem.name == data.food_name
+        ).first()
+        
+        if not confirmed_food_item:
+            raise HTTPException(status_code=500, detail="음식 아이템 생성/검색 실패")
+        
+        # 📊 5단계: 사용자 섭취량 기준 영양정보 계산 (GPT 활용)
+        user_nutrition = calculate_nutrition_from_gpt(data.food_name, data.amount)
+        
+        # 🗃️ 6단계: meal_logs에 최종 저장
+        # amount → quantity 변환 (숫자 추출)
+        import re
+        quantity_match = re.findall(r'[\d.]+', data.amount)
+        quantity = float(quantity_match[0]) if quantity_match else 1.0
+        
+        # meal_time 매핑 (한글 → 영어)
+        meal_time_mapping = {
+            "아침": "breakfast",
+            "점심": "lunch", 
+            "저녁": "dinner",
+            "야식": "midnight",
+            "간식": "snack"
+        }
+        meal_time_eng = meal_time_mapping.get(data.meal_time, data.meal_time)
+        
+        meal_log = models.MealLog(
             user_id=data.user_id,
-            food_item_id=food_item.food_item_id,
-            quantity=1.0,  # 기본값
-            meal_time=data.meal_time,
-            log_date=date.today()
+            food_item_id=confirmed_food_item.food_item_id,  # 확실한 food_item_id 사용
+            quantity=quantity,  # amount → quantity 변환
+            meal_time=meal_time_eng,  # 한글 → 영어 변환
+            log_date=date.today(),
+            calories=user_nutrition.get('calories'),
+            carbs=user_nutrition.get('carbs'),
+            protein=user_nutrition.get('protein'),
+            fat=user_nutrition.get('fat')
         )
-        db.add(diet_log)
-        db.commit()
-        db.refresh(diet_log)
         
-        print(f"[DEBUG] 식단 기록 저장 완료:")
-        print(f"  사용자 ID: {data.user_id}")
-        print(f"  음식명: {data.food_name}")
-        print(f"  섭취량: {data.amount}")
-        print(f"  식사시간: {data.meal_time}")
-        print(f"  칼로리: {data.calories}kcal")
+        db.add(meal_log)
+        db.commit() 
+        db.refresh(meal_log)
         
-        return {"message": "식단 기록 저장 성공", "id": diet_log.diet_log_id}
+        print(f"[SUCCESS] 식단 기록 저장 완료:")
+        print(f"  meal_log_id: {meal_log.meal_log_id}")
+        print(f"  food_item_id: {meal_log.food_item_id}")
+        print(f"  quantity: {meal_log.quantity}")
+        print(f"  meal_time: {meal_log.meal_time}")
+        print(f"  영양정보 - 칼로리: {meal_log.calories}kcal")
+        
+        return {
+            "message": "식단 기록 저장 성공",
+            "meal_log_id": meal_log.meal_log_id,
+            "food_item_id": meal_log.food_item_id,
+            "food_name": data.food_name,
+            "quantity": float(meal_log.quantity),
+            "meal_time": meal_log.meal_time,
+            "nutrition": {
+                "calories": float(meal_log.calories) if meal_log.calories else None,
+                "carbs": float(meal_log.carbs) if meal_log.carbs else None,
+                "protein": float(meal_log.protein) if meal_log.protein else None,
+                "fat": float(meal_log.fat) if meal_log.fat else None
+            }
+        }
         
     except Exception as e:
         print(f"[ERROR] 식단 기록 저장 실패: {e}")
@@ -923,6 +1090,75 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
         ))
 
     return results
+
+# 🧪 식단 저장 로직 테스트용 API
+@app.post("/api/py/test/diet-save")
+def test_diet_save(db: Session = Depends(get_db)):
+    """새로운 식단 저장 로직을 테스트합니다."""
+    test_data = DietRecord(
+        user_id=2,  # 테스트 사용자
+        food_name="말린 살구",  # DB에 없는 음식으로 테스트
+        amount="5개",
+        meal_time="간식"
+    )
+    
+    try:
+        result = save_diet_record(test_data, db)
+        return {
+            "test_status": "SUCCESS",
+            "message": "식단 저장 로직 테스트 완료",
+            "result": result
+        }
+    except Exception as e:
+        return {
+            "test_status": "FAILED", 
+            "error": str(e)
+        }
+
+# 📋 오늘 식단 기록 조회 API  
+@app.get("/api/py/note/diet/daily")
+def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session = Depends(get_db)):
+    """사용자의 오늘 식단 기록을 조회합니다."""
+    if target_date:
+        query_date = date.fromisoformat(target_date)
+    else:
+        query_date = date.today()
+    
+    records = db.query(models.MealLog).filter(
+        models.MealLog.user_id == user_id,
+        models.MealLog.log_date == query_date
+    ).all()
+    
+    results = []
+    for record in records:
+        # food_item 정보도 함께 조회
+        food_item = db.query(models.FoodItem).filter(
+            models.FoodItem.food_item_id == record.food_item_id
+        ).first()
+        
+        results.append({
+            "meal_log_id": record.meal_log_id,
+            "food_item_id": record.food_item_id,
+            "food_name": food_item.name if food_item else "Unknown",
+            "quantity": float(record.quantity),
+            "meal_time": record.meal_time,
+            "log_date": str(record.log_date),
+            "nutrition": {
+                "calories": float(record.calories) if record.calories else None,
+                "carbs": float(record.carbs) if record.carbs else None,
+                "protein": float(record.protein) if record.protein else None,
+                "fat": float(record.fat) if record.fat else None
+            },
+            "created_at": str(record.created_at)
+        })
+    
+    return {
+        "user_id": user_id,
+        "date": str(query_date),
+        "total_records": len(results),
+        "records": results
+    }
+
 # 🆕 GPT 기반 새로운 food_item 생성 API
 @app.post("/api/py/food-items/create-from-gpt")
 def create_food_item_from_gpt(food_name: str, db: Session = Depends(get_db)):
