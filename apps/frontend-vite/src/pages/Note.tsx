@@ -516,7 +516,6 @@ const Note = () => {
       return;
     }
 
-    // 토큰 유효성 검사 추가
     if (!isTokenValid()) {
       console.error('토큰이 유효하지 않습니다. 로그인 페이지로 이동합니다.');
       removeToken();
@@ -524,41 +523,40 @@ const Note = () => {
       return;
     }
 
-    const dateStr = selectedDate.toISOString().split("T")[0];
-    console.log(`🔍 운동 기록 조회 시작 - 날짜: ${dateStr}`);
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    console.log('[운동기록 조회 호출]', formattedDate, authToken);
 
     try {
-      // authApi.ts의 getDailyExerciseRecords 함수 사용
-      const data = await getDailyExerciseRecords(dateStr);
-      console.log('✅ 운동 기록 조회 성공:', data);
-      setTodayExercise(data);
+      const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      console.log('[운동기록 조회 응답]', data);
+      // 날짜 필터 적용 (exerciseDate 기준)
+      const filtered = data.filter(
+        (e: ExerciseRecordDTO) =>
+          e.exerciseDate && e.exerciseDate.startsWith(formattedDate)
+      );
+      setTodayExercise(filtered);
+      console.log('[운동기록 날짜 필터링 결과]', filtered);
+      if (!filtered || filtered.length === 0) {
+        console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
+      }
     } catch (err) {
       console.error("운동 기록 불러오기 실패:", err);
-      
-      if (err instanceof Error) {
-        const message = err.message;
-        
-        if (message.includes('인증이 필요합니다')) {
-          console.error('인증 실패 - 토큰이 만료되었거나 유효하지 않습니다.');
-          debugToken();
-          removeToken();
-          navigate('/login');
-          return;
-        }
-        
-        if (message.includes('접근 권한이 없습니다')) {
-          console.error('권한 없음 - 403 Forbidden');
-          debugToken();
-        }
-      }
-      
       setTodayExercise([]);
     }
   };
 
   useEffect(() => {
-    fetchExercise();
-  }, [selectedDate]);
+    if (authToken) {
+      fetchExercise();
+    }
+  }, [selectedDate, authToken]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
@@ -818,12 +816,11 @@ const Note = () => {
   const addExerciseRecord = async () => {
     try {
       const token = getToken();
+      console.log('운동 추가 토큰:', token); // 토큰 값 확인
       const userInfo = getUserInfo();
-      const userId = userInfo?.userId || 1;
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
 
       const request = {
-        userId: userId,
         exerciseName: exerciseName.trim(),
         sets: sets || 1,
         reps: reps || 10,
@@ -831,7 +828,7 @@ const Note = () => {
         time: time || null,
         exerciseDate: formattedDate
       };
-      console.log("💪 운동 추가 요청:", request);
+      console.log('💪 운동 추가 요청:', request);
 
       const res = await fetch('/api/note/exercise', {
         method: 'POST',
@@ -844,8 +841,7 @@ const Note = () => {
 
       if (!res.ok) throw new Error("운동 기록 추가 실패");
 
-      const data = await res.json();
-      setTodayExercise(prev => [...prev, data]);
+      await fetchExercise(); // 운동 추가 후 오늘의 운동 기록을 강제로 다시 불러옴
 
       setIsAddExerciseDialogOpen(false);
       setExerciseName('');
@@ -1139,16 +1135,23 @@ const Note = () => {
               <CardContent>
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
-                    {todayExercise.map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    {todayExercise.map((record) => (
+                      <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                          <p className="font-medium">{record.exerciseName}</p>
-                          <p className="text-sm text-gray-600">
-                            {record.sets && record.reps && record.weight ? (
-                              `${record.sets}세트 × ${record.reps}회 (${record.weight}kg)`
-                            ) : (
-                              `${record.durationMinutes || 0}분`
+                          <p className="font-medium">
+                            {record.exerciseName}
+                            {record.bodyPart && (
+                              <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                             )}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {/* 세트/횟수/무게 */}
+                            {record.sets && record.reps ? `${record.sets}세트 × ${record.reps}회` : ''}
+                            {record.weight ? ` (${record.weight}kg)` : ''}
+                            {/* 시간 */}
+                            {record.durationMinutes ? ` • ${record.durationMinutes}분` : ''}
+                            {/* 칼로리 정보가 있다면 */}
+                            {typeof record.calories_burned === 'number' && ` • ${record.calories_burned}kcal`}
                           </p>
                         </div>
                         <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
