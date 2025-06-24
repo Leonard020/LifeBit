@@ -18,9 +18,13 @@ from note_routes import router as note_router  # ✅ 상단에 추가
 # 새로 추가: 차트 분석 서비스 import
 from analytics_service import HealthAnalyticsService
 
-# Load .env
-env_path = Path(__file__).parent / '.env'
+# Load .env from project root
+env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
+
+# Also try to load local .env in ai-api-fastapi directory
+local_env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=local_env_path, override=False)  # Don't override existing values
 
 # 환경 변수 로드 확인
 print("[ENV] Environment variables loaded:")

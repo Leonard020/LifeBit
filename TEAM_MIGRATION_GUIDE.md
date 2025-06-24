@@ -1,239 +1,116 @@
-# 🚀 LifeBit 팀 마이그레이션 가이드
+# 팀원을 위한 변경사항 가이드
 
-## 📋 개요
-LifeBit 프로젝트에 새로 참여하는 팀원을 위한 환경 설정 가이드입니다.
+## 🔄 **변경사항 요약**
+
+최근 CORS 문제 해결 및 Docker 환경 개선을 위해 일부 파일이 수정되었습니다.
+**로컬 개발 환경에는 영향이 없도록** 설계되었습니다.
 
 ---
 
-## 🔧 데이터베이스 연결 문제 해결
+## ✅ **로컬 개발자에게 영향 없는 이유**
 
-### ❌ 문제 상황
-- **에러 메시지**: `Connection refused` 또는 `Host not found: postgres-db`
-- **원인**: Docker 환경용 설정이 로컬 개발 환경에서 사용됨
+### 1. **환경변수 기본값 유지**
+```typescript
+// apps/frontend-vite/src/config/env.ts
+BASE_URL: import.meta.env.VITE_CORE_API_URL || 'http://localhost:8080',
+AI_API_URL: import.meta.env.VITE_AI_API_URL || 'http://localhost:8001',
+```
+- 환경변수 없으면 → 기존 로컬 포트 사용
+- **변경 불필요**: 기존대로 개발 가능
 
-### ✅ 해결 방법
+### 2. **CORS 설정 확장**
+```java
+// Spring Boot - 로컬 개발 포트 포함
+.allowedOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000")
+```
+```python
+# FastAPI - 로컬 개발 포트 포함  
+origins = ["http://localhost:3000", "http://localhost:5173", ...]
+```
+- **기존 포트 유지**: `localhost:5173` (Vite), `localhost:8080` (Spring), `localhost:8001` (FastAPI)
+- **추가 포트**: Docker 환경용만 추가
 
-#### 1️⃣ 환경변수 설정 (.env 파일)
+---
 
-프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 추가:
+## 🚀 **로컬 개발 환경 그대로 사용**
 
+### 기존 방식 (변경 없음):
 ```bash
-# 데이터베이스 설정 (로컬 개발용)
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=lifebit_db
-DB_USER=lifebit_user
-DB_PASSWORD=lifebit_password
+# 1. 백엔드 실행
+cd apps/core-api-spring && ./mvnw spring-boot:run  # :8080
+cd apps/ai-api-fastapi && uvicorn main:app --reload --port 8001  # :8001
 
-# 기타 필수 설정
-OPENAI_API_KEY=your-api-key-here
-USE_GPT=false
-JWT_SECRET=your-jwt-secret-here-minimum-256-bits
+# 2. 프론트엔드 실행
+cd apps/frontend-vite && npm run dev  # :5173
 ```
 
-#### 2️⃣ PostgreSQL 로컬 설치
+### 접속 URL (기존과 동일):
+- **프론트엔드**: http://localhost:5173
+- **Spring Boot**: http://localhost:8080  
+- **FastAPI**: http://localhost:8001
 
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-```
+---
 
-**macOS (Homebrew):**
-```bash
-brew install postgresql
-brew services start postgresql
-```
+## 🐳 **Docker 환경 (선택사항)**
 
-**Windows:**
-[PostgreSQL 공식 사이트](https://www.postgresql.org/download/windows/)에서 설치
+Docker를 사용하고 싶은 팀원만 사용:
 
-#### 3️⃣ 데이터베이스 설정
-
-```bash
-# PostgreSQL 접속
-sudo -u postgres psql
-
-# 데이터베이스 및 사용자 생성
-CREATE DATABASE lifebit_db;
-CREATE USER lifebit_user WITH PASSWORD 'lifebit_password';
-GRANT ALL PRIVILEGES ON DATABASE lifebit_db TO lifebit_user;
-
-# 종료
-\q
-```
-
-#### 4️⃣ 애플리케이션 실행
-
-**FastAPI (AI API):**
-```bash
-cd apps/ai-api-fastapi
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-**Spring Boot (Core API):**
-```bash
-cd apps/core-api-spring
-# 로컬 프로파일로 실행
-SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
-```
-
-**Frontend:**
+### 환경변수 설정:
 ```bash
 cd apps/frontend-vite
-npm install
-npm run dev
+cp .env.example .env
+
+# .env 파일에서 다음 두 줄 주석 해제:
+VITE_CORE_API_URL=http://localhost:8082/api
+VITE_AI_API_URL=http://localhost:8082/ai
+```
+
+### Docker 실행:
+```bash
+docker-compose -f docker-compose.single-server.yml up -d
+# → http://localhost:8082 접속
 ```
 
 ---
 
-## 🐳 Docker 환경에서 개발하기
+## 📋 **체크리스트**
 
-전체 스택을 Docker로 실행하려면:
+### 로컬 개발자가 확인할 것:
+- [ ] 기존 개발 방식 그대로 사용 가능
+- [ ] `localhost:5173` → `localhost:8080`, `localhost:8001` 연결 정상
+- [ ] CORS 오류 없음
+- [ ] 환경변수 설정 불필요
 
-```bash
-# 단일 서버 배포
-./scripts/deploy-single-server.sh
-
-# 또는 개별 서비스
-docker-compose up -d postgres-db  # 데이터베이스만
-docker-compose up -d              # 전체 서비스
-```
-
----
-
-## 🔍 연결 확인 방법
-
-### 1️⃣ 데이터베이스 연결 테스트
-```bash
-# PostgreSQL 직접 연결
-psql -h localhost -U lifebit_user -d lifebit_db
-
-# 또는
-telnet localhost 5432
-```
-
-### 2️⃣ 애플리케이션 헬스체크
-```bash
-# Spring Boot
-curl http://localhost:8080/actuator/health
-
-# FastAPI
-curl http://localhost:8001/api/py/health
-
-# Frontend
-curl http://localhost:3000
-```
+### 문제 발생 시:
+1. **CORS 오류**: 브라우저 캐시 삭제
+2. **포트 충돌**: `lsof -i :5173` 확인 후 프로세스 종료
+3. **환경변수 문제**: `.env` 파일 삭제 후 재시작
 
 ---
 
-## 🛠️ 환경별 설정
+## 🤝 **팀 협업 권장사항**
 
-### 로컬 개발 환경
-- **DB_HOST**: `localhost`
-- **Spring Profile**: `local`
-- **포트**: 기본 포트 사용 (5432, 8080, 8001, 3000)
+### 1. **환경 선택**:
+- **로컬 개발** (기본): 빠른 개발 사이클
+- **Docker 환경** (선택): 전체 시스템 테스트
 
-### Docker 환경
-- **DB_HOST**: `postgres-db` (자동 감지)
-- **Spring Profile**: `docker`
-- **네트워크**: lifebit-network
+### 2. **환경변수 관리**:
+- `.env` 파일은 개인별 관리 (Git 추적 안함)
+- `.env.example` 참고하여 필요 시 설정
 
-### 프로덕션 환경
-- **DB_HOST**: 실제 DB 서버 주소
-- **Spring Profile**: `prod`
-- **SSL/TLS**: 활성화
+### 3. **문제 해결**:
+- 기존 방식으로 안 되면 팀에 문의
+- Docker 관련 문제는 선택사항이므로 무시 가능
 
 ---
 
-## 📞 문제 해결
+## 💡 **요약**
 
-### 🔧 자주 발생하는 문제들
+**🎯 핵심**: 기존 로컬 개발 방식은 전혀 변경되지 않았습니다!
 
-#### 1. "Connection refused" 오류
-```bash
-# PostgreSQL 서비스 상태 확인
-sudo systemctl status postgresql
+- ✅ 포트 번호 동일
+- ✅ 실행 방법 동일  
+- ✅ 환경변수 설정 불필요
+- ✅ CORS 문제 해결됨
 
-# 서비스 시작
-sudo systemctl start postgresql
-```
-
-#### 2. "Authentication failed" 오류
-```bash
-# 비밀번호 재설정
-sudo -u postgres psql
-ALTER USER lifebit_user PASSWORD 'lifebit_password';
-```
-
-#### 3. "Database does not exist" 오류
-```bash
-# 데이터베이스 재생성
-sudo -u postgres createdb lifebit_db
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE lifebit_db TO lifebit_user;"
-```
-
-#### 4. 환경변수 인식 안 됨
-```bash
-# .env 파일 위치 확인 (프로젝트 루트)
-ls -la .env
-
-# 환경변수 수동 설정
-export DB_HOST=localhost
-export DB_PORT=5432
-```
-
----
-
-## 🎯 팀 협업 가이드
-
-### 1️⃣ 브랜치 전략
-- `main`: 프로덕션 코드
-- `develop`: 개발 통합 브랜치
-- `feature/*`: 기능 개발 브랜치
-
-### 2️⃣ 환경 동기화
-```bash
-# 최신 코드 동기화
-git pull origin develop
-
-# 의존성 업데이트
-cd apps/core-api-spring && ./mvnw clean install
-cd apps/ai-api-fastapi && pip install -r requirements.txt
-cd apps/frontend-vite && npm install
-```
-
-### 3️⃣ 데이터베이스 마이그레이션
-```bash
-# Spring Boot가 자동으로 스키마 업데이트
-# 새로운 테이블이나 컬럼이 추가되면 자동 반영
-```
-
----
-
-## 📚 추가 자료
-
-- [PostgreSQL 설치 가이드](https://www.postgresql.org/docs/current/installation.html)
-- [Docker 설치 가이드](https://docs.docker.com/get-docker/)
-- [Spring Boot 프로파일](https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.profiles)
-- [FastAPI 환경변수](https://fastapi.tiangolo.com/advanced/settings/)
-
----
-
-## 🆘 긴급 연락처
-
-문제가 해결되지 않으면 다음 방법으로 연락:
-
-1. **Slack**: #lifebit-dev 채널
-2. **이슈 등록**: GitHub Issues
-3. **팀 리드**: @your-team-lead
-
----
-
-**마지막 업데이트**: 2024년 6월 24일  
-**작성자**: LifeBit 개발팀 
+**추가된 것**: Docker 환경 옵션 (선택사항) 
