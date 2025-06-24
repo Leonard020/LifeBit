@@ -10,6 +10,7 @@ import com.lifebit.coreapi.repository.ExerciseSessionRepository;
 import com.lifebit.coreapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -41,8 +42,9 @@ public class NoteExerciseService {
     }
 
     // ✅ 일일 기록 데이터 (세션 하나하나 반환)
+    @Transactional
     public List<ExerciseRecordDTO> getTodayExerciseRecords(Long userId, LocalDate date) {
-        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDate(userId, date);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateWithCatalog(userId, date);
         return sessions.stream()
                 .map(ExerciseRecordDTO::new)
                 .toList();

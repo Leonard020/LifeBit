@@ -195,6 +195,7 @@ INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein,
 -- ===================================================================
 -- 4. -- 사용자 목표 설정 (각 사용자당 10개씩, 500개)
 -- 2025년 2월 1일부터 주별로 1개씩 생성
+-- weekly_workout_target = 모든 운동 부위별 목표의 합계
 -- ===================================================================
 INSERT INTO user_goals (
     user_id,
@@ -214,95 +215,76 @@ INSERT INTO user_goals (
     updated_at
 )
 SELECT 
-    user_series.user_id,
+    calculated_data.user_id,
     
-    -- 주간 운동 목표 (3-7회, 연령대별 차등)
-    CASE 
-        WHEN COALESCE(u.age, 30) BETWEEN 20 AND 25 THEN 5 + (random() * 2)::integer
-        WHEN COALESCE(u.age, 30) BETWEEN 26 AND 35 THEN 4 + (random() * 2)::integer
-        ELSE 3 + (random() * 2)::integer
-    END AS weekly_workout_target,
+    -- 각 운동 부위별 목표의 합계로 weekly_workout_target 계산
+    calculated_data.weekly_chest + 
+    calculated_data.weekly_back + 
+    calculated_data.weekly_legs + 
+    calculated_data.weekly_shoulders + 
+    calculated_data.weekly_arms + 
+    calculated_data.weekly_abs + 
+    calculated_data.weekly_cardio AS weekly_workout_target,
     
-    -- 주간 운동 부위별 목표
-    (random() * 3)::integer AS weekly_chest,
-    (random() * 3)::integer AS weekly_back,
-    (random() * 3)::integer AS weekly_legs,
-    (random() * 2)::integer AS weekly_shoulders,
-    (random() * 2)::integer AS weekly_arms,
-    (random() * 3)::integer AS weekly_abs,
-    (random() * 5)::integer AS weekly_cardio,
+    -- 개별 운동 부위별 목표
+    calculated_data.weekly_chest,
+    calculated_data.weekly_back,
+    calculated_data.weekly_legs,
+    calculated_data.weekly_shoulders,
+    calculated_data.weekly_arms,
+    calculated_data.weekly_abs,
+    calculated_data.weekly_cardio,
 
-    -- 일일 영양소 목표 (NULL 값 처리)
-    CASE 
-        WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 4 + random() * 50)::integer
-        ELSE (COALESCE(u.weight, 60) * 3.5 + random() * 40)::integer
-    END AS daily_carbs_target,
+    -- 일일 영양소 목표 (이미 계산됨)
+    calculated_data.daily_carbs_target,
+    calculated_data.daily_protein_target,
+    calculated_data.daily_fat_target,
 
-    CASE 
-        WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.8 + random() * 30)::integer
-        ELSE (COALESCE(u.weight, 60) * 1.5 + random() * 25)::integer
-    END AS daily_protein_target,
-
-    CASE 
-        WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.2 + random() * 20)::integer
-        ELSE (COALESCE(u.weight, 60) * 1.0 + random() * 15)::integer
-    END AS daily_fat_target,
-
-    -- 일일 총 칼로리 목표 계산
-    (
-        (
-            CASE 
-                WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.8 + random() * 30)
-                ELSE (COALESCE(u.weight, 60) * 1.5 + random() * 25)
-            END * 4
-        ) +
-        (
-            CASE 
-                WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.2 + random() * 20)
-                ELSE (COALESCE(u.weight, 60) * 1.0 + random() * 15)
-            END * 9
-        ) +
-        (
-            CASE 
-                WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 4 + random() * 50)
-                ELSE (COALESCE(u.weight, 60) * 3.5 + random() * 40)
-            END * 4
-        )
-    )::integer AS daily_calory_target,
+    -- 일일 총 칼로리 목표 계산 (단백질*4 + 지방*9 + 탄수화물*4)
+    (calculated_data.daily_protein_target * 4 + 
+     calculated_data.daily_fat_target * 9 + 
+     calculated_data.daily_carbs_target * 4)::integer AS daily_calory_target,
 
     CURRENT_TIMESTAMP AS created_at,
     CURRENT_TIMESTAMP AS updated_at
 
 FROM (
-    -- 실제 존재하는 사용자에 대해서만 생성
+    -- 실제 존재하는 사용자에 대해서만 생성하고 모든 목표값을 한번에 계산
     SELECT 
         u.user_id,
-        week_num
+        u.gender,
+        u.weight,
+        u.age,
+        week_num,
+        -- 운동 부위별 목표
+        (random() * 3)::integer AS weekly_chest,
+        (random() * 3)::integer AS weekly_back,
+        (random() * 3)::integer AS weekly_legs,
+        (random() * 2)::integer AS weekly_shoulders,
+        (random() * 2)::integer AS weekly_arms,
+        (random() * 3)::integer AS weekly_abs,
+        (random() * 5)::integer AS weekly_cardio,
+        -- 일일 영양소 목표 (NULL 값 처리)
+        CASE 
+            WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 4 + random() * 50)::integer
+            ELSE (COALESCE(u.weight, 60) * 3.5 + random() * 40)::integer
+        END AS daily_carbs_target,
+        CASE 
+            WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.8 + random() * 30)::integer
+            ELSE (COALESCE(u.weight, 60) * 1.5 + random() * 25)::integer
+        END AS daily_protein_target,
+        CASE 
+            WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 1.2 + random() * 20)::integer
+            ELSE (COALESCE(u.weight, 60) * 1.0 + random() * 15)::integer
+        END AS daily_fat_target
     FROM users u
     CROSS JOIN generate_series(0, 9) AS week_num
     WHERE u.user_id IS NOT NULL
     LIMIT 500  -- 최대 500개로 제한
-) user_series
-JOIN users u ON u.user_id = user_series.user_id
--- WHERE 조건 제거하여 모든 사용자 대상
-ORDER BY user_series.user_id, user_series.week_num; 
+) calculated_data
+ORDER BY calculated_data.user_id, calculated_data.week_num;
 
 
--- ===================================================================
--- 5. 건강 기록 490개 (체중 변화 추적)
--- ===================================================================
-INSERT INTO health_records (user_id, weight, height, record_date)
-SELECT 
-        -- 사용자 ID: 2~50 사이
-    2 + (row_number() OVER () - 1) % 49 AS user_id,
-    -- 체중 변화 (초기 체중 ± 5kg 범위에서 점진적 변화)
-    u.weight + (random() - 0.5) * 10, -- ±5kg 변화
-    u.height, -- 키는 고정
-    -- 🔧 기록 날짜를 2025-02-01부터 시작하도록 수정
-    DATE '2025-02-01' + (random() * 180)::integer * INTERVAL '1 day'
-FROM users u 
-CROSS JOIN generate_series(1, 10) AS series -- 사용자당 10개씩
-WHERE u.role = 'USER'; 
 
 
 -- ===================================================================

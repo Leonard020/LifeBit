@@ -21,12 +21,13 @@ import SocialRedirect from './pages/SocialRedirect';
 import { AuthProvider } from './AuthContext'; // ← 이 줄 추가
 import { AdminPage } from './pages/AdminPage';
 import UserInfo from './pages/UserInfo';
+import { API_CONFIG } from './config/env';
 
 
 // ===================================================================
 // [개발용 서버 상태 확인] - 추후 이 부분 2줄을 삭제하면 됩니다.
-const CORE_API_URL = 'http://localhost:8080';
-const AI_API_URL = 'http://localhost:8001';
+const CORE_API_URL = API_CONFIG.BASE_URL;
+const AI_API_URL = API_CONFIG.AI_API_URL;
 // ===================================================================
 
 

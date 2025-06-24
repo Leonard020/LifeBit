@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { API_CONFIG } from './config/env'
+import { AUTH_CONFIG } from '@/config/env'
 
 // 🔧 개발 환경에서 디버깅 도구 제공
 if (import.meta.env.DEV) {
@@ -13,8 +15,8 @@ if (import.meta.env.DEV) {
       return userInfo ? JSON.parse(userInfo) : null;
     },
     clearAuth: () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('userInfo');
+      localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+      localStorage.removeItem(AUTH_CONFIG.USER_KEY);
       console.log('✅ 인증 정보 삭제됨');
     },
     testWebSocket: (userId: string) => {
@@ -24,7 +26,7 @@ if (import.meta.env.DEV) {
         return;
       }
       
-      const wsUrl = `ws://localhost:8080/ws/health/${userId}?token=${encodeURIComponent(token)}`;
+      const wsUrl = `ws://${API_CONFIG.BASE_URL.replace('http://', '')}/ws/health/${userId}?token=${encodeURIComponent(token)}`;
       console.log('🔗 WebSocket 테스트 연결 시도:', wsUrl);
       
       const testWs = new WebSocket(wsUrl);

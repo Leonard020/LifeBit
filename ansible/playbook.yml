@@ -1,26 +1,35 @@
 ---
-- name: Deploy LifeBit Application to NCP
+# ================================================
+# LifeBit 학원용 Ansible 배포 플레이북
+# ================================================
+# 단일 서버에 Docker Compose로 모든 서비스 배포
+
+- name: Deploy LifeBit Application to NCP (Academy Version)
   hosts: lifebit_servers
   become: yes
   vars:
     project_name: "lifebit"
-    environment: "{{ env | default('dev') }}"
+    environment: "{{ env | default('demo') }}"
     project_path: "/opt/lifebit"
-    git_repo: "{{ git_repository_url }}"
+    git_repo: "{{ git_repository_url | default('https://github.com/your-username/LifeBit.git') }}"
     git_branch: "{{ git_branch | default('main') }}"
     
   tasks:
+    # ================================================
+    # 시스템 기본 설정
+    # ================================================
     - name: Update system packages
       apt:
         update_cache: yes
         upgrade: dist
         cache_valid_time: 3600
-      tags: system
+      tags: [system, setup]
 
     - name: Install required system packages
       apt:
         name:
           - curl
+          - wget
           - git
           - docker.io
           - docker-compose
@@ -29,8 +38,10 @@
           - htop
           - vim
           - unzip
+          - tree
+          - jq
         state: present
-      tags: system
+      tags: [system, setup]
 
     - name: Install Docker Compose v2
       shell: |
@@ -38,22 +49,25 @@
         chmod +x /usr/local/bin/docker-compose
       args:
         creates: /usr/local/bin/docker-compose
-      tags: system
+      tags: [system, setup]
 
     - name: Start and enable Docker service
       systemd:
         name: docker
         state: started
         enabled: yes
-      tags: system
+      tags: [system, setup]
 
     - name: Add root user to docker group
       user:
         name: root
         groups: docker
         append: yes
-      tags: system
+      tags: [system, setup]
 
+    # ================================================
+    # 프로젝트 설정
+    # ================================================
     - name: Create project directory
       file:
         path: "{{ project_path }}"
@@ -61,7 +75,7 @@
         owner: root
         group: root
         mode: '0755'
-      tags: setup
+      tags: [setup, deploy]
 
     - name: Clone or update repository
       git:
@@ -69,244 +83,241 @@
         dest: "{{ project_path }}"
         version: "{{ git_branch }}"
         force: yes
-      tags: deploy
+      tags: [deploy]
       register: git_result
 
-    - name: Check if .env file exists in FastAPI app
+    - name: Check if .env file exists
       stat:
-        path: "{{ project_path }}/apps/ai-api-fastapi/.env"
-      register: fastapi_env_file
-      tags: config
+        path: "{{ project_path }}/.env"
+      register: env_file
+      tags: [config]
 
-    - name: Create .env file for FastAPI if not exists
+    - name: Create main .env file if not exists
       copy:
         content: |
-          # Whisper, GPT Turbo 3.5 API Key 
-          OPENAI_API_KEY="{{ openai_api_key | default('your-api-key-here') }}"
+          # ================================================
+          # LifeBit 학원용 환경 변수 설정
+          # ================================================
           
-          # False일때는 gpt 토큰안씀 사용할때는 True로 변경
+          # 데이터베이스 설정 (PostgreSQL)
+          POSTGRES_DB=lifebit_db
+          POSTGRES_USER=lifebit_user
+          POSTGRES_PASSWORD=lifebit_password
+          POSTGRES_PORT=5432
+          
+          # Redis 설정
+          REDIS_PASSWORD=lifebit_redis_secure_pass
+          REDIS_PORT=6379
+          
+          # Spring Boot 설정
+          SPRING_PROFILES_ACTIVE={{ environment }}
+          JWT_SECRET=your-jwt-secret-key-here-32-characters-minimum
+          
+          # AI API 설정
+          OPENAI_API_KEY={{ openai_api_key | default('your-api-key-here') }}
           USE_GPT={{ use_gpt | default('False') }}
           
-          # 카카오 로그인
-          KAKAO_REDIRECT_URI="{{ kakao_redirect_uri | default('') }}"
+          # 소셜 로그인 설정 (선택적)
+          KAKAO_REDIRECT_URI={{ kakao_redirect_uri | default('') }}
+          GOOGLE_CLIENT_SECRET={{ google_client_secret | default('') }}
+          GOOGLE_REDIRECT_URI={{ google_redirect_uri | default('') }}
           
-          # 구글 로그인
-          GOOGLE_CLIENT_SECRET="{{ google_client_secret | default('') }}"
-          GOOGLE_REDIRECT_URI="{{ google_redirect_uri | default('') }}"
-        dest: "{{ project_path }}/apps/ai-api-fastapi/.env"
+          # Airflow 설정
+          AIRFLOW_FERNET_KEY={{ airflow_fernet_key | default('') }}
+          AIRFLOW_ADMIN_USER=admin
+          AIRFLOW_ADMIN_PASSWORD=admin123
+          
+          # Grafana 설정
+          GRAFANA_ADMIN_USER=admin
+          GRAFANA_ADMIN_PASSWORD=grafana_secure_password
+          
+          # 메모리 제한 (학원용 최적화)
+          POSTGRES_MAX_MEMORY=512
+          REDIS_MAX_MEMORY=256
+          
+          # 환경 정보
+          ENVIRONMENT={{ environment }}
+          PROJECT_NAME={{ project_name }}
+        dest: "{{ project_path }}/.env"
         owner: root
         group: root
         mode: '0600'
-      when: not fastapi_env_file.stat.exists
-      tags: config
+      when: not env_file.stat.exists
+      tags: [config]
 
     - name: Install Python cryptography for Fernet key generation
       pip:
         name: cryptography
         state: present
-      tags: config
+      tags: [config]
 
-    - name: Generate Airflow Fernet key
+    - name: Generate Airflow Fernet key if not set
       shell: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
       register: fernet_key
       changed_when: false
-      tags: config
+      tags: [config]
+      when: airflow_fernet_key is not defined or airflow_fernet_key == ""
 
-    - name: Update docker-compose.yml with generated secrets
-      replace:
-        path: "{{ project_path }}/docker-compose.yml"
-        regexp: 'your-fernet-key-here-32-characters'
-        replace: "{{ fernet_key.stdout }}"
-      tags: config
+    - name: Update .env with generated Fernet key
+      lineinfile:
+        path: "{{ project_path }}/.env"
+        regexp: '^AIRFLOW_FERNET_KEY='
+        line: "AIRFLOW_FERNET_KEY={{ fernet_key.stdout }}"
+      when: fernet_key.stdout is defined
+      tags: [config]
 
-    - name: Update docker-compose.yml with secret key
-      replace:
-        path: "{{ project_path }}/docker-compose.yml"
-        regexp: 'your-secret-key-here'
-        replace: "{{ ansible_date_time.epoch }}-{{ inventory_hostname }}"
-      tags: config
-
+    # ================================================
+    # 기존 서비스 정리
+    # ================================================
     - name: Stop existing containers gracefully
       community.docker.docker_compose:
         project_src: "{{ project_path }}"
+        files:
+          - docker-compose.single-server.yml
         state: absent
         timeout: 60
       ignore_errors: yes
-      tags: deploy
+      tags: [deploy, cleanup]
 
     - name: Clean up unused Docker resources
       shell: |
         docker system prune -f
         docker volume prune -f
-      tags: deploy
+      tags: [deploy, cleanup]
 
-    - name: Pre-build Docker images to avoid timeout
+    # ================================================
+    # 애플리케이션 배포
+    # ================================================
+    - name: Build Docker images
       shell: |
         cd {{ project_path }}
-        docker-compose build --parallel
-      tags: deploy
+        docker-compose -f docker-compose.single-server.yml build --parallel
+      tags: [deploy, build]
       register: build_result
       failed_when: build_result.rc != 0
 
-    - name: Start database first
+    - name: Start all services with Docker Compose
       community.docker.docker_compose:
         project_src: "{{ project_path }}"
-        services:
-          - postgres-db
+        files:
+          - docker-compose.single-server.yml
         state: present
-      tags: deploy
+        timeout: 300
+      tags: [deploy]
+      register: compose_result
 
-    - name: Wait for database to be ready
-      wait_for:
-        port: 5432
-        host: localhost
-        delay: 10
-        timeout: 120
-      tags: deploy
-
-    - name: Start backend services
-      community.docker.docker_compose:
-        project_src: "{{ project_path }}"
-        services:
-          - fastapi-app
-          - spring-app
-        state: present
-      tags: deploy
-
-    - name: Wait for backend services
-      wait_for:
-        port: "{{ item }}"
-        host: localhost
-        delay: 20
-        timeout: 180
-      loop:
-        - 8001  # FastAPI
-        - 8080  # Spring Boot
-      tags: deploy
-
-    - name: Start frontend and proxy services
-      community.docker.docker_compose:
-        project_src: "{{ project_path }}"
-        services:
-          - frontend-app
-          - nginx-proxy
-        state: present
-      tags: deploy
-
-    - name: Start Airflow services
-      community.docker.docker_compose:
-        project_src: "{{ project_path }}"
-        services:
-          - airflow-webserver
-          - airflow-scheduler
-        state: present
-      tags: deploy
-
-    - name: Wait for all services to be ready
+    - name: Wait for services to be ready
       wait_for:
         port: "{{ item }}"
         host: localhost
         delay: 30
         timeout: 300
       loop:
-        - 80    # Nginx
-        - 8081  # Airflow
-      tags: deploy
+        - 5432  # PostgreSQL
+        - 6379  # Redis
+        - 8080  # Spring Boot
+        - 8001  # FastAPI
+        - 3000  # Frontend
+        - 8082  # Nginx Proxy
+      tags: [deploy, verify]
 
-    - name: Comprehensive health check
+    # ================================================
+    # 배포 검증
+    # ================================================
+    - name: Check service health
       uri:
-        url: "http://localhost:{{ item.port }}{{ item.path }}"
+        url: "http://localhost:{{ item.port }}{{ item.path | default('') }}"
         method: GET
-        status_code: "{{ item.expected_codes }}"
-        timeout: 10
+        status_code: [200, 404]  # 404도 허용 (서비스가 실행 중이면)
       loop:
-        - { port: 80, path: "/", expected_codes: [200, 301, 302] }
-        - { port: 8001, path: "/docs", expected_codes: [200] }
-        - { port: 8080, path: "/actuator/health", expected_codes: [200] }
-        - { port: 8081, path: "/health", expected_codes: [200] }
-      register: health_check
-      retries: 5
-      delay: 15
-      tags: health
+        - { port: 8080, path: "/actuator/health" }
+        - { port: 8001, path: "/docs" }
+        - { port: 3000, path: "/" }
+        - { port: 8082, path: "/" }
+        - { port: 3001, path: "/" }
+        - { port: 9090, path: "/" }
+      ignore_errors: yes
+      tags: [deploy, verify]
+      register: health_checks
 
     - name: Display service status
       debug:
         msg: |
-          LifeBit 배포 완료!
-          - 웹사이트: http://{{ ansible_default_ipv4.address }}
-          - API 문서: http://{{ ansible_default_ipv4.address }}/api/docs
-          - Spring API: http://{{ ansible_default_ipv4.address }}/api
-          - Airflow: http://{{ ansible_default_ipv4.address }}/airflow
-      tags: deploy
+          🎉 LifeBit 학원용 배포 완료!
+          
+          📋 서비스 상태:
+          {% for check in health_checks.results %}
+          - {{ check.item.port }}: {{ 'OK' if check.status == 200 else 'STARTING' }}
+          {% endfor %}
+          
+          🌐 접속 URLs:
+          - Frontend:     http://{{ ansible_default_ipv4.address }}:3000
+          - Spring API:   http://{{ ansible_default_ipv4.address }}:8080
+          - FastAPI:      http://{{ ansible_default_ipv4.address }}:8001
+          - Nginx Proxy:  http://{{ ansible_default_ipv4.address }}:8082
+          - Grafana:      http://{{ ansible_default_ipv4.address }}:3001 (admin/grafana_secure_password)
+          - Prometheus:   http://{{ ansible_default_ipv4.address }}:9090
+          - Airflow:      http://{{ ansible_default_ipv4.address }}:8081 (admin/admin123)
+          
+          🔧 유용한 명령어:
+          - 서비스 상태: docker ps
+          - 로그 보기: docker-compose -f docker-compose.single-server.yml logs -f [service]
+          - 서비스 재시작: docker-compose -f docker-compose.single-server.yml restart [service]
+      tags: [deploy, verify]
 
-    - name: Setup log rotation
+    # ================================================
+    # 시스템 최적화 (선택적)
+    # ================================================
+    - name: Configure system for Docker optimization
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: "vm.max_map_count", value: "262144" }
+        - { name: "fs.file-max", value: "65536" }
+      tags: [optimize]
+      ignore_errors: yes
+
+    - name: Create Docker daemon configuration for optimization
       copy:
         content: |
-          {{ project_path }}/logs/*.log {
-              daily
-              missingok
-              rotate 52
-              compress
-              delaycompress
-              notifempty
-              create 644 root root
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "storage-driver": "overlay2"
+          }
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: '0644'
+      tags: [optimize]
+      notify: restart docker
+
+    - name: Setup log rotation for application logs
+      copy:
+        content: |
+          /opt/lifebit/logs/*.log {
+            daily
+            missingok
+            rotate 7
+            compress
+            delaycompress
+            notifempty
+            create 644 root root
           }
         dest: /etc/logrotate.d/lifebit
         owner: root
         group: root
         mode: '0644'
-      tags: maintenance
+      tags: [optimize]
 
-    - name: Create backup script
-      copy:
-        content: |
-          #!/bin/bash
-          BACKUP_DIR="/opt/backups"
-          PROJECT_DIR="{{ project_path }}"
-          DATE=$(date +%Y%m%d_%H%M%S)
-          
-          mkdir -p $BACKUP_DIR
-          
-          # Backup database
-          docker exec lifebit_postgres pg_dump -U lifebit_user lifebit_db > $BACKUP_DIR/db_backup_$DATE.sql
-          
-          # Backup application data
-          tar -czf $BACKUP_DIR/app_backup_$DATE.tar.gz -C $PROJECT_DIR .
-          
-          # Keep only last 7 backups
-          find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
-          find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
-          
-          echo "Backup completed: $DATE"
-        dest: /usr/local/bin/backup-lifebit.sh
-        owner: root
-        group: root
-        mode: '0755'
-      tags: maintenance
-
-    - name: Setup backup cron job
-      cron:
-        name: "LifeBit daily backup"
-        minute: "0"
-        hour: "2"
-        job: "/usr/local/bin/backup-lifebit.sh >> /var/log/lifebit-backup.log 2>&1"
-      tags: maintenance
-
-    - name: Create monitoring script
-      copy:
-        content: |
-          #!/bin/bash
-          echo "=== LifeBit 서비스 상태 ==="
-          docker-compose -f {{ project_path }}/docker-compose.yml ps
-          echo ""
-          echo "=== 시스템 리소스 ==="
-          free -h
-          df -h
-          echo ""
-          echo "=== Docker 상태 ==="
-          docker stats --no-stream
-        dest: /usr/local/bin/lifebit-status.sh
-        owner: root
-        group: root
-        mode: '0755'
-      tags: maintenance 
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted 

@@ -205,7 +205,7 @@ const HealthLog: React.FC = () => {
       
       console.log('📝 [DB 요청 데이터]:', requestData);
       
-      const response = await fetch('/api/food-items', {
+      const response = await fetch('/api/diet/food-items', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -390,7 +390,10 @@ const HealthLog: React.FC = () => {
       const response = await sendChatMessage(
         chatInputText,
         updatedHistory,
-        recordType
+        recordType,
+        undefined, // chatStep
+        undefined, // currentData  
+        userId     // 🚀 userId 전달
       );
       console.log('📦 AI 응답:', response);
       if (response?.parsed_data) {

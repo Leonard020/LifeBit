@@ -20,7 +20,8 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
 
     // ✅ NoteExerciseService 용
     List<ExerciseSession> findByUser_UserIdAndExerciseDateBetween(Long userId, LocalDate start, LocalDate end);
-    List<ExerciseSession> findByUser_UserIdAndExerciseDate(Long userId, LocalDate date);
+    @Query("SELECT es FROM ExerciseSession es JOIN FETCH es.user JOIN FETCH es.exerciseCatalog WHERE es.user.userId = :userId AND es.exerciseDate = :date")
+    List<ExerciseSession> findByUser_UserIdAndExerciseDateWithCatalog(@Param("userId") Long userId, @Param("date") LocalDate date);
 
     @Query("SELECT es.exerciseDate as date, COUNT(es) as count FROM ExerciseSession es " +
            "WHERE es.user = :user AND es.exerciseDate BETWEEN :startDate AND :endDate " +

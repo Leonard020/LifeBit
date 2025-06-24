@@ -10,15 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
 import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
-
 import { toast } from '@/hooks/use-toast';
+import { useUserGoals } from '@/api/auth';
+import type { TooltipProps } from 'recharts';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -197,22 +198,36 @@ const Note = () => {
     diet: boolean;
   }
 
-  // Exercise goals from profile (mock data) (유지)
-  const exerciseGoals: { [key: string]: number } = {
-    '가슴': 3,
-    '등': 2,
-    '하체': 4,
-    '어깨': 2,
-    '복근': 3,
-    '팔': 2,
-    '유산소': 5,
-  };
+  const userId = getUserIdFromToken();
+  const { data: userGoalsData, isLoading: goalsLoading } = useUserGoals(userId ? userId.toString() : '');
+
+  // 3. Map backend fields to radar chart axes
+  const bodyPartMap = [
+    { key: 'weekly_chest', label: '가슴' },
+    { key: 'weekly_back', label: '등' },
+    { key: 'weekly_legs', label: '하체' },
+    { key: 'weekly_shoulders', label: '어깨' },
+    { key: 'weekly_abs', label: '복근' },
+    { key: 'weekly_arms', label: '팔' },
+    { key: 'weekly_cardio', label: '유산소' },
+  ];
+
+  const exerciseGoals = React.useMemo(() => {
+    if (!userGoalsData) return {};
+    // If array, pick the latest
+    const goals = Array.isArray(userGoalsData)
+      ? userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0])
+      : userGoalsData.data || userGoalsData;
+    return bodyPartMap.reduce((acc, { key, label }) => {
+      acc[label] = goals[key] ?? 0;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [userGoalsData]);
 
   // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
     const fetchWeeklySummary = async () => {
       if (!authToken) return; // 토큰이 없으면 실행하지 않음
-
       setIsLoadingSummary(true);
       try {
         const userInfo = getUserInfo();
@@ -236,10 +251,10 @@ const Note = () => {
     fetchWeeklySummary();
   }, [authToken]); // authToken이 변경될 때마다 실행
 
-  const exerciseData = Object.entries(exerciseGoals).map(([part, goal]) => ({
-    subject: part,
-    value: (weeklySummary[part] || 0) * 20, // 1회 = 20%
-    goal: goal * 20,
+  const exerciseData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: (weeklySummary[label] || 0) * 20, // 1회 = 20%
+    goal: (exerciseGoals[label] || 0) * 20,
   }));
 
   // ✅ fetchDietData를 useCallback으로 분리
@@ -515,7 +530,6 @@ const Note = () => {
       return;
     }
 
-    // 토큰 유효성 검사 추가
     if (!isTokenValid()) {
       console.error('토큰이 유효하지 않습니다. 로그인 페이지로 이동합니다.');
       removeToken();
@@ -523,41 +537,40 @@ const Note = () => {
       return;
     }
 
-    const dateStr = selectedDate.toISOString().split("T")[0];
-    console.log(`🔍 운동 기록 조회 시작 - 날짜: ${dateStr}`);
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    console.log('[운동기록 조회 호출]', formattedDate, authToken);
 
     try {
-      // authApi.ts의 getDailyExerciseRecords 함수 사용
-      const data = await getDailyExerciseRecords(dateStr);
-      console.log('✅ 운동 기록 조회 성공:', data);
-      setTodayExercise(data);
+      const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      console.log('[운동기록 조회 응답]', data);
+      // 날짜 필터 적용 (exerciseDate 기준)
+      const filtered = data.filter(
+        (e: ExerciseRecordDTO) =>
+          e.exerciseDate && e.exerciseDate.startsWith(formattedDate)
+      );
+      setTodayExercise(filtered);
+      console.log('[운동기록 날짜 필터링 결과]', filtered);
+      if (!filtered || filtered.length === 0) {
+        console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
+      }
     } catch (err) {
       console.error("운동 기록 불러오기 실패:", err);
-      
-      if (err instanceof Error) {
-        const message = err.message;
-        
-        if (message.includes('인증이 필요합니다')) {
-          console.error('인증 실패 - 토큰이 만료되었거나 유효하지 않습니다.');
-          debugToken();
-          removeToken();
-          navigate('/login');
-          return;
-        }
-        
-        if (message.includes('접근 권한이 없습니다')) {
-          console.error('권한 없음 - 403 Forbidden');
-          debugToken();
-        }
-      }
-      
       setTodayExercise([]);
     }
   };
 
   useEffect(() => {
-    fetchExercise();
-  }, [selectedDate]);
+    if (authToken) {
+      fetchExercise();
+    }
+  }, [selectedDate, authToken]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
@@ -807,12 +820,11 @@ const Note = () => {
   const addExerciseRecord = async () => {
     try {
       const token = getToken();
+      console.log('운동 추가 토큰:', token); // 토큰 값 확인
       const userInfo = getUserInfo();
-      const userId = userInfo?.userId || 1;
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
 
       const request = {
-        userId: userId,
         exerciseName: exerciseName.trim(),
         sets: sets || 1,
         reps: reps || 10,
@@ -820,7 +832,7 @@ const Note = () => {
         time: time || null,
         exerciseDate: formattedDate
       };
-      console.log("💪 운동 추가 요청:", request);
+      console.log('💪 운동 추가 요청:', request);
 
       const res = await fetch('/api/note/exercise', {
         method: 'POST',
@@ -833,8 +845,7 @@ const Note = () => {
 
       if (!res.ok) throw new Error("운동 기록 추가 실패");
 
-      const data = await res.json();
-      setTodayExercise(prev => [...prev, data]);
+      await fetchExercise(); // 운동 추가 후 오늘의 운동 기록을 강제로 다시 불러옴
 
       setIsAddExerciseDialogOpen(false);
       setExerciseName('');
@@ -946,6 +957,20 @@ const Note = () => {
     }
   };
 
+  // Custom tooltip for radar chart
+  const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
+    if (active && payload && payload.length > 0) {
+      // Find the goal value
+      const part = payload[0].payload.subject;
+      const goal = payload[0].payload.goal;
+      return (
+        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
+          <strong>{part}</strong>: {goal / 20}회
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <Layout>
@@ -1013,12 +1038,31 @@ const Note = () => {
           {/* Exercise Tab - 기존 코드 유지 */}
           <TabsContent value="exercise" className="space-y-6">
             <Card className="hover-lift">
-              <CardHeader>
-                <CardTitle>운동 부위별 목표</CardTitle>
-                <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <>
+                  <div>
+                    <CardTitle>운동 부위별 목표</CardTitle>
+                    <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+                  </div>
+                  {/* 총 주간 운동 목표 - no box, just text on background */}
+                  <div className="ml-auto text-right">
+                    <div className="text-base font-bold text-blue-700">
+                      {(() => {
+                        // Calculate total weekly workout target
+                        const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
+                        const cardio = exerciseGoals['유산소'] || 0;
+                        const total = strength + cardio;
+                        return `목표 : ${total}회 / 주`;
+                      })()}
+                    </div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      (근력운동: {(exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0)}회, 유산소: {exerciseGoals['유산소'] || 0}회)
+                    </div>
+                  </div>
+                </>
               </CardHeader>
               <CardContent>
-                {isLoadingSummary ? (
+                {(isLoadingSummary || goalsLoading) ? (
                   <div className="text-center py-8 text-muted-foreground">
                     운동 집계 데이터를 불러오는 중...
                   </div>
@@ -1028,6 +1072,7 @@ const Note = () => {
                       <RadarChart data={exerciseData}>
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
+                        <Tooltip content={<RadarGoalTooltip />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                       </RadarChart>
@@ -1128,16 +1173,23 @@ const Note = () => {
               <CardContent>
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
-                    {todayExercise.map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    {todayExercise.map((record) => (
+                      <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                          <p className="font-medium">{record.exerciseName}</p>
-                          <p className="text-sm text-gray-600">
-                            {record.sets && record.reps && record.weight ? (
-                              `${record.sets}세트 × ${record.reps}회 (${record.weight}kg)`
-                            ) : (
-                              `${record.durationMinutes || 0}분`
+                          <p className="font-medium">
+                            {record.exerciseName}
+                            {record.bodyPart && (
+                              <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                             )}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {/* 세트/횟수/무게 */}
+                            {record.sets && record.reps ? `${record.sets}세트 × ${record.reps}회` : ''}
+                            {record.weight ? ` (${record.weight}kg)` : ''}
+                            {/* 시간 */}
+                            {record.durationMinutes ? ` • ${record.durationMinutes}분` : ''}
+                            {/* 칼로리 정보가 있다면 */}
+                            {typeof record.calories_burned === 'number' && ` • ${record.calories_burned}kcal`}
                           </p>
                         </div>
                         <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>

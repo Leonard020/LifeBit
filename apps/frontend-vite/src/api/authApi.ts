@@ -198,6 +198,7 @@ export interface ExerciseRecordDTO {
   weight?: number;
   exerciseDate: string;
   durationMinutes?: number;
+  calories_burned?: number;
 }
 
 // ============================================================================
@@ -841,12 +842,12 @@ export const getExerciseCatalog = async (): Promise<ExerciseCatalog[]> => {
 };
 
 // 일일 운동 기록 조회
-export const getDailyExerciseRecords = async (date: string): Promise<ExerciseRecordDTO[]> => {
+export const getDailyExerciseRecords = async (date: string, userId: number): Promise<ExerciseRecordDTO[]> => {
   try {
     console.log('🏋️ [getDailyExerciseRecords] 일일 운동 기록 조회 시작 - 날짜:', date);
     
     const response = await axiosInstance.get('/api/note/exercise/daily', {
-      params: { date }
+      params: { date, user_id: userId }
     });
     
     console.log('✅ [getDailyExerciseRecords] 일일 운동 기록 조회 성공:', response.data);

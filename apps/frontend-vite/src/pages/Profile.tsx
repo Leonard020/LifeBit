@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { BasicInfoBox } from '@/components/BasicInfoBox';
 import { API_CONFIG } from '@/config/env';
 import { useUpdateUserGoal, useCreateUserGoal } from '@/api/authApi';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface StrengthGoal {
   id: string;
@@ -78,6 +79,7 @@ const Profile = () => {
   const { data: userGoalsData, isLoading: goalsLoading } = useUserGoals(currentUserId?.toString() || '');
   const updateUserGoalMutation = useUpdateUserGoal();
   const createUserGoalMutation = useCreateUserGoal();
+  const queryClient = useQueryClient();
 
   const bodyPartOptions = [
     { value: 'chest', label: '가슴' },
@@ -97,7 +99,14 @@ const Profile = () => {
   // Load user goals when data is available
   useEffect(() => {
     if (userGoalsData && !goalsLoading) {
-      const goalsData = userGoalsData.data || userGoalsData;
+      // Future-proof: if userGoalsData is an array, pick the one with the highest user_goal_id
+      let goalsData;
+      if (Array.isArray(userGoalsData)) {
+        if (userGoalsData.length === 0) return;
+        goalsData = userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0]);
+      } else {
+        goalsData = userGoalsData.data || userGoalsData;
+      }
       setGoals({
         dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
         dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
@@ -263,7 +272,8 @@ const Profile = () => {
       };
 
       await createUserGoalMutation.mutateAsync(goalsData);
-
+      // Invalidate user goals cache after successful update
+      queryClient.invalidateQueries({ queryKey: ['userGoals', currentUserId] });
       toast({
         title: '목표 설정 완료',
         description: '건강 목표가 성공적으로 저장되었습니다.',
