@@ -13,8 +13,9 @@ import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, C
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import axios from '@/utils/axios';
-import { getUserInfo, getToken, getUserIdFromToken, isTokenValid } from '@/utils/auth';
+import axios from 'axios';
+import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { toast } from '@/hooks/use-toast';
@@ -90,22 +91,13 @@ const Note = () => {
   const [reps, setReps] = useState(10);
   const [weight, setWeight] = useState(0);
   const [time, setTime] = useState('');
+  const [exerciseOptions, setExerciseOptions] = useState<{ value: string; label: string }[]>([]);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 운동 기록 타입 정의
-  interface ExerciseRecord {
-    exercise_session_id: number;
-    name: string;
-    weight: string;
-    sets: number;
-    reps: number;
-    time: string;
-  }
-
   // Mock data for records on specific dates (유지)
-  const [todayExercise, setTodayExercise] = useState<ExerciseRecord[]>([]);
+  const [todayExercise, setTodayExercise] = useState<ExerciseRecordDTO[]>([]);
 
   // ✅ 토큰을 맨 처음에 한 번만 가져와서 저장
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -138,7 +130,7 @@ const Note = () => {
 
       setDietRecordedDates(Object.keys(dietResponse.data));
       // exercise_date가 없을 경우를 대비하여 방어 코드 추가
-      setExerciseRecordedDates(exerciseResponse.data?.map((item: any) => item.exercise_date) || []);
+      setExerciseRecordedDates(exerciseResponse.data?.map((item: { exercise_date: string }) => item.exercise_date) || []);
     } catch (err) {
       console.error("달력 기록 조회 실패:", err);
       setDietRecordedDates([]);
@@ -256,14 +248,67 @@ const Note = () => {
     setDietError(null);
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
     try {
-      const userId = getUserIdFromToken() || 1;
-      const dietLogsResponse = await axios.get(`/api/diet/daily-records/${formattedDate}`, { params: { userId } });
-      const nutritionGoalsResponse = await axios.get(`/api/diet/nutrition-goals/${formattedDate}`, { params: { userId } });
-      setDailyDietLogs(dietLogsResponse.data);
-      setDailyNutritionGoals(nutritionGoalsResponse.data);
+      const userId = getUserIdFromToken();
+      
+      if (!userId) {
+        console.warn('🚨 [fetchDietData] 사용자 ID를 찾을 수 없습니다.');
+        setDietError("사용자 인증이 필요합니다.");
+        return;
+      }
+
+      console.log(`🍽️ [fetchDietData] 식단 데이터 조회 시작: ${formattedDate}, 사용자: ${userId}`);
+      
+      // ✅ authApi.ts의 함수 사용 (충돌 방지)
+      const dietRecords = await getDailyDietRecords(formattedDate, userId);
+      
+      // DietRecord → DietLogDTO 변환
+      const convertedRecords: DietLogDTO[] = dietRecords.map(record => ({
+        id: record.id,
+        userId: record.userId,
+        foodItemId: record.foodItemId,
+        foodName: record.foodName,
+        quantity: record.quantity,
+        calories: record.calories,
+        carbs: record.carbs,
+        protein: record.protein,
+        fat: record.fat,
+        logDate: record.logDate,
+        unit: record.unit,
+        mealTime: record.mealTime,
+        inputSource: record.inputSource,
+        confidenceScore: record.confidenceScore,
+        originalAudioPath: record.originalAudioPath,
+        validationStatus: record.validationStatus,
+        validationNotes: record.validationNotes,
+        createdAt: record.createdAt
+      }));
+
+      // 영양소 목표는 임시로 기본값 설정 (추후 authApi.ts에 함수 추가 필요)
+      const defaultGoals: DietNutritionDTO[] = [
+        { name: '칼로리', target: 2000, current: 0, unit: 'kcal', percentage: 0 },
+        { name: '탄수화물', target: 250, current: 0, unit: 'g', percentage: 0 },
+        { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
+        { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
+      ];
+      
+      console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
+      setDailyDietLogs(convertedRecords);
+      setDailyNutritionGoals(defaultGoals);
+      
     } catch (error) {
-      console.error("식단 데이터를 가져오는 중 오류 발생:", error);
-      setDietError("식단 데이터를 불러오는데 실패했습니다.");
+      console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('403')) {
+          setDietError("권한이 없습니다. 다시 로그인해주세요.");
+        } else if (error.message.includes('401')) {
+          setDietError("인증이 만료되었습니다. 다시 로그인해주세요.");
+        } else {
+          setDietError(`식단 데이터를 불러오는데 실패했습니다: ${error.message}`);
+        }
+      } else {
+        setDietError("식단 데이터를 불러오는데 실패했습니다.");
+      }
     } finally {
       setIsLoadingDietData(false);
     }
@@ -403,7 +448,7 @@ const Note = () => {
 
   // 오늘의 기록 타입 정의
   interface TodayRecords {
-    exercise: ExerciseRecord[];
+    exercise: ExerciseRecordDTO[];
     diet: UIRecord[];
   }
 
@@ -470,19 +515,43 @@ const Note = () => {
       setTodayExercise([]);
       return;
     }
-  
+
+    // 토큰 유효성 검사 추가
+    if (!isTokenValid()) {
+      console.error('토큰이 유효하지 않습니다. 로그인 페이지로 이동합니다.');
+      removeToken();
+      navigate('/login');
+      return;
+    }
+
     const dateStr = selectedDate.toISOString().split("T")[0];
-  
+    console.log(`🔍 운동 기록 조회 시작 - 날짜: ${dateStr}`);
+
     try {
-      // axios.get 호출: 쿼리 파라미터와 헤더에 토큰 포함
-      const res = await axios.get('/api/note/exercise/daily', {
-        params: { date: dateStr },
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-  
-      setTodayExercise(res.data);
+      // authApi.ts의 getDailyExerciseRecords 함수 사용
+      const data = await getDailyExerciseRecords(dateStr);
+      console.log('✅ 운동 기록 조회 성공:', data);
+      setTodayExercise(data);
     } catch (err) {
       console.error("운동 기록 불러오기 실패:", err);
+      
+      if (err instanceof Error) {
+        const message = err.message;
+        
+        if (message.includes('인증이 필요합니다')) {
+          console.error('인증 실패 - 토큰이 만료되었거나 유효하지 않습니다.');
+          debugToken();
+          removeToken();
+          navigate('/login');
+          return;
+        }
+        
+        if (message.includes('접근 권한이 없습니다')) {
+          console.error('권한 없음 - 403 Forbidden');
+          debugToken();
+        }
+      }
+      
       setTodayExercise([]);
     }
   };
@@ -745,7 +814,6 @@ const Note = () => {
 
   // 💪 일일 운동 추가 - Spring API 사용
   const [bodyPart, setBodyPart] = useState('chest');         // 선택한 부위
-  const [exerciseOptions, setExerciseOptions] = useState([]); // 드롭다운 운동 목록
 
   const addExerciseRecord = async () => {
     try {
@@ -797,22 +865,20 @@ const Note = () => {
 
   // 일일 운동 기록 수정
   const [isEditExerciseDialogOpen, setIsEditExerciseDialogOpen] = useState(false);
-  const [editingExercise, setEditingExercise] = useState<ExerciseRecord | null>(null);
+  const [editingExercise, setEditingExercise] = useState<ExerciseRecordDTO | null>(null);
   const [exerciseEditForm, setExerciseEditForm] = useState({
     sets: 1,
     reps: 10,
     weight: 0,
-    time: ''
   });
 
 
-  const startEditExercise = (record: ExerciseRecord) => {
+  const startEditExercise = (record: ExerciseRecordDTO) => {
     setEditingExercise(record);
     setExerciseEditForm({
-      sets: record.sets,
-      reps: record.reps,
-      weight: parseFloat(record.weight) || 0,
-      time: record.time || ''
+      sets: record.sets || 1,
+      reps: record.reps || 10,
+      weight: record.weight || 0,
     });
     setIsEditExerciseDialogOpen(true);
   };
@@ -821,103 +887,73 @@ const Note = () => {
   useEffect(() => {
     const fetchExercises = async () => {
       try {
-        const res = await fetch(`/api/exercises?bodyPart=${bodyPart}`);
-        const data = await res.json();
-        setExerciseOptions(data);  // 서버에서 문자열 배열을 내려주는 걸로 가정
+        console.log(`🏋️ [fetchExercises] 운동 카탈로그 조회 시작`);
+        
+        const data = await getExerciseCatalog();
+        console.log('✅ [fetchExercises] 운동 카탈로그 조회 성공:', data);
+        
+        setExerciseOptions(data.map(item => ({
+          value: item.name,
+          label: item.name
+        })));
       } catch (err) {
-        console.error("운동 불러오기 실패:", err);
+        console.error("❌ [fetchExercises] 운동 카탈로그 조회 실패:", err);
       }
     };
 
     fetchExercises();
-  }, [bodyPart]);
+  }, []);
 
 
   // 점(●) 표시용 modifiers와 classNames 추가
   function parseDateString(dateStr: string) {
-    // 'yyyy-MM-dd' -> Date 객체
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
+    // "2024-06-21T15:30:00" -> "15:30"
+    if (dateStr.includes('T')) {
+      return dateStr.split('T')[1].substring(0, 5);
+    }
+    // "15:30:00" -> "15:30"
+    if (dateStr.includes(':')) {
+      const parts = dateStr.split(':');
+      return `${parts[0]}:${parts[1]}`;
+    }
+    return dateStr;
   }
-  const dietDates = dietRecordedDates.map(parseDateString);
-  const exerciseDates = exerciseRecordedDates.map(parseDateString);
-  const bothDates = dietDates.filter(date => exerciseDates.some(ed => ed.getTime() === date.getTime()));
-  const dietOnlyDates = dietDates.filter(date => !exerciseDates.some(ed => ed.getTime() === date.getTime()));
-  const exerciseOnlyDates = exerciseDates.filter(date => !dietDates.some(dd => dd.getTime() === date.getTime()));
-  const modifiers = {
-    both: bothDates,
-    diet: dietOnlyDates,
-    exercise: exerciseOnlyDates,
-  };
-  const modifiersClassNames = {
-    both: 'calendar-dot-both',
-    diet: 'calendar-dot-diet',
-    exercise: 'calendar-dot-exercise',
-  };
 
   const deleteExerciseRecord = async (sessionId: number) => {
+    if (!authToken) {
+      console.warn('인증 토큰이 없습니다.');
+      return;
+    }
+
     try {
-      const token = getToken();
-      if (!token) {
-        console.warn('인증 토큰이 없습니다.');
-        return;
-      }
-      const response = await fetch(`/api/py/note/exercise/${sessionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      await axios.delete(`/api/note/exercise/${sessionId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
-      if (!response.ok) {
-        throw new Error('운동 기록 삭제 실패');
-      }
-      setTodayExercise(prev => prev.filter(ex => ex.exercise_session_id !== sessionId));
-      toast({
-        title: "삭제 완료",
-        description: "운동 기록이 삭제되었습니다.",
-      });
+
+      // 삭제 후 목록 새로고침
+      await fetchExercise();
     } catch (err) {
-      console.error(err);
-      toast({
-        title: "삭제 실패",
-        description: "기록 삭제 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
+      console.error("운동 기록 삭제 실패:", err);
     }
   };
 
-
-  // 저장 버튼 로직(saveExerciseEdit)
   const saveExerciseEdit = async () => {
-    if (!editingExercise) return;
+    if (!editingExercise || !authToken) return;
 
     try {
-      const token = getToken();
-      const res = await fetch(`/api/note/exercise/${editingExercise.exercise_session_id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(exerciseEditForm),
+      await axios.put(`/api/note/exercise/${editingExercise.exerciseSessionId}`, {
+        sets: exerciseEditForm.sets,
+        reps: exerciseEditForm.reps,
+        weight: exerciseEditForm.weight,
+      }, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
-
-      if (!res.ok) throw new Error('수정 실패');
-
-      toast({ title: '수정 완료', description: '운동 기록이 수정되었습니다.' });
-
-      // ✅ 최신 운동기록 다시 불러오기
-      await fetchExercise();
 
       setIsEditExerciseDialogOpen(false);
       setEditingExercise(null);
+      await fetchExercise();
     } catch (err) {
-      console.error(err);
-      toast({
-        title: '수정 실패',
-        description: '서버 오류로 수정에 실패했습니다.',
-        variant: 'destructive',
-      });
+      console.error("운동 기록 수정 실패:", err);
     }
   };
 
@@ -940,7 +976,7 @@ const Note = () => {
                       <span className="font-medium">{formatDate(selectedDate)}</span>
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="center" side="bottom">
+                  <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={selectedDate}
@@ -948,8 +984,6 @@ const Note = () => {
                       onMonthChange={setCalendarMonth}
                       initialFocus
                       className={cn("p-3 pointer-events-auto")}
-                      modifiers={modifiers}
-                      modifiersClassNames={modifiersClassNames}
                       dayContent={customDayContent}
                     />
                   </PopoverContent>
@@ -1040,8 +1074,9 @@ const Note = () => {
                         <Label>운동 부위 선택</Label>
                         <select
                           value={bodyPart}
-                          onChange={(e) => setBodyPart(e.target.value as any)}
+                          onChange={(e) => setBodyPart(e.target.value as 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'abs' | 'cardio' | 'full_body')}
                           className="w-full border p-2 rounded"
+                          title="운동 부위 선택"
                         >
                           <option value="chest">가슴</option>
                           <option value="back">등</option>
@@ -1062,13 +1097,14 @@ const Note = () => {
                           onChange={(e) => setExerciseName(e.target.value)}
                           className="w-full border p-2 rounded"
                           disabled={exerciseOptions.length === 0}
+                          title="운동 선택"
                         >
                           <option value="">
                             {exerciseOptions.length === 0 ? '운동 부위를 먼저 선택하세요' : '운동을 선택하세요'}
                           </option>
-                          {exerciseOptions.map((name) => (
-                            <option key={name} value={name}>
-                              {name}
+                          {exerciseOptions.map((exercise) => (
+                            <option key={exercise.value} value={exercise.value}>
+                              {exercise.label}
                             </option>
                           ))}
                         </select>
@@ -1104,29 +1140,20 @@ const Note = () => {
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
                     {todayExercise.map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h4 className="font-medium">{record.name}</h4>
-                            <Badge variant="outline" className="text-xs">운동</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {[
-                              record.weight && record.weight !== '체중' && record.weight !== '0kg' ? record.weight : null,
-                              record.sets ? `${record.sets}세트` : null,
-                              record.reps ? `${record.reps}회` : null,
-                              record.time ? record.time : null
-                            ].filter(Boolean).join(' • ')}
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium">{record.exerciseName}</p>
+                          <p className="text-sm text-gray-600">
+                            {record.sets && record.reps && record.weight ? (
+                              `${record.sets}세트 × ${record.reps}회 (${record.weight}kg)`
+                            ) : (
+                              `${record.durationMinutes || 0}분`
+                            )}
                           </p>
                         </div>
-                        <div className="flex space-x-1">
-                          <Button size="icon" variant="ghost" className="h-8 w-8">
-                            <Edit className="h-4 w-4" onClick={() => {/* TODO: 수정 모달 오픈 */ }} />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exercise_session_id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                     {isToday(selectedDate) && !hasClaimedExerciseScore && (
@@ -1173,13 +1200,6 @@ const Note = () => {
                     type="number"
                     value={exerciseEditForm.weight}
                     onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>운동 시간</Label>
-                  <Input
-                    value={exerciseEditForm.time}
-                    onChange={e => setExerciseEditForm(prev => ({ ...prev, time: e.target.value }))}
                   />
                 </div>
                 <div className="flex justify-end gap-2">
