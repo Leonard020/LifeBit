@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/diet")
@@ -112,10 +113,96 @@ public class DietController {
     }
 
     @PostMapping("/record")
-    public ResponseEntity<DietLogDTO> recordDiet(
-            @RequestBody DietLogDTO request) {
-        DietLogDTO savedRecord = dietService.recordDiet(request);
-        return ResponseEntity.ok(savedRecord);
+    public ResponseEntity<Map<String, Object>> recordDiet(
+            @RequestBody Map<String, Object> request,
+            HttpServletRequest httpRequest) {
+        
+        try {
+            log.info("식단 기록 생성 요청: {}", request);
+            
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(httpRequest);
+            
+            // 요청 데이터에서 필요한 값들 추출 (snake_case와 camelCase 모두 지원)
+            Long foodItemId = request.get("food_item_id") != null ? 
+                Long.valueOf(request.get("food_item_id").toString()) : 
+                (request.get("foodItemId") != null ? Long.valueOf(request.get("foodItemId").toString()) : null);
+            
+            Double quantity = request.get("quantity") != null ? 
+                Double.valueOf(request.get("quantity").toString()) : 1.0;
+            
+            String mealTime = request.get("meal_time") != null ? 
+                request.get("meal_time").toString() : 
+                (request.get("mealTime") != null ? request.get("mealTime").toString() : "snack");
+            
+            String inputSource = request.get("input_source") != null ? 
+                request.get("input_source").toString() : 
+                (request.get("inputSource") != null ? request.get("inputSource").toString() : "TYPING");
+            
+            Double confidenceScore = request.get("confidence_score") != null ? 
+                Double.valueOf(request.get("confidence_score").toString()) : 
+                (request.get("confidenceScore") != null ? Double.valueOf(request.get("confidenceScore").toString()) : 1.0);
+            
+            String validationStatus = request.get("validation_status") != null ? 
+                request.get("validation_status").toString() : 
+                (request.get("validationStatus") != null ? request.get("validationStatus").toString() : "VALIDATED");
+            
+            String logDate = request.get("log_date") != null ? 
+                request.get("log_date").toString() : 
+                (request.get("logDate") != null ? request.get("logDate").toString() : LocalDate.now().toString());
+            
+            // 필수 값 검증
+            if (foodItemId == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "food_item_id 또는 foodItemId가 필요합니다.");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+            
+            // DietLogDTO 생성 (토큰에서 가져온 사용자 ID 사용)
+            DietLogDTO dietLogDTO = new DietLogDTO();
+            dietLogDTO.setUserId(tokenUserId);
+            dietLogDTO.setFoodItemId(foodItemId);
+            dietLogDTO.setQuantity(quantity);
+            dietLogDTO.setMealTime(mealTime);
+            dietLogDTO.setInputSource(inputSource);
+            dietLogDTO.setConfidenceScore(confidenceScore);
+            dietLogDTO.setValidationStatus(validationStatus);
+            dietLogDTO.setLogDate(logDate);
+            
+            // 데이터베이스에 저장
+            DietLogDTO savedRecord = dietService.recordDiet(dietLogDTO);
+            
+            // 응답 데이터 구성 (ExerciseSessionController와 유사한 형태)
+            Map<String, Object> response = new HashMap<>();
+            response.put("meal_log_id", savedRecord.getId());
+            response.put("user_id", savedRecord.getUserId());
+            response.put("food_item_id", savedRecord.getFoodItemId());
+            response.put("food_name", savedRecord.getFoodName());
+            response.put("quantity", savedRecord.getQuantity());
+            response.put("meal_time", savedRecord.getMealTime());
+            response.put("log_date", savedRecord.getLogDate());
+            response.put("calories", savedRecord.getCalories());
+            response.put("carbs", savedRecord.getCarbs());
+            response.put("protein", savedRecord.getProtein());
+            response.put("fat", savedRecord.getFat());
+            response.put("input_source", savedRecord.getInputSource());
+            response.put("confidence_score", savedRecord.getConfidenceScore());
+            response.put("validation_status", savedRecord.getValidationStatus());
+            response.put("created_at", savedRecord.getCreatedAt());
+            
+            log.info("식단 기록 생성 완료 - ID: {}", savedRecord.getId());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("식단 기록 생성 중 오류 발생: {}", e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "식단 기록 생성에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
     }
 
     @PutMapping("/record/{id}")
