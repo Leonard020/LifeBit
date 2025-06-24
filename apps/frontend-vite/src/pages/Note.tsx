@@ -10,15 +10,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
 import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useUserGoals } from '@/api/auth';
 
 import { toast } from '@/hooks/use-toast';
+import type { TooltipProps } from 'recharts';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -196,22 +198,36 @@ const Note = () => {
     diet: boolean;
   }
 
-  // Exercise goals from profile (mock data) (유지)
-  const exerciseGoals: { [key: string]: number } = {
-    '가슴': 3,
-    '등': 2,
-    '하체': 4,
-    '어깨': 2,
-    '복근': 3,
-    '팔': 2,
-    '유산소': 5,
+  // === 사용자 목표 불러오기 ===
+  const userId = getUserIdFromToken();
+  const { data: userGoalsData, isLoading: isLoadingUserGoals, refetch: refetchUserGoals } = useUserGoals(userId ? userId.toString() : '');
+
+  // 목표값 매핑 (userGoalsData는 API 응답 그대로)
+  const goalMap: { [key: string]: number } = {
+    '가슴': userGoalsData?.weekly_chest ?? 0,
+    '등': userGoalsData?.weekly_back ?? 0,
+    '하체': userGoalsData?.weekly_legs ?? 0,
+    '어깨': userGoalsData?.weekly_shoulders ?? 0,
+    '복근': userGoalsData?.weekly_abs ?? 0,
+    '팔': userGoalsData?.weekly_arms ?? 0,
+    '유산소': userGoalsData?.weekly_cardio ?? 0,
   };
+
+  // === 총 주간 운동 목표 계산 ===
+  const weeklyStrength =
+    (userGoalsData?.weekly_chest ?? 0) +
+    (userGoalsData?.weekly_back ?? 0) +
+    (userGoalsData?.weekly_legs ?? 0) +
+    (userGoalsData?.weekly_shoulders ?? 0) +
+    (userGoalsData?.weekly_arms ?? 0) +
+    (userGoalsData?.weekly_abs ?? 0);
+  const weeklyCardio = userGoalsData?.weekly_cardio ?? 0;
+  const weeklyWorkoutTarget = weeklyStrength + weeklyCardio;
 
   // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
     const fetchWeeklySummary = async () => {
       if (!authToken) return; // 토큰이 없으면 실행하지 않음
-
       setIsLoadingSummary(true);
       try {
         const userInfo = getUserInfo();
@@ -235,7 +251,8 @@ const Note = () => {
     fetchWeeklySummary();
   }, [authToken]); // authToken이 변경될 때마다 실행
 
-  const exerciseData = Object.entries(exerciseGoals).map(([part, goal]) => ({
+  // 레이더 차트 데이터 생성 (목표치: user profile 기반)
+  const exerciseData = Object.entries(goalMap).map(([part, goal]) => ({
     subject: part,
     value: (weeklySummary[part] || 0) * 20, // 1회 = 20%
     goal: goal * 20,
@@ -957,6 +974,30 @@ const Note = () => {
     }
   };
 
+  // Always refetch user goals on mount and when window regains focus
+  useEffect(() => {
+    refetchUserGoals();
+    const onFocus = () => refetchUserGoals();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  // Custom tooltip for RadarChart
+  const CustomRadarTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ dataKey: string; value: number; payload: { subject: string } }> }) => {
+    if (active && payload && payload.length > 0) {
+      // Find the 'goal' value in the payload
+      const goalData = payload.find(p => p.dataKey === 'goal');
+      if (goalData) {
+        return (
+          <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
+            <div><b>{goalData.payload.subject}</b></div>
+            <div style={{ color: '#EF4444' }}>목표치: <b>{goalData.value / 20}회</b></div>
+          </div>
+        );
+      }
+    }
+    return null;
+  };
 
   return (
     <Layout>
@@ -1024,12 +1065,18 @@ const Note = () => {
           {/* Exercise Tab - 기존 코드 유지 */}
           <TabsContent value="exercise" className="space-y-6">
             <Card className="hover-lift">
-              <CardHeader>
-                <CardTitle>운동 부위별 목표</CardTitle>
-                <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>운동 부위별 목표</CardTitle>
+                  <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-lg text-blue-700">목표: {weeklyWorkoutTarget}회 / 주</div>
+                  <div className="text-xs text-blue-600">(근력운동: {weeklyStrength}회, 유산소: {weeklyCardio}회)</div>
+                </div>
               </CardHeader>
               <CardContent>
-                {isLoadingSummary ? (
+                {isLoadingSummary || isLoadingUserGoals ? (
                   <div className="text-center py-8 text-muted-foreground">
                     운동 집계 데이터를 불러오는 중...
                   </div>
@@ -1041,6 +1088,7 @@ const Note = () => {
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+                        <Tooltip content={<CustomRadarTooltip />} />
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
