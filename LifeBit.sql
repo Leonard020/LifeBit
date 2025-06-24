@@ -202,9 +202,8 @@ CREATE TABLE user_ranking (
     season INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
-
 
 CREATE INDEX idx_user_ranking_user_id ON user_ranking(user_id);
 CREATE INDEX idx_user_ranking_total_score ON user_ranking(total_score);
