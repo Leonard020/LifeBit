@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { toast } from '@/hooks/use-toast';
@@ -143,8 +143,9 @@ const Note = () => {
     lunch: '점심',
     dinner: '저녁',
     snack: '간식',
+    midnight: '야식',
   };
-  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack', 'midnight'];
 
   const groupedDietLogs = dailyDietLogs.reduce((acc, log) => {
     const meal = log.mealTime || 'snack';
@@ -333,10 +334,8 @@ const Note = () => {
 
     setIsSearching(true);
     try {
-      const response = await axios.get(`/api/diet/food-items/search`, {
-        params: { keyword: searchKeyword }
-      });
-      setSearchResults(response.data);
+      const results = await searchFoodItems(searchKeyword);
+      setSearchResults(results);
     } catch (error) {
       console.error("음식 검색 중 오류:", error);
       setSearchResults([]);
@@ -364,25 +363,19 @@ const Note = () => {
       }
 
       const request = {
-        userId,
         foodItemId: selectedFood.foodItemId,
         quantity: parseFloat(quantity),
-        logDate: selectedDate.toISOString().split('T')[0],
         mealTime: mealTime,
         unit: 'g',
+        logDate: selectedDate.toISOString().split('T')[0],
+        userId: userId,
       };
 
-      const token = localStorage.getItem('token');
-      const response = await axios.post('/api/diet/record', request, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const newRecord = response.data as DietLogDTO;
+      const newRecord = await createDietRecord(request);
 
-      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태를 직접 업데이트
       setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
-      await fetchCalendarRecords(); // 달력 점은 여전히 새로고침
+      await fetchCalendarRecords();
 
-      // ✅ 상태 초기화 및 팝업 닫기
       setIsAddDietDialogOpen(false);
       setSearchKeyword('');
       setSearchResults([]);
@@ -394,7 +387,17 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        toast({
+          title: "권한 오류",
+          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
+          variant: "destructive"
+        });
+        removeToken();
+        navigate('/login');
+        return;
+      }
       console.error('식단 기록 추가 중 오류:', error);
       toast({
         title: "식단 기록 추가 실패",
@@ -405,19 +408,15 @@ const Note = () => {
   };
 
   // 식단 기록 삭제
-  const deleteDietRecord = async (id: number) => {
+  const handleDeleteDietRecord = async (id: number) => {
     try {
-      await axios.delete(`/api/diet/record/${id}`);
-
-      // 데이터 새로고침 (목록과 달력 모두)
+      await deleteDietRecord(id);
       await fetchDietData();
       await fetchCalendarRecords();
-
       toast({
         title: "삭제 완료",
         description: "식단 기록이 삭제되었습니다."
       });
-
     } catch (error) {
       console.error("식단 기록 삭제 중 오류:", error);
       toast({
@@ -686,6 +685,7 @@ const Note = () => {
     carbs: 0,    // 100g당
     protein: 0,  // 100g당
     fat: 0,      // 100g당
+    mealTime: 'breakfast', // 추가: 식사 시간
   });
   const [isUpdatingDiet, setIsUpdatingDiet] = useState(false);
 
@@ -695,7 +695,7 @@ const Note = () => {
   const [isEditSearching, setIsEditSearching] = useState(false);
 
 
-  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
 
     const isNutrientField = ['foodName', 'calories', 'carbs', 'protein', 'fat'].includes(name);
@@ -704,7 +704,7 @@ const Note = () => {
       ...prev,
       // 이름이나 영양성분 수정 시, foodItemId를 null로 만들어 '커스텀 음식'으로 전환
       foodItemId: isNutrientField ? null : prev.foodItemId,
-      [name]: name === 'foodName' ? value : (Number(value) >= 0 ? Number(value) : 0)
+      [name]: name === 'foodName' ? value : (name === 'mealTime' ? value : (Number(value) >= 0 ? Number(value) : 0))
     }));
   };
 
@@ -713,10 +713,8 @@ const Note = () => {
     if (!editSearchKeyword.trim()) return;
     setIsEditSearching(true);
     try {
-      const response = await axios.get(`/api/diet/food-items/search`, {
-        params: { keyword: editSearchKeyword }
-      });
-      setEditSearchResults(response.data);
+      const results = await searchFoodItems(editSearchKeyword);
+      setEditSearchResults(results);
     } catch (error) {
       console.error("음식 검색 중 오류:", error);
       setEditSearchResults([]);
@@ -756,6 +754,7 @@ const Note = () => {
       carbs: dietLog.carbs * per100gFactor,
       protein: dietLog.protein * per100gFactor,
       fat: dietLog.fat * per100gFactor,
+      mealTime: dietLog.mealTime || 'breakfast', // 추가: 식사 시간
     });
 
     setEditSearchKeyword(dietLog.foodName);
@@ -768,34 +767,24 @@ const Note = () => {
   // 식단 수정 저장
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
-
     setIsUpdatingDiet(true);
     try {
-      // 서버에는 foodItemId 유무와 100g 기준 영양성분을 보냄
-      const submissionData = {
-        foodItemId: editFormData.foodItemId,
-        foodName: editFormData.foodName,
+      const submissionData: any = {
         quantity: editFormData.quantity,
-        calories: editFormData.calories,
-        carbs: editFormData.carbs,
-        protein: editFormData.protein,
-        fat: editFormData.fat,
+        mealTime: editFormData.mealTime,
+        unit: 'g',
+        logDate: selectedDate.toISOString().split('T')[0],
       };
-
-      const response = await axios.put(`/api/diet/record/${editingDietLog.id}`, submissionData, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const updatedRecord = response.data as DietLogDTO;
-
-      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태 직접 업데이트
+      if (editFormData.foodItemId) {
+        submissionData['foodItemId'] = editFormData.foodItemId;
+      }
+      const updatedRecord = await updateDietRecord(editingDietLog.id, submissionData);
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
-      await fetchCalendarRecords(); // 달력 점 새로고침
-
+      await fetchCalendarRecords();
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
-
       toast({
         title: "식단이 수정되었습니다.",
         description: "식단 기록이 성공적으로 업데이트되었습니다.",
@@ -1361,7 +1350,7 @@ const Note = () => {
                               <Label htmlFor="mealTime">식사 시간</Label>
                               <select
                                 id="mealTime"
-                                title="식사 시간 선택"
+                                name="mealTime"
                                 value={mealTime}
                                 onChange={e => setMealTime(e.target.value)}
                                 className="mt-1 block w-full border rounded px-2 py-1"
@@ -1370,6 +1359,8 @@ const Note = () => {
                                 <option value="lunch">점심</option>
                                 <option value="dinner">저녁</option>
                                 <option value="snack">간식</option>
+                                <option value="midnight">야식</option>
+
                               </select>
                             </div>
                           </div>
@@ -1445,7 +1436,7 @@ const Note = () => {
                                     size="icon"
                                     variant="ghost"
                                     className="h-8 w-8 text-destructive"
-                                    onClick={() => deleteDietRecord(record.id)}
+                                    onClick={() => handleDeleteDietRecord(record.id)}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>

@@ -25,7 +25,7 @@ CREATE TYPE exercise_part_type AS ENUM ('strength', 'aerobic', 'flexibility', 'b
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');
 
 -- 식사 시간 타입
-CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
+CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack', 'midnight');
 
 -- 입력 소스 타입
 CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
