@@ -1,0 +1,273 @@
+---
+- name: Deploy LifeBit Application to NCP
+  hosts: lifebit_servers
+  become: yes
+  vars:
+    project_name: "lifebit"
+    environment: "{{ env | default('dev') }}"
+    project_path: "/opt/lifebit"
+    git_repo: "{{ git_repository_url }}"
+    git_branch: "{{ git_branch | default('main') }}"
+    
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+      tags: system
+
+    - name: Install required system packages
+      apt:
+        name:
+          - curl
+          - git
+          - docker.io
+          - docker-compose
+          - python3-pip
+          - python3-docker
+        state: present
+      tags: system
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      tags: system
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+      tags: system
+
+    - name: Create project directory
+      file:
+        path: "{{ project_path }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      tags: setup
+
+    - name: Clone or update repository
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ project_path }}"
+        version: "{{ git_branch }}"
+        force: yes
+      become_user: ubuntu
+      tags: deploy
+
+    - name: Check if .env file exists in FastAPI app
+      stat:
+        path: "{{ project_path }}/apps/ai-api-fastapi/.env"
+      register: fastapi_env_file
+      tags: config
+
+    - name: Create .env file for FastAPI if not exists
+      copy:
+        content: |
+          # Whisper, GPT Turbo 3.5 API Key 
+          OPENAI_API_KEY="{{ openai_api_key | default('your-api-key-here') }}"
+          
+          # False일때는 gpt 토큰안씀 사용할때는 True로 변경
+          USE_GPT={{ use_gpt | default('False') }}
+          
+          # 카카오 로그인
+          KAKAO_REDIRECT_URI="{{ kakao_redirect_uri | default('') }}"
+          
+          # 구글 로그인
+          GOOGLE_CLIENT_SECRET="{{ google_client_secret | default('') }}"
+          GOOGLE_REDIRECT_URI="{{ google_redirect_uri | default('') }}"
+        dest: "{{ project_path }}/apps/ai-api-fastapi/.env"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+      when: not fastapi_env_file.stat.exists
+      tags: config
+
+    - name: Generate Airflow Fernet key
+      shell: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      register: fernet_key
+      changed_when: false
+      tags: config
+
+    - name: Update docker-compose.yml with generated secrets
+      replace:
+        path: "{{ project_path }}/docker-compose.yml"
+        regexp: 'your-fernet-key-here-32-characters'
+        replace: "{{ fernet_key.stdout }}"
+      tags: config
+
+    - name: Update docker-compose.yml with secret key
+      replace:
+        path: "{{ project_path }}/docker-compose.yml"
+        regexp: 'your-secret-key-here'
+        replace: "{{ ansible_date_time.epoch }}-{{ inventory_hostname }}"
+      tags: config
+
+    - name: Stop existing containers
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        state: absent
+      become_user: ubuntu
+      ignore_errors: yes
+      tags: deploy
+
+    - name: Remove old images (optional)
+      shell: docker image prune -f
+      become_user: ubuntu
+      tags: deploy
+
+    - name: Build and start containers
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        build: yes
+        state: present
+        recreate: smart
+      become_user: ubuntu
+      tags: deploy
+
+    - name: Wait for services to be ready
+      wait_for:
+        port: "{{ item }}"
+        host: localhost
+        delay: 30
+        timeout: 300
+      loop:
+        - 80    # Nginx
+        - 8001  # FastAPI
+        - 8080  # Spring Boot
+        - 8081  # Airflow
+      tags: deploy
+
+    - name: Check service health
+      uri:
+        url: "http://localhost:{{ item.port }}{{ item.path }}"
+        method: GET
+        status_code: [200, 404]  # 404도 허용 (서비스가 실행 중이면)
+      loop:
+        - { port: 80, path: "/health" }
+        - { port: 8001, path: "/api/py/health" }
+        - { port: 8080, path: "/actuator/health" }
+        - { port: 8081, path: "/" }
+      register: health_check
+      retries: 5
+      delay: 10
+      tags: health
+
+    - name: Setup log rotation
+      copy:
+        content: |
+          {{ project_path }}/logs/*.log {
+              daily
+              missingok
+              rotate 52
+              compress
+              delaycompress
+              notifempty
+              create 644 ubuntu ubuntu
+          }
+        dest: /etc/logrotate.d/lifebit
+        owner: root
+        group: root
+        mode: '0644'
+      tags: maintenance
+
+    - name: Create backup script
+      copy:
+        content: |
+          #!/bin/bash
+          BACKUP_DIR="/opt/backups"
+          PROJECT_DIR="{{ project_path }}"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          
+          mkdir -p $BACKUP_DIR
+          
+          # Backup database
+          docker exec lifebit_postgres pg_dump -U lifebit_user lifebit_db > $BACKUP_DIR/db_backup_$DATE.sql
+          
+          # Backup application data
+          tar -czf $BACKUP_DIR/app_backup_$DATE.tar.gz -C $PROJECT_DIR .
+          
+          # Keep only last 7 backups
+          find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
+          find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+          
+          echo "Backup completed: $DATE"
+        dest: /usr/local/bin/backup-lifebit.sh
+        owner: root
+        group: root
+        mode: '0755'
+      tags: maintenance
+
+    - name: Setup backup cron job
+      cron:
+        name: "LifeBit Daily Backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup-lifebit.sh"
+        user: root
+      tags: maintenance
+
+    - name: Setup monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # Simple monitoring script
+          
+          # Check if containers are running
+          CONTAINERS=("lifebit_postgres" "lifebit_fastapi" "lifebit_spring" "lifebit_frontend" "lifebit_nginx")
+          
+          for container in "${CONTAINERS[@]}"; do
+              if ! docker ps | grep -q $container; then
+                  echo "ALERT: Container $container is not running!"
+                  # Add notification logic here (email, Slack, etc.)
+              fi
+          done
+          
+          # Check disk space
+          DISK_USAGE=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
+          if [ $DISK_USAGE -gt 80 ]; then
+              echo "ALERT: Disk usage is at ${DISK_USAGE}%"
+          fi
+          
+          # Check memory usage
+          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.2f", $3*100/$2}')
+          if (( $(echo "$MEMORY_USAGE > 90" | bc -l) )); then
+              echo "ALERT: Memory usage is at ${MEMORY_USAGE}%"
+          fi
+        dest: /usr/local/bin/monitor-lifebit.sh
+        owner: root
+        group: root
+        mode: '0755'
+      tags: monitoring
+
+    - name: Setup monitoring cron job
+      cron:
+        name: "LifeBit System Monitoring"
+        minute: "*/5"
+        job: "/usr/local/bin/monitor-lifebit.sh"
+        user: root
+      tags: monitoring
+
+    - name: Display deployment information
+      debug:
+        msg: |
+          ===== LifeBit 배포 완료 =====
+          프로젝트 경로: {{ project_path }}
+          웹 사이트: http://{{ ansible_default_ipv4.address }}
+          Spring API 문서: http://{{ ansible_default_ipv4.address }}/api/swagger-ui.html
+          FastAPI 문서: http://{{ ansible_default_ipv4.address }}/api/py/docs
+          Airflow: http://{{ ansible_default_ipv4.address }}/airflow
+          
+          관리 명령어:
+          - 컨테이너 상태 확인: docker ps
+          - 로그 확인: docker-compose logs -f
+          - 서비스 재시작: docker-compose restart
+          - 백업 실행: /usr/local/bin/backup-lifebit.sh
+          - 모니터링: /usr/local/bin/monitor-lifebit.sh
+      tags: info 
