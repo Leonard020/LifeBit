@@ -10,14 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { useUserGoals } from '@/api/auth';
+import type { TooltipProps } from 'recharts';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -142,8 +144,9 @@ const Note = () => {
     lunch: '점심',
     dinner: '저녁',
     snack: '간식',
+    midnight: '야식',
   };
-  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack', 'midnight'];
 
   const groupedDietLogs = dailyDietLogs.reduce((acc, log) => {
     const meal = log.mealTime || 'snack';
@@ -195,16 +198,31 @@ const Note = () => {
     diet: boolean;
   }
 
-  // Exercise goals from profile (mock data) (유지)
-  const exerciseGoals: { [key: string]: number } = {
-    '가슴': 3,
-    '등': 2,
-    '하체': 4,
-    '어깨': 2,
-    '복근': 3,
-    '팔': 2,
-    '유산소': 5,
-  };
+  const userId = getUserIdFromToken();
+  const { data: userGoalsData, isLoading: goalsLoading } = useUserGoals(userId ? userId.toString() : '');
+
+  // 3. Map backend fields to radar chart axes
+  const bodyPartMap = [
+    { key: 'weekly_chest', label: '가슴' },
+    { key: 'weekly_back', label: '등' },
+    { key: 'weekly_legs', label: '하체' },
+    { key: 'weekly_shoulders', label: '어깨' },
+    { key: 'weekly_abs', label: '복근' },
+    { key: 'weekly_arms', label: '팔' },
+    { key: 'weekly_cardio', label: '유산소' },
+  ];
+
+  const exerciseGoals = React.useMemo(() => {
+    if (!userGoalsData) return {};
+    // If array, pick the latest
+    const goals = Array.isArray(userGoalsData)
+      ? userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0])
+      : userGoalsData.data || userGoalsData;
+    return bodyPartMap.reduce((acc, { key, label }) => {
+      acc[label] = goals[key] ?? 0;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [userGoalsData]);
 
   // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
@@ -233,10 +251,10 @@ const Note = () => {
     fetchWeeklySummary();
   }, [authToken]); // authToken이 변경될 때마다 실행
 
-  const exerciseData = Object.entries(exerciseGoals).map(([part, goal]) => ({
-    subject: part,
-    value: (weeklySummary[part] || 0) * 20, // 1회 = 20%
-    goal: goal * 20,
+  const exerciseData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: (weeklySummary[label] || 0) * 20, // 1회 = 20%
+    goal: (exerciseGoals[label] || 0) * 20,
   }));
 
   // ✅ fetchDietData를 useCallback으로 분리
@@ -331,10 +349,8 @@ const Note = () => {
 
     setIsSearching(true);
     try {
-      const response = await axios.get(`/api/diet/food-items/search`, {
-        params: { keyword: searchKeyword }
-      });
-      setSearchResults(response.data);
+      const results = await searchFoodItems(searchKeyword);
+      setSearchResults(results);
     } catch (error) {
       console.error("음식 검색 중 오류:", error);
       setSearchResults([]);
@@ -362,25 +378,19 @@ const Note = () => {
       }
 
       const request = {
-        userId,
         foodItemId: selectedFood.foodItemId,
         quantity: parseFloat(quantity),
-        logDate: selectedDate.toISOString().split('T')[0],
         mealTime: mealTime,
         unit: 'g',
+        logDate: selectedDate.toISOString().split('T')[0],
+        userId: userId,
       };
 
-      const token = localStorage.getItem('token');
-      const response = await axios.post('/api/diet/record', request, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const newRecord = response.data as DietLogDTO;
+      const newRecord = await createDietRecord(request);
 
-      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태를 직접 업데이트
       setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
-      await fetchCalendarRecords(); // 달력 점은 여전히 새로고침
+      await fetchCalendarRecords();
 
-      // ✅ 상태 초기화 및 팝업 닫기
       setIsAddDietDialogOpen(false);
       setSearchKeyword('');
       setSearchResults([]);
@@ -392,7 +402,17 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        toast({
+          title: "권한 오류",
+          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
+          variant: "destructive"
+        });
+        removeToken();
+        navigate('/login');
+        return;
+      }
       console.error('식단 기록 추가 중 오류:', error);
       toast({
         title: "식단 기록 추가 실패",
@@ -403,19 +423,15 @@ const Note = () => {
   };
 
   // 식단 기록 삭제
-  const deleteDietRecord = async (id: number) => {
+  const handleDeleteDietRecord = async (id: number) => {
     try {
-      await axios.delete(`/api/diet/record/${id}`);
-
-      // 데이터 새로고침 (목록과 달력 모두)
+      await deleteDietRecord(id);
       await fetchDietData();
       await fetchCalendarRecords();
-
       toast({
         title: "삭제 완료",
         description: "식단 기록이 삭제되었습니다."
       });
-
     } catch (error) {
       console.error("식단 기록 삭제 중 오류:", error);
       toast({
@@ -682,6 +698,7 @@ const Note = () => {
     carbs: 0,    // 100g당
     protein: 0,  // 100g당
     fat: 0,      // 100g당
+    mealTime: 'breakfast', // 추가: 식사 시간
   });
   const [isUpdatingDiet, setIsUpdatingDiet] = useState(false);
 
@@ -691,7 +708,7 @@ const Note = () => {
   const [isEditSearching, setIsEditSearching] = useState(false);
 
 
-  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
 
     const isNutrientField = ['foodName', 'calories', 'carbs', 'protein', 'fat'].includes(name);
@@ -700,7 +717,7 @@ const Note = () => {
       ...prev,
       // 이름이나 영양성분 수정 시, foodItemId를 null로 만들어 '커스텀 음식'으로 전환
       foodItemId: isNutrientField ? null : prev.foodItemId,
-      [name]: name === 'foodName' ? value : (Number(value) >= 0 ? Number(value) : 0)
+      [name]: name === 'foodName' ? value : (name === 'mealTime' ? value : (Number(value) >= 0 ? Number(value) : 0))
     }));
   };
 
@@ -709,10 +726,8 @@ const Note = () => {
     if (!editSearchKeyword.trim()) return;
     setIsEditSearching(true);
     try {
-      const response = await axios.get(`/api/diet/food-items/search`, {
-        params: { keyword: editSearchKeyword }
-      });
-      setEditSearchResults(response.data);
+      const results = await searchFoodItems(editSearchKeyword);
+      setEditSearchResults(results);
     } catch (error) {
       console.error("음식 검색 중 오류:", error);
       setEditSearchResults([]);
@@ -752,6 +767,7 @@ const Note = () => {
       carbs: dietLog.carbs * per100gFactor,
       protein: dietLog.protein * per100gFactor,
       fat: dietLog.fat * per100gFactor,
+      mealTime: dietLog.mealTime || 'breakfast', // 추가: 식사 시간
     });
 
     setEditSearchKeyword(dietLog.foodName);
@@ -764,34 +780,24 @@ const Note = () => {
   // 식단 수정 저장
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
-
     setIsUpdatingDiet(true);
     try {
-      // 서버에는 foodItemId 유무와 100g 기준 영양성분을 보냄
-      const submissionData = {
-        foodItemId: editFormData.foodItemId,
-        foodName: editFormData.foodName,
+      const submissionData: any = {
         quantity: editFormData.quantity,
-        calories: editFormData.calories,
-        carbs: editFormData.carbs,
-        protein: editFormData.protein,
-        fat: editFormData.fat,
+        mealTime: editFormData.mealTime,
+        unit: 'g',
+        logDate: selectedDate.toISOString().split('T')[0],
       };
-
-      const response = await axios.put(`/api/diet/record/${editingDietLog.id}`, submissionData, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const updatedRecord = response.data as DietLogDTO;
-
-      // ✅ 데이터 새로고침 대신, 반환된 데이터로 상태 직접 업데이트
+      if (editFormData.foodItemId) {
+        submissionData['foodItemId'] = editFormData.foodItemId;
+      }
+      const updatedRecord = await updateDietRecord(editingDietLog.id, submissionData);
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
-      await fetchCalendarRecords(); // 달력 점 새로고침
-
+      await fetchCalendarRecords();
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
-
       toast({
         title: "식단이 수정되었습니다.",
         description: "식단 기록이 성공적으로 업데이트되었습니다.",
@@ -951,7 +957,20 @@ const Note = () => {
     }
   };
 
-
+  // Custom tooltip for radar chart
+  const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
+    if (active && payload && payload.length > 0) {
+      // Find the goal value
+      const part = payload[0].payload.subject;
+      const goal = payload[0].payload.goal;
+      return (
+        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
+          <strong>{part}</strong>: {goal / 20}회
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <Layout>
@@ -1019,12 +1038,31 @@ const Note = () => {
           {/* Exercise Tab - 기존 코드 유지 */}
           <TabsContent value="exercise" className="space-y-6">
             <Card className="hover-lift">
-              <CardHeader>
-                <CardTitle>운동 부위별 목표</CardTitle>
-                <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <>
+                  <div>
+                    <CardTitle>운동 부위별 목표</CardTitle>
+                    <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
+                  </div>
+                  {/* 총 주간 운동 목표 - no box, just text on background */}
+                  <div className="ml-auto text-right">
+                    <div className="text-base font-bold text-blue-700">
+                      {(() => {
+                        // Calculate total weekly workout target
+                        const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
+                        const cardio = exerciseGoals['유산소'] || 0;
+                        const total = strength + cardio;
+                        return `목표 : ${total}회 / 주`;
+                      })()}
+                    </div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      (근력운동: {(exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0)}회, 유산소: {exerciseGoals['유산소'] || 0}회)
+                    </div>
+                  </div>
+                </>
               </CardHeader>
               <CardContent>
-                {isLoadingSummary ? (
+                {(isLoadingSummary || goalsLoading) ? (
                   <div className="text-center py-8 text-muted-foreground">
                     운동 집계 데이터를 불러오는 중...
                   </div>
@@ -1034,6 +1072,7 @@ const Note = () => {
                       <RadarChart data={exerciseData}>
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
+                        <Tooltip content={<RadarGoalTooltip />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                       </RadarChart>
@@ -1363,7 +1402,7 @@ const Note = () => {
                               <Label htmlFor="mealTime">식사 시간</Label>
                               <select
                                 id="mealTime"
-                                title="식사 시간 선택"
+                                name="mealTime"
                                 value={mealTime}
                                 onChange={e => setMealTime(e.target.value)}
                                 className="mt-1 block w-full border rounded px-2 py-1"
@@ -1372,6 +1411,8 @@ const Note = () => {
                                 <option value="lunch">점심</option>
                                 <option value="dinner">저녁</option>
                                 <option value="snack">간식</option>
+                                <option value="midnight">야식</option>
+
                               </select>
                             </div>
                           </div>
@@ -1447,7 +1488,7 @@ const Note = () => {
                                     size="icon"
                                     variant="ghost"
                                     className="h-8 w-8 text-destructive"
-                                    onClick={() => deleteDietRecord(record.id)}
+                                    onClick={() => handleDeleteDietRecord(record.id)}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>

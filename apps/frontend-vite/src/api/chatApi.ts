@@ -22,14 +22,16 @@ interface ChatRequestBody {
     mapped_meal_type?: string;
     has_time_info: boolean;
   };
+  user_id?: number; // user_id 추가
 }
 
 // API 응답 타입
 export interface ChatResponse {
-  type: 'initial' | 'success' | 'incomplete' | 'clarification' | 'error' | 'modified' | 'confirmation';
+  type: 'initial' | 'success' | 'incomplete' | 'clarification' | 'error' | 'modified' | 'confirmation' | 'saved' | 'save_error';
   message: string;
   suggestions?: string[];
   missingFields?: string[];
+  save_result?: any; // 저장 결과 추가
   parsed_data?: {
     exercise?: string;
     category?: string;
@@ -87,16 +89,23 @@ type CurrentDataType = ExerciseState | DietState | null;
  * @param recordType - 'exercise' | 'diet'
  * @param chatStep - 'extraction' | 'validation' | 'confirmation'
  * @param currentData - 현재 상태 데이터 (운동 또는 식단)
+ * @param userId - 사용자 ID
+ * @param retryCount - 재시도 횟수 (내부 사용)
  */
 export const sendChatMessage = async (
   message: string,
   conversationHistory: Message[],
   recordType: 'exercise' | 'diet',
   chatStep?: 'extraction' | 'validation' | 'confirmation',
-  currentData?: CurrentDataType
+  currentData?: CurrentDataType,
+  userId?: number,
+  retryCount = 0
 ): Promise<ChatResponse> => {
+  const maxRetries = 2;
+  
   try {
-    const token = getToken(); // ✅ 토큰 읽기
+    console.log(`📤 [Chat API] 메시지 전송 시작 (시도: ${retryCount + 1}/${maxRetries + 1})`);
+    const token = getToken();
 
     const body: ChatRequestBody = {
       message,
@@ -104,6 +113,7 @@ export const sendChatMessage = async (
       record_type: recordType,
       ...(chatStep && { chat_step: chatStep }),
       ...(currentData && { current_data: currentData }),
+      ...(userId && { user_id: userId }),
     };
 
     // ✅ 식단 기록인 경우 시간 매핑 정보 포함
@@ -128,14 +138,41 @@ export const sendChatMessage = async (
       }
     });
 
+    console.log('✅ [Chat API] 메시지 전송 성공');
     return response.data;
   } catch (error) {
+    console.error(`❌ [Chat API] 메시지 전송 실패 (시도: ${retryCount + 1}):`, error);
+    
+    // 재시도 가능한 네트워크 오류인지 확인
+    const isRetryableError = error instanceof AxiosError && (
+      error.code === 'ERR_NETWORK' ||
+      error.code === 'ECONNREFUSED' ||
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('Network Error') ||
+      (error.response?.status && error.response.status >= 500)
+    );
+    
+    // 재시도 횟수가 남아있고 재시도 가능한 오류인 경우
+    if (retryCount < maxRetries && isRetryableError) {
+      console.log(`🔄 [Chat API] 재시도 중... (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5초 대기
+      return sendChatMessage(message, conversationHistory, recordType, chatStep, currentData, userId, retryCount + 1);
+    }
+    
+    // 최대 재시도 횟수 초과 또는 재시도 불가능한 오류
+    console.log('❌ [Chat API] 재시도 중단 또는 비재시도 오류');
     let errorMessage = '메시지 전송 중 오류가 발생했습니다.';
+    
     if (error instanceof AxiosError) {
-      errorMessage = error.response?.data?.message || error.message;
+      if (retryCount >= maxRetries && isRetryableError) {
+        errorMessage = '서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      } else {
+        errorMessage = error.response?.data?.message || error.message;
+      }
     } else if (error instanceof Error) {
       errorMessage = error.message;
     }
+    
     return { type: 'error', message: errorMessage };
   }
 };

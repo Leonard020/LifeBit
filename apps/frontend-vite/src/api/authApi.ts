@@ -97,26 +97,32 @@ export interface DietRecord {
 
 // 식단 기록 생성 요청 타입
 export interface DietRecordCreateRequest {
-  food_item_id: number;
+  foodItemId: number;
   quantity: number;
-  meal_time?: string;
-  input_source?: string;
-  confidence_score?: number;
-  original_audio_path?: string;
-  validation_status?: string;
-  validation_notes?: string;
-  created_at?: string;
+  mealTime?: string;
+  inputSource?: string;
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string;
+  validationNotes?: string;
+  createdAt?: string;
+  userId?: number;
+  logDate?: string;
+  unit?: string;
 }
 
 // 식단 기록 수정 요청 타입
 export interface DietRecordUpdateRequest {
+  foodItemId?: number;
   quantity?: number;
-  meal_time?: string;
-  input_source?: string;
-  confidence_score?: number;
-  original_audio_path?: string;
-  validation_status?: string;
-  validation_notes?: string;
+  mealTime?: string;
+  inputSource?: string;
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string;
+  validationNotes?: string;
+  logDate?: string;
+  unit?: string;
 }
 
 // 식품 아이템 타입

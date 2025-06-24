@@ -4,5 +4,6 @@ public enum MealTimeType {
     breakfast,
     lunch,
     dinner,
-    snack
+    snack,
+    midnight
 } 

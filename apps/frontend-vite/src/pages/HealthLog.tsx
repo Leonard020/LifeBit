@@ -390,7 +390,10 @@ const HealthLog: React.FC = () => {
       const response = await sendChatMessage(
         chatInputText,
         updatedHistory,
-        recordType
+        recordType,
+        undefined, // chatStep
+        undefined, // currentData  
+        userId     // 🚀 userId 전달
       );
       console.log('📦 AI 응답:', response);
       if (response?.parsed_data) {
