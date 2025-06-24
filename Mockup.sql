@@ -285,21 +285,6 @@ FROM (
 ORDER BY calculated_data.user_id, calculated_data.week_num;
 
 
--- ===================================================================
--- 5. 건강 기록 490개 (체중 변화 추적)
--- ===================================================================
-INSERT INTO health_records (user_id, weight, height, record_date)
-SELECT 
-        -- 사용자 ID: 2~50 사이
-    2 + (row_number() OVER () - 1) % 49 AS user_id,
-    -- 체중 변화 (초기 체중 ± 5kg 범위에서 점진적 변화)
-    u.weight + (random() - 0.5) * 10, -- ±5kg 변화
-    u.height, -- 키는 고정
-    -- 🔧 기록 날짜를 2025-02-01부터 시작하도록 수정
-    DATE '2025-02-01' + (random() * 180)::integer * INTERVAL '1 day'
-FROM users u 
-CROSS JOIN generate_series(1, 10) AS series -- 사용자당 10개씩
-WHERE u.role = 'USER'; 
 
 
 -- ===================================================================
