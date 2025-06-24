@@ -22,6 +22,21 @@ interface StrengthGoal {
   weeklyCount: string;
 }
 
+// Track selected body parts in localStorage to persist across refresh/navigation
+const SELECTED_BODY_PARTS_KEY = 'selectedBodyParts';
+
+function getSelectedBodyPartsFromStorage() {
+  try {
+    const stored = localStorage.getItem(SELECTED_BODY_PARTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+function setSelectedBodyPartsToStorage(parts) {
+  localStorage.setItem(SELECTED_BODY_PARTS_KEY, JSON.stringify(parts));
+}
+
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -96,10 +111,45 @@ const Profile = () => {
     return bodyPartOptions.filter(opt => !selected.includes(opt.value));
   }, [strengthGoals, bodyPartOptions]);
 
-  // Load user goals when data is available
+  // Track selected body parts in localStorage to persist across refresh/navigation
+  const [selectedBodyParts, setSelectedBodyParts] = useState(() => getSelectedBodyPartsFromStorage());
+
+  // When user adds a strength goal, add to selectedBodyParts
+  const addStrengthGoal = () => {
+    if (availableBodyParts.length === 0) return;
+    const newPart = availableBodyParts[0].value;
+    const newGoal: StrengthGoal = {
+      id: Date.now().toString(),
+      bodyPart: newPart,
+      weeklyCount: '1'
+    };
+    setStrengthGoals([...strengthGoals, newGoal]);
+    const updatedParts = Array.from(new Set([...selectedBodyParts, newPart]));
+    setSelectedBodyParts(updatedParts);
+    setSelectedBodyPartsToStorage(updatedParts);
+  };
+
+  // When user removes a strength goal, remove from selectedBodyParts
+  const removeStrengthGoal = (id: string) => {
+    const goalToRemove = strengthGoals.find(goal => goal.id === id);
+    if (!goalToRemove) return;
+    const updatedGoals = strengthGoals.filter(goal => goal.id !== id);
+    setStrengthGoals(updatedGoals);
+    const updatedParts = selectedBodyParts.filter(part => part !== goalToRemove.bodyPart);
+    setSelectedBodyParts(updatedParts);
+    setSelectedBodyPartsToStorage(updatedParts);
+  };
+
+  // Restore updateStrengthGoal function
+  const updateStrengthGoal = (id: string, field: keyof StrengthGoal, value: string) => {
+    setStrengthGoals(strengthGoals.map(goal => 
+      goal.id === id ? { ...goal, [field]: value } : goal
+    ));
+  };
+
+  // When loading from backend, show all exercises that are either in selectedBodyParts or have value > 0
   useEffect(() => {
     if (userGoalsData && !goalsLoading) {
-      // Future-proof: if userGoalsData is an array, pick the one with the highest user_goal_id
       let goalsData;
       if (Array.isArray(userGoalsData)) {
         if (userGoalsData.length === 0) return;
@@ -120,53 +170,42 @@ const Profile = () => {
         weeklyAbs: goalsData.weekly_abs?.toString() || '0',
         weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
       });
-      // Also update strengthGoals state from loaded data (excluding cardio)
-      setStrengthGoals([
+      const loadedStrengthGoals = [
         { id: 'chest', bodyPart: 'chest', weeklyCount: goalsData.weekly_chest?.toString() || '0' },
         { id: 'back', bodyPart: 'back', weeklyCount: goalsData.weekly_back?.toString() || '0' },
         { id: 'legs', bodyPart: 'legs', weeklyCount: goalsData.weekly_legs?.toString() || '0' },
         { id: 'shoulders', bodyPart: 'shoulders', weeklyCount: goalsData.weekly_shoulders?.toString() || '0' },
         { id: 'arms', bodyPart: 'arms', weeklyCount: goalsData.weekly_arms?.toString() || '0' },
         { id: 'abs', bodyPart: 'abs', weeklyCount: goalsData.weekly_abs?.toString() || '0' },
-      ]);
+      ];
+      // Show if in selectedBodyParts or value > 0
+      setStrengthGoals(loadedStrengthGoals.filter(goal => selectedBodyParts.includes(goal.bodyPart) || parseInt(goal.weeklyCount) > 0));
     }
-  }, [userGoalsData, goalsLoading]);
+  }, [userGoalsData, goalsLoading, selectedBodyParts]);
 
-  const addStrengthGoal = () => {
-    if (availableBodyParts.length === 0) return;
-    const newGoal: StrengthGoal = {
-      id: Date.now().toString(),
-      bodyPart: availableBodyParts[0].value,
-      weeklyCount: '1'
-    };
-    setStrengthGoals([...strengthGoals, newGoal]);
-  };
-
-  const removeStrengthGoal = (id: string) => {
-    setStrengthGoals(strengthGoals.filter(goal => goal.id !== id));
-  };
-
-  const updateStrengthGoal = (id: string, field: keyof StrengthGoal, value: string) => {
-    setStrengthGoals(strengthGoals.map(goal => 
-      goal.id === id ? { ...goal, [field]: value } : goal
-    ));
-  };
+  // Keep selectedBodyParts in sync with localStorage
+  useEffect(() => {
+    setSelectedBodyPartsToStorage(selectedBodyParts);
+  }, [selectedBodyParts]);
 
   // Sync goals state with strengthGoals changes (excluding cardio)
   useEffect(() => {
-    const newGoals = { ...goals };
-    strengthGoals.forEach(goal => {
-      switch (goal.bodyPart) {
-        case 'chest': newGoals.weeklyChest = goal.weeklyCount; break;
-        case 'back': newGoals.weeklyBack = goal.weeklyCount; break;
-        case 'legs': newGoals.weeklyLegs = goal.weeklyCount; break;
-        case 'shoulders': newGoals.weeklyShoulders = goal.weeklyCount; break;
-        case 'arms': newGoals.weeklyArms = goal.weeklyCount; break;
-        case 'abs': newGoals.weeklyAbs = goal.weeklyCount; break;
-        default: break;
-      }
+    setGoals(prevGoals => {
+      const newGoals = { ...prevGoals };
+      strengthGoals.forEach(goal => {
+        switch (goal.bodyPart) {
+          case 'chest': newGoals.weeklyChest = goal.weeklyCount; break;
+          case 'back': newGoals.weeklyBack = goal.weeklyCount; break;
+          case 'legs': newGoals.weeklyLegs = goal.weeklyCount; break;
+          case 'shoulders': newGoals.weeklyShoulders = goal.weeklyCount; break;
+          case 'arms': newGoals.weeklyArms = goal.weeklyCount; break;
+          case 'abs': newGoals.weeklyAbs = goal.weeklyCount; break;
+          default: break;
+        }
+      });
+      // weeklyCardio는 기존 값 유지
+      return newGoals;
     });
-    setGoals(newGoals);
   }, [strengthGoals]);
 
   // 컴포넌트 마운트 시 사용자 프로필 로드
@@ -248,15 +287,17 @@ const Profile = () => {
     try {
       setLoading(true);
 
-      // Map strengthGoals to backend fields (excluding cardio)
-      const strengthGoalMap = strengthGoals.reduce((acc, goal) => {
-        switch (goal.bodyPart) {
-          case 'chest': acc.weekly_chest = parseInt(goal.weeklyCount); break;
-          case 'back': acc.weekly_back = parseInt(goal.weeklyCount); break;
-          case 'legs': acc.weekly_legs = parseInt(goal.weeklyCount); break;
-          case 'shoulders': acc.weekly_shoulders = parseInt(goal.weeklyCount); break;
-          case 'arms': acc.weekly_arms = parseInt(goal.weeklyCount); break;
-          case 'abs': acc.weekly_abs = parseInt(goal.weeklyCount); break;
+      // Always send all 6 body parts, using value from strengthGoals if present, or 0 if not
+      const allParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'abs'];
+      const strengthGoalMap = allParts.reduce((acc, part) => {
+        const found = strengthGoals.find(goal => goal.bodyPart === part);
+        switch (part) {
+          case 'chest': acc.weekly_chest = found ? parseInt(found.weeklyCount) : 0; break;
+          case 'back': acc.weekly_back = found ? parseInt(found.weeklyCount) : 0; break;
+          case 'legs': acc.weekly_legs = found ? parseInt(found.weeklyCount) : 0; break;
+          case 'shoulders': acc.weekly_shoulders = found ? parseInt(found.weeklyCount) : 0; break;
+          case 'arms': acc.weekly_arms = found ? parseInt(found.weeklyCount) : 0; break;
+          case 'abs': acc.weekly_abs = found ? parseInt(found.weeklyCount) : 0; break;
           default: break;
         }
         return acc;
@@ -272,8 +313,8 @@ const Profile = () => {
       };
 
       await createUserGoalMutation.mutateAsync(goalsData);
-      // Invalidate user goals cache after successful update
-      queryClient.invalidateQueries({ queryKey: ['userGoals', currentUserId] });
+      // Force refetch after mutation for immediate UI update
+      await queryClient.refetchQueries({ queryKey: ['userGoals', currentUserId] });
       toast({
         title: '목표 설정 완료',
         description: '건강 목표가 성공적으로 저장되었습니다.',

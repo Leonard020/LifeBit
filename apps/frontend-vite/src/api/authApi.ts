@@ -1074,9 +1074,10 @@ export const useCreateUserGoal = () => {
     mutationFn: createUserGoal,
     onSuccess: (data) => {
       console.log('🎉 사용자 목표 생성 성공:', data);
-      
-      // 관련 캐시 무효화하여 최신 데이터 반영
-      queryClient.invalidateQueries({ queryKey: ['user-goals'] });
+      // Invalidate the correct user goals cache for immediate UI update
+      if (data && data.user_id) {
+        queryClient.invalidateQueries({ queryKey: ['userGoals', String(data.user_id)] });
+      }
       queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
     },
     onError: (error) => {
@@ -1097,9 +1098,10 @@ export const useUpdateUserGoal = () => {
       updateUserGoal(userId, data),
     onSuccess: (data) => {
       console.log('🎉 사용자 목표 수정 성공:', data);
-      
-      // 관련 캐시 무효화하여 최신 데이터 반영
-      queryClient.invalidateQueries({ queryKey: ['user-goals'] });
+      // Invalidate the correct user goals cache for immediate UI update
+      if (data && data.user_id) {
+        queryClient.invalidateQueries({ queryKey: ['userGoals', String(data.user_id)] });
+      }
       queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
     },
     onError: (error) => {
@@ -1121,7 +1123,7 @@ export const useDeleteUserGoal = () => {
       console.log('🎉 사용자 목표 삭제 성공:', data);
       
       // 관련 캐시 무효화하여 최신 데이터 반영
-      queryClient.invalidateQueries({ queryKey: ['user-goals'] });
+      queryClient.invalidateQueries({ queryKey: ['userGoals'] });
       queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
     },
     onError: (error) => {
