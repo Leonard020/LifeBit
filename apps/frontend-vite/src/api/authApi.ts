@@ -181,6 +181,19 @@ export interface ExerciseCatalog {
   description?: string;
 }
 
+// 일일 운동 기록 DTO 타입 (백엔드 ExerciseRecordDTO 기반)
+export interface ExerciseRecordDTO {
+  userId?: number;
+  exerciseSessionId: number;
+  exerciseName: string;
+  bodyPart: string;
+  sets?: number;
+  reps?: number;
+  weight?: number;
+  exerciseDate: string;
+  durationMinutes?: number;
+}
+
 // ============================================================================
 // 사용자 목표 관련 타입들
 // ============================================================================
@@ -791,22 +804,68 @@ export const getExerciseSession = async (sessionId: number): Promise<ExerciseSes
  */
 export const getExerciseCatalog = async (): Promise<ExerciseCatalog[]> => {
   try {
-    console.log('💪 [API] 운동 카탈로그 조회 요청');
+    console.log('🏋️ [getExerciseCatalog] 운동 카탈로그 조회 시작');
     
-    const response = await axiosInstance.get<ExerciseCatalog[]>('/api/exercise-catalog');
+    const response = await axiosInstance.get('/api/exercises/catalog');
     
-    console.log('✅ [API] 운동 카탈로그 조회 성공:', response.data);
+    console.log('✅ [getExerciseCatalog] 운동 카탈로그 조회 성공:', response.data);
+    
     return response.data;
   } catch (error: unknown) {
-    console.error('❌ [API] 운동 카탈로그 조회 실패:', error);
+    console.error('❌ [getExerciseCatalog] 운동 카탈로그 조회 실패:', error);
     
-    if (error instanceof Error && 'response' in error) {
-      const axiosError = error as { response?: { data?: ErrorResponse } };
-      if (axiosError.response?.data?.message) {
-        throw new Error(axiosError.response.data.message);
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as { response?: { status?: number; data?: { message?: string } } };
+      
+      if (axiosError.response?.status === 401) {
+        console.error('🚨 [getExerciseCatalog] 인증 실패 - 토큰이 만료되었거나 유효하지 않습니다.');
+        throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
       }
+      
+      if (axiosError.response?.status === 403) {
+        console.error('🚨 [getExerciseCatalog] 권한 없음');
+        throw new Error('접근 권한이 없습니다.');
+      }
+      
+      throw new Error(axiosError.response?.data?.message || '운동 카탈로그 조회 중 오류가 발생했습니다.');
     }
+    
     throw new Error('운동 카탈로그 조회 중 오류가 발생했습니다.');
+  }
+};
+
+// 일일 운동 기록 조회
+export const getDailyExerciseRecords = async (date: string): Promise<ExerciseRecordDTO[]> => {
+  try {
+    console.log('🏋️ [getDailyExerciseRecords] 일일 운동 기록 조회 시작 - 날짜:', date);
+    
+    const response = await axiosInstance.get('/api/note/exercise/daily', {
+      params: { date }
+    });
+    
+    console.log('✅ [getDailyExerciseRecords] 일일 운동 기록 조회 성공:', response.data);
+    
+    return response.data;
+  } catch (error: unknown) {
+    console.error('❌ [getDailyExerciseRecords] 일일 운동 기록 조회 실패:', error);
+    
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as { response?: { status?: number; data?: { message?: string } } };
+      
+      if (axiosError.response?.status === 401) {
+        console.error('🚨 [getDailyExerciseRecords] 인증 실패 - 토큰이 만료되었거나 유효하지 않습니다.');
+        throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
+      }
+      
+      if (axiosError.response?.status === 403) {
+        console.error('🚨 [getDailyExerciseRecords] 권한 없음');
+        throw new Error('접근 권한이 없습니다.');
+      }
+      
+      throw new Error(axiosError.response?.data?.message || '일일 운동 기록 조회 중 오류가 발생했습니다.');
+    }
+    
+    throw new Error('일일 운동 기록 조회 중 오류가 발생했습니다.');
   }
 };
 

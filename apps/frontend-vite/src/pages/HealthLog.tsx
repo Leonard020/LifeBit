@@ -12,11 +12,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { 
-  BarChart3, 
-  MessageSquare, 
-  Activity,
-  TrendingUp,
+import { BarChart3, MessageSquare, Activity,TrendingUp,
   Brain,
   Zap,
   Smartphone,
@@ -60,14 +56,53 @@ interface HealthStatistics {
   totalWorkoutDays: number;
 }
 
+// 🆕 DB 스키마에 맞는 영양 정보 타입 정의
+interface NutritionData {
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  serving_size?: number; // 기본값: 100g
+}
+
+// 🆕 음식 아이템 생성 요청 타입 (DB 스키마 기반)
+interface FoodItemCreateRequest {
+  name: string;
+  food_code?: string; // 선택적 필드
+  serving_size: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+}
+
+// 🆕 음식 아이템 응답 타입 (DB 스키마 기반)
+interface FoodItemResponse {
+  food_item_id: number;
+  uuid: string;
+  food_code?: string;
+  name: string;
+  serving_size: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  created_at: string;
+}
+
 const HealthLog: React.FC = () => {
   // 🔧 모든 Hook을 최상단에 배치 (조건부 호출 금지!)
   const { user, isLoggedIn, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // State hooks
-  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>('enhanced');
+  // State hooks - localStorage를 사용하여 새로고침 후에도 탭 상태 유지
+  const [activeTab, setActiveTab] = useState<'enhanced' | 'react' | 'python'>(() => {
+    const savedTab = localStorage.getItem('healthlog-active-tab');
+    return (savedTab === 'enhanced' || savedTab === 'react' || savedTab === 'python') 
+      ? savedTab as 'enhanced' | 'react' | 'python'
+      : 'enhanced';
+  });
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('week');
   
   // 각 탭별 독립적인 기간 상태
@@ -93,7 +128,7 @@ const HealthLog: React.FC = () => {
   const createDietMutation = useCreateDietRecord();
   
   // 🆕 프론트엔드에서 직접 GPT 호출하여 영양정보 계산
-  const calculateNutritionFromGPT = async (foodName: string): Promise<any> => {
+  const calculateNutritionFromGPT = async (foodName: string): Promise<NutritionData> => {
     try {
       console.log('🤖 [HealthLog GPT 영양정보] 계산 시작:', foodName);
       
@@ -151,36 +186,44 @@ const HealthLog: React.FC = () => {
     }
   };
 
-  // 🆕 Spring Boot API로 새로운 음식 아이템 생성
-  const createFoodItemInDB = async (foodName: string, nutritionData: any): Promise<number | null> => {
+  // 🆕 Spring Boot API로 새로운 음식 아이템 생성 (DB 스키마 기반)
+  const createFoodItemInDB = async (foodName: string, nutritionData: NutritionData): Promise<number | null> => {
     try {
       console.log('💾 [HealthLog DB 음식 생성] 시작:', foodName, nutritionData);
       
       const token = getToken();
+      
+      // DB 스키마에 맞는 요청 데이터 구성
+      const requestData: FoodItemCreateRequest = {
+        name: foodName,
+        serving_size: nutritionData.serving_size || 100.0, // 기본값 100g
+        calories: Number(nutritionData.calories.toFixed(2)), // DECIMAL(6,2) 형식
+        carbs: Number(nutritionData.carbs.toFixed(2)),
+        protein: Number(nutritionData.protein.toFixed(2)),
+        fat: Number(nutritionData.fat.toFixed(2))
+      };
+      
+      console.log('📝 [DB 요청 데이터]:', requestData);
+      
       const response = await fetch('/api/food-items', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          name: foodName,
-          serving_size: 100.0,
-          calories: nutritionData.calories,
-          carbs: nutritionData.carbs,
-          protein: nutritionData.protein,
-          fat: nutritionData.fat
-        })
+        body: JSON.stringify(requestData)
       });
 
       if (!response.ok) {
-        throw new Error(`Spring Boot API 오류: ${response.status}`);
+        const errorText = await response.text();
+        console.error('💥 [Spring Boot API 오류 응답]:', errorText);
+        throw new Error(`Spring Boot API 오류: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
+      const data: FoodItemResponse = await response.json();
       console.log('💾 [HealthLog DB 음식 생성] 성공:', data);
       
-      return data.food_item_id || data.foodItemId;
+      return data.food_item_id;
     } catch (error) {
       console.error('💾 [HealthLog DB 음식 생성] 실패:', error);
       return null;
@@ -582,7 +625,11 @@ const HealthLog: React.FC = () => {
           */}
 
           {/* 차트 분석 탭 */}
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'enhanced' | 'react' | 'python')} className="mb-6">
+          <Tabs value={activeTab} onValueChange={(value) => {
+            const newTab = value as 'enhanced' | 'react' | 'python';
+            setActiveTab(newTab);
+            localStorage.setItem('healthlog-active-tab', newTab);
+          }} className="mb-6">
             <TabsList className="grid w-full grid-cols-3 max-w-2xl">
               <TabsTrigger value="enhanced" className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4" />

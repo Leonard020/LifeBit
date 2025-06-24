@@ -90,6 +90,13 @@ CREATE TABLE user_goals (
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     weekly_workout_target INTEGER DEFAULT 3,
+	weekly_chest INTEGER DEFAULT 0,
+	weekly_back INTEGER DEFAULT 0,
+	weekly_legs INTEGER DEFAULT 0,
+	weekly_shoulders INTEGER DEFAULT 0,
+	weekly_arms INTEGER DEFAULT 0,
+	weekly_abs INTEGER DEFAULT 0,
+	weekly_cardio INTEGER DEFAULT 0,
     daily_carbs_target INTEGER DEFAULT 200,
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
@@ -177,10 +184,6 @@ CREATE TABLE meal_logs (
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
-    calories DECIMAL(6,2),
-    carbs DECIMAL(6,2),
-    protein DECIMAL(6,2),
-    fat DECIMAL(6,2),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -199,9 +202,8 @@ CREATE TABLE user_ranking (
     season INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
-
 
 CREATE INDEX idx_user_ranking_user_id ON user_ranking(user_id);
 CREATE INDEX idx_user_ranking_total_score ON user_ranking(total_score);

@@ -1,0 +1,38 @@
+---
+# 프로젝트 기본 설정
+project_name: "lifebit"
+project_path: "/opt/lifebit"
+
+# Git 저장소 설정
+git_repository_url: "https://github.com/Hyeon6492/LifeBit.git"  # 실제 저장소 URL로 변경
+git_branch: "main"
+
+# 애플리케이션 설정
+openai_api_key: "{{ vault_openai_api_key | default('your-api-key-here') }}"
+use_gpt: "False"
+
+# OAuth 설정 (선택사항)
+kakao_redirect_uri: ""
+google_client_secret: ""
+google_redirect_uri: ""
+
+# 데이터베이스 설정
+db_name: "lifebit_db"
+db_user: "lifebit_user"
+db_password: "{{ vault_db_password | default('lifebit_password') }}"
+
+# 모니터링 설정
+enable_monitoring: true
+backup_retention_days: 7
+
+# 보안 설정
+allowed_ssh_sources:
+  - "0.0.0.0/0"  # 프로덕션에서는 제한적으로 설정
+
+# 성능 설정
+max_upload_size: "100M"
+worker_processes: "auto"
+
+# 로깅 설정
+log_level: "info"
+log_retention_days: 30 

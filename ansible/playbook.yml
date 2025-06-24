@@ -1,0 +1,312 @@
+---
+- name: Deploy LifeBit Application to NCP
+  hosts: lifebit_servers
+  become: yes
+  vars:
+    project_name: "lifebit"
+    environment: "{{ env | default('dev') }}"
+    project_path: "/opt/lifebit"
+    git_repo: "{{ git_repository_url }}"
+    git_branch: "{{ git_branch | default('main') }}"
+    
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+      tags: system
+
+    - name: Install required system packages
+      apt:
+        name:
+          - curl
+          - git
+          - docker.io
+          - docker-compose
+          - python3-pip
+          - python3-docker
+          - htop
+          - vim
+          - unzip
+        state: present
+      tags: system
+
+    - name: Install Docker Compose v2
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+      args:
+        creates: /usr/local/bin/docker-compose
+      tags: system
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      tags: system
+
+    - name: Add root user to docker group
+      user:
+        name: root
+        groups: docker
+        append: yes
+      tags: system
+
+    - name: Create project directory
+      file:
+        path: "{{ project_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      tags: setup
+
+    - name: Clone or update repository
+      git:
+        repo: "{{ git_repo }}"
+        dest: "{{ project_path }}"
+        version: "{{ git_branch }}"
+        force: yes
+      tags: deploy
+      register: git_result
+
+    - name: Check if .env file exists in FastAPI app
+      stat:
+        path: "{{ project_path }}/apps/ai-api-fastapi/.env"
+      register: fastapi_env_file
+      tags: config
+
+    - name: Create .env file for FastAPI if not exists
+      copy:
+        content: |
+          # Whisper, GPT Turbo 3.5 API Key 
+          OPENAI_API_KEY="{{ openai_api_key | default('your-api-key-here') }}"
+          
+          # False일때는 gpt 토큰안씀 사용할때는 True로 변경
+          USE_GPT={{ use_gpt | default('False') }}
+          
+          # 카카오 로그인
+          KAKAO_REDIRECT_URI="{{ kakao_redirect_uri | default('') }}"
+          
+          # 구글 로그인
+          GOOGLE_CLIENT_SECRET="{{ google_client_secret | default('') }}"
+          GOOGLE_REDIRECT_URI="{{ google_redirect_uri | default('') }}"
+        dest: "{{ project_path }}/apps/ai-api-fastapi/.env"
+        owner: root
+        group: root
+        mode: '0600'
+      when: not fastapi_env_file.stat.exists
+      tags: config
+
+    - name: Install Python cryptography for Fernet key generation
+      pip:
+        name: cryptography
+        state: present
+      tags: config
+
+    - name: Generate Airflow Fernet key
+      shell: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      register: fernet_key
+      changed_when: false
+      tags: config
+
+    - name: Update docker-compose.yml with generated secrets
+      replace:
+        path: "{{ project_path }}/docker-compose.yml"
+        regexp: 'your-fernet-key-here-32-characters'
+        replace: "{{ fernet_key.stdout }}"
+      tags: config
+
+    - name: Update docker-compose.yml with secret key
+      replace:
+        path: "{{ project_path }}/docker-compose.yml"
+        regexp: 'your-secret-key-here'
+        replace: "{{ ansible_date_time.epoch }}-{{ inventory_hostname }}"
+      tags: config
+
+    - name: Stop existing containers gracefully
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        state: absent
+        timeout: 60
+      ignore_errors: yes
+      tags: deploy
+
+    - name: Clean up unused Docker resources
+      shell: |
+        docker system prune -f
+        docker volume prune -f
+      tags: deploy
+
+    - name: Pre-build Docker images to avoid timeout
+      shell: |
+        cd {{ project_path }}
+        docker-compose build --parallel
+      tags: deploy
+      register: build_result
+      failed_when: build_result.rc != 0
+
+    - name: Start database first
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - postgres-db
+        state: present
+      tags: deploy
+
+    - name: Wait for database to be ready
+      wait_for:
+        port: 5432
+        host: localhost
+        delay: 10
+        timeout: 120
+      tags: deploy
+
+    - name: Start backend services
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - fastapi-app
+          - spring-app
+        state: present
+      tags: deploy
+
+    - name: Wait for backend services
+      wait_for:
+        port: "{{ item }}"
+        host: localhost
+        delay: 20
+        timeout: 180
+      loop:
+        - 8001  # FastAPI
+        - 8080  # Spring Boot
+      tags: deploy
+
+    - name: Start frontend and proxy services
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - frontend-app
+          - nginx-proxy
+        state: present
+      tags: deploy
+
+    - name: Start Airflow services
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - airflow-webserver
+          - airflow-scheduler
+        state: present
+      tags: deploy
+
+    - name: Wait for all services to be ready
+      wait_for:
+        port: "{{ item }}"
+        host: localhost
+        delay: 30
+        timeout: 300
+      loop:
+        - 80    # Nginx
+        - 8081  # Airflow
+      tags: deploy
+
+    - name: Comprehensive health check
+      uri:
+        url: "http://localhost:{{ item.port }}{{ item.path }}"
+        method: GET
+        status_code: "{{ item.expected_codes }}"
+        timeout: 10
+      loop:
+        - { port: 80, path: "/", expected_codes: [200, 301, 302] }
+        - { port: 8001, path: "/docs", expected_codes: [200] }
+        - { port: 8080, path: "/actuator/health", expected_codes: [200] }
+        - { port: 8081, path: "/health", expected_codes: [200] }
+      register: health_check
+      retries: 5
+      delay: 15
+      tags: health
+
+    - name: Display service status
+      debug:
+        msg: |
+          LifeBit 배포 완료!
+          - 웹사이트: http://{{ ansible_default_ipv4.address }}
+          - API 문서: http://{{ ansible_default_ipv4.address }}/api/docs
+          - Spring API: http://{{ ansible_default_ipv4.address }}/api
+          - Airflow: http://{{ ansible_default_ipv4.address }}/airflow
+      tags: deploy
+
+    - name: Setup log rotation
+      copy:
+        content: |
+          {{ project_path }}/logs/*.log {
+              daily
+              missingok
+              rotate 52
+              compress
+              delaycompress
+              notifempty
+              create 644 root root
+          }
+        dest: /etc/logrotate.d/lifebit
+        owner: root
+        group: root
+        mode: '0644'
+      tags: maintenance
+
+    - name: Create backup script
+      copy:
+        content: |
+          #!/bin/bash
+          BACKUP_DIR="/opt/backups"
+          PROJECT_DIR="{{ project_path }}"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          
+          mkdir -p $BACKUP_DIR
+          
+          # Backup database
+          docker exec lifebit_postgres pg_dump -U lifebit_user lifebit_db > $BACKUP_DIR/db_backup_$DATE.sql
+          
+          # Backup application data
+          tar -czf $BACKUP_DIR/app_backup_$DATE.tar.gz -C $PROJECT_DIR .
+          
+          # Keep only last 7 backups
+          find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
+          find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+          
+          echo "Backup completed: $DATE"
+        dest: /usr/local/bin/backup-lifebit.sh
+        owner: root
+        group: root
+        mode: '0755'
+      tags: maintenance
+
+    - name: Setup backup cron job
+      cron:
+        name: "LifeBit daily backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup-lifebit.sh >> /var/log/lifebit-backup.log 2>&1"
+      tags: maintenance
+
+    - name: Create monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          echo "=== LifeBit 서비스 상태 ==="
+          docker-compose -f {{ project_path }}/docker-compose.yml ps
+          echo ""
+          echo "=== 시스템 리소스 ==="
+          free -h
+          df -h
+          echo ""
+          echo "=== Docker 상태 ==="
+          docker stats --no-stream
+        dest: /usr/local/bin/lifebit-status.sh
+        owner: root
+        group: root
+        mode: '0755'
+      tags: maintenance 
