@@ -53,9 +53,9 @@ public class JwtTokenProvider {
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder()
-                .setSigningKey(jwtConfig.secretKey())
-                .build()
-                .parseClaimsJws(token);
+                    .setSigningKey(jwtConfig.secretKey())
+                    .build()
+                    .parseClaimsJws(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
@@ -69,4 +69,4 @@ public class JwtTokenProvider {
                 .parseClaimsJws(token)
                 .getBody();
     }
-} 
+}

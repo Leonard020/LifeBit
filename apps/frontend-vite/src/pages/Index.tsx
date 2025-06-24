@@ -17,6 +17,123 @@ import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
 import { useNavigate } from 'react-router-dom';
 
+// 🆕 프론트엔드에서 직접 GPT 호출하여 영양정보 계산
+const calculateNutritionFromGPT = async (foodName: string): Promise<any> => {
+  try {
+    console.log('🤖 [Index GPT 영양정보] 계산 시작:', foodName);
+    
+    const prompt = `다음 음식의 100g 기준 영양 정보를 정확히 계산해주세요.
+
+음식명: ${foodName}
+기준량: 100g
+
+일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
+{
+  "calories": 100g당_칼로리(kcal),
+  "carbs": 100g당_탄수화물(g),
+  "protein": 100g당_단백질(g),
+  "fat": 100g당_지방(g)
+}
+
+값은 소수점 첫째자리까지 반올림하여 제공해주세요.`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 200
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API 오류: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const nutritionText = data.choices[0].message.content.trim();
+    const nutritionData = JSON.parse(nutritionText);
+    
+    console.log('🤖 [Index GPT 영양정보] 계산 완료:', nutritionData);
+    return nutritionData;
+    
+  } catch (error) {
+    console.error('🤖 [Index GPT 영양정보] 계산 실패:', error);
+    // 기본값 반환 (일반적인 건과일 기준)
+    return {
+      calories: 250.0,
+      carbs: 60.0,
+      protein: 3.0,
+      fat: 1.0
+    };
+  }
+};
+
+// 🆕 Spring Boot API로 새로운 음식 아이템 생성
+const createFoodItemInDB = async (foodName: string, nutritionData: any): Promise<number | null> => {
+  try {
+    console.log('💾 [Index DB 음식 생성] 시작:', foodName, nutritionData);
+    
+    const token = getTokenFromStorage();
+    const response = await fetch('/api/food-items', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: foodName,
+        serving_size: 100.0,
+        calories: nutritionData.calories,
+        carbs: nutritionData.carbs,
+        protein: nutritionData.protein,
+        fat: nutritionData.fat
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Spring Boot API 오류: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('💾 [Index DB 음식 생성] 성공:', data);
+    
+    return data.food_item_id || data.foodItemId;
+  } catch (error) {
+    console.error('💾 [Index DB 음식 생성] 실패:', error);
+    return null;
+  }
+};
+
+// 🆕 GPT + Spring Boot 통합 음식 생성 함수
+const createFoodItemFromGPT = async (foodName: string): Promise<number | null> => {
+  try {
+    // 1단계: GPT로 영양정보 계산
+    const nutritionData = await calculateNutritionFromGPT(foodName);
+    
+    // 2단계: Spring Boot API로 DB에 음식 생성
+    const foodItemId = await createFoodItemInDB(foodName, nutritionData);
+    
+    if (foodItemId) {
+      console.log('🎉 [Index 통합 음식 생성] 성공:', { foodName, foodItemId, nutritionData });
+      return foodItemId;
+    } else {
+      console.error('❌ [Index 통합 음식 생성] DB 저장 실패');
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ [Index 통합 음식 생성] 전체 실패:', error);
+    return null;
+  }
+};
+
 type Nutrition = {
   calories: number;
   carbs: number;
@@ -38,10 +155,20 @@ type DietData = {
   validation_notes?: string;
   created_at?: string;
   log_date?: string;
-  nutrition?: Nutrition;
+  // nutrition 필드 제거: Spring Boot CRUD API 사용으로 영양성분 계산 불필요
 };
 
 type SimpleDietData = Omit<DietData, 'amount'> & { amount: string };
+
+// 🕐 현재 시간대 판단 함수 (DB ENUM에 맞춤)
+const getCurrentTimePeriod = (): string => {
+  const hour = new Date().getHours();
+  if (hour >= 4 && hour < 8) return 'dawn';      // 새벽 4-8시
+  if (hour >= 8 && hour < 12) return 'morning';   // 오전 8-12시
+  if (hour >= 12 && hour < 18) return 'afternoon'; // 오후 12-18시
+  if (hour >= 18 && hour < 22) return 'evening';   // 저녁 18-22시
+  return 'night'; // 밤 22-4시
+};
 
 const Index = () => {
   const { toast } = useToast();
@@ -254,19 +381,59 @@ const Index = () => {
 
     if (type === 'exercise') {
       const isCardio = chatStructuredData.category === '유산소';
-      const payload = {
-        user_id: Number(userId),
-        name: chatStructuredData.exercise || '운동기록',
-        weight: isCardio ? null : (chatStructuredData.weight ?? 0),
-        sets: isCardio ? null : (chatStructuredData.sets ?? 0),
-        reps: isCardio ? null : (chatStructuredData.reps ?? 0),
-        duration_minutes: chatStructuredData.duration_min ?? 0,
-        calories_burned: chatStructuredData.calories_burned ?? 0,
-        exercise_date: new Date().toISOString().split('T')[0]
-      };
-      console.log('[운동기록 저장] payload:', payload);
+      const exerciseName = chatStructuredData.exercise || '운동기록';
+      
+      console.log('💪 [Index 운동기록] 운동명 확인:', exerciseName);
+      
       try {
-        const response = await fetch('/api/py/note/exercise', {
+        // 🔍 1단계: 운동 검색 또는 자동 생성
+        let exerciseCatalogId = 1; // 기본값
+        
+        if (exerciseName && exerciseName !== '운동기록') {
+          console.log('🔍 [Index 운동기록] 운동 카탈로그 찾기/생성 시도:', exerciseName);
+          
+          const findOrCreateResponse = await fetch('/api/exercises/find-or-create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: exerciseName,
+              bodyPart: isCardio ? 'cardio' : 'muscle',
+              description: `${exerciseName} 운동`
+            })
+          });
+          
+          if (findOrCreateResponse.ok) {
+            const exerciseCatalog = await findOrCreateResponse.json();
+            exerciseCatalogId = exerciseCatalog.exerciseCatalogId;
+            console.log('✅ [Index 운동기록] 운동 카탈로그 ID 확인:', exerciseCatalogId, exerciseCatalog.name);
+          } else {
+            console.warn('⚠️ [Index 운동기록] 운동 카탈로그 생성 실패, 기본값 사용');
+          }
+        }
+        
+        // ✅ 2단계: Spring Boot API에 맞는 payload 형식
+        const payload = {
+          exercise_catalog_id: exerciseCatalogId,
+          duration_minutes: chatStructuredData.duration_min ?? 30,
+          calories_burned: chatStructuredData.calories_burned ?? 0,
+          notes: exerciseName,
+          sets: isCardio ? null : (chatStructuredData.sets ?? 0),
+          reps: isCardio ? null : (chatStructuredData.reps ?? 0),
+          weight: isCardio ? null : (chatStructuredData.weight ?? 0),
+          exercise_date: new Date().toISOString().split('T')[0],
+          // 🔧 DB 스키마에 맞는 필수 필드들 추가
+          time_period: getCurrentTimePeriod(), // 현재 시간대 자동 판단
+          input_source: 'TYPING', // DB ENUM: VOICE, TYPING
+          confidence_score: 1.0,  // 1.0 = 100% 확신
+          validation_status: 'VALIDATED' // DB ENUM: PENDING, VALIDATED, REJECTED, NEEDS_REVIEW
+        };
+        console.log('💪 [Index 운동기록] Spring Boot API 저장 시작:', payload);
+        
+        // ✅ 3단계: 운동 세션 저장
+        const response = await fetch('/api/exercise-sessions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -275,13 +442,14 @@ const Index = () => {
           body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error('운동 저장 실패');
-        console.log('[운동기록 저장 성공]', await response.json());
+        const result = await response.json();
+        console.log('💪 [Index 운동기록] Spring Boot API 저장 성공:', result);
         toast({
           title: '기록 완료',
-          description: '운동 기록이 저장되었습니다.'
+          description: `${exerciseName} 운동이 저장되었습니다.`
         });
       } catch (err) {
-        console.error('[운동기록 저장 실패]', err);
+        console.error('💪 [Index 운동기록] Spring Boot API 저장 실패:', err);
         toast({
           title: '저장 오류',
           description: '운동 데이터를 저장하지 못했습니다.',
@@ -290,128 +458,90 @@ const Index = () => {
       }
     } else if (type === 'diet') {
       const dietData = chatStructuredData as DietData;
-      let foodItemId: number | undefined = dietData.food_item_id || dietData.foodItemId;
-      if (!foodItemId && dietData.food_name) {
-        try {
-          const searchResults = await searchFoodItems(dietData.food_name);
-          foodItemId = searchResults[0]?.foodItemId;
-          console.log('[식단기록] food_item_id 검색 결과:', searchResults);
-        } catch (err) {
-          console.error('[식단기록] food_name으로 food_item_id 검색 실패', err);
-        }
+      console.log('[식단기록] Spring Boot API 저장 시작:', dietData);
+      
+      // Spring Boot CRUD API 사용 - 기본 정보만 확인 (영양성분 계산 제거)
+      if (!dietData.food_name || !dietData.amount || !dietData.meal_time) {
+        toast({
+          title: '저장 오류',
+          description: '음식명, 섭취량, 식사시간이 필요합니다.',
+          variant: 'destructive'
+        });
+        console.error('[식단기록] 필수 정보 부족:', dietData);
+        return;
       }
-      if (!foodItemId) {
-        console.warn('[식단기록] food_item_id 없이 저장 요청 (자동 등록 시도)');
-      }
-      // MealInput에 맞는 payload 생성
-      function mapMealTimeToEnum(mealTime: string) {
-        switch (mealTime) {
-          case '아침': return 'breakfast';
-          case '점심': return 'lunch';
-          case '저녁': return 'dinner';
-          case '간식': return 'snack';
-          case '야식': return 'snack'; // 임시 매핑
-          default: return 'snack';
-        }
-      }
-      function getKSTDateString() {
-        const now = new Date();
-        now.setHours(now.getHours() + 9); // KST 보정
-        return now.toISOString().slice(0, 10);
-      }
-      function normalizeNutrition(nutrition: Partial<Nutrition>): Nutrition | undefined {
-        if (!nutrition) return undefined;
-        return {
-          calories: nutrition.calories ?? 0,
-          carbs: nutrition.carbohydrates ?? nutrition.carbs ?? 0,
-          protein: nutrition.protein ?? 0,
-          fat: nutrition.fat ?? 0,
-          serving_size: nutrition.serving_size,
-          carbohydrates: nutrition.carbohydrates,
-        };
-      }
-      // [이중체크] 섭취량 단위 환산 함수 추가
-      async function convertAmountToGram(amount: number | string, foodName: string, foodItemId?: number): Promise<number> {
-        // 1. foodItemId가 있으면 DB에서 serving_size 조회
-        let servingSize = 100;
-        if (foodItemId) {
-          const searchResults = await searchFoodItems(foodName);
-          if (searchResults && searchResults.length > 0) {
-            servingSize = searchResults[0].servingSize || 100;
-          }
-        } else if (dietData.nutrition && dietData.nutrition.serving_size) {
-          servingSize = dietData.nutrition.serving_size;
-        } else {
-          // 계란 등 일부 음식은 하드코딩 (예: 계란 1개=50g)
-          if (foodName.includes('계란')) servingSize = 50;
-        }
-        // 2. amount가 "3개" 등 문자열이면 숫자만 추출
-        let num = 1;
-        if (typeof amount === 'string') {
-          const match = amount.match(/\d+(\.\d+)?/);
-          if (match) num = parseFloat(match[0]);
-        } else {
-          num = Number(amount);
-        }
-        // 3. "개" 단위면 개수*servingSize, "g" 단위면 그대로, 그 외는 기본 servingSize 곱
-        if (typeof amount === 'string' && amount.includes('개')) {
-          return num * servingSize;
-        } else if (typeof amount === 'string' && amount.includes('g')) {
-          return num;
-        } else {
-          return num * servingSize;
-        }
-      }
-      // [이중체크] nutrition 환산 함수
-      function calcNutritionByGram(nutrition: Nutrition | undefined, gram: number, servingSize: number = 100): Nutrition | undefined {
-        if (!nutrition) return undefined;
-        const baseServing = nutrition.serving_size || servingSize || 100;
-        const ratio = gram / baseServing;
-        return {
-          calories: Math.round((nutrition.calories || 0) * ratio * 10) / 10,
-          carbs: Math.round((nutrition.carbs || 0) * ratio * 10) / 10,
-          protein: Math.round((nutrition.protein || 0) * ratio * 10) / 10,
-          fat: Math.round((nutrition.fat || 0) * ratio * 10) / 10,
-          serving_size: gram,
-          carbohydrates: nutrition.carbohydrates !== undefined ? Math.round((nutrition.carbohydrates || 0) * ratio * 10) / 10 : undefined,
-        };
-      }
-      // [이중체크] 실제 환산 적용
-      const gramAmount = await convertAmountToGram(dietData.amount, dietData.food_name || '', foodItemId);
-      const normalizedNutrition = normalizeNutrition(dietData.nutrition);
-      const nutritionByGram = calcNutritionByGram(normalizedNutrition, gramAmount, normalizedNutrition?.serving_size);
-      const payload = {
-        user_id: Number(userId),
-        food_item_id: foodItemId ? Number(foodItemId) : undefined,
-        quantity: gramAmount, // g 단위로 환산
-        log_date: dietData.log_date || getKSTDateString(),
-        meal_time: mapMealTimeToEnum(dietData.meal_time),
-        food_name: dietData.food_name,
-        nutrition: nutritionByGram,
-      };
-      console.log('[식단기록 저장] payload:', payload);
+
+      // 식품 검색하여 food_item_id 찾기
       try {
-        const response = await fetch('/api/py/note/diet', {
+        let foodItemId = dietData.food_item_id || dietData.foodItemId;
+        
+        // food_item_id가 없으면 식품명으로 검색
+        if (!foodItemId && dietData.food_name) {
+          console.log('🔍 [Index 식단기록] 음식 검색 시작:', dietData.food_name);
+          const searchResults = await searchFoodItems(dietData.food_name);
+          console.log('🔍 [Index 식단기록] 검색 결과:', searchResults);
+          
+          if (searchResults && searchResults.length > 0) {
+            foodItemId = searchResults[0].foodItemId;
+            console.log('✅ [Index 식단기록] 검색된 foodItemId:', foodItemId);
+          } else {
+            console.log('⚠️ [Index 식단기록] DB에 없음, GPT로 생성 시도:', dietData.food_name);
+            
+            // 🆕 GPT 기반 자동 음식 생성
+            const createdFoodItemId = await createFoodItemFromGPT(dietData.food_name);
+            
+            if (createdFoodItemId) {
+              foodItemId = createdFoodItemId;
+              console.log('🎉 [Index 식단기록] GPT로 음식 생성 성공, foodItemId:', foodItemId);
+              toast({
+                title: "새로운 음식 추가 완료",
+                description: `"${dietData.food_name}"이 GPT 분석으로 자동 추가되었습니다.`,
+              });
+            } else {
+              console.error('❌ [Index 식단기록] GPT 음식 생성 실패:', dietData.food_name);
+              toast({
+                title: "음식 정보 생성 실패",
+                description: `"${dietData.food_name}"의 정보를 생성할 수 없습니다.`,
+                variant: "destructive"
+              });
+              return; // 저장 중단
+            }
+          }
+        }
+
+        // Spring Boot CRUD API 호출 (/api/diet/record)
+        const response = await fetch('/api/diet/record', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            food_item_id: foodItemId,
+            quantity: Number(dietData.amount),
+            meal_time: dietData.meal_time,
+            input_source: dietData.input_source || 'chat',
+            confidence_score: dietData.confidence_score || 1.0,
+            validation_status: dietData.validation_status || 'confirmed'
+          })
         });
-        const responseBody = await response.json().catch(() => ({}));
+        
         if (!response.ok) {
-          console.error('[식단기록 저장 실패] 응답코드:', response.status, responseBody);
-          throw new Error('식단 저장 실패');
+          throw new Error(`서버 응답 오류: ${response.status}`);
         }
-        console.log('[식단기록 저장 성공]', responseBody);
+        
+        const responseData = await response.json();
+        console.log('[식단기록] Spring Boot API 저장 성공:', responseData);
+        
         toast({
           title: '기록 완료',
-          description: '식단 기록이 저장되었습니다.'
+          description: '식단이 성공적으로 저장되었습니다.'
         });
+        
         navigate('/note', { state: { refreshDiet: true } });
+        
       } catch (err) {
-        console.error('[식단기록 저장 실패] 예외:', err);
+        console.error('[식단기록] Spring Boot API 저장 실패:', err);
         toast({
           title: '저장 오류',
           description: '식단 데이터를 저장하지 못했습니다.',
@@ -483,7 +613,7 @@ const Index = () => {
               setCurrentMealTime(null);
               setChatAiFeedback({
                 type: 'initial',
-                message: '안녕하세요! 😊 오늘 어떤 음식을 드셨나요?\n\n언제, 무엇을, 얼마나 드셨는지 자유롭게 말씀해 주세요!\n\n예시: "아침에 계란 2개랑 토스트 1개 먹었어요"\n\n정보 저장이 필요하면 "저장", "기록해줘", "완료", "끝" 중 하나의 문구를 입력해 주세요. 해당 문구를 입력하면 자동으로 기록이 저장됩니다.'
+                message: '안녕하세요! 😊 오늘 어떤 음식을 드셨나요?\n\n언제, 무엇을, 얼마나 드셨는지 자유롭게 말씀해 주세요!\n\n예시: "아침에 계란후라이 2개랑 식빵 1개 먹었어요"\n\n📝 음식명, 섭취량, 식사시간 3가지 정보만 수집합니다.\n정보 저장이 필요하면 "저장", "기록해줘", "완료", "끝" 중 하나의 문구를 입력해 주세요.'
               });
               setChatStep('extraction');
             }}

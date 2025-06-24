@@ -1,46 +1,49 @@
 package com.lifebit.coreapi.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.lifebit.coreapi.entity.ExerciseSession;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter
+@Setter
+@JsonInclude(JsonInclude.Include.NON_NULL) // null 필드 제외
 public class ExerciseRecordDTO {
 
-    @JsonProperty("exercise_session_id")
-    private Long sessionId;
-
-    @JsonProperty("name")
+    private Long userId;
+    private Long exerciseSessionId;
     private String exerciseName;
-
+    private String bodyPart;
     private Integer sets;
     private Integer reps;
-    private BigDecimal weight;
-
-    private Long userId;
-    private String time;  // 사용자가 입력한 운동 시간 (예: "20분")
-
+    private Float weight;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate exerciseDate;
 
-    @JsonProperty("formatted_time")
-    private String durationFormatted;  // 서버에서 가공된 시간 포맷 출력용
+    private Integer durationMinutes;
 
     public ExerciseRecordDTO(ExerciseSession session) {
-        this.sessionId = session.getExerciseSessionId();
-        this.exerciseName = session.getExerciseCatalog().getName();
+        this.exerciseSessionId = session.getExerciseSessionId();
+        this.userId = session.getUser() != null ? session.getUser().getUserId() : null;
+
+        if (session.getExerciseCatalog() != null) {
+            this.exerciseName = session.getExerciseCatalog().getName();
+            this.bodyPart = session.getExerciseCatalog().getBodyPart() != null
+                ? session.getExerciseCatalog().getBodyPart().name()
+                : "미지정";
+        } else {
+            this.exerciseName = "이름없음";
+            this.bodyPart = "미지정";
+        }
+
         this.sets = session.getSets();
         this.reps = session.getReps();
-        this.weight = session.getWeight();
+        this.weight = session.getWeight() != null ? session.getWeight().floatValue() : null;
         this.exerciseDate = session.getExerciseDate();
-        this.durationFormatted = session.getDurationMinutes() != null
-                ? session.getDurationMinutes() + "분"
-                : null;
+        this.durationMinutes = session.getDurationMinutes();
     }
 }

@@ -3,10 +3,19 @@ package com.lifebit.coreapi.dto;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter @Setter
 public class ExerciseRecordRequest {
     private Long catalogId;
+
+    private Integer sets;
+    private Integer reps;
+    private Float weight;
+
     private Integer durationMinutes;
     private Integer caloriesBurned;
     private String notes;
-} 
+
+    private LocalDate exerciseDate; // ⏰ 생략 시 서버에서 LocalDate.now() 처리 가능
+}

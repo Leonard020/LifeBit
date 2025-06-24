@@ -9,6 +9,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "exercise_catalog")
 @Getter @Setter
+
 public class ExerciseCatalog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

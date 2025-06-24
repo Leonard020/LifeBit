@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Drawer, DrawerContent, DrawerTrigger, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
+import { getTierMeta } from '@/constants/rankingTierMeta';
 
 interface RankingUser {
   rank: number;
@@ -18,6 +19,8 @@ interface RankingUser {
   score: number;
   badge: string;
   streakDays: number;
+  tier: string;
+  colorCode?: string;
 }
 
 interface MyRanking {
@@ -25,6 +28,8 @@ interface MyRanking {
   score: number;
   streakDays: number;
   totalUsers: number;
+  tier: string;
+  colorCode?: string;
 }
 
 interface Achievement {
@@ -164,6 +169,9 @@ const Ranking = () => {
   // 데이터가 없을 때 안내 메시지 표시
   const hasNoData = topRankers.length === 0 && myRanking.rank === 0 && achievements.length === 0;
 
+  // 내 랭킹 등급 정보
+  const myTierMeta = getTierMeta(String(myRanking.tier));
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -200,6 +208,22 @@ const Ranking = () => {
             </CardHeader>
             <CardContent>
               <div className="text-center space-y-4">
+                {/* 등급명/색상 표시 */}
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span
+                    style={{
+                      background: myTierMeta.color,
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '2px 10px',
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                    }}
+                  >
+                    {myTierMeta.name}
+                  </span>
+                  <span className="text-sm text-muted-foreground">{myTierMeta.desc}</span>
+                </div>
                 <div className="flex items-center justify-center space-x-8">
                   <div className="text-center">
                     <div className="text-3xl font-bold gradient-text">{myRanking.rank || '-'}</div>
@@ -232,35 +256,53 @@ const Ranking = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {topRankers.map((user: RankingUser) => (
-                  <div key={user.rank} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 flex items-center justify-center">
-                        {getRankIcon(user.rank)}
+                {topRankers.map((user: RankingUser) => {
+                  const tierMeta = getTierMeta(String(user.tier));
+                  return (
+                    <div key={user.rank} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 flex items-center justify-center">
+                          {getRankIcon(user.rank)}
+                        </div>
+                        <Avatar>
+                          <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
+                            <span className="text-white text-sm font-bold">
+                              {user.nickname.charAt(0)}
+                            </span>
+                          </div>
+                          <AvatarFallback>{user.nickname.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium">{user.nickname}</div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              style={{
+                                background: tierMeta.color,
+                                color: '#fff',
+                                borderRadius: '8px',
+                                padding: '2px 8px',
+                                fontWeight: 'bold',
+                                fontSize: '0.9rem',
+                              }}
+                            >
+                              {tierMeta.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">{tierMeta.desc}</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {user.streakDays}일 연속
+                          </div>
+                        </div>
                       </div>
-                      <Avatar>
-                        <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-bold">
-                            {user.nickname.charAt(0)}
-                          </span>
-                        </div>
-                        <AvatarFallback>{user.nickname.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{user.nickname}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {user.streakDays}일 연속
-                        </div>
+                      <div className="text-right">
+                        <div className="font-bold">{user.score.toLocaleString()}점</div>
+                        <Badge className={`text-xs ${getBadgeColor(user.badge)}`}>
+                          {user.badge}
+                        </Badge>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-bold">{user.score.toLocaleString()}점</div>
-                      <Badge className={`text-xs ${getBadgeColor(user.badge)}`}>
-                        {user.badge}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
