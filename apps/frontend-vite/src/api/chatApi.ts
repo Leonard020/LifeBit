@@ -60,8 +60,9 @@ interface ExerciseState {
   sets?: number;
   reps?: number;
   duration_min?: number;
-  weight?: number;
+  weight?: number | string; // string 타입도 허용하도록 수정
   calories_burned?: number;
+  exercise_date?: string; // 운동 날짜 필드 추가
 }
 
 interface DietState {
