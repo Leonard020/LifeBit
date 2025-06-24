@@ -18,9 +18,13 @@ from note_routes import router as note_router  # ✅ 상단에 추가
 # 새로 추가: 차트 분석 서비스 import
 from analytics_service import HealthAnalyticsService
 
-# Load .env
-env_path = Path(__file__).parent / '.env'
+# Load .env from project root
+env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
+
+# Also try to load local .env in ai-api-fastapi directory
+local_env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=local_env_path, override=False)  # Don't override existing values
 
 # 환경 변수 로드 확인
 print("[ENV] Environment variables loaded:")
@@ -44,7 +48,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,9 +63,9 @@ app.include_router(auth_router, prefix="/api/py/auth")
 def init_database():
     try:
         models.Base.metadata.create_all(bind=engine)
-        print("✅ Database tables created successfully")
+        print("Database tables created successfully")
     except Exception as e:
-        print(f"⚠️ Database initialization delayed: {e}")
+        print(f"Database initialization delayed: {e}")
 
 # 앱 시작 시 데이터베이스 초기화 시도
 @app.on_event("startup")

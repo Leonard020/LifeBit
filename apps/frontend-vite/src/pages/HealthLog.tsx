@@ -205,7 +205,7 @@ const HealthLog: React.FC = () => {
       
       console.log('📝 [DB 요청 데이터]:', requestData);
       
-      const response = await fetch('/api/food-items', {
+      const response = await fetch('/api/diet/food-items', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

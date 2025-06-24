@@ -102,7 +102,7 @@
           # 데이터베이스 설정 (PostgreSQL)
           POSTGRES_DB=lifebit_db
           POSTGRES_USER=lifebit_user
-          POSTGRES_PASSWORD=lifebit_secure_password_123
+          POSTGRES_PASSWORD=lifebit_password
           POSTGRES_PORT=5432
           
           # Redis 설정

@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
+import { AUTH_CONFIG } from '@/config/env';
 
 interface Props {
   children: ReactNode;
@@ -54,8 +55,8 @@ class ErrorBoundary extends Component<Props, State> {
 
     // 인증 오류인 경우 토큰 정리
     if (this.state.isAuthError) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem(AUTH_CONFIG.TOKEN_KEY);
+      localStorage.removeItem(AUTH_CONFIG.USER_KEY);
       window.dispatchEvent(new Event('storage'));
     }
   }

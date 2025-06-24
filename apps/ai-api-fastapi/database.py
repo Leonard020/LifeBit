@@ -2,12 +2,12 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# PostgreSQL 연결 정보 - 환경변수 사용
-POSTGRES_USER = os.getenv("DB_USER", "lifebit_user")
-POSTGRES_PASSWORD = os.getenv("DB_PASSWORD", "lifebit_password")
-POSTGRES_DB = os.getenv("DB_NAME", "lifebit_db")
-POSTGRES_HOST = os.getenv("DB_HOST", "postgres-db")  # Docker 서비스명 사용
-POSTGRES_PORT = os.getenv("DB_PORT", "5432")
+# PostgreSQL 연결 정보 (실제 값으로 교체)
+POSTGRES_USER = "lifebit_user"
+POSTGRES_PASSWORD = "lifebit_password"
+POSTGRES_DB = "lifebit_db"
+POSTGRES_HOST = "127.0.0.1"
+POSTGRES_PORT = "5432"
 
 DATABASE_URL = (
     f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
