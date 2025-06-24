@@ -36,13 +36,15 @@ app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 
 # CORS 설정
 origins = [
+    "http://localhost:3000",
     "http://localhost:5173",
+    "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,8 +55,18 @@ app.add_middleware(
 # 라우터 등록
 app.include_router(auth_router, prefix="/api/py/auth")
 
-# DB 테이블 생성
-models.Base.metadata.create_all(bind=engine)
+# DB 테이블 생성 (지연 초기화)
+def init_database():
+    try:
+        models.Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created successfully")
+    except Exception as e:
+        print(f"⚠️ Database initialization delayed: {e}")
+
+# 앱 시작 시 데이터베이스 초기화 시도
+@app.on_event("startup")
+async def startup_event():
+    init_database()
 
 # 차트 분석 서비스 인스턴스 생성
 analytics_service = HealthAnalyticsService()

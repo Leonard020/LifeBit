@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { API_CONFIG } from './config/env'
 
 // 🔧 개발 환경에서 디버깅 도구 제공
 if (import.meta.env.DEV) {
@@ -24,7 +25,7 @@ if (import.meta.env.DEV) {
         return;
       }
       
-      const wsUrl = `ws://localhost:8080/ws/health/${userId}?token=${encodeURIComponent(token)}`;
+      const wsUrl = `ws://${API_CONFIG.BASE_URL.replace('http://', '')}/ws/health/${userId}?token=${encodeURIComponent(token)}`;
       console.log('🔗 WebSocket 테스트 연결 시도:', wsUrl);
       
       const testWs = new WebSocket(wsUrl);

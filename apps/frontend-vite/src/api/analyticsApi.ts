@@ -7,6 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axiosInstance from '@/utils/axios';
+import { API_CONFIG } from '@/config/env';
 
 // ============================================================================
 // 타입 정의
@@ -157,7 +158,7 @@ export interface PersonalizedRecommendations {
 // API 함수들 (향후 구현)
 // ============================================================================
 
-// 건강 분석 리포트 조회
+// AI 건강 분석 리포트 조회
 const getHealthAnalyticsReport = async (
   userId: number, 
   period: string
@@ -169,7 +170,7 @@ const getHealthAnalyticsReport = async (
       user_id: userId,
       period: period
     }, {
-      baseURL: 'http://localhost:8001' // FastAPI 서버
+      baseURL: API_CONFIG.AI_API_URL // FastAPI 서버
     });
     
     return {
@@ -209,7 +210,7 @@ const getAIHealthInsights = async (
       user_id: userId,
       period: period
     }, {
-      baseURL: 'http://localhost:8001' // FastAPI 서버
+      baseURL: API_CONFIG.AI_API_URL // FastAPI 서버
     });
     
     return {

@@ -1,3 +1,7 @@
+# ================================================
+# LifeBit 학원용 Terraform 변수 설정
+# ================================================
+
 # NCP 인증 정보
 variable "ncp_access_key" {
   description = "NCP Access Key"
@@ -31,9 +35,14 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Environment (dev, staging, prod)"
+  description = "Environment (demo, dev, prod)"
   type        = string
-  default     = "dev"
+  default     = "demo"
+  
+  validation {
+    condition = contains(["demo", "dev", "prod"], var.environment)
+    error_message = "Environment must be one of: demo, dev, prod."
+  }
 }
 
 # VPC 설정
@@ -46,20 +55,25 @@ variable "vpc_cidr" {
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets"
   type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+  default     = ["10.0.1.0/24"]
 }
 
 variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
+  description = "CIDR blocks for private subnets (not used in single server setup)"
   type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
+  default     = ["10.0.101.0/24"]
 }
 
 # 서버 설정
 variable "server_instance_type" {
-  description = "Server instance type"
+  description = "Server instance type (학원용 적당한 성능)"
   type        = string
   default     = "SVR.VSVR.HICPU.C002.M004.NET.SSD.B050.G002"  # 2vCPU, 4GB RAM
+  
+  validation {
+    condition = can(regex("^SVR\\.VSVR\\.", var.server_instance_type))
+    error_message = "Server instance type must be a valid NCP server product code."
+  }
 }
 
 variable "server_image_product_code" {
@@ -68,59 +82,55 @@ variable "server_image_product_code" {
   default     = "SW.VSVR.OS.LNX64.UBNTU.SVR2004.B050"
 }
 
-# 보안 설정
+# 보안 설정 (학원용으로 완화)
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # 프로덕션에서는 제한적으로 설정
+  default     = ["0.0.0.0/0"]  # 학원용 - 전체 허용
 }
 
-variable "allowed_http_cidrs" {
-  description = "CIDR blocks allowed for HTTP access"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
+# 추가 스토리지 설정 (선택적)
+variable "enable_additional_storage" {
+  description = "Enable additional block storage"
+  type        = bool
+  default     = false
 }
 
-# 데이터베이스 설정
-variable "db_instance_type" {
-  description = "Database instance type"
-  type        = string
-  default     = "DB.t3.micro"
-}
-
-variable "db_storage_size" {
-  description = "Database storage size (GB)"
+variable "additional_storage_size" {
+  description = "Additional storage size (GB)"
   type        = number
-  default     = 20
-}
-
-variable "db_username" {
-  description = "Database master username"
-  type        = string
-  default     = "lifebit_user"
-}
-
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  sensitive   = true
-  default     = "lifebit_password123!"
-}
-
-# 도메인 설정
-variable "domain_name" {
-  description = "Domain name for the application"
-  type        = string
-  default     = ""
+  default     = 50
+  
+  validation {
+    condition = var.additional_storage_size >= 10 && var.additional_storage_size <= 2000
+    error_message = "Additional storage size must be between 10 and 2000 GB."
+  }
 }
 
 # 태그 설정
 variable "tags" {
-  description = "Resource tags"
+  description = "Tags to apply to all resources"
   type        = map(string)
   default = {
+    Environment = "demo"
     Project     = "LifeBit"
-    Environment = "dev"
+    Owner       = "Student"
+    Purpose     = "Academy Project"
     ManagedBy   = "Terraform"
+    CostOptimized = "true"
   }
+}
+
+# 알림 설정 (선택적)
+variable "notification_email" {
+  description = "Email for notifications"
+  type        = string
+  default     = ""
+}
+
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for notifications"
+  type        = string
+  default     = ""
+  sensitive   = true
 } 
