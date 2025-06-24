@@ -8,7 +8,6 @@ import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserGoalRepository;
 import com.lifebit.coreapi.repository.UserRepository;
-import com.lifebit.coreapi.service.UserGoalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

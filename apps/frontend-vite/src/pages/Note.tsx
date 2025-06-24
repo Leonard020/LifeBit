@@ -648,7 +648,11 @@ const Note = () => {
 
   // 3. 실제 기록 기반으로 점 표시
   const hasRecordOnDate = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
+    const dateStr = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0')
+    ].join('-');
     return {
       exercise: exerciseRecordedDates.includes(dateStr),
       diet: dietRecordedDates.includes(dateStr)

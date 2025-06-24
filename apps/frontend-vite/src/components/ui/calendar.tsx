@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, DayContentProps } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,8 +13,17 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  dayContent,
   ...props
 }: CalendarProps) {
+  const components = {
+    IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
+    IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
+    ...(dayContent && {
+      DayContent: (dayProps: DayContentProps) => <>{dayContent(dayProps.date)}</>,
+    }),
+  };
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
@@ -53,10 +62,7 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
-      components={{
-        IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
-        IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
-      }}
+      components={components}
       {...props}
     />
   );
