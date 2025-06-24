@@ -17,8 +17,17 @@ import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi'; // 실제 경로에 맞게 import
 import { useNavigate } from 'react-router-dom';
 
+// NutritionData 타입 정의 추가 (파일 상단 import문 아래)
+type NutritionData = {
+  serving_size?: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+};
+
 // 🆕 프론트엔드에서 직접 GPT 호출하여 영양정보 계산
-const calculateNutritionFromGPT = async (foodName: string): Promise<any> => {
+const calculateNutritionFromGPT = async (foodName: string): Promise<NutritionData> => {
   try {
     console.log('🤖 [Index GPT 영양정보] 계산 시작:', foodName);
     
@@ -77,12 +86,13 @@ const calculateNutritionFromGPT = async (foodName: string): Promise<any> => {
 };
 
 // 🆕 Spring Boot API로 새로운 음식 아이템 생성
-const createFoodItemInDB = async (foodName: string, nutritionData: any): Promise<number | null> => {
+const createFoodItemInDB = async (foodName: string, nutritionData: NutritionData): Promise<number | null> => {
   try {
     console.log('💾 [Index DB 음식 생성] 시작:', foodName, nutritionData);
     
     const token = getTokenFromStorage();
-    const response = await fetch('/api/food-items', {
+    console.log('토큰:', token);
+    const response = await fetch('/api/diet/food-items', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -134,14 +144,6 @@ const createFoodItemFromGPT = async (foodName: string): Promise<number | null> =
   }
 };
 
-type Nutrition = {
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  serving_size?: number;
-  carbohydrates?: number;
-};
 type DietData = {
   food_item_id?: number;
   foodItemId?: number;
@@ -373,6 +375,7 @@ const Index = () => {
     if (!chatStructuredData) return;
     const userId = getUserIdFromToken();
     const token = getTokenFromStorage();
+    console.log('식단 저장 토큰:', token);
 
     if (!userId) {
       console.warn('[⚠️ 유저 ID 없음] 토큰에서 사용자 정보를 가져올 수 없습니다.');
@@ -517,6 +520,7 @@ const Index = () => {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
+            userId,
             food_item_id: foodItemId,
             quantity: Number(dietData.amount),
             meal_time: dietData.meal_time,
