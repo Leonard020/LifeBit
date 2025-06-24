@@ -538,9 +538,10 @@ const Note = () => {
     }
 
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-    console.log('[운동기록 조회 호출]', formattedDate, authToken);
+    console.log('[운동기록 조회 호출]', formattedDate);
 
     try {
+      // exercise_sessions 테이블의 모든 필드를 포함하여 요청
       const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
         method: 'GET',
         headers: {
@@ -548,15 +549,45 @@ const Note = () => {
           'Content-Type': 'application/json'
         }
       });
+
+      if (!res.ok) {
+        throw new Error(`API 요청 실패: ${res.status}`);
+      }
+
       const data = await res.json();
-      console.log('[운동기록 조회 응답]', data);
+      console.log('[운동기록 원본 데이터]', JSON.stringify(data, null, 2));
+
       // 날짜 필터 적용 (exerciseDate 기준)
-      const filtered = data.filter(
-        (e: ExerciseRecordDTO) =>
-          e.exerciseDate && e.exerciseDate.startsWith(formattedDate)
-      );
-      setTodayExercise(filtered);
-      console.log('[운동기록 날짜 필터링 결과]', filtered);
+      const filtered = data.filter((e: ExerciseRecordDTO) => {
+        const matches = e.exerciseDate && e.exerciseDate.startsWith(formattedDate);
+        // 각 레코드의 세부 정보 로깅
+        console.log('[운동 기록 상세]', {
+          id: e.exerciseSessionId,
+          name: e.exerciseName,
+          bodyPart: e.bodyPart,
+          sets: e.sets,
+          reps: e.reps,
+          weight: e.weight,
+          duration: e.durationMinutes,
+          calories: e.calories_burned
+        });
+        return matches;
+      });
+
+      console.log('[필터링된 운동기록]', filtered);
+      
+      // 데이터 정제: undefined나 null이 아닌 값만 포함
+      const cleanedData = filtered.map(record => ({
+        ...record,
+        sets: record.sets || undefined,
+        reps: record.reps || undefined,
+        weight: record.weight || undefined,
+        durationMinutes: record.durationMinutes || undefined,
+        calories_burned: record.calories_burned || undefined
+      }));
+
+      setTodayExercise(cleanedData);
+
       if (!filtered || filtered.length === 0) {
         console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
       }
@@ -1173,30 +1204,56 @@ const Note = () => {
               <CardContent>
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
-                    {todayExercise.map((record) => (
-                      <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">
-                            {record.exerciseName}
-                            {record.bodyPart && (
-                              <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
-                            )}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {/* 세트/횟수/무게 */}
-                            {record.sets && record.reps ? `${record.sets}세트 × ${record.reps}회` : ''}
-                            {record.weight ? ` (${record.weight}kg)` : ''}
-                            {/* 시간 */}
-                            {record.durationMinutes ? ` • ${record.durationMinutes}분` : ''}
-                            {/* 칼로리 정보가 있다면 */}
-                            {typeof record.calories_burned === 'number' && ` • ${record.calories_burned}kcal`}
-                          </p>
+                    {todayExercise.map((record) => {
+                      const parts = [];
+                      
+                      // 세트, 횟수가 있으면 근력 운동으로 간주
+                      const isStrengthExercise = record.sets !== undefined || record.reps !== undefined;
+                      
+                      if (isStrengthExercise) {
+                        // 근력 운동 정보
+                        const strengthInfo = [];
+                        if (record.sets !== undefined) strengthInfo.push(`${record.sets}세트`);
+                        if (record.reps !== undefined) strengthInfo.push(`${record.reps}회`);
+                        if (strengthInfo.length > 0) {
+                          parts.push(strengthInfo.join(' × '));
+                        }
+                        
+                        // 무게 정보
+                        if (record.weight !== undefined) {
+                          parts.push(`${record.weight}kg`);
+                        }
+                      }
+                      
+                      // 시간 정보 (모든 운동 타입에 표시)
+                      if (record.durationMinutes !== undefined) {
+                        parts.push(`${record.durationMinutes}분`);
+                      }
+                      
+                      // 칼로리 정보
+                      if (record.calories_burned !== undefined) {
+                        parts.push(`${record.calories_burned}kcal`);
+                      }
+
+                      return (
+                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <p className="font-medium">
+                              {record.exerciseName}
+                              {record.bodyPart && (
+                                <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
+                              )}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {parts.length > 0 ? parts.join(' • ') : '기록 없음'}
+                            </p>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {isToday(selectedDate) && !hasClaimedExerciseScore && (
                       <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
                         <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
