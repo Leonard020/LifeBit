@@ -48,6 +48,12 @@ output "login_key_name" {
   value       = ncloud_login_key.key.key_name
 }
 
+output "login_key_private_key" {
+  description = "Login Key Private Key"
+  value       = ncloud_login_key.key.private_key
+  sensitive   = true
+}
+
 # 연결 정보
 output "ssh_connection_command" {
   description = "SSH Connection Command"

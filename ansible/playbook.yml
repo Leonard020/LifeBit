@@ -26,7 +26,18 @@
           - docker-compose
           - python3-pip
           - python3-docker
+          - htop
+          - vim
+          - unzip
         state: present
+      tags: system
+
+    - name: Install Docker Compose v2
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+      args:
+        creates: /usr/local/bin/docker-compose
       tags: system
 
     - name: Start and enable Docker service
@@ -36,9 +47,9 @@
         enabled: yes
       tags: system
 
-    - name: Add ubuntu user to docker group
+    - name: Add root user to docker group
       user:
-        name: ubuntu
+        name: root
         groups: docker
         append: yes
       tags: system
@@ -47,8 +58,8 @@
       file:
         path: "{{ project_path }}"
         state: directory
-        owner: ubuntu
-        group: ubuntu
+        owner: root
+        group: root
         mode: '0755'
       tags: setup
 
@@ -58,8 +69,8 @@
         dest: "{{ project_path }}"
         version: "{{ git_branch }}"
         force: yes
-      become_user: ubuntu
       tags: deploy
+      register: git_result
 
     - name: Check if .env file exists in FastAPI app
       stat:
@@ -83,10 +94,16 @@
           GOOGLE_CLIENT_SECRET="{{ google_client_secret | default('') }}"
           GOOGLE_REDIRECT_URI="{{ google_redirect_uri | default('') }}"
         dest: "{{ project_path }}/apps/ai-api-fastapi/.env"
-        owner: ubuntu
-        group: ubuntu
+        owner: root
+        group: root
         mode: '0600'
       when: not fastapi_env_file.stat.exists
+      tags: config
+
+    - name: Install Python cryptography for Fernet key generation
+      pip:
+        name: cryptography
+        state: present
       tags: config
 
     - name: Generate Airflow Fernet key
@@ -109,29 +126,83 @@
         replace: "{{ ansible_date_time.epoch }}-{{ inventory_hostname }}"
       tags: config
 
-    - name: Stop existing containers
+    - name: Stop existing containers gracefully
       community.docker.docker_compose:
         project_src: "{{ project_path }}"
         state: absent
-      become_user: ubuntu
+        timeout: 60
       ignore_errors: yes
       tags: deploy
 
-    - name: Remove old images (optional)
-      shell: docker image prune -f
-      become_user: ubuntu
+    - name: Clean up unused Docker resources
+      shell: |
+        docker system prune -f
+        docker volume prune -f
       tags: deploy
 
-    - name: Build and start containers
+    - name: Pre-build Docker images to avoid timeout
+      shell: |
+        cd {{ project_path }}
+        docker-compose build --parallel
+      tags: deploy
+      register: build_result
+      failed_when: build_result.rc != 0
+
+    - name: Start database first
       community.docker.docker_compose:
         project_src: "{{ project_path }}"
-        build: yes
+        services:
+          - postgres-db
         state: present
-        recreate: smart
-      become_user: ubuntu
       tags: deploy
 
-    - name: Wait for services to be ready
+    - name: Wait for database to be ready
+      wait_for:
+        port: 5432
+        host: localhost
+        delay: 10
+        timeout: 120
+      tags: deploy
+
+    - name: Start backend services
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - fastapi-app
+          - spring-app
+        state: present
+      tags: deploy
+
+    - name: Wait for backend services
+      wait_for:
+        port: "{{ item }}"
+        host: localhost
+        delay: 20
+        timeout: 180
+      loop:
+        - 8001  # FastAPI
+        - 8080  # Spring Boot
+      tags: deploy
+
+    - name: Start frontend and proxy services
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - frontend-app
+          - nginx-proxy
+        state: present
+      tags: deploy
+
+    - name: Start Airflow services
+      community.docker.docker_compose:
+        project_src: "{{ project_path }}"
+        services:
+          - airflow-webserver
+          - airflow-scheduler
+        state: present
+      tags: deploy
+
+    - name: Wait for all services to be ready
       wait_for:
         port: "{{ item }}"
         host: localhost
@@ -139,25 +210,34 @@
         timeout: 300
       loop:
         - 80    # Nginx
-        - 8001  # FastAPI
-        - 8080  # Spring Boot
         - 8081  # Airflow
       tags: deploy
 
-    - name: Check service health
+    - name: Comprehensive health check
       uri:
         url: "http://localhost:{{ item.port }}{{ item.path }}"
         method: GET
-        status_code: [200, 404]  # 404도 허용 (서비스가 실행 중이면)
+        status_code: "{{ item.expected_codes }}"
+        timeout: 10
       loop:
-        - { port: 80, path: "/health" }
-        - { port: 8001, path: "/api/py/health" }
-        - { port: 8080, path: "/actuator/health" }
-        - { port: 8081, path: "/" }
+        - { port: 80, path: "/", expected_codes: [200, 301, 302] }
+        - { port: 8001, path: "/docs", expected_codes: [200] }
+        - { port: 8080, path: "/actuator/health", expected_codes: [200] }
+        - { port: 8081, path: "/health", expected_codes: [200] }
       register: health_check
       retries: 5
-      delay: 10
+      delay: 15
       tags: health
+
+    - name: Display service status
+      debug:
+        msg: |
+          LifeBit 배포 완료!
+          - 웹사이트: http://{{ ansible_default_ipv4.address }}
+          - API 문서: http://{{ ansible_default_ipv4.address }}/api/docs
+          - Spring API: http://{{ ansible_default_ipv4.address }}/api
+          - Airflow: http://{{ ansible_default_ipv4.address }}/airflow
+      tags: deploy
 
     - name: Setup log rotation
       copy:
@@ -169,7 +249,7 @@
               compress
               delaycompress
               notifempty
-              create 644 ubuntu ubuntu
+              create 644 root root
           }
         dest: /etc/logrotate.d/lifebit
         owner: root
@@ -206,68 +286,27 @@
 
     - name: Setup backup cron job
       cron:
-        name: "LifeBit Daily Backup"
+        name: "LifeBit daily backup"
         minute: "0"
         hour: "2"
-        job: "/usr/local/bin/backup-lifebit.sh"
-        user: root
+        job: "/usr/local/bin/backup-lifebit.sh >> /var/log/lifebit-backup.log 2>&1"
       tags: maintenance
 
-    - name: Setup monitoring script
+    - name: Create monitoring script
       copy:
         content: |
           #!/bin/bash
-          # Simple monitoring script
-          
-          # Check if containers are running
-          CONTAINERS=("lifebit_postgres" "lifebit_fastapi" "lifebit_spring" "lifebit_frontend" "lifebit_nginx")
-          
-          for container in "${CONTAINERS[@]}"; do
-              if ! docker ps | grep -q $container; then
-                  echo "ALERT: Container $container is not running!"
-                  # Add notification logic here (email, Slack, etc.)
-              fi
-          done
-          
-          # Check disk space
-          DISK_USAGE=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
-          if [ $DISK_USAGE -gt 80 ]; then
-              echo "ALERT: Disk usage is at ${DISK_USAGE}%"
-          fi
-          
-          # Check memory usage
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.2f", $3*100/$2}')
-          if (( $(echo "$MEMORY_USAGE > 90" | bc -l) )); then
-              echo "ALERT: Memory usage is at ${MEMORY_USAGE}%"
-          fi
-        dest: /usr/local/bin/monitor-lifebit.sh
+          echo "=== LifeBit 서비스 상태 ==="
+          docker-compose -f {{ project_path }}/docker-compose.yml ps
+          echo ""
+          echo "=== 시스템 리소스 ==="
+          free -h
+          df -h
+          echo ""
+          echo "=== Docker 상태 ==="
+          docker stats --no-stream
+        dest: /usr/local/bin/lifebit-status.sh
         owner: root
         group: root
         mode: '0755'
-      tags: monitoring
-
-    - name: Setup monitoring cron job
-      cron:
-        name: "LifeBit System Monitoring"
-        minute: "*/5"
-        job: "/usr/local/bin/monitor-lifebit.sh"
-        user: root
-      tags: monitoring
-
-    - name: Display deployment information
-      debug:
-        msg: |
-          ===== LifeBit 배포 완료 =====
-          프로젝트 경로: {{ project_path }}
-          웹 사이트: http://{{ ansible_default_ipv4.address }}
-          Spring API 문서: http://{{ ansible_default_ipv4.address }}/api/swagger-ui.html
-          FastAPI 문서: http://{{ ansible_default_ipv4.address }}/api/py/docs
-          Airflow: http://{{ ansible_default_ipv4.address }}/airflow
-          
-          관리 명령어:
-          - 컨테이너 상태 확인: docker ps
-          - 로그 확인: docker-compose logs -f
-          - 서비스 재시작: docker-compose restart
-          - 백업 실행: /usr/local/bin/backup-lifebit.sh
-          - 모니터링: /usr/local/bin/monitor-lifebit.sh
-      tags: info 
+      tags: maintenance 

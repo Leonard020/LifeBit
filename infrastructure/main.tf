@@ -43,11 +43,7 @@ resource "ncloud_subnet" "public" {
   usage_type     = "GEN"
 }
 
-# 인터넷 게이트웨이 생성
-resource "ncloud_internet_gateway" "main" {
-  vpc_no = ncloud_vpc.main.id
-  name   = "${var.project_name}-${var.environment}-igw"
-}
+# 인터넷 게이트웨이는 VPC 생성 시 자동으로 생성됨
 
 # ACG (Access Control Group) - 웹 서버용
 resource "ncloud_access_control_group" "web" {
@@ -61,7 +57,7 @@ resource "ncloud_access_control_group_rule" "ssh" {
   access_control_group_no = ncloud_access_control_group.web.id
   
   inbound {
-    protocol    = "tcp"
+    protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
     port_range  = "22"
     description = "SSH access"
@@ -73,7 +69,7 @@ resource "ncloud_access_control_group_rule" "http" {
   access_control_group_no = ncloud_access_control_group.web.id
   
   inbound {
-    protocol    = "tcp"
+    protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
     port_range  = "80"
     description = "HTTP access"
@@ -85,16 +81,92 @@ resource "ncloud_access_control_group_rule" "https" {
   access_control_group_no = ncloud_access_control_group.web.id
   
   inbound {
-    protocol    = "tcp"
+    protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
     port_range  = "443"
     description = "HTTPS access"
   }
 }
 
+# ACG 규칙 - Spring Boot API
+resource "ncloud_access_control_group_rule" "spring_api" {
+  access_control_group_no = ncloud_access_control_group.web.id
+  
+  inbound {
+    protocol    = "TCP"
+    ip_block    = "0.0.0.0/0"
+    port_range  = "8080"
+    description = "Spring Boot API"
+  }
+}
+
+# ACG 규칙 - FastAPI
+resource "ncloud_access_control_group_rule" "fastapi" {
+  access_control_group_no = ncloud_access_control_group.web.id
+  
+  inbound {
+    protocol    = "TCP"
+    ip_block    = "0.0.0.0/0"
+    port_range  = "8001"
+    description = "FastAPI"
+  }
+}
+
+# ACG 규칙 - Airflow
+resource "ncloud_access_control_group_rule" "airflow" {
+  access_control_group_no = ncloud_access_control_group.web.id
+  
+  inbound {
+    protocol    = "TCP"
+    ip_block    = "0.0.0.0/0"
+    port_range  = "8081"
+    description = "Airflow"
+  }
+}
+
 # 로그인 키 생성
 resource "ncloud_login_key" "key" {
   key_name = "${var.project_name}-${var.environment}-key"
+}
+
+# 초기화 스크립트 생성
+resource "ncloud_init_script" "web_init" {
+  name    = "${var.project_name}-${var.environment}-init"
+  content = base64encode(<<-EOF
+    #!/bin/bash
+    
+    # 시스템 업데이트
+    apt-get update
+    
+    # SSH 키 설정
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+    
+    # SSH 설정 개선
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/#AuthorizedKeysFile/AuthorizedKeysFile/' /etc/ssh/sshd_config
+    
+    # SSH 서비스 재시작
+    systemctl restart ssh
+    
+    # Docker 설치
+    apt-get install -y docker.io docker-compose
+    systemctl start docker
+    systemctl enable docker
+    
+    # 초기화 완료 표시
+    echo "Server initialization completed at $(date)" > /var/log/init-complete.log
+    
+    EOF
+  )
+}
+
+# 네트워크 인터페이스 생성
+resource "ncloud_network_interface" "web" {
+  name                  = "${var.project_name}-${var.environment}-web-nic"
+  subnet_no             = ncloud_subnet.public.id
+  access_control_groups = [ncloud_access_control_group.web.id]
 }
 
 # 웹 서버 인스턴스 생성
@@ -104,10 +176,12 @@ resource "ncloud_server" "web" {
   server_image_product_code = var.server_image_product_code
   server_product_code       = var.server_instance_type
   login_key_name           = ncloud_login_key.key.key_name
+  init_script_no           = ncloud_init_script.web_init.id
   
-  access_control_group_configuration_no_list = [
-    ncloud_access_control_group.web.id
-  ]
+  network_interface {
+    network_interface_no = ncloud_network_interface.web.id
+    order               = 0
+  }
 }
 
 # 퍼블릭 IP 생성

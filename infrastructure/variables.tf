@@ -104,6 +104,7 @@ variable "db_password" {
   description = "Database master password"
   type        = string
   sensitive   = true
+  default     = "lifebit_password123!"
 }
 
 # 도메인 설정
