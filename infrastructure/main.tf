@@ -22,8 +22,8 @@ provider "ncloud" {
   support_vpc = true
 }
 
-# 현재 사용자 정보 조회
-data "ncloud_user" "current" {}
+# 현재 리전 정보 조회 (ncloud_user 대신 사용)
+data "ncloud_regions" "available" {}
 
 # 데이터 소스 - 사용 가능한 존 조회
 data "ncloud_zones" "available" {
@@ -38,9 +38,7 @@ resource "ncloud_vpc" "main" {
   name            = "${var.project_name}-${var.environment}-vpc"
   ipv4_cidr_block = var.vpc_cidr
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-vpc"
-  })
+  # NCP VPC는 tags를 지원하지 않음
 }
 
 # 퍼블릭 서브넷 생성 (단일 서브넷)
@@ -53,10 +51,7 @@ resource "ncloud_subnet" "public" {
   subnet_type    = "PUBLIC"
   usage_type     = "GEN"
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-public-subnet"
-    Type = "Public"
-  })
+  # NCP Subnet은 tags를 지원하지 않음
 }
 
 # ACG (Access Control Group) - 웹 서버용
@@ -65,10 +60,7 @@ resource "ncloud_access_control_group" "web" {
   description = "ACG for LifeBit web server (Academy Project)"
   vpc_no      = ncloud_vpc.main.id
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-web-acg"
-    Purpose = "WebServer"
-  })
+  # NCP ACG는 tags를 지원하지 않음
 }
 
 # ACG 규칙 - SSH 접근
@@ -184,9 +176,7 @@ resource "ncloud_network_interface" "web" {
   subnet_no             = ncloud_subnet.public.id
   access_control_groups = [ncloud_access_control_group.web.id]
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-web-nic"
-  })
+  # NCP Network Interface는 tags를 지원하지 않음
 }
 
 # 웹 서버 인스턴스 생성 (단일 서버)
@@ -202,10 +192,7 @@ resource "ncloud_server" "web" {
     order               = 0
   }
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-web-server"
-    Role = "WebServer"
-  })
+  # NCP Server는 tags를 지원하지 않음
 }
 
 # 공인 IP 할당
@@ -213,9 +200,7 @@ resource "ncloud_public_ip" "web" {
   server_instance_no = ncloud_server.web.id
   description        = "Public IP for ${var.project_name} web server"
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-public-ip"
-  })
+  # NCP Public IP는 tags를 지원하지 않음
 }
 
 # 블록 스토리지 추가 (선택적)
@@ -227,7 +212,5 @@ resource "ncloud_block_storage" "web_data" {
   description          = "Additional storage for LifeBit data"
   server_instance_no   = ncloud_server.web.id
   
-  tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-data-storage"
-  })
+  # NCP Block Storage는 tags를 지원하지 않음
 } 
