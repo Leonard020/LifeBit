@@ -139,27 +139,38 @@ public class DietService {
         mealLog.setLogDate(LocalDate.parse(request.getLogDate()));
         mealLog.setCreatedAt(LocalDateTime.now());
 
-        // 추가: DTO의 필드를 Entity에 매핑
-        if (request.getMealTime() != null) {
-            try {
-                mealLog.setMealTime(MealTimeType.valueOf(request.getMealTime().toLowerCase()));
-            } catch (IllegalArgumentException e) {
-                // 잘못된 mealTime 값이 들어올 경우 로그를 남기고 무시 (또는 기본값 설정)
-                System.err.println("Invalid mealTime value received: " + request.getMealTime());
-            }
-        }
+        // 추가: DTO의 필드를 Entity에 안전하게 매핑
+        mealLog.setMealTime(convertMealTimeWithFallback(request.getMealTime()));
+        
         if (request.getInputSource() != null) {
-            mealLog.setInputSource(InputSourceType.valueOf(request.getInputSource()));
+            try {
+                mealLog.setInputSource(InputSourceType.valueOf(request.getInputSource().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                System.err.println("Invalid inputSource value received: " + request.getInputSource() + ", using default: TYPING");
+                mealLog.setInputSource(InputSourceType.TYPING);
+            }
+        } else {
+            mealLog.setInputSource(InputSourceType.TYPING); // 기본값
         }
+        
         if (request.getConfidenceScore() != null) {
             mealLog.setConfidenceScore(BigDecimal.valueOf(request.getConfidenceScore()));
         }
         if (request.getOriginalAudioPath() != null) {
             mealLog.setOriginalAudioPath(request.getOriginalAudioPath());
         }
+        
         if (request.getValidationStatus() != null) {
-            mealLog.setValidationStatus(ValidationStatusType.valueOf(request.getValidationStatus()));
+            try {
+                mealLog.setValidationStatus(ValidationStatusType.valueOf(request.getValidationStatus().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                System.err.println("Invalid validationStatus value received: " + request.getValidationStatus() + ", using default: VALIDATED");
+                mealLog.setValidationStatus(ValidationStatusType.VALIDATED);
+            }
+        } else {
+            mealLog.setValidationStatus(ValidationStatusType.VALIDATED); // 기본값
         }
+        
         if (request.getValidationNotes() != null) {
             mealLog.setValidationNotes(request.getValidationNotes());
         }
@@ -262,5 +273,46 @@ public class DietService {
     private double calculatePercentage(double current, double target) {
         if (target == 0) return 0;
         return Math.min((current / target) * 100, 100);
+    }
+
+    /**
+     * 식사시간 변환 with 지능적 fallback
+     * 한글 → 영어 변환 및 시간대 기반 추론
+     */
+    private MealTimeType convertMealTimeWithFallback(String mealTime) {
+        if (mealTime == null || mealTime.trim().isEmpty()) {
+            return inferMealTimeFromCurrentHour();
+        }
+        
+        // 한글 → 영어 변환 매핑
+        Map<String, String> koreanToEnglish = Map.of(
+            "아침", "breakfast",
+            "점심", "lunch",
+            "저녁", "dinner", 
+            "야식", "midnight",
+            "간식", "snack"
+        );
+        
+        String englishMealTime = koreanToEnglish.getOrDefault(mealTime, mealTime);
+        
+        try {
+            return MealTimeType.valueOf(englishMealTime.toLowerCase());
+        } catch (IllegalArgumentException e) {
+            System.err.println("Invalid mealTime value received: " + mealTime + ", using time-based inference");
+            return inferMealTimeFromCurrentHour();
+        }
+    }
+
+    /**
+     * 현재 시간을 기준으로 적절한 식사시간 추론
+     */
+    private MealTimeType inferMealTimeFromCurrentHour() {
+        int hour = java.time.LocalTime.now().getHour();
+        
+        if (hour >= 6 && hour < 11) return MealTimeType.breakfast;   // 06:00 - 10:59
+        if (hour >= 11 && hour < 15) return MealTimeType.lunch;      // 11:00 - 14:59
+        if (hour >= 15 && hour < 18) return MealTimeType.snack;      // 15:00 - 17:59
+        if (hour >= 18 && hour < 22) return MealTimeType.dinner;     // 18:00 - 21:59
+        return MealTimeType.midnight;                                // 22:00 - 05:59 (야식)
     }
 } 
