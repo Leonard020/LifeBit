@@ -216,7 +216,49 @@ update_ansible_inventory() {
 # ================================================
 # SSH 키 설정
 # ================================================
+setup_ssh_keys() {
+    log_step "SSH 키 설정"
+    
+    cd "$PROJECT_ROOT/infrastructure"
+    
+    # SSH 키 다운로드
+    local key_name="$(terraform output -raw login_key_name)"
+    local key_file="$HOME/.ssh/$key_name.pem"
+    
+    if [ ! -f "$key_file" ]; then
+        log_info "로컬에 SSH 키가 없습니다. Terraform output 에서 private_key 시도..."
+        local tf_key="$(terraform output -raw private_key 2>/dev/null || true)"
+        if [ -n "$tf_key" ]; then
+            printf "%s" "$tf_key" > "$key_file"
+            chmod 600 "$key_file"
+            log_success "SSH 개인키 저장 완료: $key_file"
 
+            # ---- 키 유효성 검사 및 줄바꿈 교정 ----
+            if ! ssh-keygen -l -f "$key_file" >/dev/null 2>&1; then
+                log_warning "키 파일이 손상되었거나 DOS 줄바꿈이 포함되어 있습니다. 교정 시도..."
+                if command -v dos2unix >/dev/null 2>&1; then
+                    dos2unix "$key_file" >/dev/null 2>&1 || true
+                    log_info "dos2unix를 사용하여 키 파일을 교정했습니다."
+                else
+                    log_info "dos2unix가 없어 sed로 대체합니다."
+                    sed -i 's/\r$//' "$key_file"
+                fi
+
+                # 최종 유효성 검사
+                if ssh-keygen -l -f "$key_file" >/dev/null 2>&1; then
+                    log_success "키 파일 교정 완료 및 유효성 확인"
+                else
+                    log_error "SSH 키가 여전히 유효하지 않습니다. 네이버클라우드 콘솔에서 새 로그인 키를 생성한 뒤 다시 배포하세요."
+                    exit 1
+                fi
+            fi
+        else
+            log_warning "Terraform에서 개인키를 제공하지 않습니다(기존 키 재사용). $key_file 경로에 이미 PEM 파일이 있어야 합니다."
+        fi
+    else
+        log_info "SSH 키가 이미 존재합니다: $key_file"
+    fi
+}
 
 # ================================================
 # 서버 연결 대기
@@ -361,7 +403,7 @@ main() {
                 exit 0
             fi
 
-            log_info "서버가 안정적으로 부팅되고 Init 스크립트를 실행할 시간을 줍니다. (2분 대기)"
+            log_info "서버가 안정적으로 부팅되고 클라우드 초기화를 진행할 시간을 줍니다. (2분 대기)"
             sleep 120
 
             setup_ssh_keys
