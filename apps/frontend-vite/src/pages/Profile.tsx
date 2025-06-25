@@ -58,9 +58,8 @@ const Profile = () => {
     gender: 'male',
   });
 
-  const [strengthGoals, setStrengthGoals] = useState<StrengthGoal[]>([
-    { id: '1', bodyPart: 'chest', weeklyCount: '2' }
-  ]);
+  const [strengthGoals, setStrengthGoals] = useState<StrengthGoal[]>([]);
+  const [selectedBodyParts, setSelectedBodyParts] = useState<string[]>([]);
 
   const [goals, setGoals] = useState({
     dailyCalories: '2000',
@@ -76,16 +75,10 @@ const Profile = () => {
     weeklyCardio: '0',
   });
 
-  // Calculate total weekly workout target
+  // Calculate total weekly workout target based on displayStrengthGoals
   const totalWeeklyWorkoutTarget = useMemo(() => {
-    return parseInt(goals.weeklyChest) + 
-           parseInt(goals.weeklyBack) + 
-           parseInt(goals.weeklyLegs) + 
-           parseInt(goals.weeklyShoulders) + 
-           parseInt(goals.weeklyArms) + 
-           parseInt(goals.weeklyAbs) + 
-           parseInt(goals.weeklyCardio);
-  }, [goals]);
+    return strengthGoals.reduce((sum, goal) => sum + parseInt(goal.weeklyCount), 0) + parseInt(goals.weeklyCardio);
+  }, [strengthGoals, goals.weeklyCardio]);
 
   // Get current user ID
   const currentUserId = getUserIdFromToken();
@@ -107,17 +100,53 @@ const Profile = () => {
 
   // Compute available body parts for adding
   const availableBodyParts = useMemo(() => {
-    const selected = strengthGoals.map(g => g.bodyPart);
+    const selected = selectedBodyParts;
     return bodyPartOptions.filter(opt => !selected.includes(opt.value));
-  }, [strengthGoals, bodyPartOptions]);
+  }, [selectedBodyParts, bodyPartOptions]);
 
-  // Track selected body parts in localStorage to persist across refresh/navigation
-  const [selectedBodyParts, setSelectedBodyParts] = useState(() => getSelectedBodyPartsFromStorage());
+  // --- 1. Table rendering: only show exercises in selectedBodyParts ---
+  const displayStrengthGoals = useMemo(() => {
+    return strengthGoals.filter(goal => selectedBodyParts.includes(goal.bodyPart));
+  }, [strengthGoals, selectedBodyParts]);
 
-  // When user adds a strength goal, add to selectedBodyParts
-  const addStrengthGoal = () => {
-    if (availableBodyParts.length === 0) return;
-    const newPart = availableBodyParts[0].value;
+  // --- 2. Delete logic: remove from selectedBodyParts and strengthGoals, set value to 0 in goals ---
+  const removeStrengthGoal = (id: string) => {
+    const goalToRemove = strengthGoals.find(goal => goal.id === id);
+    if (!goalToRemove) return;
+
+    // Remove from selectedBodyParts
+    const updatedParts = selectedBodyParts.filter(part => part !== goalToRemove.bodyPart);
+    setSelectedBodyParts(updatedParts);
+    setSelectedBodyPartsToStorage(updatedParts);
+
+    // Remove from strengthGoals (for UI)
+    setStrengthGoals(strengthGoals.filter(goal => goal.id !== id));
+
+    // Set value to 0 in goals state for DB
+    setGoals(prevGoals => {
+      const newGoals = { ...prevGoals };
+      switch (goalToRemove.bodyPart) {
+        case 'chest': newGoals.weeklyChest = '0'; break;
+        case 'back': newGoals.weeklyBack = '0'; break;
+        case 'legs': newGoals.weeklyLegs = '0'; break;
+        case 'shoulders': newGoals.weeklyShoulders = '0'; break;
+        case 'arms': newGoals.weeklyArms = '0'; break;
+        case 'abs': newGoals.weeklyAbs = '0'; break;
+        default: break;
+      }
+      return newGoals;
+    });
+  };
+
+  // --- Simplified add logic: add on select ---
+  const handleAddExerciseSelect = (selectedPart: string) => {
+    addStrengthGoal(selectedPart);
+  };
+
+  // --- 3. Add logic: only allow adding exercises not in selectedBodyParts ---
+  const addStrengthGoal = (selectedPart?: string) => {
+    const newPart = selectedPart || (availableBodyParts.length > 0 ? availableBodyParts[0].value : undefined);
+    if (!newPart) return;
     const newGoal: StrengthGoal = {
       id: Date.now().toString(),
       bodyPart: newPart,
@@ -129,17 +158,6 @@ const Profile = () => {
     setSelectedBodyPartsToStorage(updatedParts);
   };
 
-  // When user removes a strength goal, remove from selectedBodyParts
-  const removeStrengthGoal = (id: string) => {
-    const goalToRemove = strengthGoals.find(goal => goal.id === id);
-    if (!goalToRemove) return;
-    const updatedGoals = strengthGoals.filter(goal => goal.id !== id);
-    setStrengthGoals(updatedGoals);
-    const updatedParts = selectedBodyParts.filter(part => part !== goalToRemove.bodyPart);
-    setSelectedBodyParts(updatedParts);
-    setSelectedBodyPartsToStorage(updatedParts);
-  };
-
   // Restore updateStrengthGoal function
   const updateStrengthGoal = (id: string, field: keyof StrengthGoal, value: string) => {
     setStrengthGoals(strengthGoals.map(goal => 
@@ -147,15 +165,61 @@ const Profile = () => {
     ));
   };
 
-  // When loading from backend, show all exercises that are either in selectedBodyParts or have value > 0
+  // --- 4. On load: robust initialization for new users and all-zero backend ---
   useEffect(() => {
     if (userGoalsData && !goalsLoading) {
       let goalsData;
       if (Array.isArray(userGoalsData)) {
-        if (userGoalsData.length === 0) return;
+        if (userGoalsData.length === 0) {
+          setStrengthGoals([]);
+          setSelectedBodyParts([]);
+          setSelectedBodyPartsToStorage([]);
+          setGoals({
+            dailyCalories: '2000',
+            dailyCarbs: '200',
+            dailyProtein: '120',
+            dailyFat: '60',
+            weeklyChest: '0',
+            weeklyBack: '0',
+            weeklyLegs: '0',
+            weeklyShoulders: '0',
+            weeklyArms: '0',
+            weeklyAbs: '0',
+            weeklyCardio: '0',
+          });
+          return;
+        }
         goalsData = userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0]);
       } else {
         goalsData = userGoalsData.data || userGoalsData;
+      }
+      // Check if all weekly values are 0 or null (treat as new user)
+      const allZero = [
+        goalsData.weekly_chest,
+        goalsData.weekly_back,
+        goalsData.weekly_legs,
+        goalsData.weekly_shoulders,
+        goalsData.weekly_arms,
+        goalsData.weekly_abs
+      ].every(val => !val || parseInt(val) === 0);
+      if (allZero) {
+        setStrengthGoals([]);
+        setSelectedBodyParts([]);
+        setSelectedBodyPartsToStorage([]);
+        setGoals({
+          dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
+          dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
+          dailyProtein: goalsData.daily_protein_target?.toString() || '120',
+          dailyFat: goalsData.daily_fat_target?.toString() || '60',
+          weeklyChest: '0',
+          weeklyBack: '0',
+          weeklyLegs: '0',
+          weeklyShoulders: '0',
+          weeklyArms: '0',
+          weeklyAbs: '0',
+          weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
+        });
+        return;
       }
       setGoals({
         dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
@@ -170,6 +234,7 @@ const Profile = () => {
         weeklyAbs: goalsData.weekly_abs?.toString() || '0',
         weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
       });
+      // Only add exercises with value > 0
       const loadedStrengthGoals = [
         { id: 'chest', bodyPart: 'chest', weeklyCount: goalsData.weekly_chest?.toString() || '0' },
         { id: 'back', bodyPart: 'back', weeklyCount: goalsData.weekly_back?.toString() || '0' },
@@ -178,10 +243,13 @@ const Profile = () => {
         { id: 'arms', bodyPart: 'arms', weeklyCount: goalsData.weekly_arms?.toString() || '0' },
         { id: 'abs', bodyPart: 'abs', weeklyCount: goalsData.weekly_abs?.toString() || '0' },
       ];
-      // Show if in selectedBodyParts or value > 0
-      setStrengthGoals(loadedStrengthGoals.filter(goal => selectedBodyParts.includes(goal.bodyPart) || parseInt(goal.weeklyCount) > 0));
+      const exercisesWithValues = loadedStrengthGoals.filter(goal => parseInt(goal.weeklyCount) > 0);
+      setStrengthGoals(exercisesWithValues);
+      const updatedSelectedParts = exercisesWithValues.map(goal => goal.bodyPart);
+      setSelectedBodyParts(updatedSelectedParts);
+      setSelectedBodyPartsToStorage(updatedSelectedParts);
     }
-  }, [userGoalsData, goalsLoading, selectedBodyParts]);
+  }, [userGoalsData, goalsLoading]);
 
   // Keep selectedBodyParts in sync with localStorage
   useEffect(() => {
@@ -403,47 +471,37 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-medium">근력 운동 목표</Label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={addStrengthGoal}
-                      className="flex items-center gap-1"
+                    <Select
+                      value=""
+                      onValueChange={handleAddExerciseSelect}
                       disabled={availableBodyParts.length === 0}
                     >
-                      <Plus className="h-4 w-4" />
-                      추가
-                    </Button>
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="부위 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableBodyParts.map(option => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   
                   <div className="space-y-3">
-                    {strengthGoals.map((goal, idx) => {
+                    {bodyPartOptions.filter(opt => selectedBodyParts.includes(opt.value)).map((option, idx) => {
+                      const goal = strengthGoals.find(g => g.bodyPart === option.value);
                       // Filter options for this row: allow current value + unselected
-                      const selected = strengthGoals.map((g, i) => i !== idx && g.bodyPart).filter(Boolean);
-                      const options = bodyPartOptions.filter(opt => !selected.includes(opt.value) || opt.value === goal.bodyPart);
+                      const selected = bodyPartOptions
+                        .filter(o => o.value !== option.value && selectedBodyParts.includes(o.value))
+                        .map(o => o.value);
+                      const options = bodyPartOptions.filter(opt2 => !selected.includes(opt2.value) || opt2.value === option.value);
                       return (
-                        <div key={goal.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                        <div key={goal?.id || option.value} className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div className="flex-1 flex items-center pl-2 font-medium">{option.label}</div>
                           <div className="flex-1">
                             <Select 
-                              value={goal.bodyPart} 
-                              onValueChange={(value) => updateStrengthGoal(goal.id, 'bodyPart', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="부위 선택" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {options.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="flex-1">
-                            <Select 
-                              value={goal.weeklyCount} 
-                              onValueChange={(value) => updateStrengthGoal(goal.id, 'weeklyCount', value)}
+                              value={goal?.weeklyCount || '1'} 
+                              onValueChange={(value) => updateStrengthGoal(goal?.id || '', 'weeklyCount', value)}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="주간 횟수" />
@@ -460,17 +518,15 @@ const Profile = () => {
                               </SelectContent>
                             </Select>
                           </div>
-                          {strengthGoals.length > 1 && (
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => removeStrengthGoal(goal.id)}
-                              className="h-8 w-8"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => removeStrengthGoal(goal?.id || '')}
+                            className="h-8 w-8"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                       );
                     })}

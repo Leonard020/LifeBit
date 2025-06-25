@@ -4,320 +4,488 @@
 # ================================================
 # 단일 서버에 Docker Compose로 모든 서비스 배포
 
-- name: Deploy LifeBit Application to NCP (Academy Version)
-  hosts: lifebit_servers
+- name: LifeBit 완전 자동화 배포
+  hosts: all
   become: yes
   vars:
     project_name: "lifebit"
     environment: "{{ env | default('demo') }}"
-    project_path: "/opt/lifebit"
-    git_repo: "{{ git_repository_url | default('https://github.com/your-username/LifeBit.git') }}"
+    git_repo: "{{ git_repository_url | default('https://github.com/your-repo/LifeBit.git') }}"
     git_branch: "{{ git_branch | default('main') }}"
     
   tasks:
     # ================================================
-    # 시스템 기본 설정
+    # 1. 시스템 기본 설정
     # ================================================
-    - name: Update system packages
+    - name: 시스템 패키지 업데이트
       apt:
         update_cache: yes
         upgrade: dist
         cache_valid_time: 3600
-      tags: [system, setup]
+      tags: [system]
 
-    - name: Install required system packages
+    - name: 필수 패키지 설치
       apt:
         name:
           - curl
           - wget
           - git
-          - docker.io
-          - docker-compose
-          - python3-pip
-          - python3-docker
-          - htop
           - vim
+          - htop
           - unzip
-          - tree
+          - zip
           - jq
+          - tree
+          - net-tools
+          - ufw
+          - fail2ban
+          - logrotate
+          - cron
+          - software-properties-common
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+          - lsb-release
         state: present
-      tags: [system, setup]
+      tags: [system]
 
-    - name: Install Docker Compose v2
-      shell: |
-        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        chmod +x /usr/local/bin/docker-compose
-      args:
-        creates: /usr/local/bin/docker-compose
-      tags: [system, setup]
+    # ================================================
+    # 2. Docker 설치
+    # ================================================
+    - name: Docker GPG 키 추가
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      tags: [docker]
 
-    - name: Start and enable Docker service
+    - name: Docker 저장소 추가
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      tags: [docker]
+
+    - name: Docker 설치
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+      tags: [docker]
+
+    - name: Docker 서비스 시작 및 활성화
       systemd:
         name: docker
         state: started
         enabled: yes
-      tags: [system, setup]
+      tags: [docker]
 
-    - name: Add root user to docker group
+    - name: Docker Compose 설치
+      get_url:
+        url: "https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      tags: [docker]
+
+    - name: Docker 사용자 그룹 설정
       user:
-        name: root
+        name: "{{ item }}"
         groups: docker
         append: yes
-      tags: [system, setup]
+      loop:
+        - root
+        - ubuntu
+      ignore_errors: yes
+      tags: [docker]
+
+    - name: Docker SDK(Python) 및 Compose 라이브러리 설치
+      pip:
+        name:
+          - docker
+          - docker-compose
+        state: present
+      tags: [docker]
 
     # ================================================
-    # 프로젝트 설정
+    # 3. 방화벽 설정
     # ================================================
-    - name: Create project directory
+    - name: UFW 초기화
+      ufw:
+        state: reset
+      tags: [security]
+
+    - name: UFW 기본 정책 설정
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+      tags: [security]
+
+    - name: UFW 포트 허용
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto | default('tcp') }}"
+        comment: "{{ item.comment }}"
+      loop:
+        - { port: '22', comment: 'SSH' }
+        - { port: '80', comment: 'HTTP' }
+        - { port: '443', comment: 'HTTPS' }
+        - { port: '3000', comment: 'Frontend' }
+        - { port: '8080', comment: 'Spring Boot API' }
+        - { port: '8001', comment: 'FastAPI' }
+        - { port: '8081', comment: 'Airflow' }
+        - { port: '8082', comment: 'Nginx Proxy' }
+        - { port: '3001', comment: 'Grafana' }
+        - { port: '9090', comment: 'Prometheus' }
+        - { port: '9100', comment: 'Node Exporter' }
+      tags: [security]
+
+    - name: UFW 활성화
+      ufw:
+        state: enabled
+      tags: [security]
+
+    # ================================================
+    # 4. SSH 키 인증 설정 (Ubuntu 24.04 cloud-init 대응)
+    # ================================================
+    - name: SSH 키 인증 활성화 (cloud-init 무시)
+      lineinfile:
+        path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        create: yes
+        backup: yes
+      loop:
+        - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+        - { regexp: '^UsePAM', line: 'UsePAM no' }
+        - { regexp: '^PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+      notify: restart ssh
+      tags: [security, ssh]
+
+    - name: SSH 키 인증 활성화 (기본 설정)
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+      notify: restart ssh
+      tags: [security, ssh]
+
+    - name: root 사용자 .ssh 디렉토리 확인
       file:
-        path: "{{ project_path }}"
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      tags: [security, ssh]
+
+    - name: authorized_keys 파일 권한 설정
+      file:
+        path: /root/.ssh/authorized_keys
+        owner: root
+        group: root
+        mode: '0600'
+      ignore_errors: yes
+      tags: [security, ssh]
+
+    # ================================================
+    # 5. Fail2Ban 설정
+    # ================================================
+    - name: Fail2Ban 설정 파일 생성
+      copy:
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 5
+          backend = systemd
+
+          [sshd]
+          enabled = true
+          port = ssh
+          logpath = %(sshd_log)s
+          backend = %(sshd_backend)s
+
+          [nginx-http-auth]
+          enabled = true
+          port = http,https
+          logpath = /var/log/nginx/error.log
+        dest: /etc/fail2ban/jail.local
+        backup: yes
+      tags: [security]
+
+    - name: Fail2Ban 서비스 시작
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
+      tags: [security]
+
+    # ================================================
+    # 5. 프로젝트 디렉토리 설정
+    # ================================================
+    - name: 프로젝트 디렉토리 생성
+      file:
+        path: "/opt/{{ project_name }}/{{ item }}"
         state: directory
         owner: root
         group: root
         mode: '0755'
-      tags: [setup, deploy]
+      loop:
+        - ""
+        - "logs"
+        - "backups"
+        - "ssl"
+        - "data"
+      tags: [project]
 
-    - name: Clone or update repository
+    # ================================================
+    # 6. Git 저장소 클론
+    # ================================================
+    - name: 기존 프로젝트 디렉토리 정리
+      file:
+        path: "/opt/{{ project_name }}/app"
+        state: absent
+      tags: [deploy]
+
+    - name: Git 저장소 클론
       git:
         repo: "{{ git_repo }}"
-        dest: "{{ project_path }}"
+        dest: "/opt/{{ project_name }}/app"
         version: "{{ git_branch }}"
         force: yes
       tags: [deploy]
-      register: git_result
-
-    - name: Check if .env file exists
-      stat:
-        path: "{{ project_path }}/.env"
-      register: env_file
-      tags: [config]
-
-    - name: Create main .env file if not exists
-      copy:
-        content: |
-          # ================================================
-          # LifeBit 학원용 환경 변수 설정
-          # ================================================
-          
-          # 데이터베이스 설정 (PostgreSQL)
-          POSTGRES_DB=lifebit_db
-          POSTGRES_USER=lifebit_user
-          POSTGRES_PASSWORD=lifebit_password
-          POSTGRES_PORT=5432
-          
-          # Redis 설정
-          REDIS_PASSWORD=lifebit_redis_secure_pass
-          REDIS_PORT=6379
-          
-          # Spring Boot 설정
-          SPRING_PROFILES_ACTIVE={{ environment }}
-          JWT_SECRET=your-jwt-secret-key-here-32-characters-minimum
-          
-          # AI API 설정
-          OPENAI_API_KEY={{ openai_api_key | default('your-api-key-here') }}
-          USE_GPT={{ use_gpt | default('False') }}
-          
-          # 소셜 로그인 설정 (선택적)
-          KAKAO_REDIRECT_URI={{ kakao_redirect_uri | default('') }}
-          GOOGLE_CLIENT_SECRET={{ google_client_secret | default('') }}
-          GOOGLE_REDIRECT_URI={{ google_redirect_uri | default('') }}
-          
-          # Airflow 설정
-          AIRFLOW_FERNET_KEY={{ airflow_fernet_key | default('') }}
-          AIRFLOW_ADMIN_USER=admin
-          AIRFLOW_ADMIN_PASSWORD=admin123
-          
-          # Grafana 설정
-          GRAFANA_ADMIN_USER=admin
-          GRAFANA_ADMIN_PASSWORD=grafana_secure_password
-          
-          # 메모리 제한 (학원용 최적화)
-          POSTGRES_MAX_MEMORY=512
-          REDIS_MAX_MEMORY=256
-          
-          # 환경 정보
-          ENVIRONMENT={{ environment }}
-          PROJECT_NAME={{ project_name }}
-        dest: "{{ project_path }}/.env"
-        owner: root
-        group: root
-        mode: '0600'
-      when: not env_file.stat.exists
-      tags: [config]
-
-    - name: Install Python cryptography for Fernet key generation
-      pip:
-        name: cryptography
-        state: present
-      tags: [config]
-
-    - name: Generate Airflow Fernet key if not set
-      shell: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-      register: fernet_key
-      changed_when: false
-      tags: [config]
-      when: airflow_fernet_key is not defined or airflow_fernet_key == ""
-
-    - name: Update .env with generated Fernet key
-      lineinfile:
-        path: "{{ project_path }}/.env"
-        regexp: '^AIRFLOW_FERNET_KEY='
-        line: "AIRFLOW_FERNET_KEY={{ fernet_key.stdout }}"
-      when: fernet_key.stdout is defined
-      tags: [config]
 
     # ================================================
-    # 기존 서비스 정리
+    # 7. 환경 설정 파일 생성
     # ================================================
-    - name: Stop existing containers gracefully
-      community.docker.docker_compose:
-        project_src: "{{ project_path }}"
-        files:
-          - docker-compose.single-server.yml
-        state: absent
-        timeout: 60
-      ignore_errors: yes
-      tags: [deploy, cleanup]
-
-    - name: Clean up unused Docker resources
-      shell: |
-        docker system prune -f
-        docker volume prune -f
-      tags: [deploy, cleanup]
-
-    # ================================================
-    # 애플리케이션 배포
-    # ================================================
-    - name: Build Docker images
-      shell: |
-        cd {{ project_path }}
-        docker-compose -f docker-compose.single-server.yml build --parallel
-      tags: [deploy, build]
-      register: build_result
-      failed_when: build_result.rc != 0
-
-    - name: Start all services with Docker Compose
-      community.docker.docker_compose:
-        project_src: "{{ project_path }}"
-        files:
-          - docker-compose.single-server.yml
-        state: present
-        timeout: 300
-      tags: [deploy]
-      register: compose_result
-
-    - name: Wait for services to be ready
-      wait_for:
-        port: "{{ item }}"
-        host: localhost
-        delay: 30
-        timeout: 300
-      loop:
-        - 5432  # PostgreSQL
-        - 6379  # Redis
-        - 8080  # Spring Boot
-        - 8001  # FastAPI
-        - 3000  # Frontend
-        - 8082  # Nginx Proxy
-      tags: [deploy, verify]
-
-    # ================================================
-    # 배포 검증
-    # ================================================
-    - name: Check service health
-      uri:
-        url: "http://localhost:{{ item.port }}{{ item.path | default('') }}"
-        method: GET
-        status_code: [200, 404]  # 404도 허용 (서비스가 실행 중이면)
-      loop:
-        - { port: 8080, path: "/actuator/health" }
-        - { port: 8001, path: "/docs" }
-        - { port: 3000, path: "/" }
-        - { port: 8082, path: "/" }
-        - { port: 3001, path: "/" }
-        - { port: 9090, path: "/" }
-      ignore_errors: yes
-      tags: [deploy, verify]
-      register: health_checks
-
-    - name: Display service status
-      debug:
-        msg: |
-          🎉 LifeBit 학원용 배포 완료!
-          
-          📋 서비스 상태:
-          {% for check in health_checks.results %}
-          - {{ check.item.port }}: {{ 'OK' if check.status == 200 else 'STARTING' }}
-          {% endfor %}
-          
-          🌐 접속 URLs:
-          - Frontend:     http://{{ ansible_default_ipv4.address }}:3000
-          - Spring API:   http://{{ ansible_default_ipv4.address }}:8080
-          - FastAPI:      http://{{ ansible_default_ipv4.address }}:8001
-          - Nginx Proxy:  http://{{ ansible_default_ipv4.address }}:8082
-          - Grafana:      http://{{ ansible_default_ipv4.address }}:3001 (admin/grafana_secure_password)
-          - Prometheus:   http://{{ ansible_default_ipv4.address }}:9090
-          - Airflow:      http://{{ ansible_default_ipv4.address }}:8081 (admin/admin123)
-          
-          🔧 유용한 명령어:
-          - 서비스 상태: docker ps
-          - 로그 보기: docker-compose -f docker-compose.single-server.yml logs -f [service]
-          - 서비스 재시작: docker-compose -f docker-compose.single-server.yml restart [service]
-      tags: [deploy, verify]
-
-    # ================================================
-    # 시스템 최적화 (선택적)
-    # ================================================
-    - name: Configure system for Docker optimization
-      sysctl:
-        name: "{{ item.name }}"
-        value: "{{ item.value }}"
-        state: present
-        reload: yes
-      loop:
-        - { name: "vm.max_map_count", value: "262144" }
-        - { name: "fs.file-max", value: "65536" }
-      tags: [optimize]
-      ignore_errors: yes
-
-    - name: Create Docker daemon configuration for optimization
-      copy:
-        content: |
-          {
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2"
-          }
-        dest: /etc/docker/daemon.json
-        owner: root
-        group: root
+    - name: 환경 설정 파일 생성
+      template:
+        src: "{{ item.src }}"
+        dest: "/opt/{{ project_name }}/app/{{ item.dest }}"
         mode: '0644'
-      tags: [optimize]
-      notify: restart docker
+      loop:
+        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
+        - { src: 'env.j2', dest: '.env' }
+      tags: [config]
 
-    - name: Setup log rotation for application logs
+    # ================================================
+    # 8. 모니터링 도구 설치
+    # ================================================
+    - name: Node Exporter 다운로드 및 설치
+      unarchive:
+        src: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+        dest: /tmp
+        remote_src: yes
+        creates: /tmp/node_exporter-1.7.0.linux-amd64
+      tags: [monitoring]
+
+    - name: Node Exporter 바이너리 복사
+      copy:
+        src: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: '0755'
+        remote_src: yes
+      tags: [monitoring]
+
+    - name: Node Exporter 서비스 파일 생성
       copy:
         content: |
-          /opt/lifebit/logs/*.log {
-            daily
-            missingok
-            rotate 7
-            compress
-            delaycompress
-            notifempty
-            create 644 root root
+          [Unit]
+          Description=Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=nobody
+          Group=nogroup
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/node_exporter.service
+      tags: [monitoring]
+
+    - name: Node Exporter 서비스 시작
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      tags: [monitoring]
+
+    # ================================================
+    # 9. 애플리케이션 배포
+    # ================================================
+    - name: Docker Compose로 애플리케이션 시작
+      docker_compose:
+        project_src: "/opt/{{ project_name }}/app"
+        state: present
+        pull: yes
+        build: yes
+      tags: [deploy]
+
+    # ================================================
+    # 10. 헬스체크 스크립트 생성
+    # ================================================
+    - name: 헬스체크 스크립트 생성
+      copy:
+        content: |
+          #!/bin/bash
+          # LifeBit 헬스체크 스크립트
+          
+          SERVICES=("docker" "nginx" "fail2ban" "node_exporter")
+          FAILED_SERVICES=()
+
+          for service in "${SERVICES[@]}"; do
+              if ! systemctl is-active --quiet "$service"; then
+                  FAILED_SERVICES+=("$service")
+              fi
+          done
+
+          # Docker 컨테이너 상태 확인
+          CONTAINERS=$(docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v NAMES)
+          if [ -z "$CONTAINERS" ]; then
+              echo "WARNING: No running containers found"
+          fi
+
+          # 디스크 사용량 확인
+          DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
+          if [ "$DISK_USAGE" -gt 80 ]; then
+              echo "WARNING: Disk usage is ${DISK_USAGE}%"
+          fi
+
+          if [ ${#FAILED_SERVICES[@]} -eq 0 ]; then
+              echo "OK: All services are running"
+              exit 0
+          else
+              echo "CRITICAL: Failed services: ${FAILED_SERVICES[*]}"
+              exit 2
+          fi
+        dest: "/opt/{{ project_name }}/health-check.sh"
+        mode: '0755'
+      tags: [monitoring]
+
+    # ================================================
+    # 11. Cron 작업 설정
+    # ================================================
+    - name: Cron 작업 설정
+      cron:
+        name: "{{ item.name }}"
+        minute: "{{ item.minute }}"
+        hour: "{{ item.hour | default('*') }}"
+        job: "{{ item.job }}"
+      loop:
+        - name: "LifeBit 헬스체크"
+          minute: "*/5"
+          job: "/opt/{{ project_name }}/health-check.sh > /dev/null 2>&1"
+        - name: "Docker 정리"
+          minute: "0"
+          hour: "2"
+          job: "docker system prune -f > /dev/null 2>&1"
+      tags: [monitoring]
+
+    # ================================================
+    # 12. 로그 로테이션 설정
+    # ================================================
+    - name: 로그 로테이션 설정
+      copy:
+        content: |
+          /opt/{{ project_name }}/logs/*.log {
+              daily
+              missingok
+              rotate 30
+              compress
+              delaycompress
+              notifempty
+              create 644 root root
+              postrotate
+                  systemctl reload docker || true
+              endscript
           }
         dest: /etc/logrotate.d/lifebit
-        owner: root
-        group: root
+      tags: [system]
+
+    # ================================================
+    # 13. 시스템 정보 수집
+    # ================================================
+    - name: 시스템 정보 파일 생성
+      copy:
+        content: |
+          === LifeBit 서버 정보 ===
+          배포 완료 시간: {{ ansible_date_time.iso8601 }}
+          환경: {{ environment }}
+          프로젝트: {{ project_name }}
+          
+          === 시스템 정보 ===
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          CPU: {{ ansible_processor_vcpus }} cores
+          Memory: {{ ansible_memtotal_mb }} MB
+          
+          === 네트워크 정보 ===
+          Public IP: {{ ansible_default_ipv4.address }}
+          
+          === 서비스 포트 ===
+          - Frontend: 3000
+          - Spring Boot API: 8080
+          - FastAPI: 8001
+          - Airflow: 8081
+          - Nginx Proxy: 8082
+          - Grafana: 3001
+          - Prometheus: 9090
+          - Node Exporter: 9100
+        dest: "/opt/{{ project_name }}/system-info.txt"
+      tags: [info]
+
+    # ================================================
+    # 14. 배포 완료 알림
+    # ================================================
+    - name: 배포 완료 표시
+      file:
+        path: "/opt/{{ project_name }}/deployment-complete"
+        state: touch
         mode: '0644'
-      tags: [optimize]
+      tags: [deploy]
+
+    - name: 배포 완료 메시지 출력
+      debug:
+        msg: |
+          🎉 LifeBit 배포 완료!
+          
+          📱 서비스 URLs:
+          - 통합 접속 (Nginx): http://{{ ansible_default_ipv4.address }}:8082
+          - Frontend: http://{{ ansible_default_ipv4.address }}:3000
+          - Spring Boot API: http://{{ ansible_default_ipv4.address }}:8080
+          - FastAPI: http://{{ ansible_default_ipv4.address }}:8001
+          - Grafana: http://{{ ansible_default_ipv4.address }}:3001
+          - Prometheus: http://{{ ansible_default_ipv4.address }}:9090
+          
+          🔑 SSH 접속:
+          ssh -i ~/.ssh/lifebit-{{ environment }}-key.pem root@{{ ansible_default_ipv4.address }}
+      tags: [info]
 
   handlers:
     - name: restart docker
       systemd:
         name: docker
+        state: restarted
+    
+    - name: restart ssh
+      systemd:
+        name: ssh
         state: restarted 

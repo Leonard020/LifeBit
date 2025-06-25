@@ -389,12 +389,12 @@ const Note = () => {
       }
 
       const request = {
-        foodItemId: selectedFood.foodItemId,
+        food_item_id: selectedFood.foodItemId,
         quantity: parseFloat(quantity),
-        mealTime: mealTime,
+        meal_time: mealTime,
         unit: 'g',
-        logDate: selectedDate.toISOString().split('T')[0],
-        userId: userId,
+        log_date: selectedDate.toISOString().split('T')[0],
+        user_id: userId,
       };
 
       const newRecord = await createDietRecord(request);
@@ -839,12 +839,12 @@ const Note = () => {
         foodItemId?: number;
       } = {
         quantity: editFormData.quantity,
-        mealTime: editFormData.mealTime,
+        meal_time: editFormData.mealTime,
         unit: 'g',
-        logDate: selectedDate.toISOString().split('T')[0],
+        log_date: selectedDate.toISOString().split('T')[0],
       };
       if (editFormData.foodItemId) {
-        submissionData['foodItemId'] = editFormData.foodItemId;
+        submissionData['food_item_id'] = editFormData.foodItemId;
       }
       const updatedRecord = await updateDietRecord(editingDietLog.id, submissionData);
       setDailyDietLogs(prevLogs =>

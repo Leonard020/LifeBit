@@ -22,12 +22,13 @@ import { useHealthStatistics } from '@/api/auth';
 import { getToken, getUserInfo, isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Layout } from '@/components/Layout';
+import { Layout } from '../components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
 import { Message } from '@/api/chatApi';
 import { sendChatMessage } from '@/api/chatApi';
+import { createFoodItemFromGPT, type NutritionData } from '@/utils/nutritionUtils';
 import { 
   createExerciseSession, 
   createDietRecord, 
@@ -57,39 +58,7 @@ interface HealthStatistics {
   totalWorkoutDays: number;
 }
 
-// 🆕 DB 스키마에 맞는 영양 정보 타입 정의
-interface NutritionData {
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  serving_size?: number; // 기본값: 100g
-}
 
-// 🆕 음식 아이템 생성 요청 타입 (DB 스키마 기반)
-interface FoodItemCreateRequest {
-  name: string;
-  food_code?: string; // 선택적 필드
-  serving_size: number;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-}
-
-// 🆕 음식 아이템 응답 타입 (DB 스키마 기반)
-interface FoodItemResponse {
-  food_item_id: number;
-  uuid: string;
-  food_code?: string;
-  name: string;
-  serving_size: number;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  created_at: string;
-}
 
 const HealthLog: React.FC = () => {
   // 🔧 모든 Hook을 최상단에 배치 (조건부 호출 금지!)
@@ -108,9 +77,9 @@ const HealthLog: React.FC = () => {
   
   // 각 탭별 독립적인 기간 상태
   const [reactPeriod, setReactPeriod] = useState<'day' | 'week' | 'month'>('week');
-  const [pythonPeriod, setPythonPeriod] = useState<'day' | 'week' | 'month'>('week');
+    const [pythonPeriod, setPythonPeriod] = useState<'day' | 'week' | 'month'>('week');
   
-  const [recordType, setRecordType] = useState<'exercise' | 'diet'>('exercise');
+  const [recordType] = useState<'exercise' | 'diet'>('exercise'); // 고정값으로 설정 (버튼 제거됨)
   const [showChat, setShowChat] = useState(false);
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
@@ -128,130 +97,7 @@ const HealthLog: React.FC = () => {
   const createExerciseMutation = useCreateExerciseSession();
   const createDietMutation = useCreateDietRecord();
   
-  // 🆕 프론트엔드에서 직접 GPT 호출하여 영양정보 계산
-  const calculateNutritionFromGPT = async (foodName: string): Promise<NutritionData> => {
-    try {
-      console.log('🤖 [HealthLog GPT 영양정보] 계산 시작:', foodName);
-      
-      const prompt = `다음 음식의 100g 기준 영양 정보를 정확히 계산해주세요.
 
-음식명: ${foodName}
-기준량: 100g
-
-일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
-{
-  "calories": 100g당_칼로리(kcal),
-  "carbs": 100g당_탄수화물(g),
-  "protein": 100g당_단백질(g),
-  "fat": 100g당_지방(g)
-}
-
-값은 소수점 첫째자리까지 반올림하여 제공해주세요.`;
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.1,
-          max_tokens: 200
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API 오류: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const nutritionText = data.choices[0].message.content.trim();
-      const nutritionData = JSON.parse(nutritionText);
-      
-      console.log('🤖 [HealthLog GPT 영양정보] 계산 완료:', nutritionData);
-      return nutritionData;
-      
-    } catch (error) {
-      console.error('🤖 [HealthLog GPT 영양정보] 계산 실패:', error);
-      // 기본값 반환 (일반적인 건과일 기준)
-      return {
-        calories: 250.0,
-        carbs: 60.0,
-        protein: 3.0,
-        fat: 1.0
-      };
-    }
-  };
-
-  // 🆕 Spring Boot API로 새로운 음식 아이템 생성 (DB 스키마 기반)
-  const createFoodItemInDB = async (foodName: string, nutritionData: NutritionData): Promise<number | null> => {
-    try {
-      console.log('💾 [HealthLog DB 음식 생성] 시작:', foodName, nutritionData);
-      
-      const token = getToken();
-      
-      // DB 스키마에 맞는 요청 데이터 구성
-      const requestData: FoodItemCreateRequest = {
-        name: foodName,
-        serving_size: nutritionData.serving_size || 100.0, // 기본값 100g
-        calories: Number(nutritionData.calories.toFixed(2)), // DECIMAL(6,2) 형식
-        carbs: Number(nutritionData.carbs.toFixed(2)),
-        protein: Number(nutritionData.protein.toFixed(2)),
-        fat: Number(nutritionData.fat.toFixed(2))
-      };
-      
-      console.log('📝 [DB 요청 데이터]:', requestData);
-      
-      const response = await fetch('/api/diet/food-items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(requestData)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('💥 [Spring Boot API 오류 응답]:', errorText);
-        throw new Error(`Spring Boot API 오류: ${response.status} - ${errorText}`);
-      }
-
-      const data: FoodItemResponse = await response.json();
-      console.log('💾 [HealthLog DB 음식 생성] 성공:', data);
-      
-      return data.food_item_id;
-    } catch (error) {
-      console.error('💾 [HealthLog DB 음식 생성] 실패:', error);
-      return null;
-    }
-  };
-
-  // 🆕 GPT + Spring Boot 통합 음식 생성 함수
-  const createFoodItemFromGPT = async (foodName: string): Promise<number | null> => {
-    try {
-      // 1단계: GPT로 영양정보 계산
-      const nutritionData = await calculateNutritionFromGPT(foodName);
-      
-      // 2단계: Spring Boot API로 DB에 음식 생성
-      const foodItemId = await createFoodItemInDB(foodName, nutritionData);
-      
-      if (foodItemId) {
-        console.log('🎉 [HealthLog 통합 음식 생성] 성공:', { foodName, foodItemId, nutritionData });
-        return foodItemId;
-      } else {
-        console.error('❌ [HealthLog 통합 음식 생성] DB 저장 실패');
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ [HealthLog 통합 음식 생성] 전체 실패:', error);
-      return null;
-    }
-  };
 
   // 🔧 userId를 안전하게 계산하는 로직 (useMemo로 메모화)
   const userId = useMemo(() => {
@@ -538,19 +384,19 @@ const HealthLog: React.FC = () => {
                 console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
               } else {
                 try {
-                  const dietRecordData = {
-                    foodItemId: foodItemId,
+                  const dietRecord: DietRecordCreateRequest = {
+                    food_item_id: foodItemId,
                     quantity: Number(dietData.quantity || dietData.amount || 100),
-                    mealTime: dietData.mealTime || dietData.meal_time || 'snack',
-                    inputSource: 'TYPING',
-                    validationStatus: 'VALIDATED'
+                    meal_time: dietData.mealTime || dietData.meal_time || 'snack',
+                    input_source: 'TYPING',
+                    validation_status: 'VALIDATED'
                   };
                   
-                  console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecordData);
+                  console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecord);
                   console.log('🔑 [저장 버튼] 현재 사용자 ID:', userId);
                   console.log('🔍 [저장 버튼] JWT 토큰 존재:', !!getToken());
                   
-                  const result = await createDietRecord(dietRecordData);
+                  const result = await createDietRecord(dietRecord);
                   console.log('[식단 기록 저장 성공]', result);
                   
                   // 식단 기록 저장 후 건강 상태 모니터링 실행
@@ -624,27 +470,6 @@ const HealthLog: React.FC = () => {
                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
                   {isConnected ? '자동 새로고침 활성' : '비활성'}
                 </Badge>
-                {/* 운동/식단 기록 타입 선택 버튼 */}
-                <Button
-                  variant={recordType === 'exercise' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setRecordType('exercise');
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  💪 운동 기록
-                </Button>
-                <Button
-                  variant={recordType === 'diet' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setRecordType('diet');
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  🍽️ 식단 기록
-                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -897,19 +722,19 @@ const HealthLog: React.FC = () => {
                             console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
                           } else {
                             try {
-                              const dietRecordData = {
-                                foodItemId: foodItemId,
+                              const dietRecord: DietRecordCreateRequest = {
+                                food_item_id: foodItemId,
                                 quantity: Number(dietData.quantity || dietData.amount || 100),
-                                mealTime: dietData.mealTime || dietData.meal_time || 'snack',
-                                inputSource: 'TYPING',
-                                validationStatus: 'VALIDATED'
+                                meal_time: dietData.mealTime || dietData.meal_time || 'snack',
+                                input_source: 'TYPING',
+                                validation_status: 'VALIDATED'
                               };
                               
-                              console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecordData);
+                              console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecord);
                               console.log('🔑 [저장 버튼] 현재 사용자 ID:', userId);
                               console.log('🔍 [저장 버튼] JWT 토큰 존재:', !!getToken());
                               
-                              const result = await createDietRecord(dietRecordData);
+                              const result = await createDietRecord(dietRecord);
                               console.log('[식단 기록 저장 성공]', result);
                               
                               // 식단 기록 저장 후 건강 상태 모니터링 실행

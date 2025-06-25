@@ -38,9 +38,9 @@ variable "environment" {
   description = "Environment (demo, dev, prod)"
   type        = string
   default     = "demo"
-  
+
   validation {
-    condition = contains(["demo", "dev", "prod"], var.environment)
+    condition     = contains(["demo", "dev", "prod"], var.environment)
     error_message = "Environment must be one of: demo, dev, prod."
   }
 }
@@ -68,10 +68,10 @@ variable "private_subnet_cidrs" {
 variable "server_instance_type" {
   description = "Server instance type (학원용 적당한 성능)"
   type        = string
-  default     = "SVR.VSVR.HICPU.C002.M004.NET.SSD.B050.G002"  # 2vCPU, 4GB RAM
-  
+  default     = "SVR.VSVR.HICPU.C002.M004.NET.SSD.B050.G002" # 2vCPU, 4GB RAM
+
   validation {
-    condition = can(regex("^SVR\\.VSVR\\.", var.server_instance_type))
+    condition     = can(regex("^SVR\\.VSVR\\.", var.server_instance_type))
     error_message = "Server instance type must be a valid NCP server product code."
   }
 }
@@ -86,7 +86,7 @@ variable "server_image_product_code" {
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # 학원용 - 전체 허용
+  default     = ["0.0.0.0/0"] # 학원용 - 전체 허용
 }
 
 # 추가 스토리지 설정 (선택적)
@@ -100,9 +100,9 @@ variable "additional_storage_size" {
   description = "Additional storage size (GB)"
   type        = number
   default     = 50
-  
+
   validation {
-    condition = var.additional_storage_size >= 10 && var.additional_storage_size <= 2000
+    condition     = var.additional_storage_size >= 10 && var.additional_storage_size <= 2000
     error_message = "Additional storage size must be between 10 and 2000 GB."
   }
 }
@@ -112,11 +112,11 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default = {
-    Environment = "demo"
-    Project     = "LifeBit"
-    Owner       = "Student"
-    Purpose     = "Academy Project"
-    ManagedBy   = "Terraform"
+    Environment   = "demo"
+    Project       = "LifeBit"
+    Owner         = "Student"
+    Purpose       = "Academy Project"
+    ManagedBy     = "Terraform"
     CostOptimized = "true"
   }
 }
