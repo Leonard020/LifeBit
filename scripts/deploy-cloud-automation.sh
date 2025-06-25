@@ -354,7 +354,8 @@ main() {
             check_prerequisites
             deploy_infrastructure
             setup_ssh_keys
-            wait_for_server "$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw public_ip)"
+            SERVER_IP=$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw public_ip)
+            wait_for_server "$SERVER_IP"
             deploy_application
             verify_deployment
             show_deployment_info
