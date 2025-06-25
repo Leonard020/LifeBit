@@ -233,28 +233,40 @@ deploy_application() {
     # Docker Compose 업데이트
     update_docker_compose
     
-    # Ansible 플레이북 실행 (재시도 로직)
+    # Ansible 플레이북 실행 (용량 문제 해결 포함)
     log_info "Ansible 플레이북 실행 중..."
-    local max_retries=3
+    local max_retries=2
     local retry=1
     
     while (( retry <= max_retries )); do
         log_info "Ansible 배포 시도 ($retry/$max_retries)..."
         
-        if ansible-playbook -i ansible/inventory.ini ansible/playbook.yml --timeout 900 -v; then
+        # 배포 전 원격 서버 디스크 공간 정리
+        if (( retry > 1 )); then
+            log_info "재시도 전 원격 서버 정리 중..."
+            ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "
+                sudo docker system prune -a -f --volumes || true
+                sudo apt-get autoremove -y || true
+                sudo apt-get autoclean || true
+                sudo journalctl --vacuum-time=1d || true
+                sudo find /tmp -type f -atime +1 -delete 2>/dev/null || true
+                echo '=== 정리 후 디스크 상태 ==='
+                df -h /
+            " || true
+        fi
+        
+        if timeout 1200 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml --timeout 900 -v; then
             log_success "Ansible 배포 완료"
             break
         else
             if (( retry < max_retries )); then
-                log_warning "Ansible 배포 실패 - 재시도 중... ($retry/$max_retries)"
+                log_warning "Ansible 배포 실패 - 용량 부족일 가능성 높음"
+                log_info "단계별 배포로 전환을 준비 중..."
                 sleep 30
             else
-                log_error "Ansible 배포 최종 실패"
-                log_info "수동 배포를 시도하세요:"
-                log_info "1. SSH 접속: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP"
-                log_info "2. 애플리케이션 디렉토리로 이동: cd /opt/lifebit/app"
-                log_info "3. Docker Compose 실행: sudo docker-compose up -d"
-                exit 1
+                log_error "Ansible 배포 최종 실패 - 단계별 배포로 전환"
+                log_info "용량 부족 문제로 인해 단계별 Docker 배포를 시도합니다."
+                return 1  # 실패를 반환하여 manual_docker_deploy 호출
             fi
         fi
         ((retry++))
@@ -413,13 +425,18 @@ show_deployment_info() {
     
     echo
     log_info "🌐 애플리케이션 URLs:"
-    echo "Frontend:     http://$PUBLIC_IP:3000"
-    echo "Spring API:   http://$PUBLIC_IP:8080"
-    echo "FastAPI:      http://$PUBLIC_IP:8001"
-    echo "Airflow:      http://$PUBLIC_IP:8081"
-    echo "Nginx Proxy:  http://$PUBLIC_IP:8082"
-    echo "Grafana:      http://$PUBLIC_IP:3001"
-    echo "Prometheus:   http://$PUBLIC_IP:9090"
+    echo "🔥 핵심 서비스 (우선 사용):"
+    echo "  FastAPI (AI):  http://$PUBLIC_IP:8001"
+    echo "  Spring API:    http://$PUBLIC_IP:8080"
+    echo "  PostgreSQL:    $PUBLIC_IP:5432"
+    echo "  Redis:         $PUBLIC_IP:6379"
+    echo ""
+    echo "🚀 전체 서비스 (차후 확인):"
+    echo "  Frontend:      http://$PUBLIC_IP:3000"
+    echo "  Nginx Proxy:   http://$PUBLIC_IP:8082"
+    echo "  Airflow:       http://$PUBLIC_IP:8081"
+    echo "  Grafana:       http://$PUBLIC_IP:3001"
+    echo "  Prometheus:    http://$PUBLIC_IP:9090"
     
     echo
     log_info "💰 예상 비용: 월 2-3만원 (t3.small 2GB RAM)"
@@ -434,16 +451,45 @@ show_deployment_info() {
     log_info "🔍 서비스 상태 실시간 확인:"
     PUBLIC_IP=$(terraform output -raw public_ip 2>/dev/null)
     
-    # 서비스 상태 확인
-    log_info "각 서비스 응답 확인 중..."
-    for service in "Frontend:3000" "Spring-API:8080" "FastAPI:8001" "Airflow:8081" "Grafana:3001" "Prometheus:9090"; do
+    # 핵심 서비스 상태 확인
+    log_info "핵심 서비스 응답 확인 중..."
+    
+    # 우선순위가 높은 서비스부터 확인
+    log_info "1. 데이터베이스 서비스 확인..."
+    if ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "sudo docker exec lifebit-postgres pg_isready -U lifebit" > /dev/null 2>&1; then
+        echo "✅ PostgreSQL: 정상 연결"
+    else
+        echo "❌ PostgreSQL: 연결 실패"
+    fi
+    
+    if ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "sudo docker exec lifebit-redis redis-cli ping" > /dev/null 2>&1; then
+        echo "✅ Redis: 정상 연결"
+    else
+        echo "❌ Redis: 연결 실패"
+    fi
+    
+    log_info "2. API 서비스 확인..."
+    if curl -f -s --max-time 10 "http://$PUBLIC_IP:8001/health" > /dev/null 2>&1; then
+        echo "✅ FastAPI: 정상 응답"
+    else
+        echo "⏳ FastAPI: 시작 중... (30초 후 다시 확인하세요)"
+    fi
+    
+    if curl -f -s --max-time 10 "http://$PUBLIC_IP:8080/actuator/health" > /dev/null 2>&1; then
+        echo "✅ Spring API: 정상 응답"
+    else
+        echo "⏳ Spring API: 시작 중... (60초 후 다시 확인하세요)"
+    fi
+    
+    log_info "3. 추가 서비스 확인..."
+    for service in "Frontend:3000" "Nginx-Proxy:8082" "Airflow:8081" "Grafana:3001" "Prometheus:9090"; do
         name=$(echo $service | cut -d: -f1)
         port=$(echo $service | cut -d: -f2)
         
-        if curl -f -s --max-time 5 "http://$PUBLIC_IP:$port" > /dev/null 2>&1; then
+        if curl -f -s --max-time 3 "http://$PUBLIC_IP:$port" > /dev/null 2>&1; then
             echo "✅ $name: 정상 작동"
         else
-            echo "⏳ $name: 시작 중 또는 로딩 중"
+            echo "⏳ $name: 시작 중 또는 비활성화됨"
         fi
     done
     
@@ -485,9 +531,10 @@ main() {
     update_inventory
     wait_for_ssh_ready
     
-    # 애플리케이션 배포 (Ansible 실패 시 수동 배포로 대체)
+    # 애플리케이션 배포 (Ansible 실패 시 단계별 배포로 대체)
     if ! deploy_application; then
-        log_warning "Ansible 배포 실패 - 수동 Docker 배포로 전환"
+        log_warning "Ansible 배포 실패 - 용량 부족으로 인한 단계별 Docker 배포로 전환"
+        log_info "이는 20GB 디스크에서 모든 서비스를 동시 빌드할 때 발생할 수 있습니다."
         manual_docker_deploy
     fi
     
