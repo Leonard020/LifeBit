@@ -142,7 +142,58 @@
       tags: [security]
 
     # ================================================
-    # 4. Fail2Ban 설정
+    # 4. SSH 키 인증 설정 (Ubuntu 24.04 cloud-init 대응)
+    # ================================================
+    - name: SSH 키 인증 활성화 (cloud-init 무시)
+      lineinfile:
+        path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        create: yes
+        backup: yes
+      loop:
+        - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+        - { regexp: '^UsePAM', line: 'UsePAM no' }
+        - { regexp: '^PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+      notify: restart ssh
+      tags: [security, ssh]
+
+    - name: SSH 키 인증 활성화 (기본 설정)
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+      notify: restart ssh
+      tags: [security, ssh]
+
+    - name: root 사용자 .ssh 디렉토리 확인
+      file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      tags: [security, ssh]
+
+    - name: authorized_keys 파일 권한 설정
+      file:
+        path: /root/.ssh/authorized_keys
+        owner: root
+        group: root
+        mode: '0600'
+      ignore_errors: yes
+      tags: [security, ssh]
+
+    # ================================================
+    # 5. Fail2Ban 설정
     # ================================================
     - name: Fail2Ban 설정 파일 생성
       copy:
@@ -424,4 +475,9 @@
     - name: restart docker
       systemd:
         name: docker
+        state: restarted
+    
+    - name: restart ssh
+      systemd:
+        name: ssh
         state: restarted 
