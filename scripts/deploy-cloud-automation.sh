@@ -365,6 +365,13 @@ main() {
         "full")
             check_prerequisites
             deploy_infrastructure
+
+            # DRY_RUN 모드에서는 인프라만 계획 후 종료
+            if [ "$DRY_RUN" = "true" ]; then
+                log_info "DRY_RUN 모드: 인프라 계획 확인 후 종료합니다."
+                exit 0
+            fi
+
             setup_ssh_keys
             SERVER_IP=$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw public_ip)
             wait_for_server "$SERVER_IP"
