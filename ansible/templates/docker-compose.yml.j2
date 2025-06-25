@@ -5,7 +5,7 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.25.0.0/16
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres_data:
@@ -38,7 +38,7 @@ services:
       - "5432:5432"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.10
+        ipv4_address: 172.20.0.10
     deploy:
       resources:
         limits:
@@ -65,7 +65,7 @@ services:
       - "6379:6379"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.11
+        ipv4_address: 172.20.0.11
     deploy:
       resources:
         limits:
@@ -88,7 +88,7 @@ services:
     container_name: lifebit-spring-api
     restart: unless-stopped
     environment:
-      - SPRING_PROFILES_ACTIVE={{ environment }}
+      - SPRING_PROFILES_ACTIVE=docker
       - DB_HOST=postgres-db
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB}
@@ -102,7 +102,7 @@ services:
       - "8080:8080"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.20
+        ipv4_address: 172.20.0.20
     deploy:
       resources:
         limits:
@@ -144,7 +144,7 @@ services:
       - "8001:8001"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.21
+        ipv4_address: 172.20.0.21
     deploy:
       resources:
         limits:
@@ -167,8 +167,8 @@ services:
   # ================================================
   frontend-app:
     build:
-      context: ./apps/frontend-vite
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/frontend-vite/Dockerfile
     container_name: lifebit-frontend
     restart: unless-stopped
     environment:
@@ -178,7 +178,7 @@ services:
       - "3000:80"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.30
+        ipv4_address: 172.20.0.30
     depends_on:
       - spring-app
       - fastapi-app
@@ -210,7 +210,7 @@ services:
       - "8081:8080"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.40
+        ipv4_address: 172.20.0.40
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -219,14 +219,16 @@ services:
   # 웹 프록시 (Nginx) - 간단한 설정
   # ================================================
   nginx-proxy:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: nginx-dockerfile
     container_name: lifebit-nginx
     restart: unless-stopped
     ports:
       - "8082:80"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.50
+        ipv4_address: 172.20.0.50
     depends_on:
       - frontend-app
       - spring-app
@@ -253,7 +255,7 @@ services:
       - "9090:9090"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.60
+        ipv4_address: 172.20.0.60
 
   # ================================================
   # 대시보드 (Grafana) - 경량화
@@ -273,7 +275,7 @@ services:
       - "3001:3000"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.61
+        ipv4_address: 172.20.0.61
     depends_on:
       - prometheus
 
@@ -295,4 +297,4 @@ services:
       - "9100:9100"
     networks:
       lifebit-network:
-        ipv4_address: 172.25.0.70 
+        ipv4_address: 172.20.0.70 

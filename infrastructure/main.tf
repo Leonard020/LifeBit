@@ -117,7 +117,7 @@ resource "aws_security_group" "web" {
   }
 }
 
-# EC2 인스턴스 (t3.micro, Ubuntu 22.04)
+# EC2 인스턴스 (t3.small, Ubuntu 22.04)
 resource "aws_instance" "web" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
@@ -125,6 +125,19 @@ resource "aws_instance" "web" {
   vpc_security_group_ids = [aws_security_group.web.id]
   key_name               = aws_key_pair.lifebit.key_name
   associate_public_ip_address = true
+  
+  # EBS 루트 볼륨 크기 증가 (8GB -> 20GB)
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 20
+    encrypted   = true
+    tags = {
+      Name        = "${var.project_name}-${var.environment}-root-volume"
+      Project     = var.project_name
+      Environment = var.environment
+    }
+  }
+  
   tags = {
     Name        = "${var.project_name}-${var.environment}-web-server"
     Project     = var.project_name
@@ -132,13 +145,29 @@ resource "aws_instance" "web" {
   }
   user_data = <<-EOF
 #!/bin/bash
-# SSH 공개키 직접 주입 (ubuntu 계정)
+# 로그 파일 설정
+exec > >(tee /var/log/user-data.log) 2>&1
+echo "User Data 스크립트 시작: $(date)"
+
+# 시스템 업데이트
+apt-get update -y
+
+# SSH 키 디렉토리 생성 및 권한 설정
 mkdir -p /home/ubuntu/.ssh
+chown ubuntu:ubuntu /home/ubuntu/.ssh
 chmod 700 /home/ubuntu/.ssh
-echo "${tls_private_key.lifebit.public_key_openssh}" >> /home/ubuntu/.ssh/authorized_keys
-chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+
+# SSH 공개키 추가 (기존 키 덮어쓰기 방지)
+echo "${tls_private_key.lifebit.public_key_openssh}" > /home/ubuntu/.ssh/authorized_keys
+chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
-echo "SSH key injection completed" > /var/log/ssh-key-injection.log
+
+# SSH 서비스 재시작
+systemctl restart ssh
+
+# 완료 로그
+echo "SSH 키 설정 완료: $(date)" >> /var/log/ssh-key-setup.log
+echo "User Data 스크립트 완료: $(date)"
 EOF
 }
 
