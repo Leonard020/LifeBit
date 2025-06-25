@@ -34,7 +34,7 @@ import com.lifebit.coreapi.service.HealthStatisticsService;
 import com.lifebit.coreapi.service.AchievementService;
 import com.lifebit.coreapi.service.ExerciseService;
 import com.lifebit.coreapi.service.MealService;
-import com.lifebit.coreapi.service.ranking.RankingNotificationService;
+import com.lifebit.coreapi.service.NotificationService;
 
 @Service
 @RequiredArgsConstructor
@@ -49,7 +49,7 @@ public class RankingService {
     private final AchievementService achievementService;
     private final ExerciseService exerciseService;
     private final MealService mealService;
-    private final RankingNotificationService rankingNotificationService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public RankingResponseDto getRankingData() {
@@ -348,7 +348,7 @@ public class RankingService {
             // 2. 등급 변화 감지 시 알림 전송
             if (prevTier != newTier) {
                 try {
-                    rankingNotificationService.sendTierChangeNotification(ranking.getUserId(), prevTier, newTier);
+                    notificationService.saveNotification(ranking.getUserId(), "TIER_CHANGE", "등급 변화 알림", String.format("등급이 %s에서 %s로 변경되었습니다.", prevTier.name(), newTier.name()));
                 } catch (Exception e) {
                     log.warn("등급 변화 알림 전송 실패: userId={}, {} -> {}", ranking.getUserId(), prevTier, newTier);
                 }
@@ -425,7 +425,7 @@ public class RankingService {
         }
         // 시즌 종료 알림 전송 (한 번만 호출, 내부에서 상위 랭커 전체 알림)
         try {
-            rankingNotificationService.sendSeasonEndNotification(String.valueOf(currentSeason));
+            notificationService.saveNotification(null, "SEASON_END", "시즌 종료 알림", String.format("%d 시즌이 종료되었습니다.", currentSeason));
         } catch (Exception e) {
             log.warn("시즌 종료 알림 전송 실패: season={}", currentSeason);
         }

@@ -11,14 +11,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.Objects;
-import com.lifebit.coreapi.service.notification.HealthNotificationService;
+import com.lifebit.coreapi.service.NotificationService;
 
 @Service
 @RequiredArgsConstructor
 public class UserGoalService {
     private final UserGoalRepository userGoalRepository;
     private final UserRepository userRepository;
-    private final HealthNotificationService healthNotificationService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public UserGoal getUserGoal(Long userId) {
@@ -88,13 +88,13 @@ public class UserGoalService {
         UserGoal savedGoal = userGoalRepository.save(existingGoal);
 
         // 목표 수정 알림
-        healthNotificationService.sendGoalAchievementNotification(userId, "목표 수정", "목표가 수정되었습니다.");
+        notificationService.saveNotification(userId, "GOAL_UPDATE", "목표 수정", "목표가 수정되었습니다.");
 
         // 목표 달성 임박 체크 (예: 주간 운동 목표 90% 이상)
         if (savedGoal.getWeeklyWorkoutTarget() != null) {
             int progress = getCurrentWeeklyWorkoutProgress(userId); // 실제 구현 필요
             if (progress >= (int)(savedGoal.getWeeklyWorkoutTarget() * 0.9)) {
-                healthNotificationService.sendGoalAchievementNotification(userId, "목표 임박", "주간 운동 목표 달성이 임박했습니다! (" + progress + "/" + savedGoal.getWeeklyWorkoutTarget() + ")");
+                notificationService.saveNotification(userId, "GOAL_IMMINENT", "목표 임박", "주간 운동 목표 달성이 임박했습니다! (" + progress + "/" + savedGoal.getWeeklyWorkoutTarget() + ")");
             }
         }
         return savedGoal;
@@ -127,12 +127,10 @@ public class UserGoalService {
      */
     @Transactional(readOnly = true)
     public UserGoal getUserGoalOrDefault(Long userId) {
-        UserGoal existingGoal = userGoalRepository.findByUserId(userId).orElse(null);
-        
+        UserGoal existingGoal = getLatestUserGoal(userId);
         if (existingGoal != null) {
             return existingGoal;
         }
-        
         // DB에 저장하지 않고 메모리상의 기본값만 반환
         UserGoal defaultGoal = new UserGoal();
         defaultGoal.setUserId(userId);
@@ -173,7 +171,7 @@ public class UserGoalService {
         
         UserGoal savedGoal = userGoalRepository.save(userGoal);
         // 목표 설정 알림
-        healthNotificationService.sendGoalAchievementNotification(userGoal.getUserId(), "목표 설정", "목표가 성공적으로 설정되었습니다.");
+        notificationService.saveNotification(userGoal.getUserId(), "GOAL_SET", "목표 설정", "목표가 성공적으로 설정되었습니다.");
         return savedGoal;
     }
 

@@ -201,13 +201,14 @@ public class DietService {
             newFoodItem.setCarbs(BigDecimal.valueOf(request.getCarbs()));
             newFoodItem.setProtein(BigDecimal.valueOf(request.getProtein()));
             newFoodItem.setFat(BigDecimal.valueOf(request.getFat()));
-            
+
             foodToLink = foodItemRepository.save(newFoodItem);
         }
         
         // MealLog가 최종 FoodItem을 가리키도록 설정하고 섭취량 업데이트
         mealLog.setFoodItem(foodToLink);
         mealLog.setQuantity(BigDecimal.valueOf(request.getQuantity()));
+        mealLog.setMealTime(convertMealTimeWithFallback(request.getMealTime()));
         
         MealLog updatedMealLog = mealLogRepository.save(mealLog);
         return convertToDietLogDTO(updatedMealLog);
@@ -313,5 +314,20 @@ public class DietService {
         if (hour >= 15 && hour < 18) return MealTimeType.snack;      // 15:00 - 17:59
         if (hour >= 18 && hour < 22) return MealTimeType.dinner;     // 18:00 - 21:59
         return MealTimeType.midnight;                                // 22:00 - 05:59 (야식)
+    }
+
+    @Transactional
+    public Long createCustomFoodItem(String name, Double calories, Double carbs, Double protein, Double fat) {
+        FoodItem foodItem = new FoodItem();
+        foodItem.setUuid(UUID.randomUUID());
+        foodItem.setName(name);
+        foodItem.setServingSize(BigDecimal.valueOf(100));
+        foodItem.setCalories(BigDecimal.valueOf(calories));
+        foodItem.setCarbs(BigDecimal.valueOf(carbs));
+        foodItem.setProtein(BigDecimal.valueOf(protein));
+        foodItem.setFat(BigDecimal.valueOf(fat));
+        foodItem.setCreatedAt(LocalDateTime.now());
+        FoodItem saved = foodItemRepository.save(foodItem);
+        return saved.getFoodItemId();
     }
 } 

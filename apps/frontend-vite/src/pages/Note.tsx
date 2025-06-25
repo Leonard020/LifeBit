@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
@@ -389,18 +389,30 @@ const Note = () => {
         return;
       }
 
-      const request = {
-        food_item_id: selectedFood.foodItemId,
+      const request: any = {
         quantity: parseFloat(quantity),
         meal_time: mealTime,
         unit: 'g',
         log_date: selectedDate.toISOString().split('T')[0],
-        user_id: userId,
+        input_source: 'TYPING', // 항상 직접입력으로 고정
       };
+
+      if (selectedFood.foodItemId) {
+        // DB에 있는 음식
+        request.food_item_id = selectedFood.foodItemId;
+      } else {
+        // 직접 입력 음식
+        request.food_name = selectedFood.name;
+        request.calories = selectedFood.calories;
+        request.carbs = selectedFood.carbs;
+        request.protein = selectedFood.protein;
+        request.fat = selectedFood.fat;
+      }
 
       const newRecord = await createDietRecord(request);
 
       setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
+      await fetchDietData();
       await fetchCalendarRecords();
 
       setIsAddDietDialogOpen(false);
@@ -409,6 +421,7 @@ const Note = () => {
       setSelectedFood(null);
       setQuantity('100');
       setMealTime('breakfast');
+      setInputSource('TYPING');
 
       toast({
         title: "식단 기록 추가 완료",
@@ -536,73 +549,26 @@ const Note = () => {
 
   // ✅ 오늘 운동 기록 불러오기
   const fetchExercise = async () => {
-    if (!authToken) {
-      console.warn('인증 토큰이 없습니다.');
+    const userId = getUserIdFromToken();
+    if (!userId) {
       setTodayExercise([]);
       return;
     }
-
-    if (!isTokenValid()) {
-      console.error('토큰이 유효하지 않습니다. 로그인 페이지로 이동합니다.');
-      removeToken();
-      navigate('/login');
-      return;
-    }
-
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-    console.log('[운동기록 조회 호출]', formattedDate);
-
     try {
-      // exercise_sessions 테이블의 모든 필드를 포함하여 요청
-      const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error(`API 요청 실패: ${res.status}`);
-      }
-
-      const data = await res.json();
-      console.log('[운동기록 원본 데이터]', JSON.stringify(data, null, 2));
-
+      const data = await getDailyExerciseRecords(formattedDate, userId);
       // 날짜 필터 적용 (exerciseDate 기준)
-      const filtered = data.filter((e: ExerciseRecordDTO) => {
-        const matches = e.exerciseDate && e.exerciseDate.startsWith(formattedDate);
-        // 각 레코드의 세부 정보 로깅
-        console.log('[운동 기록 상세]', {
-          id: e.exerciseSessionId,
-          name: e.exerciseName,
-          bodyPart: e.bodyPart,
-          sets: e.sets,
-          reps: e.reps,
-          weight: e.weight,
-          duration: e.durationMinutes,
-          calories: e.calories_burned
-        });
-        return matches;
-      });
-
-      console.log('[필터링된 운동기록]', filtered);
-
+      const filtered = data.filter((e: ExerciseRecordDTO) => e.exerciseDate && e.exerciseDate.startsWith(formattedDate));
       // 데이터 정제: undefined나 null이 아닌 값만 포함
       const cleanedData = filtered.map(record => ({
         ...record,
-        sets: record.sets ?? record.set ?? record.set_count ?? undefined,
-        reps: record.reps ?? record.rep ?? record.rep_count ?? undefined,
-        weight: record.weight ?? record.weight_kg ?? undefined,
+        sets: record.sets,
+        reps: record.reps,
+        weight: record.weight,
         durationMinutes: record.durationMinutes || undefined,
         calories_burned: record.calories_burned || undefined
       }));
-
       setTodayExercise(cleanedData.sort((a, b) => b.exerciseSessionId - a.exerciseSessionId));
-
-      if (!filtered || filtered.length === 0) {
-        console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
-      }
     } catch (err) {
       console.error("운동 기록 불러오기 실패:", err);
       setTodayExercise([]);
@@ -829,16 +795,24 @@ const Note = () => {
     if (!editingDietLog) return;
     setIsUpdatingDiet(true);
     try {
-      const submissionData: any = {
+      const request: any = {
+        userId: getUserIdFromToken(), // PUT에는 반드시 포함
         quantity: editFormData.quantity,
-        meal_time: editFormData.mealTime,
+        mealTime: editFormData.mealTime,
         unit: 'g',
-        log_date: selectedDate.toISOString().split('T')[0],
+        logDate: selectedDate.toISOString().split('T')[0],
+        inputSource: 'TYPING',
       };
       if (editFormData.foodItemId) {
-        submissionData['food_item_id'] = editFormData.foodItemId;
+        request.foodItemId = editFormData.foodItemId;
+      } else {
+        request.foodName = editFormData.foodName;
+        request.calories = editFormData.calories;
+        request.carbs = editFormData.carbs;
+        request.protein = editFormData.protein;
+        request.fat = editFormData.fat;
       }
-      const updatedRecord = await updateDietRecord(editingDietLog.id, submissionData);
+      const updatedRecord = await updateDietRecord(editingDietLog.id, request);
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
@@ -866,34 +840,16 @@ const Note = () => {
 
   const addExerciseRecord = async () => {
     try {
-      const token = getToken();
-      console.log('운동 추가 토큰:', token); // 토큰 값 확인
-      const userInfo = getUserInfo();
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-
-      const request = {
+      const request: any = {
         exerciseName: exerciseName.trim(),
         sets: sets || 1,
         reps: reps || 10,
         weight: weight || 0.0,
-        time: time || null,
         exerciseDate: formattedDate
       };
-      console.log('💪 운동 추가 요청:', request);
-
-      const res = await fetch('/api/note/exercise', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(request)
-      });
-
-      if (!res.ok) throw new Error("운동 기록 추가 실패");
-
-      await fetchExercise(); // 운동 추가 후 오늘의 운동 기록을 강제로 다시 불러옴
-
+      await createExerciseSession(request);
+      await fetchExercise();
       setIsAddExerciseDialogOpen(false);
       setExerciseName('');
       setSets(1);
@@ -967,17 +923,8 @@ const Note = () => {
   }
 
   const deleteExerciseRecord = async (sessionId: number) => {
-    if (!authToken) {
-      console.warn('인증 토큰이 없습니다.');
-      return;
-    }
-
     try {
-      await axios.delete(`/api/note/exercise/${sessionId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      // 삭제 후 목록 새로고침
+      await deleteExerciseSession(sessionId);
       await fetchExercise();
     } catch (err) {
       console.error("운동 기록 삭제 실패:", err);
@@ -985,17 +932,13 @@ const Note = () => {
   };
 
   const saveExerciseEdit = async () => {
-    if (!editingExercise || !authToken) return;
-
+    if (!editingExercise) return;
     try {
-      await axios.put(`/api/note/exercise/${editingExercise.exerciseSessionId}`, {
+      await updateExerciseSession(editingExercise.exerciseSessionId, {
         sets: exerciseEditForm.sets,
         reps: exerciseEditForm.reps,
         weight: exerciseEditForm.weight,
-      }, {
-        headers: { Authorization: `Bearer ${authToken}` },
       });
-
       setIsEditExerciseDialogOpen(false);
       setEditingExercise(null);
       await fetchExercise();
@@ -1036,6 +979,9 @@ const Note = () => {
       (error as { response: { status?: unknown } }).response?.status !== undefined
     );
   }
+
+  // Note.tsx 상단 state 부분에 추가
+  const [inputSource, setInputSource] = useState('TYPING'); // 입력 방식(직접입력/음성입력)
 
   return (
     <Layout>
@@ -1443,7 +1389,7 @@ const Note = () => {
                           </div>
                         </div>
 
-                        {searchResults.length > 0 && (
+                        {searchResults.length > 0 ? (
                           <div>
                             <Label>검색 결과</Label>
                             <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
@@ -1462,38 +1408,92 @@ const Note = () => {
                               ))}
                             </div>
                           </div>
+                        ) : (
+                          searchKeyword.trim() && (
+                            <div className="text-center text-muted-foreground mt-4">
+                              <div>검색 결과가 없습니다.</div>
+                              <Button
+                                className="mt-2"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedFood({
+                                    foodItemId: undefined,
+                                    name: searchKeyword,
+                                    calories: 0,
+                                    carbs: 0,
+                                    protein: 0,
+                                    fat: 0,
+                                    servingSize: 100
+                                  });
+                                }}
+                              >
+                                직접 입력하기
+                              </Button>
+                            </div>
+                          )
                         )}
 
-                        {selectedFood && (
-                          <div>
-                            <Label htmlFor="quantity">섭취량 (g)</Label>
+                        {selectedFood && selectedFood.foodItemId === undefined && (
+                          <div className="mt-4 space-y-2">
+                            <Label>음식명</Label>
                             <Input
-                              id="quantity"
+                              value={selectedFood.name}
+                              onChange={e => setSelectedFood({ ...selectedFood, name: e.target.value })}
+                              placeholder="음식명을 입력하세요"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label>칼로리 (100g당)</Label>
+                                <Input
+                                  type="number"
+                                  value={selectedFood.calories}
+                                  onChange={e => setSelectedFood({ ...selectedFood, calories: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div>
+                                <Label>탄수화물 (100g당)</Label>
+                                <Input
+                                  type="number"
+                                  value={selectedFood.carbs}
+                                  onChange={e => setSelectedFood({ ...selectedFood, carbs: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div>
+                                <Label>단백질 (100g당)</Label>
+                                <Input
+                                  type="number"
+                                  value={selectedFood.protein}
+                                  onChange={e => setSelectedFood({ ...selectedFood, protein: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div>
+                                <Label>지방 (100g당)</Label>
+                                <Input
+                                  type="number"
+                                  value={selectedFood.fat}
+                                  onChange={e => setSelectedFood({ ...selectedFood, fat: Number(e.target.value) })}
+                                />
+                              </div>
+                            </div>
+                            <Label>섭취량 (g)</Label>
+                            <Input
                               type="number"
                               value={quantity}
-                              onChange={(e) => setQuantity(e.target.value)}
+                              onChange={e => setQuantity(e.target.value)}
                               min="1"
-                              className="mt-1"
                             />
-                            <div className="text-sm text-muted-foreground mt-1">
-                              예상 칼로리: {Math.round((selectedFood.calories * parseFloat(quantity)) / 100)}kcal
-                            </div>
-                            <div className="mt-3">
-                              <Label htmlFor="mealTime">식사 시간</Label>
-                              <select
-                                id="mealTime"
-                                name="mealTime"
-                                value={mealTime}
-                                onChange={e => setMealTime(e.target.value)}
-                                className="mt-1 block w-full border rounded px-2 py-1"
-                              >
-                                <option value="breakfast">아침</option>
-                                <option value="lunch">점심</option>
-                                <option value="dinner">저녁</option>
-                                <option value="snack">간식</option>
-                                <option value="midnight">야식</option>
-                              </select>
-                            </div>
+                            <Label>식사 시간</Label>
+                            <select
+                              value={mealTime}
+                              onChange={e => setMealTime(e.target.value)}
+                              className="block w-full border rounded px-2 py-1"
+                            >
+                              <option value="breakfast">아침</option>
+                              <option value="lunch">점심</option>
+                              <option value="dinner">저녁</option>
+                              <option value="snack">간식</option>
+                              <option value="midnight">야식</option>
+                            </select>
                           </div>
                         )}
 
@@ -1724,6 +1724,22 @@ const Note = () => {
                     - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(1)} g<br />
                     - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(1)} g<br />
                     - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(1)} g
+                  </div>
+                  <div>
+                    <Label htmlFor="editMealTime">식사 시간</Label>
+                    <select
+                      id="editMealTime"
+                      name="mealTime"
+                      value={editFormData.mealTime}
+                      onChange={handleEditFormChange}
+                      className="block w-full border rounded px-2 py-1 mt-1"
+                    >
+                      <option value="breakfast">아침</option>
+                      <option value="lunch">점심</option>
+                      <option value="dinner">저녁</option>
+                      <option value="snack">간식</option>
+                      <option value="midnight">야식</option>
+                    </select>
                   </div>
                 </div>
 
