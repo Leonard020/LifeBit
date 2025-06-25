@@ -247,4 +247,27 @@ export const createFoodItemFromGPT = async (foodName: string, retryCount = 0): P
     console.log('❌ [통합 음식 생성] 최대 재시도 횟수 초과');
     return null;
   }
-}; 
+};
+
+/**
+ * Converts a user-entered amount string (e.g., '1개', '2공기', '100g') to grams.
+ * Uses food-specific logic for common foods.
+ */
+export function parseAmountToGrams(amount: string, foodName?: string): number {
+  if (!amount) return 100;
+  const num = parseFloat(amount.replace(/[^0-9.]/g, '')) || 1;
+  const lower = amount.toLowerCase();
+  if (lower.includes('g')) return num;
+  if (lower.includes('공기')) return num * 210;
+  if (lower.includes('장')) return num * 3;
+  if (lower.includes('컵')) return num * 240;
+  if (lower.includes('개')) {
+    if (foodName?.includes('계란')) return num * 60;
+    if (foodName?.includes('핫도그')) return num * 80;
+    if (foodName?.includes('사과')) return num * 200;
+    // Add more food-specific rules as needed
+    return num * 100; // fallback for unknown '개'
+  }
+  // fallback: treat as 100g per unit
+  return num * 100;
+} 
