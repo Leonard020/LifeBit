@@ -60,6 +60,12 @@ output "login_key_name" {
   value       = ncloud_login_key.main.key_name
 }
 
+output "private_key" {
+  description = "Private key for SSH access"
+  value       = ncloud_login_key.main.private_key
+  sensitive   = true
+}
+
 output "access_control_group_id" {
   description = "Access Control Group ID"
   value       = ncloud_access_control_group.web.id

@@ -101,15 +101,29 @@ usermod -aG docker ubuntu || true
 log_info "SSH 보안 설정 중..."
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 
-# SSH 설정 개선
-sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+# SSH 키 디렉토리 확인 및 생성
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+# 기존 authorized_keys 백업 (있는 경우)
+if [ -f /root/.ssh/authorized_keys ]; then
+    cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.backup
+    log_info "기존 SSH 키 백업 완료"
+fi
+
+# SSH 설정 개선 (점진적으로 적용)
 sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 sed -i 's/#AuthorizedKeysFile/AuthorizedKeysFile/' /etc/ssh/sshd_config
-sed -i 's/#PermitRootLogin yes/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 sed -i 's/#Port 22/Port 22/' /etc/ssh/sshd_config
+
+# PasswordAuthentication은 나중에 비활성화 (SSH 키 확인 후)
+# sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+# sed -i 's/#PermitRootLogin yes/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 
 # SSH 서비스 재시작
 systemctl restart ssh
+
+log_info "SSH 설정 완료 - SSH 키 로그인 활성화됨"
 
 # 방화벽 설정 (UFW)
 log_info "방화벽 설정 중..."

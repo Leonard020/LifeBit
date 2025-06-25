@@ -170,7 +170,7 @@ deploy_infrastructure() {
     terraform apply "tfplan-$TIMESTAMP"
     
     # 서버 IP 추출
-    SERVER_IP=$(terraform output -raw web_server_public_ip)
+    SERVER_IP=$(terraform output -raw public_ip)
     log_success "인프라 배포 완료! 서버 IP: $SERVER_IP"
     
     # Ansible 인벤토리 업데이트
@@ -271,7 +271,7 @@ verify_deployment() {
     log_step "배포 검증"
     
     cd "$PROJECT_ROOT/infrastructure"
-    local server_ip=$(terraform output -raw web_server_public_ip)
+    local server_ip=$(terraform output -raw public_ip)
     
     local services=(
         "http://$server_ip:8082:Nginx Proxy"
@@ -311,7 +311,7 @@ verify_deployment() {
 # ================================================
 show_deployment_info() {
     cd "$PROJECT_ROOT/infrastructure"
-    local server_ip=$(terraform output -raw web_server_public_ip)
+    local server_ip=$(terraform output -raw public_ip)
     
     cat << EOF
 
@@ -354,7 +354,7 @@ main() {
             check_prerequisites
             deploy_infrastructure
             setup_ssh_keys
-            wait_for_server "$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw web_server_public_ip)"
+            wait_for_server "$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw public_ip)"
             deploy_application
             verify_deployment
             show_deployment_info
