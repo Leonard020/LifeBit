@@ -19,6 +19,10 @@ LOG_FILE="$PROJECT_ROOT/logs/deploy-cloud-$TIMESTAMP.log"
 DEPLOY_MODE="${1:-full}"  # full, infra-only, app-only
 ENVIRONMENT="${2:-demo}"  # demo, dev, prod
 DRY_RUN="${3:-false}"     # true, false
+AUTO_APPROVE="${4:-false}"    # true, false
+
+# 고유 이름 접미사
+NAME_SUFFIX="${5:-$(date +%m%d%H%M)}"
 
 # NCP 설정 (환경변수에서 로드)
 NCP_ACCESS_KEY="${NCP_ACCESS_KEY}"
@@ -83,6 +87,7 @@ EOF
     echo "배포 모드: $DEPLOY_MODE"
     echo "환경: $ENVIRONMENT"
     echo "DRY RUN: $DRY_RUN"
+    echo "AUTO_APPROVE: $AUTO_APPROVE"
     echo "시작 시간: $(date)"
     echo "로그 파일: $LOG_FILE"
     echo "================================================"
@@ -120,10 +125,14 @@ check_prerequisites() {
     # Git 상태 확인
     if [ -n "$(git status --porcelain)" ]; then
         log_warning "Git 작업 디렉토리에 커밋되지 않은 변경사항이 있습니다."
-        read -p "계속 진행하시겠습니까? (y/N): " confirm
-        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-            log_info "배포가 취소되었습니다."
-            exit 0
+        if [ "$AUTO_APPROVE" = "true" ]; then
+            log_info "AUTO_APPROVE 모드: 변경사항 무시하고 계속 진행합니다."
+        else
+            read -p "계속 진행하시겠습니까? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                log_info "배포가 취소되었습니다."
+                exit 0
+            fi
         fi
     fi
     
@@ -148,6 +157,7 @@ deploy_infrastructure() {
         -var="ncp_access_key=$NCP_ACCESS_KEY" \
         -var="ncp_secret_key=$NCP_SECRET_KEY" \
         -var="environment=$ENVIRONMENT" \
+        -var="name_suffix=$NAME_SUFFIX" \
         -var-file="single-server.tfvars" \
         -out="tfplan-$TIMESTAMP"
     
@@ -156,13 +166,15 @@ deploy_infrastructure() {
         return 0
     fi
     
-    # 사용자 확인
-    echo ""
-    log_warning "위의 Terraform 계획을 검토하세요."
-    read -p "인프라를 배포하시겠습니까? (y/N): " confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        log_info "인프라 배포가 취소되었습니다."
-        exit 0
+    if [ "$AUTO_APPROVE" = "true" ]; then
+        log_info "AUTO_APPROVE 모드: 사용자 확인을 건너뜁니다."
+    else
+        log_warning "위의 Terraform 계획을 검토하세요."
+        read -p "인프라를 배포하시겠습니까? (y/N): " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            log_info "인프라 배포가 취소되었습니다."
+            exit 0
+        fi
     fi
     
     # Terraform 적용
@@ -190,8 +202,16 @@ update_ansible_inventory() {
     cp "$inventory_file" "$inventory_file.backup-$TIMESTAMP"
     
     # 서버 IP 업데이트
-    sed -i "s/ansible_host=YOUR_SERVER_IP_HERE/ansible_host=$server_ip/g" "$inventory_file"
     sed -i "s/lifebit-demo-server ansible_host=.*/lifebit-$ENVIRONMENT-server ansible_host=$server_ip/g" "$inventory_file"
+    # ansible_host placeholder (백워드 호환)
+    sed -i "s/ansible_host=YOUR_SERVER_IP_HERE/ansible_host=$server_ip/g" "$inventory_file"
+
+    # SSH 개인키 경로 업데이트
+    local key_name="$(terraform output -raw login_key_name)"
+    sed -i "s|ansible_ssh_private_key_file=.*|ansible_ssh_private_key_file=~/.ssh/${key_name}.pem|g" "$inventory_file"
+    
+    # update user
+    sed -i "s/ansible_user=.*/ansible_user=ubuntu/g" "$inventory_file"
     
     log_success "Ansible 인벤토리 업데이트 완료"
 }
@@ -205,14 +225,19 @@ setup_ssh_keys() {
     cd "$PROJECT_ROOT/infrastructure"
     
     # SSH 키 다운로드
-    local key_name="lifebit-$ENVIRONMENT-key"
+    local key_name="$(terraform output -raw login_key_name)"
     local key_file="$HOME/.ssh/$key_name.pem"
     
     if [ ! -f "$key_file" ]; then
-        log_info "SSH 키 다운로드 중..."
-        terraform output -raw private_key > "$key_file"
-        chmod 600 "$key_file"
-        log_success "SSH 키 설정 완료: $key_file"
+        log_info "로컬에 SSH 키가 없습니다. Terraform output 에서 private_key 시도..."
+        local tf_key="$(terraform output -raw private_key 2>/dev/null || true)"
+        if [ -n "$tf_key" ]; then
+            echo "$tf_key" > "$key_file"
+            chmod 600 "$key_file"
+            log_success "SSH 개인키 저장 완료: $key_file"
+        else
+            log_warning "Terraform에서 개인키를 제공하지 않습니다(기존 키 재사용). $key_file 경로에 이미 PEM 파일이 있어야 합니다."
+        fi
     else
         log_info "SSH 키가 이미 존재합니다: $key_file"
     fi
@@ -227,14 +252,15 @@ wait_for_server() {
     
     log_info "서버 부팅 대기 중... (최대 5분)"
     
+    local key_name="$(terraform output -raw login_key_name)"
+
     for i in {1..30}; do
-        if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
-               -i "$HOME/.ssh/lifebit-$ENVIRONMENT-key.pem" \
+        if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o PasswordAuthentication=no \
+               -i "$HOME/.ssh/${key_name}.pem" \
                root@"$server_ip" "echo 'SSH 연결 성공'" &>/dev/null; then
             log_success "서버 연결 확인 완료"
             return 0
         fi
-        
         log_info "서버 연결 시도 중... ($i/30)"
         sleep 10
     done
@@ -330,7 +356,7 @@ show_deployment_info() {
    - Airflow:            http://$server_ip:8081 (admin/admin123)
 
 🔑 SSH 접속:
-   ssh -i ~/.ssh/lifebit-$ENVIRONMENT-key.pem root@$server_ip
+   ssh -i ~/.ssh/$(terraform output -raw login_key_name).pem root@$server_ip
 
 📋 관리 명령어:
    - 서비스 상태: docker ps
@@ -353,6 +379,13 @@ main() {
         "full")
             check_prerequisites
             deploy_infrastructure
+
+            # DRY_RUN 모드에서는 인프라만 계획 후 종료
+            if [ "$DRY_RUN" = "true" ]; then
+                log_info "DRY_RUN 모드: 인프라 계획 확인 후 종료합니다."
+                exit 0
+            fi
+
             setup_ssh_keys
             SERVER_IP=$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw public_ip)
             wait_for_server "$SERVER_IP"
@@ -374,7 +407,7 @@ main() {
             ;;
         *)
             log_error "잘못된 배포 모드: $DEPLOY_MODE"
-            log_info "사용법: $0 [full|infra-only|app-only] [demo|dev|prod] [true|false]"
+            log_info "사용법: $0 [full|infra-only|app-only] [demo|dev|prod] [true|false] [true|false] [name_suffix]"
             exit 1
             ;;
     esac

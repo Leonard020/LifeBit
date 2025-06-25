@@ -490,10 +490,30 @@ export const createDietRecord = async (data: DietRecordCreateRequest): Promise<D
   try {
     console.log('🍽️ [API] 식단 기록 생성 요청:', data);
     
-    const response = await axiosInstance.post<DietRecord>('/api/diet/record', data);
-    
-    console.log('✅ [API] 식단 기록 생성 성공:', response.data);
-    return response.data;
+    const response = await axiosInstance.post('/api/diet/record', data);
+    const res = response.data;
+
+    // Map backend keys to frontend keys
+    return {
+      id: res.meal_log_id ?? res.id, // <-- Ensure 'id' is set!
+      userId: res.user_id,
+      foodItemId: res.food_item_id,
+      foodName: res.food_name,
+      quantity: res.quantity,
+      calories: res.calories,
+      carbs: res.carbs,
+      protein: res.protein,
+      fat: res.fat,
+      logDate: res.log_date,
+      unit: res.unit || 'g',
+      mealTime: res.meal_time,
+      inputSource: res.input_source,
+      confidenceScore: res.confidence_score,
+      originalAudioPath: res.original_audio_path,
+      validationStatus: res.validation_status,
+      validationNotes: res.validation_notes,
+      createdAt: res.created_at,
+    };
   } catch (error: unknown) {
     console.error('❌ [API] 식단 기록 생성 실패:', error);
     

@@ -25,7 +25,7 @@ CREATE TYPE exercise_part_type AS ENUM ('strength', 'aerobic', 'flexibility', 'b
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');
 
 -- 식사 시간 타입
-CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack', 'midnight');
+CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
 
 -- 입력 소스 타입
 CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
@@ -90,13 +90,13 @@ CREATE TABLE user_goals (
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     weekly_workout_target INTEGER DEFAULT 3,
-	weekly_chest INTEGER DEFAULT 0,
-	weekly_back INTEGER DEFAULT 0,
-	weekly_legs INTEGER DEFAULT 0,
-	weekly_shoulders INTEGER DEFAULT 0,
-	weekly_arms INTEGER DEFAULT 0,
-	weekly_abs INTEGER DEFAULT 0,
-	weekly_cardio INTEGER DEFAULT 0,
+    weekly_chest INTEGER DEFAULT 0,
+    weekly_back INTEGER DEFAULT 0,
+    weekly_legs INTEGER DEFAULT 0,
+    weekly_shoulders INTEGER DEFAULT 0,
+    weekly_arms INTEGER DEFAULT 0,
+    weekly_abs INTEGER DEFAULT 0,
+    weekly_cardio INTEGER DEFAULT 0,
     daily_carbs_target INTEGER DEFAULT 200,
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
@@ -184,6 +184,10 @@ CREATE TABLE meal_logs (
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
+    calories DECIMAL(6,2),
+    carbs DECIMAL(6,2),
+    protein DECIMAL(6,2),
+    fat DECIMAL(6,2),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -202,7 +206,8 @@ CREATE TABLE user_ranking (
     season INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    tier VARCHAR(32) DEFAULT 'UNRANK'
 );
 
 CREATE INDEX idx_user_ranking_user_id ON user_ranking(user_id);
@@ -218,7 +223,9 @@ CREATE TABLE ranking_history (
     rank_position INTEGER NOT NULL,
     season INTEGER NOT NULL,
     period_type VARCHAR(10) NOT NULL,
-    recorded_at TIMESTAMP NOT NULL DEFAULT NOW()
+    recorded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    user_id BIGINT,
+    tier VARCHAR(32)
 );
 
 CREATE INDEX idx_ranking_history_user_ranking_id ON ranking_history(user_ranking_id);
@@ -406,6 +413,47 @@ BEFORE UPDATE ON voice_recognition_logs
 FOR EACH ROW
 EXECUTE FUNCTION update_processed_at();
 
+-- 인덱스 추가 (랭킹 조회 성능 향상)
+CREATE INDEX IF NOT EXISTS idx_user_ranking_total_score ON user_ranking(total_score DESC);
+CREATE INDEX IF NOT EXISTS idx_user_ranking_user_id ON user_ranking(user_id);
+
+-- 등급 구간별 tier 값 일괄 업데이트 (점수 기준, 필요에 따라 조정)
+UPDATE user_ranking SET tier = 'UNRANK'      WHERE total_score < 100;
+UPDATE user_ranking SET tier = 'BRONZE'      WHERE total_score >= 100   AND total_score < 500;
+UPDATE user_ranking SET tier = 'SILVER'      WHERE total_score >= 500   AND total_score < 1000;
+UPDATE user_ranking SET tier = 'GOLD'        WHERE total_score >= 1000  AND total_score < 2000;
+UPDATE user_ranking SET tier = 'PLATINUM'    WHERE total_score >= 2000  AND total_score < 3000;
+UPDATE user_ranking SET tier = 'DIAMOND'     WHERE total_score >= 3000  AND total_score < 4000;
+UPDATE user_ranking SET tier = 'MASTER'      WHERE total_score >= 4000  AND total_score < 5000;
+UPDATE user_ranking SET tier = 'GRANDMASTER' WHERE total_score >= 5000  AND total_score < 6000;
+UPDATE user_ranking SET tier = 'CHALLENGER'  WHERE total_score >= 6000;
+
+-- ranking_history.user_id 값 동기화 (user_ranking_id → user_id)
+UPDATE ranking_history rh
+SET user_id = ur.user_id
+FROM user_ranking ur
+WHERE rh.user_ranking_id = ur.id;
+
+-- ranking_history.tier 값 동기화 (user_id 기준)
+UPDATE ranking_history rh
+SET tier = ur.tier
+FROM user_ranking ur
+WHERE rh.user_id = ur.user_id;
+
+-- user_goals 테이블에 부위별 목표 컬럼 추가 (기존 테이블이 있는 경우)
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_chest INTEGER DEFAULT 0;
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_back INTEGER DEFAULT 0;
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_legs INTEGER DEFAULT 0;
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_shoulders INTEGER DEFAULT 0;
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_arms INTEGER DEFAULT 0;
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_abs INTEGER DEFAULT 0;
+ALTER TABLE user_goals ADD COLUMN IF NOT EXISTS weekly_cardio INTEGER DEFAULT 0;
+
+-- (선택) 더미 데이터 삽입 예시
+-- INSERT INTO user_ranking (user_id, total_score, tier, rank_position, streak_days, is_active)
+-- VALUES (1, 1200, 'GOLD', 1, 10, TRUE), (2, 800, 'SILVER', 2, 5, TRUE);
+
+-- (선택) 기타 필요한 컬럼/인덱스 추가 (예: 시즌별 인덱스, created_at/last_updated_at 인덱스 등)
 
 SELECT * FROM exercise_sessions ORDER BY created_at DESC LIMIT 5;
   SELECT * FROM meal_logs WHERE user_id = 2 AND log_date = '2025-06-21';

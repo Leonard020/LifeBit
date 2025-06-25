@@ -22,7 +22,7 @@ import { useHealthStatistics } from '@/api/auth';
 import { getToken, getUserInfo, isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Layout } from '@/components/Layout';
+import { Layout } from '../components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
@@ -41,6 +41,7 @@ import {
   type ExerciseCatalog,
   type FoodItem
 } from '@/api/authApi';
+import { healthNotificationApi, HealthMonitoringResult } from '@/api/notification';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -170,6 +171,52 @@ const HealthLog: React.FC = () => {
   // React Query로 데이터 조회하므로 기존 useEffect 제거
   // healthStats가 변경되면 자동으로 리렌더링됨
 
+  // 건강 상태 모니터링 함수
+  const monitorHealthStatus = async (): Promise<void> => {
+    try {
+      const result: HealthMonitoringResult = await healthNotificationApi.monitorHealth();
+      
+      if (result.success) {
+        if (result.notificationsCreated > 0) {
+          toast({
+            title: "건강 상태 알림",
+            description: result.message,
+          });
+        } else {
+          toast({
+            title: "건강 상태 확인",
+            description: "현재 건강 상태가 양호합니다.",
+          });
+        }
+      } else {
+        toast({
+          title: "건강 상태 확인 실패",
+          description: result.error || "건강 상태를 확인하는 중 오류가 발생했습니다.",
+          variant: "destructive"
+        });
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      toast({
+        title: "건강 상태 확인 실패",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  };
+
+  // 건강 상태 모니터링 자동 실행
+  useEffect(() => {
+    if (userId && isLoggedIn) {
+      // 페이지 로드 후 3초 뒤에 건강 상태 모니터링 실행
+      const timer = setTimeout(() => {
+        monitorHealthStatus();
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [userId, isLoggedIn]);
+
   // 에러 처리
   useEffect(() => {
     if (healthStatsError) {
@@ -293,10 +340,10 @@ const HealthLog: React.FC = () => {
               };
               
               await createExerciseMutation.mutateAsync(exerciseData);
-            toast({
-              title: "운동 기록 저장 완료",
-              description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-            });
+              console.log('[운동 기록 저장 성공]');
+              
+              // 운동 기록 저장 후 건강 상태 모니터링 실행
+              await monitorHealthStatus();
             } else if (recordType === 'diet') {
               console.log('[식단기록 저장] payload:', response.parsed_data);
               type DietData = {
@@ -360,27 +407,23 @@ const HealthLog: React.FC = () => {
                 console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
               } else {
                 try {
-                  const dietRecordData = {
-                    food_item_id: foodItemId as number,
-                    quantity: Number(quantity),
-                    meal_time: (dietData.meal_time || dietData.mealTime || 'snack') as string, // 간식으로 기본값 변경
-                    input_source: (dietData.input_source || 'TYPING') as string,
-                    validation_status: (dietData.validation_status || 'VALIDATED') as string,
+                  const dietRecord: DietRecordCreateRequest = {
+                    food_item_id: foodItemId,
+                    quantity: Number(dietData.quantity || dietData.amount || 100),
+                    meal_time: dietData.mealTime || dietData.meal_time || 'snack',
+                    input_source: 'TYPING',
+                    validation_status: 'VALIDATED'
                   };
                   
-                  console.log('🍽️ [식단 저장] 전송 데이터:', dietRecordData);
-                  console.log('🔑 [식단 저장] 현재 사용자 ID:', userId);
-                  console.log('🔍 [식단 저장] JWT 토큰 존재:', !!getToken());
-                  console.log('🔍 [식단 저장] JWT 토큰 길이:', getToken()?.length || 0);
+                  console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecord);
+                  console.log('🔑 [저장 버튼] 현재 사용자 ID:', userId);
+                  console.log('🔍 [저장 버튼] JWT 토큰 존재:', !!getToken());
                   
-                  const result = await createDietRecord(dietRecordData);
+                  const result = await createDietRecord(dietRecord);
                   console.log('[식단 기록 저장 성공]', result);
-                  toast({
-                    title: "식단 기록 저장 완료",
-                    description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-                  });
-                  // 그래프/식단 기록 새로고침
-                  if (typeof refetchHealthStats === 'function') await refetchHealthStats();
+                  
+                  // 식단 기록 저장 후 건강 상태 모니터링 실행
+                  await monitorHealthStatus();
                 } catch (err) {
                   console.error('[식단 기록 저장 실패]', err);
                   toast({
@@ -450,7 +493,6 @@ const HealthLog: React.FC = () => {
                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
                   {isConnected ? '자동 새로고침 활성' : '비활성'}
                 </Badge>
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -459,6 +501,14 @@ const HealthLog: React.FC = () => {
                 >
                   <MessageSquare className="h-4 w-4" />
                   AI 채팅
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={monitorHealthStatus}
+                  className="flex items-center gap-1"
+                >
+                  🏥 건강 체크
                 </Button>
               </div>
             </div>
@@ -709,26 +759,23 @@ const HealthLog: React.FC = () => {
                             console.error('[식단기록] 저장 실패: 음식 정보 또는 섭취량 부족', { foodItemId, quantity });
                           } else {
                             try {
-                              const dietRecordData = {
-                                food_item_id: foodItemId as number,
-                                quantity: Number(quantity),
-                                meal_time: (dietData.meal_time || dietData.mealTime || 'snack') as string, // 간식으로 기본값 변경
-                                input_source: (dietData.input_source || 'TYPING') as string,
-                                validation_status: (dietData.validation_status || 'VALIDATED') as string,
+                              const dietRecord: DietRecordCreateRequest = {
+                                food_item_id: foodItemId,
+                                quantity: Number(dietData.quantity || dietData.amount || 100),
+                                meal_time: dietData.mealTime || dietData.meal_time || 'snack',
+                                input_source: 'TYPING',
+                                validation_status: 'VALIDATED'
                               };
                               
-                              console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecordData);
+                              console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecord);
                               console.log('🔑 [저장 버튼] 현재 사용자 ID:', userId);
                               console.log('🔍 [저장 버튼] JWT 토큰 존재:', !!getToken());
                               
-                              const result = await createDietRecord(dietRecordData);
+                              const result = await createDietRecord(dietRecord);
                               console.log('[식단 기록 저장 성공]', result);
-                              toast({
-                                title: "식단 기록 저장 완료",
-                                description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-                              });
-                              // 그래프/식단 기록 새로고침
-                              if (typeof refetchHealthStats === 'function') await refetchHealthStats();
+                              
+                              // 식단 기록 저장 후 건강 상태 모니터링 실행
+                              await monitorHealthStatus();
                             } catch (err) {
                               console.error('[식단 기록 저장 실패]', err);
                               toast({

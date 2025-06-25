@@ -783,7 +783,53 @@ delete_internet_gateways() {
     fi
 }
 
-# VPC 삭제
+# VPC 내부 리소스 확인
+check_vpc_resources() {
+    local vpc_no="$1"
+    local has_resources=false
+    
+    log_info "VPC 내부 리소스 확인 중: $vpc_no"
+    
+    # 서브넷 확인
+    local subnet_list=$(cd "$HOME/.ncloud" && ./ncloud vpc getSubnetList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local subnet_count=$(echo "$subnet_list" | jq '.getSubnetListResponse.subnetList | length // 0' 2>/dev/null || echo 0)
+    if [[ "$subnet_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 서브넷 $subnet_count개가 남아있습니다"
+        has_resources=true
+    fi
+    
+    # 서버 인스턴스 확인
+    local server_list=$(cd "$HOME/.ncloud" && ./ncloud vserver getServerInstanceList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local server_count=$(echo "$server_list" | jq '.getServerInstanceListResponse.serverInstanceList | length // 0' 2>/dev/null || echo 0)
+    if [[ "$server_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 서버 인스턴스 $server_count개가 남아있습니다"
+        has_resources=true
+    fi
+    
+    # 로드밸런서 확인
+    local lb_list=$(cd "$HOME/.ncloud" && ./ncloud vloadbalancer getLoadBalancerInstanceList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local lb_count=$(echo "$lb_list" | jq '.getLoadBalancerInstanceListResponse.loadBalancerInstanceList | length // 0' 2>/dev/null || echo 0)
+    if [[ "$lb_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 로드밸런서 $lb_count개가 남아있습니다"
+        has_resources=true
+    fi
+    
+    # NAT Gateway 확인
+    local nat_list=$(cd "$HOME/.ncloud" && ./ncloud vpc getNatGatewayInstanceList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local nat_count=$(echo "$nat_list" | jq '.getNatGatewayInstanceListResponse.natGatewayInstanceList | length // 0' 2>/dev/null || echo 0)
+    if [[ "$nat_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 NAT Gateway $nat_count개가 남아있습니다"
+        has_resources=true
+    fi
+    
+    if [[ "$has_resources" == "true" ]]; then
+        return 1  # 리소스가 남아있음
+    else
+        return 0  # 삭제 가능
+    fi
+}
+
+# VPC 삭제 (개선된 버전)
 delete_vpcs() {
     log_info "VPC 삭제 중..."
     local vpc_list=$(cd "$HOME/.ncloud" && ./ncloud vpc getVpcList --output json 2>&1)
@@ -803,11 +849,60 @@ delete_vpcs() {
     local vpc_count=$(echo "$vpc_list" | jq '.getVpcListResponse.vpcList | length // 0')
     
     if [[ "$vpc_count" -gt 0 ]]; then
-        echo "$vpc_list" | jq -r '.getVpcListResponse.vpcList[] | select(.isDefault == false) | .vpcNo' | while read -r vpc_no; do
+        # 삭제 가능한 VPC 목록 수집
+        local vpcs_to_delete=()
+        while IFS= read -r vpc_info; do
+            if [[ -n "$vpc_info" ]]; then
+                local vpc_no=$(echo "$vpc_info" | cut -d' ' -f1)
+                local vpc_name=$(echo "$vpc_info" | cut -d' ' -f2-)
+                
+                # 기본 VPC가 아닌지 확인
+                if [[ "$vpc_name" != *"default"* && "$vpc_no" != "null" ]]; then
+                    vpcs_to_delete+=("$vpc_no")
+                fi
+            fi
+        done < <(echo "$vpc_list" | jq -r '.getVpcListResponse.vpcList[] | select(.isDefault == false) | .vpcNo + " " + (.vpcName // "unnamed")')
+        
+        # VPC 삭제 시도 (최대 3회 재시도)
+        for vpc_no in "${vpcs_to_delete[@]}"; do
             if [[ -n "$vpc_no" ]]; then
-                log_info "VPC 삭제 중: $vpc_no"
-                cd "$HOME/.ncloud" && ./ncloud vpc deleteVpc --vpcNo "$vpc_no" 2>/dev/null || true
-                log_success "VPC 삭제 완료: $vpc_no"
+                log_info "VPC 삭제 준비 중: $vpc_no"
+                
+                local max_attempts=3
+                local attempt=1
+                local deleted=false
+                
+                while [[ $attempt -le $max_attempts && "$deleted" == "false" ]]; do
+                    log_info "VPC $vpc_no 삭제 시도 $attempt/$max_attempts"
+                    
+                    # VPC 내부 리소스 확인
+                    if check_vpc_resources "$vpc_no"; then
+                        log_info "VPC $vpc_no는 삭제 가능한 상태입니다"
+                        
+                        # VPC 삭제 시도
+                        if cd "$HOME/.ncloud" && ./ncloud vpc deleteVpc --vpcNo "$vpc_no" 2>/dev/null; then
+                            log_success "VPC 삭제 완료: $vpc_no"
+                            deleted=true
+                        else
+                            log_warning "VPC $vpc_no 삭제 실패 (시도 $attempt/$max_attempts)"
+                        fi
+                    else
+                        log_warning "VPC $vpc_no에 아직 리소스가 남아있어 삭제할 수 없습니다 (시도 $attempt/$max_attempts)"
+                    fi
+                    
+                    if [[ "$deleted" == "false" ]]; then
+                        if [[ $attempt -lt $max_attempts ]]; then
+                            log_info "30초 후 다시 시도합니다..."
+                            sleep 30
+                        fi
+                        attempt=$((attempt + 1))
+                    fi
+                done
+                
+                if [[ "$deleted" == "false" ]]; then
+                    log_error "VPC $vpc_no 삭제 실패: 최대 재시도 횟수 초과"
+                    log_info "수동으로 네이버클라우드 콘솔에서 VPC를 확인해주세요"
+                fi
             fi
         done
     else
@@ -892,6 +987,10 @@ cleanup_all() {
         # 9. Internet Gateway 삭제
         delete_internet_gateways
         total_deleted=$((total_deleted + 1))
+        
+        # VPC 삭제 전 추가 대기 (모든 리소스 삭제 완료 대기)
+        log_info "VPC 삭제 전 모든 리소스 삭제 완료 대기 중... (60초)"
+        sleep 60
         
         # 10. VPC 삭제 (마지막)
         delete_vpcs
@@ -1018,6 +1117,11 @@ cleanup_specific() {
                 delete_subnets
                 delete_route_tables
                 delete_internet_gateways
+                
+                # VPC 삭제 전 추가 대기
+                log_info "VPC 삭제 전 모든 리소스 삭제 완료 대기 중... (60초)"
+                sleep 60
+                
                 delete_vpcs
             else
                 log_error "네이버클라우드 CLI 설정이 필요합니다."
@@ -1137,10 +1241,12 @@ LifeBit 프로젝트 구조:
     클라우드 리소스 삭제 순서 (의존성 고려):
     1. 서버 인스턴스 → 2. 로드밸런서 → 3. NAT Gateway → 4. 퍼블릭 IP
     5. 네트워크 인터페이스 → 6. ACG → 7. 서브넷 → 8. Route Table
-    9. Internet Gateway → 10. VPC (마지막)
+    9. Internet Gateway → 10. VPC (마지막, 재시도 로직 포함)
     
     - 기본 리소스(기본 VPC, 기본 ACG)는 보호되어 삭제되지 않습니다.
     - 의존성이 있는 리소스는 자동으로 올바른 순서로 삭제됩니다.
+    - VPC 삭제는 내부 리소스 확인 후 최대 3회 재시도됩니다.
+    - VPC 삭제 실패 시 네이버클라우드 콘솔에서 수동 확인이 필요할 수 있습니다.
 
 EOF
 }

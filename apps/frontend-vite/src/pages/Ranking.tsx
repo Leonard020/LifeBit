@@ -189,10 +189,26 @@ const Ranking = () => {
             <p className="text-muted-foreground mb-6">
               건강 기록을 시작하고 다른 사용자들과 함께 경쟁해보세요!
             </p>
-            <div className="space-y-2 text-sm text-muted-foreground max-w-md mx-auto">
+            <div className="space-y-2 text-sm text-muted-foreground max-w-md mx-auto mb-8">
               <p>• 꾸준한 운동과 기록으로 점수를 획득하세요</p>
               <p>• 연속 기록 일수를 늘려 더 높은 순위에 도전하세요</p>
               <p>• 다양한 업적을 달성하여 배지를 수집하세요</p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => navigate('/profile')}
+                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+              >
+                프로필 작성하러 가기
+              </button>
+              <div>
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors font-medium"
+                >
+                  메뉴로 돌아가기
+                </button>
+              </div>
             </div>
           </div>
         )}

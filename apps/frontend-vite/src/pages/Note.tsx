@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, Dumbbell, Apple, Edit, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
@@ -235,11 +235,11 @@ const Note = () => {
     }, {} as Record<string, number>);
   }, [userGoalsData]);
 
-  // Always show all 7 body parts in the radar chart
+  const MAX_EDGE_VALUE = 7;
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: (weeklySummary[label] || 0) * 20, // 1회 = 20%
-    goal: (exerciseGoals[label] || 0) * 20,
+    value: weeklySummary[label] || 0,
+    goal: exerciseGoals[label] || 0,
   }));
 
   // 운동데이터터 - 저장된 토큰 사용
@@ -1012,7 +1012,7 @@ const Note = () => {
       const goal = payload[0].payload.goal;
       return (
         <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <strong>{part}</strong>: {goal / 20}회
+          <strong>{part}</strong>: {goal}회
         </div>
       );
     }
@@ -1126,6 +1126,7 @@ const Note = () => {
                       <RadarChart data={exerciseData}>
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
+                        <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
                         <Tooltip content={<RadarGoalTooltip />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
@@ -1484,10 +1485,8 @@ const Note = () => {
                                 <option value="breakfast">아침</option>
                                 <option value="lunch">점심</option>
                                 <option value="dinner">저녁</option>
-                                <option value="midnight">야식</option>
                                 <option value="snack">간식</option>
                                 <option value="midnight">야식</option>
-
                               </select>
                             </div>
                           </div>
