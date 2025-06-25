@@ -33,9 +33,19 @@ data "ncloud_zones" "available" {
   }
 }
 
+# Local values
+locals {
+  suffix = var.name_suffix != "" ? "-${substr(var.name_suffix,0,8)}" : ""
+}
+
+# 로그인 키 생성 (항상 고유 suffix로 생성)
+resource "ncloud_login_key" "main" {
+  key_name = "${var.project_name}-${var.environment}-key${local.suffix}"
+}
+
 # VPC 생성
 resource "ncloud_vpc" "main" {
-  name            = "${var.project_name}-${var.environment}-vpc-v2"
+  name            = "${var.project_name}-${var.environment}-vpc${local.suffix}"
   ipv4_cidr_block = var.vpc_cidr
 
   # NCP VPC는 tags를 지원하지 않음
@@ -156,21 +166,6 @@ resource "ncloud_access_control_group_rule" "all_ports" {
   }
 }
 
-# 로그인 키 생성
-resource "ncloud_login_key" "main" {
-  key_name = "${var.project_name}-${var.environment}-key-v2"
-}
-
-# 최소 초기화 스크립트 (SSH 키 직접 설정)
-resource "ncloud_init_script" "minimal_init" {
-  name = "${var.project_name}-${var.environment}-minimal-init"
-  content = base64encode(templatefile("${path.module}/scripts/minimal-init.sh", {
-    environment     = var.environment
-    project_name    = var.project_name
-    ssh_private_key = ncloud_login_key.main.private_key
-  }))
-}
-
 # 네트워크 인터페이스 생성
 resource "ncloud_network_interface" "web" {
   name                  = "${var.project_name}-${var.environment}-web-nic"
@@ -186,7 +181,6 @@ resource "ncloud_server" "web" {
   server_image_product_code = var.server_image_product_code
   server_product_code       = var.server_instance_type
   login_key_name            = ncloud_login_key.main.key_name
-  init_script_no            = ncloud_init_script.minimal_init.id
   subnet_no                 = ncloud_subnet.public.id
 
   network_interface {

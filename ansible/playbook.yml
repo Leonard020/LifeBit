@@ -331,12 +331,12 @@
     # ================================================
     # 9. 애플리케이션 배포
     # ================================================
-    - name: Docker Compose로 애플리케이션 시작
-      docker_compose:
+    - name: Docker Compose로 애플리케이션 시작 (Compose v2)
+      community.docker.docker_compose_v2:
         project_src: "/opt/{{ project_name }}/app"
+        pull: true
+        build: true
         state: present
-        pull: yes
-        build: yes
       tags: [deploy]
 
     # ================================================

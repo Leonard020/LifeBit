@@ -21,6 +21,9 @@ ENVIRONMENT="${2:-demo}"  # demo, dev, prod
 DRY_RUN="${3:-false}"     # true, false
 AUTO_APPROVE="${4:-false}"    # true, false
 
+# 고유 이름 접미사
+NAME_SUFFIX="${5:-$(date +%m%d%H%M)}"
+
 # NCP 설정 (환경변수에서 로드)
 NCP_ACCESS_KEY="${NCP_ACCESS_KEY}"
 NCP_SECRET_KEY="${NCP_SECRET_KEY}"
@@ -154,6 +157,7 @@ deploy_infrastructure() {
         -var="ncp_access_key=$NCP_ACCESS_KEY" \
         -var="ncp_secret_key=$NCP_SECRET_KEY" \
         -var="environment=$ENVIRONMENT" \
+        -var="name_suffix=$NAME_SUFFIX" \
         -var-file="single-server.tfvars" \
         -out="tfplan-$TIMESTAMP"
     
@@ -203,7 +207,11 @@ update_ansible_inventory() {
     sed -i "s/ansible_host=YOUR_SERVER_IP_HERE/ansible_host=$server_ip/g" "$inventory_file"
 
     # SSH 개인키 경로 업데이트
-    sed -i "s|ansible_ssh_private_key_file=.*|ansible_ssh_private_key_file=~/.ssh/lifebit-$ENVIRONMENT-key.pem|g" "$inventory_file"
+    local key_name="$(terraform output -raw login_key_name)"
+    sed -i "s|ansible_ssh_private_key_file=.*|ansible_ssh_private_key_file=~/.ssh/${key_name}.pem|g" "$inventory_file"
+    
+    # update user
+    sed -i "s/ansible_user=.*/ansible_user=ubuntu/g" "$inventory_file"
     
     log_success "Ansible 인벤토리 업데이트 완료"
 }
@@ -217,14 +225,19 @@ setup_ssh_keys() {
     cd "$PROJECT_ROOT/infrastructure"
     
     # SSH 키 다운로드
-    local key_name="lifebit-$ENVIRONMENT-key"
+    local key_name="$(terraform output -raw login_key_name)"
     local key_file="$HOME/.ssh/$key_name.pem"
     
     if [ ! -f "$key_file" ]; then
-        log_info "SSH 키 다운로드 중..."
-        terraform output -raw private_key > "$key_file"
-        chmod 600 "$key_file"
-        log_success "SSH 키 설정 완료: $key_file"
+        log_info "로컬에 SSH 키가 없습니다. Terraform output 에서 private_key 시도..."
+        local tf_key="$(terraform output -raw private_key 2>/dev/null || true)"
+        if [ -n "$tf_key" ]; then
+            echo "$tf_key" > "$key_file"
+            chmod 600 "$key_file"
+            log_success "SSH 개인키 저장 완료: $key_file"
+        else
+            log_warning "Terraform에서 개인키를 제공하지 않습니다(기존 키 재사용). $key_file 경로에 이미 PEM 파일이 있어야 합니다."
+        fi
     else
         log_info "SSH 키가 이미 존재합니다: $key_file"
     fi
@@ -239,14 +252,15 @@ wait_for_server() {
     
     log_info "서버 부팅 대기 중... (최대 5분)"
     
+    local key_name="$(terraform output -raw login_key_name)"
+
     for i in {1..30}; do
-        if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
-               -i "$HOME/.ssh/lifebit-$ENVIRONMENT-key.pem" \
+        if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o PasswordAuthentication=no \
+               -i "$HOME/.ssh/${key_name}.pem" \
                root@"$server_ip" "echo 'SSH 연결 성공'" &>/dev/null; then
             log_success "서버 연결 확인 완료"
             return 0
         fi
-        
         log_info "서버 연결 시도 중... ($i/30)"
         sleep 10
     done
@@ -342,7 +356,7 @@ show_deployment_info() {
    - Airflow:            http://$server_ip:8081 (admin/admin123)
 
 🔑 SSH 접속:
-   ssh -i ~/.ssh/lifebit-$ENVIRONMENT-key.pem root@$server_ip
+   ssh -i ~/.ssh/$(terraform output -raw login_key_name).pem root@$server_ip
 
 📋 관리 명령어:
    - 서비스 상태: docker ps
@@ -393,7 +407,7 @@ main() {
             ;;
         *)
             log_error "잘못된 배포 모드: $DEPLOY_MODE"
-            log_info "사용법: $0 [full|infra-only|app-only] [demo|dev|prod] [true|false] [true|false]"
+            log_info "사용법: $0 [full|infra-only|app-only] [demo|dev|prod] [true|false] [true|false] [name_suffix]"
             exit 1
             ;;
     esac
