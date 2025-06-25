@@ -444,4 +444,4 @@ SELECT * FROM exercise_sessions ORDER BY created_at DESC LIMIT 5;
 
     SELECT * FROM meal_logs WHERE user_id=2 ORDER BY log_date DESC;
 
-
+**** 여기까지 다시 반영

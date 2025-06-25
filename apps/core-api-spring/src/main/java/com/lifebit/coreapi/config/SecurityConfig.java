@@ -42,6 +42,10 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Excepti
             
             // ✅ 인증 필요 경로는 따로 명시
             .requestMatchers("/api/note/exercise/**").authenticated()
+            
+            // ✅ 알림 관련 API 엔드포인트들 인증 필요
+            .requestMatchers("/api/v1/ranking-notifications/**").authenticated()
+            .requestMatchers("/api/v1/health-notifications/**").authenticated()
 
             // ✅ 나머지 모든 요청도 인증 필요
             .anyRequest().authenticated()

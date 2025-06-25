@@ -323,16 +323,15 @@ const Note = () => {
       setDailyDietLogs(convertedRecords);
       setDailyNutritionGoals(defaultGoals);
       
-    } catch (error) {
-      console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
-      
-      if (error instanceof Error) {
-        if (error.message.includes('403')) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status === 403) {
           setDietError("권한이 없습니다. 다시 로그인해주세요.");
-        } else if (error.message.includes('401')) {
+        } else if (axiosError.response?.status === 401) {
           setDietError("인증이 만료되었습니다. 다시 로그인해주세요.");
         } else {
-          setDietError(`식단 데이터를 불러오는데 실패했습니다: ${error.message}`);
+          setDietError(`식단 데이터를 불러오는데 실패했습니다: ${axiosError.response?.data?.message || '알 수 없는 오류'}`);
         }
       } else {
         setDietError("식단 데이터를 불러오는데 실패했습니다.");
@@ -414,16 +413,19 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
-        toast({
-          title: "권한 오류",
-          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        removeToken();
-        navigate('/login');
-        return;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status === 403) {
+          toast({
+            title: "권한 오류",
+            description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
+            variant: "destructive"
+          });
+          removeToken();
+          navigate('/login');
+          return;
+        }
       }
       console.error('식단 기록 추가 중 오류:', error);
       toast({
@@ -829,7 +831,13 @@ const Note = () => {
     if (!editingDietLog) return;
     setIsUpdatingDiet(true);
     try {
-      const submissionData: any = {
+      const submissionData: {
+        quantity: number;
+        mealTime: string;
+        unit: string;
+        logDate: string;
+        foodItemId?: number;
+      } = {
         quantity: editFormData.quantity,
         mealTime: editFormData.mealTime,
         unit: 'g',

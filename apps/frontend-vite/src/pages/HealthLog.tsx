@@ -40,6 +40,7 @@ import {
   type ExerciseCatalog,
   type FoodItem
 } from '@/api/authApi';
+import { healthNotificationApi, HealthMonitoringResult } from '@/api/notification';
 
 interface HealthStatistics {
   currentWeight: number;
@@ -317,6 +318,52 @@ const HealthLog: React.FC = () => {
   // React Query로 데이터 조회하므로 기존 useEffect 제거
   // healthStats가 변경되면 자동으로 리렌더링됨
 
+  // 건강 상태 모니터링 함수
+  const monitorHealthStatus = async (): Promise<void> => {
+    try {
+      const result: HealthMonitoringResult = await healthNotificationApi.monitorHealth();
+      
+      if (result.success) {
+        if (result.notificationsCreated > 0) {
+          toast({
+            title: "건강 상태 알림",
+            description: result.message,
+          });
+        } else {
+          toast({
+            title: "건강 상태 확인",
+            description: "현재 건강 상태가 양호합니다.",
+          });
+        }
+      } else {
+        toast({
+          title: "건강 상태 확인 실패",
+          description: result.error || "건강 상태를 확인하는 중 오류가 발생했습니다.",
+          variant: "destructive"
+        });
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      toast({
+        title: "건강 상태 확인 실패",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  };
+
+  // 건강 상태 모니터링 자동 실행
+  useEffect(() => {
+    if (userId && isLoggedIn) {
+      // 페이지 로드 후 3초 뒤에 건강 상태 모니터링 실행
+      const timer = setTimeout(() => {
+        monitorHealthStatus();
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [userId, isLoggedIn]);
+
   // 에러 처리
   useEffect(() => {
     if (healthStatsError) {
@@ -424,10 +471,10 @@ const HealthLog: React.FC = () => {
               };
               
               await createExerciseMutation.mutateAsync(exerciseData);
-            toast({
-              title: "운동 기록 저장 완료",
-              description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-            });
+              console.log('[운동 기록 저장 성공]');
+              
+              // 운동 기록 저장 후 건강 상태 모니터링 실행
+              await monitorHealthStatus();
             } else if (recordType === 'diet') {
               console.log('[식단기록 저장] payload:', response.parsed_data);
               type DietData = {
@@ -492,26 +539,22 @@ const HealthLog: React.FC = () => {
               } else {
                 try {
                   const dietRecordData = {
-                    food_item_id: foodItemId as number,
-                    quantity: Number(quantity),
-                    meal_time: (dietData.meal_time || dietData.mealTime || 'snack') as string, // 간식으로 기본값 변경
-                    input_source: (dietData.input_source || 'TYPING') as string,
-                    validation_status: (dietData.validation_status || 'VALIDATED') as string,
+                    foodItemId: foodItemId,
+                    quantity: Number(dietData.quantity || dietData.amount || 100),
+                    mealTime: dietData.mealTime || dietData.meal_time || 'snack',
+                    inputSource: 'TYPING',
+                    validationStatus: 'VALIDATED'
                   };
                   
-                  console.log('🍽️ [식단 저장] 전송 데이터:', dietRecordData);
-                  console.log('🔑 [식단 저장] 현재 사용자 ID:', userId);
-                  console.log('🔍 [식단 저장] JWT 토큰 존재:', !!getToken());
-                  console.log('🔍 [식단 저장] JWT 토큰 길이:', getToken()?.length || 0);
+                  console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecordData);
+                  console.log('🔑 [저장 버튼] 현재 사용자 ID:', userId);
+                  console.log('🔍 [저장 버튼] JWT 토큰 존재:', !!getToken());
                   
                   const result = await createDietRecord(dietRecordData);
                   console.log('[식단 기록 저장 성공]', result);
-                  toast({
-                    title: "식단 기록 저장 완료",
-                    description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-                  });
-                  // 그래프/식단 기록 새로고침
-                  if (typeof refetchHealthStats === 'function') await refetchHealthStats();
+                  
+                  // 식단 기록 저장 후 건강 상태 모니터링 실행
+                  await monitorHealthStatus();
                 } catch (err) {
                   console.error('[식단 기록 저장 실패]', err);
                   toast({
@@ -587,7 +630,6 @@ const HealthLog: React.FC = () => {
                   size="sm"
                   onClick={() => {
                     setRecordType('exercise');
-                    console.log('[DEBUG] recordType set to exercise');
                   }}
                   className="flex items-center gap-1"
                 >
@@ -598,7 +640,6 @@ const HealthLog: React.FC = () => {
                   size="sm"
                   onClick={() => {
                     setRecordType('diet');
-                    console.log('[DEBUG] recordType set to diet');
                   }}
                   className="flex items-center gap-1"
                 >
@@ -612,6 +653,14 @@ const HealthLog: React.FC = () => {
                 >
                   <MessageSquare className="h-4 w-4" />
                   AI 채팅
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={monitorHealthStatus}
+                  className="flex items-center gap-1"
+                >
+                  🏥 건강 체크
                 </Button>
               </div>
             </div>
@@ -849,11 +898,11 @@ const HealthLog: React.FC = () => {
                           } else {
                             try {
                               const dietRecordData = {
-                                food_item_id: foodItemId as number,
-                                quantity: Number(quantity),
-                                meal_time: (dietData.meal_time || dietData.mealTime || 'snack') as string, // 간식으로 기본값 변경
-                                input_source: (dietData.input_source || 'TYPING') as string,
-                                validation_status: (dietData.validation_status || 'VALIDATED') as string,
+                                foodItemId: foodItemId,
+                                quantity: Number(dietData.quantity || dietData.amount || 100),
+                                mealTime: dietData.mealTime || dietData.meal_time || 'snack',
+                                inputSource: 'TYPING',
+                                validationStatus: 'VALIDATED'
                               };
                               
                               console.log('🍽️ [저장 버튼] 전송 데이터:', dietRecordData);
@@ -862,12 +911,9 @@ const HealthLog: React.FC = () => {
                               
                               const result = await createDietRecord(dietRecordData);
                               console.log('[식단 기록 저장 성공]', result);
-                              toast({
-                                title: "식단 기록 저장 완료",
-                                description: "AI 분석된 데이터를 성공적으로 저장했습니다.",
-                              });
-                              // 그래프/식단 기록 새로고침
-                              if (typeof refetchHealthStats === 'function') await refetchHealthStats();
+                              
+                              // 식단 기록 저장 후 건강 상태 모니터링 실행
+                              await monitorHealthStatus();
                             } catch (err) {
                               console.error('[식단 기록 저장 실패]', err);
                               toast({

@@ -23,6 +23,7 @@ public class NoteExerciseService {
     private final ExerciseSessionRepository exerciseSessionRepository;
     private final ExerciseCatalogRepository exerciseCatalogRepository;
     private final UserRepository userRepository;
+    private final AchievementService achievementService;
 
     // ✅ 주간 요약 데이터
     public List<NoteExerciseDTO> getWeeklyExerciseSummary(Long userId, LocalDate weekStart) {
@@ -78,6 +79,25 @@ public class NoteExerciseService {
         // ✅ 저장
         ExerciseSession saved = exerciseSessionRepository.save(session);
 
+        // ✅ 업적 체크 및 업데이트
+        try {
+            // 연속 운동 일수 계산 및 업적 업데이트
+            int currentStreak = calculateCurrentStreak(dto.getUserId());
+            achievementService.updateStreakAchievements(dto.getUserId(), currentStreak);
+            
+            // 총 운동 일수 업적 업데이트
+            int totalWorkoutDays = getTotalWorkoutDays(dto.getUserId());
+            achievementService.updateUserAchievementProgress(dto.getUserId(), "총 운동 일수", totalWorkoutDays);
+            
+            // 주간 운동 횟수 업적 업데이트
+            int weeklyExerciseCount = getWeeklyExerciseCount(dto.getUserId());
+            achievementService.updateUserAchievementProgress(dto.getUserId(), "주간 운동", weeklyExerciseCount);
+            
+        } catch (Exception e) {
+            // 업적 업데이트 실패 시 로그만 남기고 계속 진행
+            System.err.println("Failed to update achievements: " + e.getMessage());
+        }
+
         // ✅ DTO 반환
         return new ExerciseRecordDTO(saved);
     }
@@ -112,5 +132,49 @@ public class NoteExerciseService {
         // 💾 저장 후 DTO 변환하여 반환
         ExerciseSession saved = exerciseSessionRepository.save(session);
         return new ExerciseRecordDTO(saved);
+    }
+
+    // ✅ 연속 운동 일수 계산
+    private int calculateCurrentStreak(Long userId) {
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
+            userId, LocalDate.now().minusDays(365), LocalDate.now());
+        
+        if (sessions.isEmpty()) {
+            return 0;
+        }
+
+        int streak = 0;
+        LocalDate currentDate = LocalDate.now();
+        
+        // 오늘부터 역순으로 연속 운동 일수 계산
+        for (ExerciseSession session : sessions) {
+            if (session.getExerciseDate().equals(currentDate)) {
+                streak++;
+                currentDate = currentDate.minusDays(1);
+            } else if (session.getExerciseDate().isBefore(currentDate)) {
+                break; // 연속이 끊어짐
+            }
+        }
+        
+        return streak;
+    }
+
+    // ✅ 총 운동 일수 계산
+    private int getTotalWorkoutDays(Long userId) {
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
+            userId, LocalDate.now().minusDays(365), LocalDate.now());
+        
+        return (int) sessions.stream()
+            .map(ExerciseSession::getExerciseDate)
+            .distinct()
+            .count();
+    }
+
+    // ✅ 주간 운동 횟수 계산
+    private int getWeeklyExerciseCount(Long userId) {
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
+            userId, LocalDate.now().minusDays(7), LocalDate.now());
+        
+        return sessions.size();
     }
 }

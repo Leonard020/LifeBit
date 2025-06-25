@@ -27,6 +27,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
 import { isAdmin, removeToken } from '@/utils/auth'; // ✅ removeToken 추가
+import NotificationBell from '@/components/NotificationBell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -77,6 +78,8 @@ const WebHeader = () => {
             >
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
+
+            <NotificationBell />
 
             {isLoggedIn ? (
               <DropdownMenu>
@@ -195,6 +198,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
+
+            <NotificationBell />
 
             {isLoggedIn ? (
               <DropdownMenu>

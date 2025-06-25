@@ -6,6 +6,7 @@ import com.lifebit.coreapi.entity.UserAchievement;
 import com.lifebit.coreapi.repository.AchievementRepository;
 import com.lifebit.coreapi.repository.UserAchievementRepository;
 import com.lifebit.coreapi.repository.UserRepository;
+import com.lifebit.coreapi.service.ranking.RankingNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ public class AchievementService {
     private final AchievementRepository achievementRepository;
     private final UserAchievementRepository userAchievementRepository;
     private final UserRepository userRepository;
+    private final RankingNotificationService rankingNotificationService;
     
     /**
      * 특정 사용자의 업적 정보를 조회합니다.
@@ -99,6 +101,7 @@ public class AchievementService {
             userAchievement.setIsAchieved(true);
             userAchievement.setAchievedDate(LocalDate.now());
             log.info("Achievement unlocked for user: {}, achievement: {}", userId, achievementTitle);
+            rankingNotificationService.notifyAchievementUnlocked(userId, achievement);
         }
         
         userAchievementRepository.save(userAchievement);

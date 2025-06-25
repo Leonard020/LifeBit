@@ -175,8 +175,19 @@ export const login = async (data: LoginData) => {
         };
 
         // 토큰과 사용자 정보 저장
+        console.log('🔑 [login] 토큰 저장 시작:', {
+          access_token: access_token ? `${access_token.substring(0, 20)}...` : 'null',
+          userInfo: userInfo
+        });
+        
         setToken(access_token);
         setUserInfo(userInfo);
+        
+        // 저장 후 확인
+        console.log('✅ [login] 토큰 저장 완료:', {
+          storedToken: localStorage.getItem('access_token') ? `${localStorage.getItem('access_token')?.substring(0, 20)}...` : 'null',
+          storedUserInfo: localStorage.getItem('userInfo')
+        });
 
         return {
             access_token,
@@ -462,6 +473,52 @@ export const verifyPassword = async (password: string): Promise<boolean> => {
     } catch (error) {
         return false;
     }
+};
+
+// ============================================================================
+// 랭킹 알림 관련 API
+// ============================================================================
+
+// 알림 타입 정의
+export interface RankingNotification {
+  id: number;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// 알림 목록 조회
+export const getRankingNotifications = async (page: number = 0, size: number = 10, isRead?: boolean) => {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    size: size.toString()
+  });
+  
+  if (isRead !== undefined) {
+    params.append('isRead', isRead.toString());
+  }
+  
+  const response = await axios.get(`/api/v1/ranking-notifications?${params}`);
+  return response.data;
+};
+
+// 알림 읽음 처리
+export const markNotificationAsRead = async (notificationId: number) => {
+  const response = await axios.post(`/api/v1/ranking-notifications/${notificationId}/read`);
+  return response.data;
+};
+
+// 전체 알림 읽음 처리
+export const markAllNotificationsAsRead = async () => {
+  const response = await axios.post('/api/v1/ranking-notifications/read-all');
+  return response.data;
+};
+
+// 알림 삭제
+export const deleteNotification = async (notificationId: number) => {
+  const response = await axios.delete(`/api/v1/ranking-notifications/${notificationId}`);
+  return response.data;
 };
 
 

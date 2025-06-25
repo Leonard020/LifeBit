@@ -11,12 +11,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.Objects;
+import com.lifebit.coreapi.service.notification.HealthNotificationService;
 
 @Service
 @RequiredArgsConstructor
 public class UserGoalService {
     private final UserGoalRepository userGoalRepository;
     private final UserRepository userRepository;
+    private final HealthNotificationService healthNotificationService;
 
     @Transactional(readOnly = true)
     public UserGoal getUserGoal(Long userId) {
@@ -83,7 +85,19 @@ public class UserGoalService {
         }
 
         existingGoal.setUpdatedAt(LocalDateTime.now());
-        return userGoalRepository.save(existingGoal);
+        UserGoal savedGoal = userGoalRepository.save(existingGoal);
+
+        // 목표 수정 알림
+        healthNotificationService.sendGoalAchievementNotification(userId, "목표 수정", "목표가 수정되었습니다.");
+
+        // 목표 달성 임박 체크 (예: 주간 운동 목표 90% 이상)
+        if (savedGoal.getWeeklyWorkoutTarget() != null) {
+            int progress = getCurrentWeeklyWorkoutProgress(userId); // 실제 구현 필요
+            if (progress >= (int)(savedGoal.getWeeklyWorkoutTarget() * 0.9)) {
+                healthNotificationService.sendGoalAchievementNotification(userId, "목표 임박", "주간 운동 목표 달성이 임박했습니다! (" + progress + "/" + savedGoal.getWeeklyWorkoutTarget() + ")");
+            }
+        }
+        return savedGoal;
     }
 
     @Transactional
@@ -157,7 +171,10 @@ public class UserGoalService {
         userGoal.setCreatedAt(now);
         userGoal.setUpdatedAt(now);
         
-        return userGoalRepository.save(userGoal);
+        UserGoal savedGoal = userGoalRepository.save(userGoal);
+        // 목표 설정 알림
+        healthNotificationService.sendGoalAchievementNotification(userGoal.getUserId(), "목표 설정", "목표가 성공적으로 설정되었습니다.");
+        return savedGoal;
     }
 
     /**
@@ -241,5 +258,13 @@ public class UserGoalService {
             Objects.equals(a.getWeeklyArms(), b.getWeeklyArms()) &&
             Objects.equals(a.getWeeklyAbs(), b.getWeeklyAbs()) &&
             Objects.equals(a.getWeeklyCardio(), b.getWeeklyCardio());
+    }
+
+    // 목표 임박 체크용 예시 메서드
+    private int getCurrentWeeklyWorkoutProgress(Long userId) {
+        // 실제 운동 기록에서 주간 운동 횟수/시간을 조회하는 로직 필요
+        // 예시: ExerciseService 등에서 가져오기
+        // 여기서는 0 반환 (구현 필요)
+        return 0;
     }
 } 

@@ -172,4 +172,24 @@ public class RankingNotificationService {
         String message = String.format("등급이 %s에서 %s로 변경되었습니다.", prevTier.name(), newTier.name());
         saveNotification(userId, RankingNotification.NotificationType.RANK_CHANGE, "등급 변화 알림", message);
     }
+
+    /**
+     * 업적 달성 알림 전송 (AchievementService에서 호출)
+     */
+    @Transactional
+    public void notifyAchievementUnlocked(Long userId, com.lifebit.coreapi.entity.Achievement achievement) {
+        try {
+            RankingNotification notification = new RankingNotification();
+            notification.setUserId(userId);
+            notification.setType(RankingNotification.NotificationType.ACHIEVEMENT);
+            notification.setTitle("업적 달성");
+            notification.setMessage(String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()));
+            notification.setRead(false);
+            notification.setCreatedAt(java.time.LocalDateTime.now());
+            rankingNotificationRepository.save(notification);
+        } catch (Exception e) {
+            // 알림 전송 실패 시 로그만 남기고 계속 진행
+            System.err.println("Failed to send achievement notification: " + e.getMessage());
+        }
+    }
 } 
