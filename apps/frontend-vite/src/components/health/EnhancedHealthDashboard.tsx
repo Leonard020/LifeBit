@@ -343,13 +343,21 @@ const NutritionChart: React.FC<{
   fat: number;
   calories: number;
   nutritionGoals: {
-    calories: number;
-    carbs: number;
-    protein: number;
-    fat: number;
+    calories: number | null;
+    carbs: number | null;
+    protein: number | null;
+    fat: number | null;
   };
 }> = ({ carbs, protein, fat, calories, nutritionGoals }) => {
   const total = carbs + protein + fat;
+
+  // 목표가 설정되지 않은 경우 처리
+  const hasNutritionGoals = !!(
+    nutritionGoals.calories || 
+    nutritionGoals.carbs || 
+    nutritionGoals.protein || 
+    nutritionGoals.fat
+  );
 
   if (total === 0) {
     return (
@@ -472,137 +480,132 @@ const NutritionChart: React.FC<{
         </div>
       </div>
       
-      {/* 목표 대비 달성률 섹션 */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm">
-        <h4 className="text-lg font-semibold text-center mb-6 flex items-center justify-center gap-2">
-          <Target className="h-5 w-5 text-emerald-600" />
-          🎯 목표 대비 달성률
-        </h4>
-        
-        <div className="space-y-4">
-          {/* 총 열량 */}
-          <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-4">
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2">
-                <Flame className="h-4 w-4 text-red-500" />
-                <span className="font-medium text-sm">총 열량</span>
-              </div>
-              <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{Math.round(calories * 10) / 10} kcal</span>
-                <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.calories} kcal</span>
-              </div>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-              <div
-                className="bg-gradient-to-r from-red-400 to-red-600 h-2 rounded-full transition-all duration-700"
-                style={{ width: `${Math.min((calories / nutritionGoals.calories) * 100, 100)}%` }}
-              />
-            </div>
-            <div className="text-xs text-red-600 font-medium text-center">
-              {Math.round((calories / nutritionGoals.calories) * 1000) / 10}% 달성
-            </div>
-          </div>
+      {/* 목표 대비 달성률 섹션 - 목표가 설정된 경우만 표시 */}
+      {hasNutritionGoals ? (
+        <div className="mt-8 bg-white rounded-2xl p-6 shadow-sm">
+          <h4 className="text-lg font-semibold text-center mb-6 flex items-center justify-center gap-2">
+            <Target className="h-5 w-5 text-emerald-600" />
+            🎯 목표 대비 달성률 (최신 목표 기준)
+          </h4>
           
-          {/* 탄수화물 */}
-          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="font-medium text-sm">탄수화물</span>
+          <div className="space-y-4">
+            {/* 총 열량 - 목표가 있는 경우만 표시 */}
+            {nutritionGoals.calories && (
+              <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-red-500" />
+                    <span className="font-medium text-sm">총 열량</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-gray-900">{Math.round(calories * 10) / 10} kcal</span>
+                    <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.calories} kcal</span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div
+                    className="bg-gradient-to-r from-red-400 to-red-600 h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min((calories / nutritionGoals.calories) * 100, 100)}%` }}
+                  />
+                </div>
+                <div className="text-xs text-red-600 font-medium text-center">
+                  {Math.round((calories / nutritionGoals.calories) * 1000) / 10}% 달성
+                </div>
               </div>
-              <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{Math.round(carbs * 10) / 10}g</span>
-                <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.carbs}g</span>
+            )}
+            
+            {/* 탄수화물 - 목표가 있는 경우만 표시 */}
+            {nutritionGoals.carbs && (
+              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    <span className="font-medium text-sm">탄수화물</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-gray-900">{Math.round(carbs * 10) / 10}g</span>
+                    <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.carbs}g</span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div
+                    className="bg-gradient-to-r from-blue-400 to-blue-600 h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min((carbs / nutritionGoals.carbs) * 100, 100)}%` }}
+                  />
+                </div>
+                <div className="text-xs text-blue-600 font-medium text-center">
+                  {Math.round((carbs / nutritionGoals.carbs) * 1000) / 10}% 달성
+                </div>
               </div>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-              <div
-                className="bg-gradient-to-r from-blue-400 to-blue-600 h-2 rounded-full transition-all duration-700"
-                style={{ width: `${Math.min((carbs / nutritionGoals.carbs) * 100, 100)}%` }}
-              />
-            </div>
-            <div className="text-xs text-blue-600 font-medium text-center">
-              {Math.round((carbs / nutritionGoals.carbs) * 1000) / 10}% 달성
-            </div>
-          </div>
-          
-          {/* 단백질 */}
-          <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-4">
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="font-medium text-sm">단백질</span>
+            )}
+            
+            {/* 단백질 - 목표가 있는 경우만 표시 */}
+            {nutritionGoals.protein && (
+              <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                    <span className="font-medium text-sm">단백질</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-gray-900">{Math.round(protein * 10) / 10}g</span>
+                    <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.protein}g</span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div
+                    className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min((protein / nutritionGoals.protein) * 100, 100)}%` }}
+                  />
+                </div>
+                <div className="text-xs text-emerald-600 font-medium text-center">
+                  {Math.round((protein / nutritionGoals.protein) * 1000) / 10}% 달성
+                </div>
               </div>
-              <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{Math.round(protein * 10) / 10}g</span>
-                <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.protein}g</span>
+            )}
+            
+            {/* 지방 - 목표가 있는 경우만 표시 */}
+            {nutritionGoals.fat && (
+              <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-amber-500" />
+                    <span className="font-medium text-sm">지방</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-gray-900">{Math.round(fat * 10) / 10}g</span>
+                    <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.fat}g</span>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div
+                    className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min((fat / nutritionGoals.fat) * 100, 100)}%` }}
+                  />
+                </div>
+                <div className="text-xs text-amber-600 font-medium text-center">
+                  {Math.round((fat / nutritionGoals.fat) * 1000) / 10}% 달성
+                </div>
               </div>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-              <div
-                className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-2 rounded-full transition-all duration-700"
-                style={{ width: `${Math.min((protein / nutritionGoals.protein) * 100, 100)}%` }}
-              />
-            </div>
-            <div className="text-xs text-emerald-600 font-medium text-center">
-              {Math.round((protein / nutritionGoals.protein) * 1000) / 10}% 달성
-            </div>
-          </div>
-          
-          {/* 지방 */}
-          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl p-4">
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-500" />
-                <span className="font-medium text-sm">지방</span>
-              </div>
-              <div className="text-right">
-                <span className="text-sm font-bold text-gray-900">{Math.round(fat * 10) / 10}g</span>
-                <span className="text-xs text-gray-500 ml-1">/ {nutritionGoals.fat}g</span>
-              </div>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-              <div
-                className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duration-700"
-                style={{ width: `${Math.min((fat / nutritionGoals.fat) * 100, 100)}%` }}
-              />
-            </div>
-            <div className="text-xs text-amber-600 font-medium text-center">
-              {Math.round((fat / nutritionGoals.fat) * 1000) / 10}% 달성
-            </div>
+            )}
           </div>
         </div>
-        
-        {/* 전체 달성률 요약 */}
-        <div className="mt-6 pt-4 border-t border-gray-100">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-            <div className="bg-red-50 rounded-lg p-3">
-              <div className="text-lg font-bold text-red-600">
-                {Math.round((calories / nutritionGoals.calories) * 1000) / 10}%
-              </div>
-              <div className="text-xs text-gray-600">열량</div>
-            </div>
-            <div className="bg-blue-50 rounded-lg p-3">
-              <div className="text-lg font-bold text-blue-600">
-                {Math.round((carbs / nutritionGoals.carbs) * 1000) / 10}%
-              </div>
-              <div className="text-xs text-gray-600">탄수화물</div>
-            </div>
-            <div className="bg-emerald-50 rounded-lg p-3">
-              <div className="text-lg font-bold text-emerald-600">
-                {Math.round((protein / nutritionGoals.protein) * 1000) / 10}%
-              </div>
-              <div className="text-xs text-gray-600">단백질</div>
-            </div>
-            <div className="bg-amber-50 rounded-lg p-3">
-              <div className="text-lg font-bold text-amber-600">
-                {Math.round((fat / nutritionGoals.fat) * 1000) / 10}%
-              </div>
-              <div className="text-xs text-gray-600">지방</div>
-            </div>
-          </div>
+      ) : (
+        <div className="mt-8 bg-amber-50 rounded-2xl p-6 text-center border border-amber-200">
+          <div className="text-amber-600 text-lg mb-2">🎯 목표 미설정</div>
+          <p className="text-sm text-amber-700 mb-3">
+            영양소 목표를 설정하여 달성률을 확인해보세요!
+          </p>
+          <button 
+            className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+            onClick={() => {
+              console.log('영양소 목표 설정 페이지로 이동');
+            }}
+          >
+            목표 설정하기
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -953,9 +956,13 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
     const today = new Date().toISOString().split('T')[0];
     
-    // 사용자 목표 값 (API에서 가져온 실제 데이터)
+    // 사용자 목표 값 (API에서 가져온 실제 데이터만 사용)
     const goalsData = userGoals?.data as UserGoal | undefined;
-    const targetMinutes = goalsData?.weekly_workout_target ? Math.round(goalsData.weekly_workout_target / 7) : 60;
+    
+    // 목표가 설정되지 않은 경우 기본값 대신 적절한 처리
+    const targetMinutes = goalsData?.weekly_workout_target 
+      ? Math.round(goalsData.weekly_workout_target / 7) 
+      : null; // 목표 미설정 시 null
     
     // 실제 건강 통계 API에서 운동 시간 가져오기
     const healthStatsData = healthStats?.data as Record<string, unknown>;
@@ -1023,7 +1030,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     
     return {
       exerciseMinutes: displayExerciseMinutes,
-      targetMinutes,
+      targetMinutes: targetMinutes || 60, // UI 표시용으로만 기본값 사용
       caloriesBurned,
       meals: mealsByTime,
       totalCalories,
@@ -1032,13 +1039,19 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
         protein: totalProtein,
         fat: totalFat
       },
-      // 목표 대비 달성률
+      // 목표 대비 달성률 - 실제 DB 데이터만 사용
       nutritionGoals: {
-        calories: 2000, // 기본 칼로리 목표 (추후 DB에 필드 추가 시 goalsData?.daily_calorie_target 사용)
-        carbs: goalsData?.daily_carbs_target || 300,
-        protein: goalsData?.daily_protein_target || 120,
-        fat: goalsData?.daily_fat_target || 80
-      }
+        calories: goalsData?.daily_calory_target || null, // 수정: daily_calory_target (DB 필드명 맞춤)
+        carbs: goalsData?.daily_carbs_target || null,
+        protein: goalsData?.daily_protein_target || null,
+        fat: goalsData?.daily_fat_target || null
+      },
+      // 목표 설정 여부 추가
+      hasGoals: !!(goalsData?.weekly_workout_target || 
+                   goalsData?.daily_carbs_target || 
+                   goalsData?.daily_protein_target || 
+                   goalsData?.daily_fat_target),
+      goalsCreatedAt: goalsData?.created_at
     };
   }, [exerciseSessions, mealLogs, userGoals, healthStats, nutritionStats, nutritionFromHealthStats, allLoading]);
 
