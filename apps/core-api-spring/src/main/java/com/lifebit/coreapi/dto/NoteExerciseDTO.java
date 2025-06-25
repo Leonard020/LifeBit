@@ -26,9 +26,9 @@ public class NoteExerciseDTO {
     }
 
     public void addSession(ExerciseSession session) {
-        this.totalSets += session.getSets();
-        this.totalReps += session.getReps();
-        this.totalWeight = this.totalWeight.add(session.getWeight());
+        this.totalSets += session.getSets() != null ? session.getSets() : 0;
+        this.totalReps += session.getReps() != null ? session.getReps() : 0;
+        this.totalWeight = this.totalWeight.add(session.getWeight() != null ? session.getWeight() : BigDecimal.ZERO);
         this.exerciseNames.add(session.getExerciseCatalog().getName());
     }
 }

@@ -57,7 +57,14 @@ interface HealthStatistics {
   totalWorkoutDays: number;
 }
 
-
+// 시간대 한글 변환 함수
+function getCurrentTimePeriodKorean() {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 12) return '오전';
+  if (hour >= 12 && hour < 18) return '오후';
+  if (hour >= 18 && hour < 22) return '저녁';
+  return '야간';
+}
 
 const HealthLog: React.FC = () => {
   // 🔧 모든 Hook을 최상단에 배치 (조건부 호출 금지!)
@@ -253,14 +260,30 @@ const HealthLog: React.FC = () => {
           try {
             console.log('[저장 함수 진입] recordType:', recordType, 'chatInputText:', chatInputText);
             if (recordType === 'exercise') {
-                            console.log('[운동기록 저장] payload:', response.parsed_data);
+              console.log('[운동기록 저장] payload:', response.parsed_data);
               
               // 🔧 Spring Boot API 사용하여 운동 세션 생성
+              // 1. bodyPart 변환
+              let bodyPart = 'cardio';
+              if (response.parsed_data.category === '근력운동') {
+                switch (response.parsed_data.subcategory) {
+                  case '가슴': bodyPart = 'chest'; break;
+                  case '등': bodyPart = 'back'; break;
+                  case '하체': bodyPart = 'legs'; break;
+                  case '복근': bodyPart = 'abs'; break;
+                  case '팔': bodyPart = 'arms'; break;
+                  case '어깨': bodyPart = 'shoulders'; break;
+                  default: bodyPart = 'chest';
+                }
+              }
+              // 2. 시간대 한글 변환
+              const timePeriodKorean = getCurrentTimePeriodKorean();
+              // 3. 저장 요청
               const exerciseData: ExerciseSessionCreateRequest = {
                 exercise_catalog_id: 1, // 임시값, 추후 운동명으로 찾아서 설정
                 duration_minutes: response.parsed_data.duration_min || 30,
                 calories_burned: response.parsed_data.calories_burned || 0,
-                notes: response.parsed_data.exercise || '',
+                notes: `${response.parsed_data.exercise as string || ''} (${bodyPart}, ${timePeriodKorean})`,
                 sets: response.parsed_data.sets,
                 reps: response.parsed_data.reps,
                 weight: typeof response.parsed_data.weight === 'string' 
@@ -591,16 +614,30 @@ const HealthLog: React.FC = () => {
                       try {
                                                 if (recordType === 'exercise') {
                           // 🔧 Spring Boot API 사용하여 운동 세션 생성
+                          // 1. bodyPart 변환
+                          let bodyPart = 'cardio';
+                          if (chatStructuredData.category === '근력운동') {
+                            switch (chatStructuredData.subcategory) {
+                              case '가슴': bodyPart = 'chest'; break;
+                              case '등': bodyPart = 'back'; break;
+                              case '하체': bodyPart = 'legs'; break;
+                              case '복근': bodyPart = 'abs'; break;
+                              case '팔': bodyPart = 'arms'; break;
+                              case '어깨': bodyPart = 'shoulders'; break;
+                              default: bodyPart = 'chest';
+                            }
+                          }
+                          // 2. 시간대 한글 변환
+                          const timePeriodKorean = getCurrentTimePeriodKorean();
+                          // 3. 저장 요청
                           const exerciseData: ExerciseSessionCreateRequest = {
                             exercise_catalog_id: 1, // 임시값, 추후 운동명으로 찾아서 설정
                             duration_minutes: (chatStructuredData.duration_min as number) || 30,
                             calories_burned: (chatStructuredData.calories_burned as number) || 0,
-                            notes: (chatStructuredData.exercise as string) || '',
-                            sets: chatStructuredData.sets as number,
-                            reps: chatStructuredData.reps as number,
-                            weight: typeof chatStructuredData.weight === 'string' 
-                              ? parseFloat(chatStructuredData.weight) 
-                              : (chatStructuredData.weight as number),
+                            notes: `${chatStructuredData.exercise as string || ''} (${bodyPart}, ${timePeriodKorean})`,
+                            sets: chatStructuredData.sets !== undefined && chatStructuredData.sets !== null ? Number(chatStructuredData.sets) : 0,
+                            reps: chatStructuredData.reps !== undefined && chatStructuredData.reps !== null ? Number(chatStructuredData.reps) : 0,
+                            weight: chatStructuredData.weight !== undefined && chatStructuredData.weight !== null ? Number(chatStructuredData.weight) : 0,
                             exercise_date: new Date().toISOString().slice(0, 10),
                           };
                           

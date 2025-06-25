@@ -105,7 +105,15 @@ public class ExerciseSessionController {
             
             // 데이터베이스에 저장 (토큰에서 가져온 사용자 ID 사용)
             ExerciseSession savedSession = exerciseService.recordExercise(
-                tokenUserId, catalogId, durationMinutes, caloriesBurned, notes);
+                tokenUserId,
+                catalogId,
+                durationMinutes,
+                caloriesBurned,
+                notes,
+                request.get("sets") != null ? Integer.valueOf(request.get("sets").toString()) : 0,
+                request.get("reps") != null ? Integer.valueOf(request.get("reps").toString()) : 0,
+                request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : 0d
+            );
             
             // 응답 데이터 구성
             Map<String, Object> response = new HashMap<>();

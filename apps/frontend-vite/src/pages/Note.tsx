@@ -591,14 +591,14 @@ const Note = () => {
       // 데이터 정제: undefined나 null이 아닌 값만 포함
       const cleanedData = filtered.map(record => ({
         ...record,
-        sets: record.sets || undefined,
-        reps: record.reps || undefined,
-        weight: record.weight || undefined,
+        sets: record.sets ?? record.set ?? record.set_count ?? undefined,
+        reps: record.reps ?? record.rep ?? record.rep_count ?? undefined,
+        weight: record.weight ?? record.weight_kg ?? undefined,
         durationMinutes: record.durationMinutes || undefined,
         calories_burned: record.calories_burned || undefined
       }));
 
-      setTodayExercise(cleanedData);
+      setTodayExercise(cleanedData.sort((a, b) => b.exerciseSessionId - a.exerciseSessionId));
 
       if (!filtered || filtered.length === 0) {
         console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
@@ -1019,6 +1019,13 @@ const Note = () => {
     return null;
   };
 
+  const timePeriodMap = {
+    morning: '오전',
+    afternoon: '오후',
+    evening: '저녁',
+    night: '야간',
+  };
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
@@ -1221,36 +1228,30 @@ const Note = () => {
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
                     {todayExercise.map((record) => {
+                      const isCardio = record.bodyPart === 'cardio';
                       const parts = [];
-                      
-                      // 세트, 횟수가 있으면 근력 운동으로 간주
-                      const isStrengthExercise = record.sets !== undefined || record.reps !== undefined;
-                      
-                      if (isStrengthExercise) {
-                        // 근력 운동 정보
-                        const strengthInfo = [];
-                        if (record.sets !== undefined) strengthInfo.push(`${record.sets}세트`);
-                        if (record.reps !== undefined) strengthInfo.push(`${record.reps}회`);
-                        if (strengthInfo.length > 0) {
-                          parts.push(strengthInfo.join(' × '));
-                        }
-                        
-                        // 무게 정보
-                        if (record.weight !== undefined) {
-                          parts.push(`${record.weight}kg`);
-                        }
-                      }
-                      
                       // 시간 정보 (모든 운동 타입에 표시)
                       if (record.durationMinutes !== undefined) {
                         parts.push(`${record.durationMinutes}분`);
                       }
-                      
                       // 칼로리 정보
                       if (record.calories_burned !== undefined) {
                         parts.push(`${record.calories_burned}kcal`);
                       }
-
+                      // 날짜 정보 (exerciseDate)
+                      if (record.exerciseDate) {
+                        parts.push(`${record.exerciseDate}`);
+                      }
+                      // 시간대 정보 (time_period)
+                      if (record.time_period) {
+                        parts.push(timePeriodMap[record.time_period] || record.time_period);
+                      }
+                      // 근력운동이면 세트, 무게, 횟수 추가
+                      if (!isCardio) {
+                        if (record.sets !== undefined) parts.push(`${record.sets}세트`);
+                        if (record.reps !== undefined) parts.push(`${record.reps}회`);
+                        if (record.weight !== undefined) parts.push(`${record.weight}kg`);
+                      }
                       return (
                         <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div>

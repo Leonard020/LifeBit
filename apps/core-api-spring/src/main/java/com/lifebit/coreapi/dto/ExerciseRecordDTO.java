@@ -20,7 +20,7 @@ public class ExerciseRecordDTO {
     private String bodyPart;
     private Integer sets;
     private Integer reps;
-    private Float weight;
+    private Double weight;
     
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate exerciseDate;
@@ -46,7 +46,7 @@ public class ExerciseRecordDTO {
 
         this.sets = session.getSets();
         this.reps = session.getReps();
-        this.weight = session.getWeight() != null ? session.getWeight().floatValue() : null;
+        this.weight = session.getWeight() != null ? session.getWeight().doubleValue() : null;
         this.exerciseDate = session.getExerciseDate();
         this.durationMinutes = session.getDurationMinutes();
         this.caloriesBurned = session.getCaloriesBurned();

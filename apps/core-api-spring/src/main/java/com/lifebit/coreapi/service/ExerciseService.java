@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,8 +24,10 @@ public class ExerciseService {
     private final ExerciseCatalogRepository exerciseCatalogRepository;
 
     @Transactional
-    public ExerciseSession recordExercise(Long userId, Long catalogId, Integer durationMinutes, 
-                                        Integer caloriesBurned, String notes) {
+    public ExerciseSession recordExercise(
+        Long userId, Long catalogId, Integer durationMinutes, Integer caloriesBurned, String notes,
+        Integer sets, Integer reps, Double weight
+    ) {
         ExerciseCatalog catalog = exerciseCatalogRepository.findById(catalogId)
             .orElseThrow(() -> new EntityNotFoundException("Exercise catalog not found"));
 
@@ -37,6 +40,10 @@ public class ExerciseService {
         session.setNotes(notes);
         session.setExerciseDate(LocalDate.now());
         session.setCreatedAt(LocalDateTime.now());
+
+        session.setSets(sets != null ? sets : 0);
+        session.setReps(reps != null ? reps : 0);
+        session.setWeight(weight != null ? BigDecimal.valueOf(weight) : BigDecimal.ZERO);
 
         return exerciseSessionRepository.save(session);
     }

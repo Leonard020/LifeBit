@@ -11,7 +11,7 @@ public class ExerciseRecordRequest {
 
     private Integer sets;
     private Integer reps;
-    private Float weight;
+    private Double weight;
 
     private Integer durationMinutes;
     private Integer caloriesBurned;

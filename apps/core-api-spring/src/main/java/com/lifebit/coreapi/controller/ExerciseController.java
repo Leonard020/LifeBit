@@ -32,7 +32,10 @@ public class ExerciseController {
             request.getCatalogId(),
             request.getDurationMinutes(),
             request.getCaloriesBurned(),
-            request.getNotes()
+            request.getNotes(),
+            request.getSets(),
+            request.getReps(),
+            request.getWeight()
         );
         return ResponseEntity.ok(session);
     }

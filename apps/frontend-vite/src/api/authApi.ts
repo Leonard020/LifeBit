@@ -199,6 +199,7 @@ export interface ExerciseRecordDTO {
   exerciseDate: string;
   durationMinutes?: number;
   calories_burned?: number;
+  time_period?: string; // 시간대(아침/점심/저녁 등) 추가
 }
 
 // ============================================================================

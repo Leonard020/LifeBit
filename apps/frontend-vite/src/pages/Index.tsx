@@ -313,9 +313,9 @@ const Index = () => {
           duration_minutes: chatStructuredData.duration_min ?? 30,
           calories_burned: chatStructuredData.calories_burned ?? 0,
           notes: exerciseName,
-          sets: isCardio ? null : (chatStructuredData.sets ?? 0),
-          reps: isCardio ? null : (chatStructuredData.reps ?? 0),
-          weight: isCardio ? null : (chatStructuredData.weight ?? 0),
+          sets: chatStructuredData.sets ?? 0,
+          reps: chatStructuredData.reps ?? 0,
+          weight: chatStructuredData.weight ?? 0,
           exercise_date: new Date().toISOString().split('T')[0],
           // 🔧 DB 스키마에 맞는 필수 필드들 추가
           time_period: getCurrentTimePeriod(), // 현재 시간대 자동 판단
