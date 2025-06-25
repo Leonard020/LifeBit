@@ -63,49 +63,35 @@ resource "ncloud_access_control_group" "web" {
   # NCP ACG는 tags를 지원하지 않음
 }
 
-# ACG 규칙 - SSH 접근
-resource "ncloud_access_control_group_rule" "ssh" {
+# ACG 규칙 - 모든 포트를 하나의 리소스로 통합 (NCP Provider 호환성)
+resource "ncloud_access_control_group_rule" "all_ports" {
   access_control_group_no = ncloud_access_control_group.web.id
   
-  dynamic "inbound" {
-    for_each = var.allowed_ssh_cidrs
-    content {
-      protocol    = "TCP"
-      ip_block    = inbound.value
-      port_range  = "22"
-      description = "SSH access from ${inbound.value}"
-    }
+  # SSH 접근
+  inbound {
+    protocol    = "TCP"
+    ip_block    = "0.0.0.0/0"
+    port_range  = "22"
+    description = "SSH access"
   }
-}
-
-# ACG 규칙 - HTTP
-resource "ncloud_access_control_group_rule" "http" {
-  access_control_group_no = ncloud_access_control_group.web.id
   
+  # HTTP 접근
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
     port_range  = "80"
     description = "HTTP access"
   }
-}
-
-# ACG 규칙 - HTTPS (향후 SSL 적용용)
-resource "ncloud_access_control_group_rule" "https" {
-  access_control_group_no = ncloud_access_control_group.web.id
   
+  # HTTPS 접근
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
     port_range  = "443"
     description = "HTTPS access"
   }
-}
-
-# ACG 규칙 - 애플리케이션 포트들 (개발/데모용)
-resource "ncloud_access_control_group_rule" "app_ports" {
-  access_control_group_no = ncloud_access_control_group.web.id
   
+  # Frontend (React)
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
@@ -113,6 +99,7 @@ resource "ncloud_access_control_group_rule" "app_ports" {
     description = "Frontend (React)"
   }
   
+  # Spring Boot API
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
@@ -120,6 +107,7 @@ resource "ncloud_access_control_group_rule" "app_ports" {
     description = "Spring Boot API"
   }
   
+  # FastAPI
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
@@ -127,6 +115,7 @@ resource "ncloud_access_control_group_rule" "app_ports" {
     description = "FastAPI"
   }
   
+  # Airflow
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
@@ -134,6 +123,7 @@ resource "ncloud_access_control_group_rule" "app_ports" {
     description = "Airflow"
   }
   
+  # Grafana
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
@@ -141,6 +131,7 @@ resource "ncloud_access_control_group_rule" "app_ports" {
     description = "Grafana"
   }
   
+  # Prometheus
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
@@ -148,11 +139,20 @@ resource "ncloud_access_control_group_rule" "app_ports" {
     description = "Prometheus"
   }
   
+  # Nginx Proxy
   inbound {
     protocol    = "TCP"
     ip_block    = "0.0.0.0/0"
     port_range  = "8082"
     description = "Nginx Proxy"
+  }
+  
+  # Node Exporter
+  inbound {
+    protocol    = "TCP"
+    ip_block    = "0.0.0.0/0"
+    port_range  = "9100"
+    description = "Node Exporter"
   }
 }
 
@@ -161,12 +161,13 @@ resource "ncloud_login_key" "main" {
   key_name = "${var.project_name}-${var.environment}-key-v2"
 }
 
-# 최소 초기화 스크립트 (SSH 키 충돌 방지)
+# 최소 초기화 스크립트 (SSH 키 직접 설정)
 resource "ncloud_init_script" "minimal_init" {
   name    = "${var.project_name}-${var.environment}-minimal-init"
   content = base64encode(templatefile("${path.module}/scripts/minimal-init.sh", {
     environment = var.environment
     project_name = var.project_name
+    ssh_public_key = ncloud_login_key.main.public_key
   }))
 }
 

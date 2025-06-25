@@ -56,6 +56,32 @@ mkdir -p /opt/${project_name}
 mkdir -p /opt/${project_name}/logs
 chmod 755 /opt/${project_name}
 
+# SSH 키 직접 설정 (NCP 자동 배치 실패 대비)
+log_info "SSH 키 설정 중..."
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+# SSH 공개키 추가
+echo "${ssh_public_key}" > /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+
+# SSH 설정 강화
+log_info "SSH 보안 설정 중..."
+sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+# cloud-init SSH 설정도 수정 (Ubuntu 24.04 대응)
+if [ -f /etc/ssh/sshd_config.d/50-cloud-init.conf ]; then
+    log_info "cloud-init SSH 설정 수정 중..."
+    echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config.d/50-cloud-init.conf
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config.d/50-cloud-init.conf
+fi
+
+# SSH 서비스 재시작
+log_info "SSH 서비스 재시작 중..."
+systemctl restart ssh || systemctl restart sshd
+
 # 초기화 완료 표시
 log_success "최소 초기화 완료!"
 echo "$(date): Minimal initialization completed" > /var/log/minimal-init-complete
