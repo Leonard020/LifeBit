@@ -50,3 +50,6 @@ Thumbs.db
 # Local env files
 .env.local
 .env.*.local
+
+# Terraform backup files
+infrastructure/terraform.tfvars.backup-*

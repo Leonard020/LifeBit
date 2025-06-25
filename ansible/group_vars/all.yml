@@ -3,6 +3,11 @@
 project_name: "lifebit"
 project_path: "/opt/lifebit"
 
+# 클라우드 프로바이더 설정
+cloud_provider: "aws"
+aws_region: "ap-northeast-2"
+instance_type: "t3.small"
+
 # Git 저장소 설정
 git_repository_url: "https://github.com/Hyeon6492/LifeBit.git"  # 실제 저장소 URL로 변경
 git_branch: "main"
@@ -16,10 +21,17 @@ kakao_redirect_uri: ""
 google_client_secret: ""
 google_redirect_uri: ""
 
-# 데이터베이스 설정
-db_name: "lifebit_db"
-db_user: "lifebit_user"
-db_password: "{{ vault_db_password | default('lifebit_password') }}"
+# PostgreSQL 데이터베이스 설정 (Docker Compose)
+postgres_db: "lifebit_db"
+postgres_user: "lifebit_user"
+postgres_password: "{{ vault_db_password | default('lifebit_password') }}"
+postgres_host: "postgres-db"  # Docker Compose 서비스명
+postgres_port: "5432"
+
+# 데이터베이스 설정 (기존 호환성)
+db_name: "{{ postgres_db }}"
+db_user: "{{ postgres_user }}"
+db_password: "{{ postgres_password }}"
 
 # 모니터링 설정
 enable_monitoring: true
@@ -35,4 +47,8 @@ worker_processes: "auto"
 
 # 로깅 설정
 log_level: "info"
-log_retention_days: 30 
+log_retention_days: 30
+
+# AWS 특화 설정
+aws_ebs_optimized: false
+aws_monitoring: false 

@@ -361,6 +361,38 @@
       tags: [deploy]
 
     # ================================================
+    # 9-1. PostgreSQL DB 초기화 (LifeBit.sql 적용)
+    # ================================================
+    - name: PostgreSQL 컨테이너가 준비될 때까지 대기
+      wait_for:
+        host: "{{ ansible_default_ipv4.address }}"
+        port: 5432
+        timeout: 60
+      tags: [database]
+
+    - name: LifeBit.sql 파일을 서버로 복사
+      copy:
+        src: "{{ playbook_dir }}/../LifeBit.sql"
+        dest: "/opt/{{ project_name }}/LifeBit.sql"
+        mode: '0644'
+      tags: [database]
+
+    - name: PostgreSQL DB 초기화 (LifeBit.sql 실행)
+      shell: |
+        cd /opt/{{ project_name }}/app
+        docker-compose exec -T postgres-db psql -U {{ postgres_user | default('lifebit_user') }} -d {{ postgres_db | default('lifebit_db') }} < /opt/{{ project_name }}/LifeBit.sql
+      args:
+        chdir: "/opt/{{ project_name }}/app"
+      register: db_init_result
+      failed_when: db_init_result.rc != 0
+      tags: [database]
+
+    - name: DB 초기화 결과 출력
+      debug:
+        var: db_init_result.stdout_lines
+      tags: [database]
+
+    # ================================================
     # 10. 메모리 모니터링 및 최적화
     # ================================================
     - name: 메모리 모니터링 스크립트 생성
@@ -525,7 +557,7 @@
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"
-          job: "cd /opt/{{ project_name }}/app && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_\$(date +%Y%m%d_%H%M%S).sql"
+          job: "cd /opt/{{ project_name }}/app && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
         - name: "Docker 정리"
           minute: "0"
           hour: "2"
