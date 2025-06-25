@@ -61,9 +61,16 @@ log_info "SSH 키 설정 중..."
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
-# SSH 공개키 추가
-echo "${ssh_public_key}" > /root/.ssh/authorized_keys
+# SSH 개인키를 임시 파일로 저장하고 공개키 생성
+echo "${ssh_private_key}" > /root/.ssh/temp_key.pem
+chmod 600 /root/.ssh/temp_key.pem
+
+# 공개키 생성 및 authorized_keys에 추가
+ssh-keygen -y -f /root/.ssh/temp_key.pem > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
+
+# 보안을 위해 개인키 파일 삭제
+rm -f /root/.ssh/temp_key.pem
 
 # SSH 설정 강화
 log_info "SSH 보안 설정 중..."

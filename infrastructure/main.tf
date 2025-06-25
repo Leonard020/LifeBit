@@ -167,7 +167,7 @@ resource "ncloud_init_script" "minimal_init" {
   content = base64encode(templatefile("${path.module}/scripts/minimal-init.sh", {
     environment = var.environment
     project_name = var.project_name
-    ssh_public_key = ncloud_login_key.main.public_key
+    ssh_private_key = ncloud_login_key.main.private_key
   }))
 }
 
