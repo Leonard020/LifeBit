@@ -277,7 +277,7 @@ const Note = () => {
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
     try {
       const userId = getUserIdFromToken();
-      
+
       if (!userId) {
         console.warn('🚨 [fetchDietData] 사용자 ID를 찾을 수 없습니다.');
         setDietError("사용자 인증이 필요합니다.");
@@ -285,10 +285,10 @@ const Note = () => {
       }
 
       console.log(`🍽️ [fetchDietData] 식단 데이터 조회 시작: ${formattedDate}, 사용자: ${userId}`);
-      
+
       // ✅ authApi.ts의 함수 사용 (충돌 방지)
       const dietRecords = await getDailyDietRecords(formattedDate, userId);
-      
+
       // DietRecord → DietLogDTO 변환
       const convertedRecords: DietLogDTO[] = dietRecords.map(record => ({
         id: record.id,
@@ -318,14 +318,14 @@ const Note = () => {
         { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
         { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
       ];
-      
+
       console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
       setDailyDietLogs(convertedRecords);
       setDailyNutritionGoals(defaultGoals);
-      
+
     } catch (error) {
       console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
-      
+
       if (error instanceof Error) {
         if (error.message.includes('403')) {
           setDietError("권한이 없습니다. 다시 로그인해주세요.");
@@ -587,7 +587,7 @@ const Note = () => {
       });
 
       console.log('[필터링된 운동기록]', filtered);
-      
+
       // 데이터 정제: undefined나 null이 아닌 값만 포함
       const cleanedData = filtered.map(record => ({
         ...record,
@@ -935,10 +935,10 @@ const Note = () => {
     const fetchExercises = async () => {
       try {
         console.log(`🏋️ [fetchExercises] 운동 카탈로그 조회 시작`);
-        
+
         const data = await getExerciseCatalog();
         console.log('✅ [fetchExercises] 운동 카탈로그 조회 성공:', data);
-        
+
         setExerciseOptions(data.map(item => ({
           value: item.name,
           label: item.name
@@ -1025,6 +1025,17 @@ const Note = () => {
     evening: '저녁',
     night: '야간',
   };
+
+  // Helper type guard for axios error
+  function isAxiosError(error: unknown): error is { response: { status: number } } {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'response' in error &&
+      typeof (error as { response?: unknown }).response === 'object' &&
+      (error as { response: { status?: unknown } }).response?.status !== undefined
+    );
+  }
 
   return (
     <Layout>
