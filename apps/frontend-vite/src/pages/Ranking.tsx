@@ -224,22 +224,28 @@ const Ranking = () => {
             </CardHeader>
             <CardContent>
               <div className="text-center space-y-4">
-                {/* 등급명/색상 표시 */}
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <span
-                    style={{
-                      background: myTierMeta.color,
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '2px 10px',
-                      fontWeight: 'bold',
-                      fontSize: '1rem',
-                    }}
-                  >
-                    {myTierMeta.name}
-                  </span>
-                  <span className="text-sm text-muted-foreground">{myTierMeta.desc}</span>
-                </div>
+                {/* 등급명/색상 표시 + 툴팁 */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="flex items-center justify-center gap-2 mb-2 tier-badge"
+                      style={{
+                        background: myTierMeta.color,
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '6px 16px',
+                        fontWeight: 'bold',
+                        fontSize: '1.1rem',
+                      }}
+                    >
+                      <Trophy className="mr-1 h-5 w-5" />
+                      {myTierMeta.name} 등급
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    점수에 따라 자동으로 부여되는 공식 등급입니다.
+                  </TooltipContent>
+                </Tooltip>
                 <div className="flex items-center justify-center space-x-8">
                   <div className="text-center">
                     <div className="text-3xl font-bold gradient-text">{myRanking.rank || '-'}</div>
@@ -291,18 +297,27 @@ const Ranking = () => {
                         <div>
                           <div className="font-medium">{user.nickname}</div>
                           <div className="flex items-center gap-2">
-                            <span
-                              style={{
-                                background: tierMeta.color,
-                                color: '#fff',
-                                borderRadius: '8px',
-                                padding: '2px 8px',
-                                fontWeight: 'bold',
-                                fontSize: '0.9rem',
-                              }}
-                            >
-                              {tierMeta.name}
-                            </span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className="flex items-center tier-badge"
+                                  style={{
+                                    background: tierMeta.color,
+                                    color: '#fff',
+                                    borderRadius: '8px',
+                                    padding: '2px 8px',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.9rem',
+                                  }}
+                                >
+                                  <Medal className="mr-1 h-4 w-4" />
+                                  {tierMeta.name} 등급
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                점수에 따라 자동으로 부여되는 공식 등급입니다.
+                              </TooltipContent>
+                            </Tooltip>
                             <span className="text-xs text-muted-foreground">{tierMeta.desc}</span>
                           </div>
                           <div className="text-sm text-muted-foreground">
@@ -312,9 +327,7 @@ const Ranking = () => {
                       </div>
                       <div className="text-right">
                         <div className="font-bold">{user.score.toLocaleString()}점</div>
-                        <Badge className={`text-xs ${getBadgeColor(user.badge)}`}>
-                          {user.badge}
-                        </Badge>
+                        {/* Badge(뱃지)는 등급과 혼동 방지를 위해 숨김 또는 별도 표기 */}
                       </div>
                     </div>
                   );
@@ -330,58 +343,56 @@ const Ranking = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Award className="mr-2 h-5 w-5" />
-                활동 뱃지
+                나의 업적/뱃지
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {achievements.map((achievement: Achievement, index: number) => (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg border ${achievement.achieved ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer hover:shadow-lg hover:border-primary transition`}
-                    onClick={() => { setSelectedAchievement(achievement); setDrawerOpen(true); }}
-                    tabIndex={0}
-                    role="button"
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setSelectedAchievement(achievement); setDrawerOpen(true); } }}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>{achievement.title}</h4>
-                        <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>{achievement.description}</p>
-                      </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            className={`${getBadgeColor(achievement.badge)} ml-2 text-xs px-2 py-0.5`}
-                          >
-                            {achievement.badge}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <div>
-                            <div className="font-bold">{achievement.title}</div>
-                            <div className="text-xs text-muted-foreground">{achievement.description}</div>
+                  <Tooltip key={index}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={`p-4 rounded-lg border ${achievement.achieved ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer hover:shadow-lg hover:border-primary transition`}
+                        onClick={() => { setSelectedAchievement(achievement); setDrawerOpen(true); }}
+                        tabIndex={0}
+                        role="button"
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setSelectedAchievement(achievement); setDrawerOpen(true); } }}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>{achievement.title}</h4>
+                            <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>{achievement.description}</p>
                           </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                    {achievement.achieved ? (
-                      <div className="flex items-center space-x-2 text-green-600">
-                        <Trophy className="h-4 w-4" />
-                        <span className="text-sm">달성: {achievement.date}</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span>진행도</span>
-                          <span>{achievement.progress}/{achievement.target || 100}</span>
+                          <span
+                            className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
+                            style={{ fontWeight: 'bold', fontSize: '0.95rem' }}
+                          >
+                            <Award className="mr-1 h-4 w-4" />
+                            {achievement.badge} 뱃지
+                          </span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} />
-                        </div>
+                        {achievement.achieved ? (
+                          <div className="flex items-center space-x-2 text-green-600">
+                            <Trophy className="h-4 w-4" />
+                            <span className="text-sm">달성: {achievement.date}</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span>진행도</span>
+                              <span>{achievement.progress}/{achievement.target || 100}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      특정 업적을 달성하면 획득할 수 있는 뱃지입니다.
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
               </div>
               {/* 업적 상세 Drawer */}
@@ -392,7 +403,13 @@ const Ranking = () => {
                       <div className="mx-auto w-full max-w-sm bg-white rounded-xl shadow-lg p-8 flex flex-col items-center justify-center">
                         <DrawerTitle>
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge className={`${getBadgeColor(selectedAchievement.badge)} text-xs px-2 py-0.5`}>{selectedAchievement.badge}</Badge>
+                            <span
+                              className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
+                              style={{ fontWeight: 'bold', fontSize: '0.95rem' }}
+                            >
+                              <Award className="mr-1 h-4 w-4" />
+                              {selectedAchievement.badge} 뱃지
+                            </span>
                             <span className="font-bold text-lg">{selectedAchievement.title}</span>
                           </div>
                         </DrawerTitle>

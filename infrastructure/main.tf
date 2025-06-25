@@ -38,10 +38,8 @@ locals {
   suffix = var.name_suffix != "" ? "-${substr(var.name_suffix,0,8)}" : ""
 }
 
-# 로그인 키 생성 (항상 고유 suffix로 생성)
-resource "ncloud_login_key" "main" {
-  key_name = "${var.project_name}-${var.environment}-key${local.suffix}"
-}
+# 이미 생성된 로그인 키 사용 (변수로 직접 참조)
+# NCP 기본 SSH 키 주입 방식만 사용
 
 # VPC 생성
 resource "ncloud_vpc" "main" {
@@ -180,7 +178,7 @@ resource "ncloud_server" "web" {
   name                      = "${var.project_name}-${var.environment}-web-server"
   server_image_product_code = var.server_image_product_code
   server_product_code       = var.server_instance_type
-  login_key_name            = ncloud_login_key.main.key_name
+  login_key_name            = var.login_key_name
   subnet_no                 = ncloud_subnet.public.id
 
   network_interface {
@@ -209,4 +207,6 @@ resource "ncloud_block_storage" "web_data" {
   server_instance_no = ncloud_server.web.id
 
   # NCP Block Storage는 tags를 지원하지 않음
-} 
+}
+
+ 

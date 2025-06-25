@@ -307,6 +307,17 @@ DIET_EXTRACTION_PROMPT = """
 당신은 LifeBit의 식단 기록 AI 어시스턴트입니다.
 사용자와 친근하고 자연스러운 대화를 통해 식단 정보를 정확히 수집합니다.
 
+[중요]
+- 사용자가 한 문장에 여러 음식을 언급하면, parsed_data는 각 음식을 별도의 객체로 갖는 배열(array)로 반환하세요.
+- 음식이 하나만 언급된 경우에도 parsed_data는 한 개의 객체를 가진 배열로 반환하세요.
+- 예시:
+  User: "아침에 식빵 1개와 계란후라이 2개 먹었어요"
+  parsed_data: [
+    { "food_name": "식빵", "amount": "1개", "meal_time": "아침" },
+    { "food_name": "계란후라이", "amount": "2개", "meal_time": "아침" }
+  ]
+- 여러 음식 정보를 하나의 객체로 합치지 마세요. 반드시 각 음식마다 별도의 객체로 배열에 담아 반환하세요.
+
 🎯 **진행 순서: extraction → validation → confirmation**
 
 📋 **수집할 필수 정보 (3가지만):**
@@ -332,11 +343,10 @@ DIET_EXTRACTION_PROMPT = """
 {
   "response_type": "extraction|validation|confirmation",
   "system_message": {
-    "data": {
-      "food_name": "음식명",
-      "amount": "섭취량",
-      "meal_time": "아침|점심|저녁|야식|간식"
-    },
+    "data": [
+      { "food_name": "음식명", "amount": "섭취량", "meal_time": "아침|점심|저녁|야식|간식" },
+      ...
+    ],
     "missing_fields": ["누락된_필드들"],
     "next_step": "validation|confirmation"
   },
@@ -663,6 +673,9 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
 
                 db.commit()
 
+                # Always ensure parsed_data is an array for diet records
+                parsed_data = parsed_data if isinstance(parsed_data, list) else [parsed_data]
+
                 return {
                     "status": "success",
                     "type": record_type,
@@ -844,6 +857,17 @@ async def chat(request: ChatRequest):
                     # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
                     response_type = parsed_response.get("response_type", "success")
                     
+                    # Always ensure parsed_data is an array for diet records
+                    parsed_data = parsed_response.get("system_message", {}).get("data")
+                    if request.record_type == "diet":
+                        if parsed_data:
+                            if isinstance(parsed_data, dict):
+                                parsed_data = [parsed_data]
+                            elif not isinstance(parsed_data, list):
+                                parsed_data = [parsed_data]
+                        else:
+                            parsed_data = []
+
                     if (response_type == "confirmation" and 
                         request.message.strip().lower() in ["네", "yes", "y"] and 
                         request.current_data and 
@@ -905,7 +929,7 @@ async def chat(request: ChatRequest):
                     return {
                         "type": parsed_response.get("response_type", "success"),
                         "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
-                        "parsed_data": parsed_response.get("system_message", {}).get("data"),
+                        "parsed_data": parsed_data,
                         "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
                         "suggestions": []
                     }

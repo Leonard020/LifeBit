@@ -22,11 +22,20 @@ public class ExerciseController {
     private final ExerciseService exerciseService;
     private final JwtTokenProvider jwtTokenProvider;
 
+    // 시간대 자동 분류 함수
+    private com.lifebit.coreapi.entity.TimePeriodType getTimePeriodByHour(int hour) {
+        if (hour >= 5 && hour < 12) return com.lifebit.coreapi.entity.TimePeriodType.morning;
+        if (hour >= 12 && hour < 18) return com.lifebit.coreapi.entity.TimePeriodType.afternoon;
+        if (hour >= 18 && hour < 22) return com.lifebit.coreapi.entity.TimePeriodType.evening;
+        return com.lifebit.coreapi.entity.TimePeriodType.night;
+    }
+
     @PostMapping("/record")
     public ResponseEntity<ExerciseSession> recordExercise(
             @RequestHeader("Authorization") String token,
             @RequestBody ExerciseRecordRequest request) {
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
+        com.lifebit.coreapi.entity.TimePeriodType timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
         ExerciseSession session = exerciseService.recordExercise(
             userId,
             request.getCatalogId(),
@@ -35,7 +44,9 @@ public class ExerciseController {
             request.getNotes(),
             request.getSets(),
             request.getReps(),
-            request.getWeight()
+            request.getWeight(),
+            request.getExerciseDate(),
+            timePeriod
         );
         return ResponseEntity.ok(session);
     }
