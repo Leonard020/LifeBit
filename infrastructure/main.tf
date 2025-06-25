@@ -1,13 +1,13 @@
 # ================================================
-# LifeBit 학원용 Terraform 인프라 설정
+# LifeBit 학원용 단일 서버 Terraform 구성
 # ================================================
-# NCP VPC 환경에서 단일 서버 배포
+# 모든 서비스를 하나의 VM에서 Docker Compose로 실행
 
 terraform {
   required_version = ">= 1.0"
   required_providers {
     ncloud = {
-      source  = "navercloudplatform/ncloud"
+      source  = "NaverCloudPlatform/ncloud"
       version = "~> 3.1.1"
     }
   }
@@ -22,7 +22,7 @@ provider "ncloud" {
   support_vpc = true
 }
 
-# 현재 리전 정보 조회
+# 현재 리전 정보 조회 (ncloud_user 대신 사용)
 data "ncloud_regions" "available" {}
 
 # 데이터 소스 - 사용 가능한 존 조회
@@ -38,15 +38,28 @@ locals {
   suffix = var.name_suffix != "" ? "-${substr(var.name_suffix,0,8)}" : ""
 }
 
-# 로그인 키 생성 (단순한 이름 사용 - SSH 키 주입 문제 해결)
-resource "ncloud_login_key" "main" {
-  key_name = var.login_key_name
+# 이미 생성된 로그인 키 사용 (변수로 직접 참조)
+
+# Init Script 생성 (SSH 키 직접 주입)
+resource "ncloud_init_script" "ssh_key_injection" {
+  name    = "lifebit-ssh-key-injection"
+  content = base64encode(<<-EOF
+#!/bin/bash
+# SSH 키 직접 주입 스크립트
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCySWXZjwNtvyj/lM2VwtzcMtzltXuJPRA+XOEtzd+nLpt7ezevqJHtLpplXhUkHb/hqtcF78rKgk4a3TRNZSwAJXR+7l5yqP8vnTEvfpJgkoPJ8IkiigU8rDejRhIvht7Rp6S2gqyZrLSAD25vWCsPM9SK0R5xCVh0P6hYW+LYfIF9V2krz5lSdLrk/RBPYEdqIBpxPjaFOfAMrEM71sPsDJ1yDJjheDV81uFFLQwgY9ww68JLKw+Opas8tSWv7C9Qbhb2Wkib6c5HMiw0xbx+uK6TNifle79rpJgCTQAwhDUqouekW7cAyKHxcbLzlDEMBYb+poQONz7p3KxMNULV" >> /home/ubuntu/.ssh/authorized_keys
+chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+echo "SSH key injection completed" > /var/log/ssh-key-injection.log
+EOF
+  )
 }
 
 # VPC 생성
 resource "ncloud_vpc" "main" {
   name            = "${var.project_name}-${var.environment}-vpc${local.suffix}"
   ipv4_cidr_block = var.vpc_cidr
+
+  # NCP VPC는 tags를 지원하지 않음
 }
 
 # 퍼블릭 서브넷 생성 (단일 서브넷)
@@ -58,6 +71,8 @@ resource "ncloud_subnet" "public" {
   network_acl_no = ncloud_vpc.main.default_network_acl_no
   subnet_type    = "PUBLIC"
   usage_type     = "GEN"
+
+  # NCP Subnet은 tags를 지원하지 않음
 }
 
 # ACG (Access Control Group) - 웹 서버용
@@ -65,9 +80,11 @@ resource "ncloud_access_control_group" "web" {
   name        = "${var.project_name}-${var.environment}-web-acg"
   description = "ACG for LifeBit web server (Academy Project)"
   vpc_no      = ncloud_vpc.main.id
+
+  # NCP ACG는 tags를 지원하지 않음
 }
 
-# ACG 규칙 - 모든 포트를 하나의 리소스로 통합
+# ACG 규칙 - 모든 포트를 하나의 리소스로 통합 (NCP Provider 호환성)
 resource "ncloud_access_control_group_rule" "all_ports" {
   access_control_group_no = ncloud_access_control_group.web.id
 
@@ -165,14 +182,17 @@ resource "ncloud_network_interface" "web" {
   name                  = "${var.project_name}-${var.environment}-web-nic"
   subnet_no             = ncloud_subnet.public.id
   access_control_groups = [ncloud_access_control_group.web.id]
+
+  # NCP Network Interface는 tags를 지원하지 않음
 }
 
-# 웹 서버 인스턴스 생성 (단일 서버) - SSH 키 주입 문제 해결
+# 웹 서버 인스턴스 생성 (단일 서버)
 resource "ncloud_server" "web" {
   name                      = "${var.project_name}-${var.environment}-web-server"
   server_image_product_code = var.server_image_product_code
   server_product_code       = var.server_instance_type
-  login_key_name            = ncloud_login_key.main.key_name  # 로그인 키 참조
+  login_key_name            = var.login_key_name
+  init_script_no            = ncloud_init_script.ssh_key_injection.id
   subnet_no                 = ncloud_subnet.public.id
 
   network_interface {
@@ -180,16 +200,15 @@ resource "ncloud_server" "web" {
     order                = 0
   }
 
-  # 키 생성 후 대기 (XEN 하이퍼바이저 키 주입 시간 고려)
-  depends_on = [
-    ncloud_login_key.main
-  ]
+  # NCP Server는 tags를 지원하지 않음
 }
 
 # 공인 IP 할당
 resource "ncloud_public_ip" "web" {
   server_instance_no = ncloud_server.web.id
   description        = "Public IP for ${var.project_name} web server"
+
+  # NCP Public IP는 tags를 지원하지 않음
 }
 
 # 블록 스토리지 추가 (선택적)
@@ -200,6 +219,8 @@ resource "ncloud_block_storage" "web_data" {
   size               = var.additional_storage_size
   description        = "Additional storage for LifeBit data"
   server_instance_no = ncloud_server.web.id
+
+  # NCP Block Storage는 tags를 지원하지 않음
 }
 
  
