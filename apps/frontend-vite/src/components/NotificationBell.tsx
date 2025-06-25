@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Trophy, Target, Medal, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
@@ -8,17 +8,40 @@ import {
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { getRankingNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification, RankingNotification } from '@/api/auth';
+import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification, Notification } from '@/api/auth';
 import { useAuth } from '@/AuthContext';
 import { toast } from 'sonner';
 import type { AxiosError } from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 const NotificationBell = () => {
-  const [notifications, setNotifications] = useState<RankingNotification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { isLoggedIn } = useAuth();
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  type LinkType = string | { pathname: string; state?: Record<string, unknown> };
+  const typeMeta: Record<string, { icon: JSX.Element; color: string; link: (refId?: number) => LinkType | null; label: string }> = {
+    ACHIEVEMENT: {
+      icon: <Trophy className="w-4 h-4" />, color: 'text-yellow-500', label: '업적',
+      link: (refId) => refId ? { pathname: '/ranking', state: { achievementId: refId } } : '/ranking',
+    },
+    GOAL_SET: {
+      icon: <Target className="w-4 h-4" />, color: 'text-blue-500', label: '목표',
+      link: () => '/goals',
+    },
+    RANKING: {
+      icon: <Medal className="w-4 h-4" />, color: 'text-purple-500', label: '랭킹',
+      link: () => '/ranking',
+    },
+    SYSTEM: {
+      icon: <Info className="w-4 h-4" />, color: 'text-gray-500', label: '시스템',
+      link: () => null,
+    },
+  };
 
   // 알림 데이터 가져오기
   const fetchNotifications = async () => {
@@ -43,7 +66,7 @@ const NotificationBell = () => {
         return;
       }
       
-      const response = await getRankingNotifications(0, 20);
+      const response = await getNotifications(0, 20);
       const notificationList = response.content || [];
       setNotifications(notificationList);
       
@@ -169,6 +192,26 @@ const NotificationBell = () => {
     return () => clearInterval(interval);
   }, [isLoggedIn]);
 
+  const filteredNotifications = filterType
+    ? notifications.filter((n) => n.type === filterType)
+    : notifications;
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.isRead) {
+      await markNotificationAsRead(notification.id);
+      setNotifications((prev) => prev.map((n) => n.id === notification.id ? { ...n, isRead: true } : n));
+    }
+    const meta = typeMeta[notification.type];
+    if (meta && meta.link) {
+      const link = meta.link(notification.refId);
+      if (typeof link === 'string') {
+        navigate(link);
+      } else if (link && typeof link === 'object' && 'pathname' in link) {
+        navigate(link.pathname, { state: link.state });
+      }
+    }
+  };
+
   if (!isLoggedIn) return null;
 
   return (
@@ -190,62 +233,80 @@ const NotificationBell = () => {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h4 className="font-semibold">알림</h4>
-          <div className="flex items-center gap-2">
+      <PopoverContent className="w-[420px] max-w-full p-0" align="end">
+        <div className="flex items-center justify-between p-5 border-b">
+          <h4 className="font-semibold text-lg">알림</h4>
+          <div className="flex items-center gap-2 flex-wrap min-w-0 overflow-x-auto max-w-full">
+            <Button
+              variant={filterType === null ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setFilterType(null)}
+              className="text-xs"
+            >전체</Button>
+            {Object.entries(typeMeta).map(([type, meta]) => (
+              <Button
+                key={type}
+                variant={filterType === type ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setFilterType(type)}
+                className={`text-xs ${meta.color}`}
+              >{meta.icon} {meta.label}</Button>
+            ))}
             {unreadCount > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleMarkAllAsRead}
                 className="text-xs"
-              >
-                모두 읽음
-              </Button>
+              >모두 읽음</Button>
             )}
           </div>
         </div>
-        
-        <ScrollArea className="h-80">
+        <ScrollArea className="max-h-[480px]">
           {loading ? (
-            <div className="flex items-center justify-center p-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            <div className="flex items-center justify-center p-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : notifications.length === 0 ? (
-            <div className="flex items-center justify-center p-8 text-muted-foreground">
-              <p>새로운 알림이 없습니다</p>
+          ) : filteredNotifications.length === 0 ? (
+            <div className="flex items-center justify-center p-10 text-muted-foreground">
+              <p className="text-base">새로운 알림이 없습니다</p>
             </div>
           ) : (
-            <div className="p-2">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors ${
-                    notification.isRead 
-                      ? 'bg-gray-50 hover:bg-gray-100' 
-                      : 'bg-blue-50 hover:bg-blue-100 border-l-4 border-blue-500'
-                  }`}
-                  onClick={() => !notification.isRead && handleMarkAsRead(notification.id)}
-                >
-                  <div className="flex items-start justify-between">
+            <div className="p-3">
+              {filteredNotifications.map((notification) => {
+                const meta = typeMeta[notification.type] || { icon: <Info className="w-4 h-4" />, color: 'text-gray-400', label: notification.type, link: () => null };
+                return (
+                  <div
+                    key={notification.id}
+                    className={`p-4 rounded-xl mb-3 cursor-pointer transition-colors flex items-start gap-3 shadow-sm ${
+                      notification.isRead 
+                        ? 'bg-gray-50 hover:bg-gray-100' 
+                        : 'bg-blue-50 hover:bg-blue-100 border-l-4 border-blue-500'
+                    }`}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    <span className={`mt-1 ${meta.color}`}>{meta.icon}</span>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h5 className={`font-medium text-sm ${
+                      <div className="flex items-center gap-2 mb-2">
+                        <h5 className={`font-semibold text-base ${
                           notification.isRead ? 'text-gray-700' : 'text-blue-900'
                         }`}>
                           {notification.title}
+                          <span className="ml-2 text-xs text-gray-400">[{meta.label}]</span>
                         </h5>
                         {!notification.isRead && (
                           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                         )}
                       </div>
-                      <p className={`text-xs ${
+                      <p className={`text-sm leading-relaxed ${
                         notification.isRead ? 'text-gray-600' : 'text-blue-700'
                       }`}>
                         {notification.message}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      {notification.refId && (
+                        <p className="text-xs text-gray-400 mt-1">관련 ID: {notification.refId}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
                         {formatDate(notification.createdAt)}
                       </p>
                     </div>
@@ -261,8 +322,8 @@ const NotificationBell = () => {
                       ×
                     </Button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>

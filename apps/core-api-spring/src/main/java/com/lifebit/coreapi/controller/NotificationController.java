@@ -1,34 +1,32 @@
-package com.lifebit.coreapi.controller.ranking;
+package com.lifebit.coreapi.controller;
 
-import com.lifebit.coreapi.entity.ranking.RankingNotification;
-import com.lifebit.coreapi.service.ranking.RankingNotificationService;
+import com.lifebit.coreapi.entity.Notification;
+import com.lifebit.coreapi.service.NotificationService;
+import com.lifebit.coreapi.dto.NotificationDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import com.lifebit.coreapi.dto.ranking.RankingNotificationDto;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/ranking-notifications")
+@RequestMapping("/api/v1/notifications")
 @RequiredArgsConstructor
-@Slf4j
-public class RankingNotificationController {
-    private final RankingNotificationService notificationService;
+public class NotificationController {
+    private final NotificationService notificationService;
 
     /**
-     * 알림 목록 조회 (페이징/필터링/DTO)
+     * 알림 목록 조회 (페이징/필터링)
      */
     @GetMapping
-    public ResponseEntity<Page<RankingNotificationDto>> getMyNotifications(
+    public ResponseEntity<Page<NotificationDto>> getMyNotifications(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -36,7 +34,7 @@ public class RankingNotificationController {
     ) {
         Long userId = Long.parseLong(userDetails.getUsername());
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(notificationService.getUserNotificationsDto(userId, pageable, isRead));
+        return ResponseEntity.ok(notificationService.getUserNotificationsPageDto(userId, pageable, isRead));
     }
 
     /**
@@ -49,15 +47,16 @@ public class RankingNotificationController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * 알림 읽음 처리
+     */
     @PostMapping("/{id}/read")
     public ResponseEntity<?> markAsRead(@AuthenticationPrincipal UserDetails userDetails, @PathVariable Long id) {
         Long userId = Long.parseLong(userDetails.getUsername());
-        log.info("[알림 읽음 처리] userId: {}, notificationId: {}", userId, id);
         try {
             notificationService.markAsRead(id, userId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            log.error("[알림 읽음 처리 오류] userId: {}, notificationId: {}, error: {}", userId, id, e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
                 "error", "알림 읽음 처리 실패",
                 "message", e.getMessage()
@@ -65,15 +64,16 @@ public class RankingNotificationController {
         }
     }
 
+    /**
+     * 알림 삭제
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteNotification(@AuthenticationPrincipal UserDetails userDetails, @PathVariable Long id) {
         Long userId = Long.parseLong(userDetails.getUsername());
-        log.info("[알림 삭제] userId: {}, notificationId: {}", userId, id);
         try {
             notificationService.deleteNotification(id, userId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            log.error("[알림 삭제 오류] userId: {}, notificationId: {}, error: {}", userId, id, e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
                 "error", "알림 삭제 실패",
                 "message", e.getMessage()

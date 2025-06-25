@@ -480,8 +480,10 @@ export const verifyPassword = async (password: string): Promise<boolean> => {
 // ============================================================================
 
 // 알림 타입 정의
-export interface RankingNotification {
+export interface Notification {
   id: number;
+  type: string;
+  refId?: number;
   title: string;
   message: string;
   isRead: boolean;
@@ -489,7 +491,7 @@ export interface RankingNotification {
 }
 
 // 알림 목록 조회
-export const getRankingNotifications = async (page: number = 0, size: number = 10, isRead?: boolean) => {
+export const getNotifications = async (page: number = 0, size: number = 10, isRead?: boolean) => {
   const params = new URLSearchParams({
     page: page.toString(),
     size: size.toString()
@@ -499,25 +501,25 @@ export const getRankingNotifications = async (page: number = 0, size: number = 1
     params.append('isRead', isRead.toString());
   }
   
-  const response = await axios.get(`/api/v1/ranking-notifications?${params}`);
+  const response = await axios.get(`/api/v1/notifications?${params}`);
   return response.data;
 };
 
 // 알림 읽음 처리
 export const markNotificationAsRead = async (notificationId: number) => {
-  const response = await axios.post(`/api/v1/ranking-notifications/${notificationId}/read`);
+  const response = await axios.post(`/api/v1/notifications/${notificationId}/read`);
   return response.data;
 };
 
 // 전체 알림 읽음 처리
 export const markAllNotificationsAsRead = async () => {
-  const response = await axios.post('/api/v1/ranking-notifications/read-all');
+  const response = await axios.post('/api/v1/notifications/read-all');
   return response.data;
 };
 
 // 알림 삭제
 export const deleteNotification = async (notificationId: number) => {
-  const response = await axios.delete(`/api/v1/ranking-notifications/${notificationId}`);
+  const response = await axios.delete(`/api/v1/notifications/${notificationId}`);
   return response.data;
 };
 
