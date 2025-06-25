@@ -579,16 +579,88 @@ delete_acgs() {
     local acg_count=$(echo "$acg_list" | jq -r '.getAccessControlGroupListResponse.accessControlGroupList | length // 0')
     
     if [[ "$acg_count" -gt 0 ]]; then
-        echo "$acg_list" | jq -r '.getAccessControlGroupListResponse.accessControlGroupList[] | select(.isDefault == false) | .accessControlGroupNo + " " + (.vpcNo // "")' | while read -r acg_no vpc_no; do
-            if [[ -n "$acg_no" && -n "$vpc_no" ]]; then
-                log_info "ACG 삭제 중: $acg_no (VPC: $vpc_no)"
-                cd "$HOME/.ncloud" && ./ncloud vserver deleteAccessControlGroup --accessControlGroupNo "$acg_no" --vpcNo "$vpc_no" 2>/dev/null || true
-                log_success "ACG 삭제 완료: $acg_no"
+        echo "$acg_list" | jq -c '.getAccessControlGroupListResponse.accessControlGroupList[] | select(.isDefault == false)' | while read -r acg_json; do
+            local acg_no=$(echo "$acg_json" | jq -r '.accessControlGroupNo')
+            local vpc_no=$(echo "$acg_json" | jq -r '.vpcNo // ""')
+            
+            if [[ -n "$acg_no" ]]; then
+                local cmd_args="--accessControlGroupNo $acg_no"
+                if [[ -n "$vpc_no" ]]; then
+                    log_info "ACG 삭제 중: $acg_no (VPC: $vpc_no)"
+                    cmd_args="$cmd_args --vpcNo $vpc_no"
+                else
+                    log_info "ACG 삭제 중: $acg_no (Classic)"
+                fi
+                
+                cd "$HOME/.ncloud" && ./ncloud vserver deleteAccessControlGroup $cmd_args 2>/dev/null || true
+                log_success "ACG 삭제 요청 완료: $acg_no"
             fi
         done
     else
         log_info "삭제할 ACG가 없습니다"
     fi
+}
+
+# 초기화 스크립트 삭제
+delete_init_scripts() {
+    log_info "초기화 스크립트 삭제 중..."
+    local init_script_list_json=$(cd "$HOME/.ncloud" && ./ncloud vserver getInitScriptList --output json 2>&1)
+
+    if [[ "$init_script_list_json" == *"Forbidden"* ]]; then
+        log_warning "초기화 스크립트 목록 조회 권한이 없습니다."
+        return 0
+    fi
+
+    if ! echo "$init_script_list_json" | jq empty 2>/dev/null; then
+        log_warning "초기화 스크립트 목록 조회 실패 또는 빈 응답."
+        return 0
+    fi
+
+    local init_script_nos=$(echo "$init_script_list_json" | jq -r '.getInitScriptListResponse.initScriptList[].initScriptNo' 2>/dev/null)
+
+    if [[ -n "$init_script_nos" ]]; then
+        for init_script_no in $init_script_nos; do
+            log_info "초기화 스크립트 삭제: $init_script_no"
+            cd "$HOME/.ncloud" && ./ncloud vserver deleteInitScripts --initScriptNoList "$init_script_no" 2>/dev/null || true
+            log_success "초기화 스크립트 삭제 완료: $init_script_no"
+        done
+    else
+        log_info "삭제할 초기화 스크립트가 없습니다."
+    fi
+}
+
+# 네트워크 ACL 삭제
+delete_network_acls() {
+    log_info "네트워크 ACL 삭제 중..."
+    local acl_list_json=$(cd "$HOME/.ncloud" && ./ncloud vpc getNetworkAclList --output json 2>&1)
+
+    if [[ "$acl_list_json" == *"Forbidden"* ]]; then
+        log_warning "네트워크 ACL 목록 조회 권한이 없습니다."
+        return 0
+    fi
+
+    if ! echo "$acl_list_json" | jq empty 2>/dev/null; then
+        log_warning "네트워크 ACL 목록 조회 실패 또는 빈 응답."
+        return 0
+    fi
+
+    local acl_list=$(echo "$acl_list_json" | jq -c '.getNetworkAclListResponse.networkAclList[] | select(.isDefault == false)')
+    
+    if [[ -z "$acl_list" ]]; then
+        log_info "삭제할 네트워크 ACL이 없습니다."
+        return
+    fi
+
+    echo "$acl_list" | while read -r acl_json; do
+        local acl_no=$(echo "$acl_json" | jq -r '.networkAclNo')
+        local vpc_no=$(echo "$acl_json" | jq -r '.vpcNo')
+
+        if [[ -n "$acl_no" ]]; then
+            log_info "네트워크 ACL 삭제 중: $acl_no (VPC: $vpc_no)"
+            cd "$HOME/.ncloud" && ./ncloud vpc deleteNetworkAcl --networkAclNo "$acl_no" --vpcNo "$vpc_no" 2>/dev/null || true
+            log_success "네트워크 ACL 삭제 요청 완료: $acl_no"
+        fi
+    done
 }
 
 # 서브넷 삭제
@@ -952,6 +1024,10 @@ cleanup_all() {
         delete_server_instances
         total_deleted=$((total_deleted + 2))
         
+        # 1-1. 초기화 스크립트 삭제
+        delete_init_scripts
+        total_deleted=$((total_deleted + 1))
+        
         # 잠시 대기 (서버 삭제 완료 대기)
         log_info "서버 삭제 완료 대기 중... (60초)"
         sleep 60
@@ -978,6 +1054,10 @@ cleanup_all() {
         
         # 7. 서브넷 삭제
         delete_subnets
+        total_deleted=$((total_deleted + 1))
+        
+        # 7-1. 네트워크 ACL 삭제
+        delete_network_acls
         total_deleted=$((total_deleted + 1))
         
         # 8. Route Table 삭제
@@ -1108,6 +1188,7 @@ cleanup_specific() {
             if check_required_vars && check_cli && configure_cli; then
                 # 올바른 삭제 순서 적용
                 delete_server_instances
+                delete_init_scripts
                 sleep 60  # 서버 삭제 완료 대기
                 delete_load_balancers
                 delete_nat_gateways
@@ -1115,6 +1196,7 @@ cleanup_specific() {
                 delete_network_interfaces
                 delete_acgs
                 delete_subnets
+                delete_network_acls
                 delete_route_tables
                 delete_internet_gateways
                 
@@ -1123,6 +1205,22 @@ cleanup_specific() {
                 sleep 60
                 
                 delete_vpcs
+            else
+                log_error "네이버클라우드 CLI 설정이 필요합니다."
+                exit 1
+            fi
+            ;;
+        "initscripts")
+            if check_required_vars && check_cli && configure_cli; then
+                delete_init_scripts
+            else
+                log_error "네이버클라우드 CLI 설정이 필요합니다."
+                exit 1
+            fi
+            ;;
+        "networkacls"|"acls")
+            if check_required_vars && check_cli && configure_cli; then
+                delete_network_acls
             else
                 log_error "네이버클라우드 CLI 설정이 필요합니다."
                 exit 1
@@ -1176,11 +1274,13 @@ show_help() {
     
     클라우드 개별 리소스:
     servers                      클라우드 서버 인스턴스만 삭제
+    initscripts                  클라우드 초기화 스크립트만 삭제
     loadbalancers, lbs           클라우드 로드밸런서만 삭제
     natgateways, nats            클라우드 NAT Gateway만 삭제
     ips                          클라우드 퍼블릭 IP만 삭제
     networkinterfaces, nis       클라우드 네트워크 인터페이스만 삭제
     acgs                         클라우드 ACG만 삭제
+    networkacls, acls            클라우드 네트워크 ACL만 삭제
     subnets                      클라우드 서브넷만 삭제
     routetables, routes          클라우드 Route Table만 삭제
     internetgateways, igws       클라우드 Internet Gateway만 삭제
@@ -1200,6 +1300,7 @@ show_help() {
     $SCRIPT_NAME terraform-destroy      # Terraform 인프라만 삭제 (위험!)
     $SCRIPT_NAME cloud                  # 네이버클라우드 리소스만 정리 (올바른 순서)
     $SCRIPT_NAME servers                # 클라우드 서버만 삭제
+    $SCRIPT_NAME initscripts            # 클라우드 초기화 스크립트만 삭제
     $SCRIPT_NAME lbs                    # 클라우드 로드밸런서만 삭제
     $SCRIPT_NAME nats                   # 클라우드 NAT Gateway만 삭제
     $SCRIPT_NAME nis                    # 클라우드 네트워크 인터페이스만 삭제
@@ -1239,11 +1340,11 @@ LifeBit 프로젝트 구조:
     - VPC 환경에서 실행되며, VServerFullAccess, VPCFullAccess 권한이 필요합니다.
     
     클라우드 리소스 삭제 순서 (의존성 고려):
-    1. 서버 인스턴스 → 2. 로드밸런서 → 3. NAT Gateway → 4. 퍼블릭 IP
-    5. 네트워크 인터페이스 → 6. ACG → 7. 서브넷 → 8. Route Table
-    9. Internet Gateway → 10. VPC (마지막, 재시도 로직 포함)
+    1. 서버 인스턴스 → 2. 초기화 스크립트 → 3. 로드밸런서 → 4. NAT Gateway → 5. 퍼블릭 IP
+    6. 네트워크 인터페이스 → 7. ACG → 8. 서브넷 → 9. 네트워크 ACL → 10. Route Table
+    11. Internet Gateway → 12. VPC (마지막, 재시도 로직 포함)
     
-    - 기본 리소스(기본 VPC, 기본 ACG)는 보호되어 삭제되지 않습니다.
+    - 기본 리소스(기본 VPC, 기본 ACG, 기본 네트워크 ACL)는 보호되어 삭제되지 않습니다.
     - 의존성이 있는 리소스는 자동으로 올바른 순서로 삭제됩니다.
     - VPC 삭제는 내부 리소스 확인 후 최대 3회 재시도됩니다.
     - VPC 삭제 실패 시 네이버클라우드 콘솔에서 수동 확인이 필요할 수 있습니다.
@@ -1303,7 +1404,7 @@ main() {
             cleanup_all
             notify_cleanup_success "$PROJECT_NAME" "전체 리소스" "전체"
             ;;
-        "docker"|"compose"|"local"|"terraform"|"terraform-destroy"|"cloud"|"servers"|"ips"|"acgs"|"subnets"|"vpcs"|"loadbalancers"|"lbs"|"natgateways"|"nats"|"networkinterfaces"|"nis"|"routetables"|"routes"|"internetgateways"|"igws")
+        "docker"|"compose"|"local"|"terraform"|"terraform-destroy"|"cloud"|"servers"|"ips"|"acgs"|"subnets"|"vpcs"|"loadbalancers"|"lbs"|"natgateways"|"nats"|"networkinterfaces"|"nis"|"routetables"|"routes"|"internetgateways"|"igws"|"initscripts"|"networkacls"|"acls")
             notify_cleanup_start "$PROJECT_NAME" "$1"
             cleanup_specific "$1"
             notify_cleanup_success "$PROJECT_NAME" "$1" "선택된 리소스"

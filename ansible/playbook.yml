@@ -476,7 +476,7 @@
           - Prometheus: http://{{ ansible_default_ipv4.address }}:9090
           
           🔑 SSH 접속:
-          ssh -i ~/.ssh/lifebit-{{ environment }}-key.pem root@{{ ansible_default_ipv4.address }}
+          ssh -i ~/.ssh/lifebit-{{ environment }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
       tags: [info]
 
   handlers:

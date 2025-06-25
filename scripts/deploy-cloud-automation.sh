@@ -210,9 +210,6 @@ update_ansible_inventory() {
     local key_name="$(terraform output -raw login_key_name)"
     sed -i "s|ansible_ssh_private_key_file=.*|ansible_ssh_private_key_file=~/.ssh/${key_name}.pem|g" "$inventory_file"
     
-    # update user
-    sed -i "s/ansible_user=.*/ansible_user=ubuntu/g" "$inventory_file"
-    
     log_success "Ansible 인벤토리 업데이트 완료"
 }
 
@@ -232,9 +229,28 @@ setup_ssh_keys() {
         log_info "로컬에 SSH 키가 없습니다. Terraform output 에서 private_key 시도..."
         local tf_key="$(terraform output -raw private_key 2>/dev/null || true)"
         if [ -n "$tf_key" ]; then
-            echo "$tf_key" > "$key_file"
+            printf "%s" "$tf_key" > "$key_file"
             chmod 600 "$key_file"
             log_success "SSH 개인키 저장 완료: $key_file"
+
+            # ---- 키 유효성 검사 및 줄바꿈 교정 ----
+            if ! ssh-keygen -l -f "$key_file" >/dev/null 2>&1; then
+                log_warning "키 파일이 손상되었거나 DOS 줄바꿈이 포함되어 있습니다. dos2unix 변환 시도..."
+                if command -v dos2unix >/dev/null 2>&1; then
+                    dos2unix "$key_file" >/dev/null 2>&1 || true
+                else
+                    log_info "dos2unix가 없어 apt-get 설치..."
+                    sudo apt-get update -y && sudo apt-get install -y dos2unix
+                    dos2unix "$key_file" >/dev/null 2>&1 || true
+                fi
+
+                if ssh-keygen -l -f "$key_file" >/dev/null 2>&1; then
+                    log_success "키 파일 줄바꿈 교정 완료"
+                else
+                    log_error "SSH 키가 여전히 유효하지 않습니다. 네이버클라우드 콘솔에서 새 로그인 키를 생성한 뒤 다시 배포하세요."
+                    exit 1
+                fi
+            fi
         else
             log_warning "Terraform에서 개인키를 제공하지 않습니다(기존 키 재사용). $key_file 경로에 이미 PEM 파일이 있어야 합니다."
         fi
@@ -257,7 +273,7 @@ wait_for_server() {
     for i in {1..30}; do
         if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey -o PasswordAuthentication=no \
                -i "$HOME/.ssh/${key_name}.pem" \
-               root@"$server_ip" "echo 'SSH 연결 성공'" &>/dev/null; then
+               ubuntu@"$server_ip" "echo 'SSH 연결 성공'" &>/dev/null; then
             log_success "서버 연결 확인 완료"
             return 0
         fi
@@ -356,7 +372,7 @@ show_deployment_info() {
    - Airflow:            http://$server_ip:8081 (admin/admin123)
 
 🔑 SSH 접속:
-   ssh -i ~/.ssh/$(terraform output -raw login_key_name).pem root@$server_ip
+   ssh -i ~/.ssh/$(terraform output -raw login_key_name).pem ubuntu@$server_ip
 
 📋 관리 명령어:
    - 서비스 상태: docker ps
@@ -385,6 +401,9 @@ main() {
                 log_info "DRY_RUN 모드: 인프라 계획 확인 후 종료합니다."
                 exit 0
             fi
+
+            log_info "서버가 안정적으로 부팅되고 Init 스크립트를 실행할 시간을 줍니다. (2분 대기)"
+            sleep 120
 
             setup_ssh_keys
             SERVER_IP=$(cd "$PROJECT_ROOT/infrastructure" && terraform output -raw public_ip)

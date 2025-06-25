@@ -175,6 +175,12 @@ resource "ncloud_network_interface" "web" {
   # NCP Network Interface는 tags를 지원하지 않음
 }
 
+# Init Script 생성 (SSH 키 자동 주입)
+resource "ncloud_init_script" "ssh_setup" {
+  name    = "${var.project_name}-ssh${local.suffix}"
+  content = file("${path.module}/scripts/setup-ssh.sh")
+}
+
 # 웹 서버 인스턴스 생성 (단일 서버)
 resource "ncloud_server" "web" {
   name                      = "${var.project_name}-${var.environment}-web-server"
@@ -182,6 +188,7 @@ resource "ncloud_server" "web" {
   server_product_code       = var.server_instance_type
   login_key_name            = ncloud_login_key.main.key_name
   subnet_no                 = ncloud_subnet.public.id
+  init_script_no            = ncloud_init_script.ssh_setup.id
 
   network_interface {
     network_interface_no = ncloud_network_interface.web.id
