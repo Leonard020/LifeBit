@@ -415,8 +415,3 @@ SELECT * FROM exercise_sessions ORDER BY created_at DESC LIMIT 5;
     SELECT * FROM meal_logs WHERE user_id=2 ORDER BY log_date DESC;
 
 
-ALTER TABLE exercise_sessions
-ALTER COLUMN weight TYPE DECIMAL(6,2) USING weight::DECIMAL,
-ALTER COLUMN weight SET DEFAULT 0;
-
-UPDATE exercise_sessions SET weight = 0 WHERE weight IS NULL;
