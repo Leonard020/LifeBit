@@ -82,6 +82,11 @@ variable "server_image_product_code" {
   default     = "SW.VSVR.OS.LNX64.UBNTU.SVR2004.B050"
 }
 
+variable "login_key_name" {
+  description = "Name of the login key to use (created by deploy script)"
+  type        = string
+}
+
 # 보안 설정 (학원용으로 완화)
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed for SSH access"

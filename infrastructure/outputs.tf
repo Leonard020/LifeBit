@@ -37,7 +37,7 @@ output "private_ip" {
 # 접속 정보
 output "ssh_connection" {
   description = "SSH connection command"
-  value       = "ssh -i ${ncloud_login_key.main.key_name}.pem ubuntu@${ncloud_public_ip.web.public_ip}"
+  value       = "ssh -i ${var.login_key_name}.pem ubuntu@${ncloud_public_ip.web.public_ip}"
 }
 
 # 애플리케이션 접속 URLs
@@ -57,13 +57,7 @@ output "application_urls" {
 # 보안 정보
 output "login_key_name" {
   description = "Login key name for SSH access"
-  value       = ncloud_login_key.main.key_name
-}
-
-output "private_key" {
-  description = "Private key for SSH access (empty if existing key reused)"
-  value       = ncloud_login_key.main.private_key
-  sensitive   = true
+  value       = var.login_key_name
 }
 
 output "access_control_group_id" {
@@ -85,7 +79,7 @@ output "deployment_guide" {
 
 📋 접속 정보:
 - 서버 IP: ${ncloud_public_ip.web.public_ip}
-- SSH 접속: ssh -i ${ncloud_login_key.main.key_name}.pem ubuntu@${ncloud_public_ip.web.public_ip}
+- SSH 접속: ssh -i ${var.login_key_name}.pem ubuntu@${ncloud_public_ip.web.public_ip}
 
 🌐 애플리케이션 URLs:
 - Frontend:     http://${ncloud_public_ip.web.public_ip}:3000
