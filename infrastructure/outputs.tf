@@ -61,7 +61,7 @@ output "login_key_name" {
 }
 
 output "private_key" {
-  description = "Private key for SSH access"
+  description = "Private key for SSH access (empty if existing key reused)"
   value       = ncloud_login_key.main.private_key
   sensitive   = true
 }

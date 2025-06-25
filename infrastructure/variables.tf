@@ -133,4 +133,10 @@ variable "slack_webhook_url" {
   type        = string
   default     = ""
   sensitive   = true
+}
+
+variable "name_suffix" {
+  description = "Unique suffix to avoid duplicate resource names"
+  type        = string
+  default     = ""
 } 
