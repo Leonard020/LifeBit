@@ -8,6 +8,7 @@ import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.repository.ExerciseCatalogRepository;
 import com.lifebit.coreapi.repository.ExerciseSessionRepository;
 import com.lifebit.coreapi.repository.UserRepository;
+import com.lifebit.coreapi.service.AchievementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

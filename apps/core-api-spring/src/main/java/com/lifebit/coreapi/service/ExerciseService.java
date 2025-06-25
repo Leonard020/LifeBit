@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.lifebit.coreapi.entity.TimePeriodType;
 
 @Service
 @Transactional(readOnly = true)
@@ -26,7 +27,7 @@ public class ExerciseService {
     @Transactional
     public ExerciseSession recordExercise(
         Long userId, Long catalogId, Integer durationMinutes, Integer caloriesBurned, String notes,
-        Integer sets, Integer reps, Double weight
+        Integer sets, Integer reps, Double weight, LocalDate exerciseDate, TimePeriodType timePeriod
     ) {
         ExerciseCatalog catalog = exerciseCatalogRepository.findById(catalogId)
             .orElseThrow(() -> new EntityNotFoundException("Exercise catalog not found"));
@@ -38,12 +39,13 @@ public class ExerciseService {
         session.setDurationMinutes(durationMinutes);
         session.setCaloriesBurned(caloriesBurned);
         session.setNotes(notes);
-        session.setExerciseDate(LocalDate.now());
+        session.setExerciseDate(exerciseDate != null ? exerciseDate : LocalDate.now());
         session.setCreatedAt(LocalDateTime.now());
 
         session.setSets(sets != null ? sets : 0);
         session.setReps(reps != null ? reps : 0);
         session.setWeight(weight != null ? BigDecimal.valueOf(weight) : BigDecimal.ZERO);
+        session.setTimePeriod(timePeriod);
 
         return exerciseSessionRepository.save(session);
     }

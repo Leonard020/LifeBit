@@ -460,6 +460,7 @@ public class HealthStatisticsService {
                     sessionMap.put("sets", session.getSets());
                     sessionMap.put("notes", session.getNotes());
                     sessionMap.put("exercise_date", session.getExerciseDate() != null ? session.getExerciseDate().toString() : null);
+                    sessionMap.put("time_period", session.getTimePeriod());
                     sessionMap.put("created_at", session.getCreatedAt().toString());
                     return sessionMap;
                 })
