@@ -38,9 +38,20 @@ locals {
   suffix = var.name_suffix != "" ? "-${substr(var.name_suffix,0,8)}" : ""
 }
 
-# 로그인 키 생성 (항상 고유 suffix로 생성)
-resource "ncloud_login_key" "main" {
-  key_name = "${var.project_name}-${var.environment}-key${local.suffix}"
+# 이미 생성된 로그인 키 사용 (변수로 직접 참조)
+
+# Init Script 생성 (SSH 키 직접 주입)
+resource "ncloud_init_script" "ssh_key_injection" {
+  name    = "lifebit-ssh-key-injection"
+  content = base64encode(<<-EOF
+#!/bin/bash
+# SSH 키 직접 주입 스크립트
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCySWXZjwNtvyj/lM2VwtzcMtzltXuJPRA+XOEtzd+nLpt7ezevqJHtLpplXhUkHb/hqtcF78rKgk4a3TRNZSwAJXR+7l5yqP8vnTEvfpJgkoPJ8IkiigU8rDejRhIvht7Rp6S2gqyZrLSAD25vWCsPM9SK0R5xCVh0P6hYW+LYfIF9V2krz5lSdLrk/RBPYEdqIBpxPjaFOfAMrEM71sPsDJ1yDJjheDV81uFFLQwgY9ww68JLKw+Opas8tSWv7C9Qbhb2Wkib6c5HMiw0xbx+uK6TNifle79rpJgCTQAwhDUqouekW7cAyKHxcbLzlDEMBYb+poQONz7p3KxMNULV" >> /home/ubuntu/.ssh/authorized_keys
+chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+echo "SSH key injection completed" > /var/log/ssh-key-injection.log
+EOF
+  )
 }
 
 # VPC 생성
@@ -175,20 +186,14 @@ resource "ncloud_network_interface" "web" {
   # NCP Network Interface는 tags를 지원하지 않음
 }
 
-# Init Script 생성 (SSH 키 자동 주입)
-resource "ncloud_init_script" "ssh_setup" {
-  name    = "${var.project_name}-ssh${local.suffix}"
-  content = file("${path.module}/scripts/setup-ssh.sh")
-}
-
 # 웹 서버 인스턴스 생성 (단일 서버)
 resource "ncloud_server" "web" {
   name                      = "${var.project_name}-${var.environment}-web-server"
   server_image_product_code = var.server_image_product_code
   server_product_code       = var.server_instance_type
-  login_key_name            = ncloud_login_key.main.key_name
+  login_key_name            = var.login_key_name
+  init_script_no            = ncloud_init_script.ssh_key_injection.id
   subnet_no                 = ncloud_subnet.public.id
-  init_script_no            = ncloud_init_script.ssh_setup.id
 
   network_interface {
     network_interface_no = ncloud_network_interface.web.id
@@ -216,4 +221,6 @@ resource "ncloud_block_storage" "web_data" {
   server_instance_no = ncloud_server.web.id
 
   # NCP Block Storage는 tags를 지원하지 않음
-} 
+}
+
+ 

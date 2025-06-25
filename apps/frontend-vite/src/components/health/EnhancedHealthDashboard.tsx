@@ -795,6 +795,18 @@ const AIRecommendations: React.FC<{
   );
 };
 
+// 시간대 영문 → 한글 변환 함수
+function mapTimePeriodToKorean(timePeriod?: string) {
+  switch (timePeriod) {
+    case 'dawn': return '새벽';
+    case 'morning': return '오전';
+    case 'afternoon': return '오후';
+    case 'evening': return '저녁';
+    case 'night': return '야간';
+    default: return '';
+  }
+}
+
 // 메인 컴포넌트
 export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = ({
   userId,

@@ -30,6 +30,9 @@ public class ExerciseRecordDTO {
     @JsonProperty("calories_burned")
     private Integer caloriesBurned;
 
+    @JsonProperty("time_period")
+    private String timePeriod;
+
     public ExerciseRecordDTO(ExerciseSession session) {
         this.exerciseSessionId = session.getExerciseSessionId();
         this.userId = session.getUser() != null ? session.getUser().getUserId() : null;
@@ -50,5 +53,6 @@ public class ExerciseRecordDTO {
         this.exerciseDate = session.getExerciseDate();
         this.durationMinutes = session.getDurationMinutes();
         this.caloriesBurned = session.getCaloriesBurned();
+        this.timePeriod = session.getTimePeriod() != null ? session.getTimePeriod().name() : null;
     }
 }

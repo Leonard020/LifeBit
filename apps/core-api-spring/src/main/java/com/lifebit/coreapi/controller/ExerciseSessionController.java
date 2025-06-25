@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import com.lifebit.coreapi.entity.TimePeriodType;
 
 @RestController
 @RequestMapping("/api/exercise-sessions")
@@ -82,6 +83,14 @@ public class ExerciseSessionController {
         }
     }
 
+    // 시간대 자동 분류 함수
+    private TimePeriodType getTimePeriodByHour(int hour) {
+        if (hour >= 5 && hour < 12) return TimePeriodType.morning;
+        if (hour >= 12 && hour < 18) return TimePeriodType.afternoon;
+        if (hour >= 18 && hour < 22) return TimePeriodType.evening;
+        return TimePeriodType.night;
+    }
+
     @PostMapping
     public ResponseEntity<Map<String, Object>> createExerciseSession(
             @RequestBody Map<String, Object> request,
@@ -102,6 +111,9 @@ public class ExerciseSessionController {
                 Integer.valueOf(request.get("calories_burned").toString()) : null;
             String notes = request.get("notes") != null ? 
                 request.get("notes").toString() : null;
+            java.time.LocalDate exerciseDate = request.get("exercise_date") != null ?
+                java.time.LocalDate.parse(request.get("exercise_date").toString()) : java.time.LocalDate.now();
+            TimePeriodType timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
             
             // 데이터베이스에 저장 (토큰에서 가져온 사용자 ID 사용)
             ExerciseSession savedSession = exerciseService.recordExercise(
@@ -112,7 +124,9 @@ public class ExerciseSessionController {
                 notes,
                 request.get("sets") != null ? Integer.valueOf(request.get("sets").toString()) : 0,
                 request.get("reps") != null ? Integer.valueOf(request.get("reps").toString()) : 0,
-                request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : 0d
+                request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : 0d,
+                exerciseDate,
+                timePeriod
             );
             
             // 응답 데이터 구성
@@ -129,6 +143,7 @@ public class ExerciseSessionController {
             response.put("sets", savedSession.getSets());
             response.put("notes", savedSession.getNotes());
             response.put("exercise_date", savedSession.getExerciseDate() != null ? savedSession.getExerciseDate().toString() : null);
+            response.put("time_period", savedSession.getTimePeriod());
             response.put("created_at", savedSession.getCreatedAt() != null ? savedSession.getCreatedAt().toString() : null);
             
             log.info("운동 세션 생성 완료 - ID: {}", savedSession.getExerciseSessionId());
@@ -217,6 +232,7 @@ public class ExerciseSessionController {
             response.put("sets", updatedSession.getSets());
             response.put("notes", updatedSession.getNotes());
             response.put("exercise_date", updatedSession.getExerciseDate() != null ? updatedSession.getExerciseDate().toString() : null);
+            response.put("time_period", updatedSession.getTimePeriod());
             response.put("created_at", updatedSession.getCreatedAt() != null ? updatedSession.getCreatedAt().toString() : null);
             
             log.info("운동 세션 수정 완료 - ID: {}", updatedSession.getExerciseSessionId());
@@ -322,6 +338,7 @@ public class ExerciseSessionController {
             response.put("sets", session.getSets());
             response.put("notes", session.getNotes());
             response.put("exercise_date", session.getExerciseDate() != null ? session.getExerciseDate().toString() : null);
+            response.put("time_period", session.getTimePeriod());
             response.put("created_at", session.getCreatedAt() != null ? session.getCreatedAt().toString() : null);
             
             log.info("운동 세션 단일 조회 완료 - ID: {}", sessionId);

@@ -1240,29 +1240,18 @@ const Note = () => {
                 {todayExercise.length > 0 ? (
                   <div className="space-y-3">
                     {todayExercise.map((record) => {
+                      console.log('운동 기록 record:', record);
                       const isCardio = record.bodyPart === 'cardio';
-                      const parts = [];
-                      // 시간 정보 (모든 운동 타입에 표시)
-                      if (record.durationMinutes !== undefined) {
-                        parts.push(`${record.durationMinutes}분`);
-                      }
-                      // 칼로리 정보
-                      if (record.calories_burned !== undefined) {
-                        parts.push(`${record.calories_burned}kcal`);
-                      }
-                      // 날짜 정보 (exerciseDate)
-                      if (record.exerciseDate) {
-                        parts.push(`${record.exerciseDate}`);
-                      }
-                      // 시간대 정보 (time_period)
-                      if (record.time_period) {
-                        parts.push(timePeriodMap[record.time_period] || record.time_period);
-                      }
+                      // 시간, 칼로리, 날짜 등 정보
+                      const infoParts = [];
+                      if (record.durationMinutes !== undefined) infoParts.push(`${record.durationMinutes}분`);
+                      if (record.calories_burned !== undefined) infoParts.push(`${record.calories_burned}kcal`);
+                      if (record.exerciseDate) infoParts.push(`${record.exerciseDate}`);
                       // 근력운동이면 세트, 무게, 횟수 추가
                       if (!isCardio) {
-                        if (record.sets !== undefined) parts.push(`${record.sets}세트`);
-                        if (record.reps !== undefined) parts.push(`${record.reps}회`);
-                        if (record.weight !== undefined) parts.push(`${record.weight}kg`);
+                        if (record.sets !== undefined) infoParts.push(`${record.sets}세트`);
+                        if (record.reps !== undefined) infoParts.push(`${record.reps}회`);
+                        if (record.weight !== undefined) infoParts.push(`${record.weight}kg`);
                       }
                       return (
                         <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -1273,8 +1262,13 @@ const Note = () => {
                                 <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                               )}
                             </p>
-                            <p className="text-sm text-gray-600">
-                              {parts.length > 0 ? parts.join(' • ') : '기록 없음'}
+                            <p className="text-sm text-gray-600 flex items-center flex-wrap gap-x-2">
+                              {infoParts.length > 0 ? infoParts.join(' • ') : '기록 없음'}
+                              {record.time_period && (
+                                <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 font-medium text-xs">
+                                  {timePeriodMap[record.time_period] || record.time_period}
+                                </span>
+                              )}
                             </p>
                           </div>
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>

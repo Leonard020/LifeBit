@@ -1,6 +1,6 @@
 import { Layout } from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Activity, Heart } from 'lucide-react';
 import { ChatInterface } from '@/components/ChatInterface';
@@ -17,7 +17,7 @@ import { getUserIdFromToken, getToken } from '@/utils/auth';
 import { useAuth } from '@/AuthContext';
 import { searchFoodItems } from '@/api/authApi';
 import { useNavigate } from 'react-router-dom';
-import { createFoodItemFromGPT, type NutritionData } from '@/utils/nutritionUtils';
+import { createFoodItemFromGPT, type NutritionData, parseAmountToGrams } from '@/utils/nutritionUtils';
 
 
 
@@ -68,6 +68,8 @@ const Index = () => {
   const [currentMealTime, setCurrentMealTime] = useState<MealTimeType | null>(null);
 
   const navigate = useNavigate();
+
+  const [hasSaved, setHasSaved] = useState(false);
 
   /**
    * 식단 데이터의 완성도를 검증하는 함수
@@ -261,17 +263,24 @@ const Index = () => {
     }
   };
 
-  const handleRecordSubmit = async (type: 'exercise' | 'diet', content: string) => {
+  const deduplicateFoods = (foods) => {
+    const seen = new Set();
+    return foods.filter(food => {
+      const key = `${food.food_name}|${food.amount}|${food.meal_time}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const handleRecordSubmit = useCallback(async (type: 'exercise' | 'diet', content: string) => {
     if (!chatStructuredData) return;
     const userId = getUserIdFromToken();
     const token = getToken();
-    console.log('식단 저장 토큰:', token);
-
     if (!userId) {
       console.warn('[⚠️ 유저 ID 없음] 토큰에서 사용자 정보를 가져올 수 없습니다.');
       return;
     }
-
     if (type === 'exercise') {
       const isCardio = chatStructuredData.category === '유산소';
       const exerciseName = chatStructuredData.exercise || '운동기록';
@@ -350,108 +359,61 @@ const Index = () => {
         });
       }
     } else if (type === 'diet') {
-      const dietData = chatStructuredData as DietData;
-      console.log('[식단기록] Spring Boot API 저장 시작:', dietData);
-      
-      // Spring Boot CRUD API 사용 - 기본 정보만 확인 (영양성분 계산 제거)
-      if (!dietData.food_name || !dietData.amount || !dietData.meal_time) {
-        toast({
-          title: '저장 오류',
-          description: '음식명, 섭취량, 식사시간이 필요합니다.',
-          variant: 'destructive'
-        });
-        console.error('[식단기록] 필수 정보 부족:', dietData);
-        return;
-      }
-
-      // 식품 검색하여 food_item_id 찾기
-      try {
-        let foodItemId = dietData.food_item_id || dietData.foodItemId;
-        
-        // food_item_id가 없으면 식품명으로 검색
-        if (!foodItemId && dietData.food_name) {
-          console.log('🔍 [Index 식단기록] 음식 검색 시작:', dietData.food_name);
-          const searchResults = await searchFoodItems(dietData.food_name);
-          console.log('🔍 [Index 식단기록] 검색 결과:', searchResults);
-          
-          if (searchResults && searchResults.length > 0) {
-            foodItemId = searchResults[0].foodItemId;
-            console.log('✅ [Index 식단기록] 검색된 foodItemId:', foodItemId);
-          } else {
-            console.log('⚠️ [Index 식단기록] DB에 없음, GPT로 생성 시도:', dietData.food_name);
-            
-            // 🆕 GPT 기반 자동 음식 생성
-            const createdFoodItemId = await createFoodItemFromGPT(dietData.food_name);
-            
-            if (createdFoodItemId) {
-              foodItemId = createdFoodItemId;
-              console.log('🎉 [Index 식단기록] GPT로 음식 생성 성공, foodItemId:', foodItemId);
-              toast({
-                title: "새로운 음식 추가 완료",
-                description: `"${dietData.food_name}"이 GPT 분석으로 자동 추가되었습니다.`,
-              });
+      const foods = Array.isArray(chatStructuredData) ? chatStructuredData : [chatStructuredData];
+      const uniqueFoods = deduplicateFoods(foods);
+      console.log('Foods to save:', uniqueFoods);
+      for (const dietData of uniqueFoods) {
+        if (!dietData.food_name || !dietData.amount || !dietData.meal_time) {
+          toast({ title: '저장 오류', description: '음식명, 섭취량, 식사시간이 필요합니다.', variant: 'destructive' });
+          console.error('[식단기록] 필수 정보 부족:', dietData);
+          continue;
+        }
+        try {
+          let foodItemId = dietData.food_item_id || dietData.foodItemId;
+          if (!foodItemId && dietData.food_name) {
+            const searchResults = await searchFoodItems(dietData.food_name);
+            if (searchResults && searchResults.length > 0) {
+              foodItemId = searchResults[0].foodItemId;
             } else {
-              console.error('❌ [Index 식단기록] GPT 음식 생성 실패:', dietData.food_name);
-              toast({
-                title: "음식 정보 생성 실패",
-                description: `"${dietData.food_name}"의 정보를 생성할 수 없습니다.`,
-                variant: "destructive"
-              });
-              return; // 저장 중단
+              const createdFoodItemId = await createFoodItemFromGPT(dietData.food_name);
+              if (createdFoodItemId) {
+                foodItemId = createdFoodItemId;
+                toast({ title: "새로운 음식 추가 완료", description: `"${dietData.food_name}"이 GPT 분석으로 자동 추가되었습니다.` });
+              } else {
+                toast({ title: "음식 정보 생성 실패", description: `"${dietData.food_name}"의 정보를 생성할 수 없습니다.`, variant: "destructive" });
+                continue;
+              }
             }
           }
+          const englishMealTime = safeConvertMealTime(dietData.meal_time);
+          const response = await fetch('/api/diet/record', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              food_item_id: foodItemId,
+              quantity: parseAmountToGrams(String(dietData.amount), dietData.food_name),
+              meal_time: englishMealTime,
+              input_source: "TYPING",
+              confidence_score: dietData.confidence_score || 1.0,
+              validation_status: "VALIDATED"
+            })
+          });
+          if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
+          await response.json();
+        } catch (err) {
+          toast({ title: '저장 오류', description: '식단 데이터를 저장하지 못했습니다.', variant: 'destructive' });
+          console.error('[식단기록] Spring Boot API 저장 실패:', err);
         }
-
-        // 한글 식사시간을 영어로 변환 (공통 유틸리티 사용)
-        const englishMealTime = safeConvertMealTime(dietData.meal_time);
-
-        console.log('🔄 [Index 식단기록] 식사시간 변환:', dietData.meal_time, '→', englishMealTime);
-
-        // Spring Boot CRUD API 호출 (/api/diet/record)
-        const response = await fetch('/api/diet/record', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            // userId 제거 - Spring Boot에서 토큰으로 사용자 ID 추출
-            food_item_id: foodItemId,
-            quantity: Number(dietData.amount),
-            meal_time: englishMealTime,        // 영어로 변환된 meal_time
-            input_source: "TYPING",            // 올바른 enum 값
-            confidence_score: dietData.confidence_score || 1.0,
-            validation_status: "VALIDATED"     // 올바른 enum 값
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`서버 응답 오류: ${response.status}`);
-        }
-        
-        const responseData = await response.json();
-        console.log('[식단기록] Spring Boot API 저장 성공:', responseData);
-        
-        toast({
-          title: '기록 완료',
-          description: '식단이 성공적으로 저장되었습니다.'
-        });
-        
-        navigate('/note', { state: { refreshDiet: true } });
-        
-      } catch (err) {
-        console.error('[식단기록] Spring Boot API 저장 실패:', err);
-        toast({
-          title: '저장 오류',
-          description: '식단 데이터를 저장하지 못했습니다.',
-          variant: 'destructive'
-        });
       }
+      toast({ title: '기록 완료', description: '식단이 성공적으로 저장되었습니다.' });
+      setHasSaved(true);
+      navigate('/note', { state: { refreshDiet: true } });
     } else {
       console.warn('[기록 저장] 알 수 없는 recordType:', type, chatStructuredData);
     }
-
-    // 초기화
     setChatInputText('');
     setChatAiFeedback(null);
     setChatStructuredData(null);
@@ -462,10 +424,14 @@ const Index = () => {
     setCurrentMealFoods([]);
     setIsAddingMoreFood(false);
     setCurrentMealTime(null);
-  };
+  }, [chatStructuredData, getUserIdFromToken, getToken, toast, navigate]);
 
   const { user } = useAuth();
 
+  // Only reset hasSaved when a new chat session starts (e.g., when recordType changes)
+  useEffect(() => {
+    setHasSaved(false);
+  }, [recordType]);
 
   return (
     <Layout>
@@ -548,6 +514,8 @@ const Index = () => {
             currentMealFoods={currentMealFoods}
             onAddMoreFood={handleAddMoreFood}
             isAddingMoreFood={isAddingMoreFood}
+            hasSaved={hasSaved}
+            setHasSaved={setHasSaved}
           />
         ) : (
           <div className="text-center text-gray-600 p-8 bg-gray-50 rounded-lg">

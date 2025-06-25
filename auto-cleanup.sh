@@ -504,7 +504,7 @@ delete_server_instances() {
         log_warning "서버 목록 조회 실패 또는 빈 응답"
         return 0
     fi
-    
+
     local server_count=$(echo "$server_list" | jq '.getServerInstanceListResponse.serverInstanceList | length // 0')
     
     if [[ "$server_count" -gt 0 ]]; then
@@ -562,45 +562,60 @@ delete_public_ips() {
 # ACG 삭제
 delete_acgs() {
     log_info "ACG 삭제 중..."
-    local acg_list=$(cd "$HOME/.ncloud" && ./ncloud vserver getAccessControlGroupList --output json 2>&1)
-    
+    local acg_list_json=$(cd "$HOME/.ncloud" && ./ncloud vserver getAccessControlGroupList --output json 2>&1)
+
     # Forbidden 오류 처리
-    if [[ "$acg_list" == *"Forbidden"* ]]; then
+    if [[ "$acg_list_json" == *"Forbidden"* ]]; then
         log_warning "ACG 목록 조회 권한이 없습니다."
         return 0
     fi
-    
+
     # JSON 유효성 확인
-    if ! echo "$acg_list" | jq empty 2>/dev/null; then
+    if ! echo "$acg_list_json" | jq empty 2>/dev/null; then
         log_warning "ACG 목록 조회 실패 또는 빈 응답"
         return 0
     fi
-    
-    local acg_count=$(echo "$acg_list" | jq -r '.getAccessControlGroupListResponse.accessControlGroupList | length // 0')
-    
-    if [[ "$acg_count" -gt 0 ]]; then
-        echo "$acg_list" | jq -c '.getAccessControlGroupListResponse.accessControlGroupList[] | select(.isDefault == false)' | while read -r acg_json; do
-            local acg_no=$(echo "$acg_json" | jq -r '.accessControlGroupNo')
-            local vpc_no=$(echo "$acg_json" | jq -r '.vpcNo // ""')
+
+    local acg_list=$(echo "$acg_list_json" | jq -c '.getAccessControlGroupListResponse.accessControlGroupList[] | select(.isDefault == false)')
+
+    if [[ -z "$acg_list" ]]; then
+        log_info "삭제할 ACG가 없습니다."
+        return
+    fi
+
+    echo "$acg_list" | while read -r acg_json; do
+        local acg_no=$(echo "$acg_json" | jq -r '.accessControlGroupNo')
+        local vpc_no=$(echo "$acg_json" | jq -r '.vpcNo // ""')
+        
+        if [[ -n "$acg_no" ]]; then
+            local max_attempts=5
+            local attempt=1
+            local deleted=false
             
-            if [[ -n "$acg_no" ]]; then
+            while [[ $attempt -le $max_attempts && "$deleted" == "false" ]]; do
+                log_info "ACG 삭제 시도: $acg_no (시도 $attempt/$max_attempts)"
+                
                 local cmd_args="--accessControlGroupNo $acg_no"
                 if [[ -n "$vpc_no" ]]; then
-                    log_info "ACG 삭제 중: $acg_no (VPC: $vpc_no)"
                     cmd_args="$cmd_args --vpcNo $vpc_no"
-                else
-                    log_info "ACG 삭제 중: $acg_no (Classic)"
                 fi
-                
-                cd "$HOME/.ncloud" && ./ncloud vserver deleteAccessControlGroup $cmd_args 2>/dev/null || true
-                log_success "ACG 삭제 요청 완료: $acg_no"
-            fi
-        done
-    else
-        log_info "삭제할 ACG가 없습니다"
-    fi
-}
 
+                if (cd "$HOME/.ncloud" && ./ncloud vserver deleteAccessControlGroup $cmd_args 2>/dev/null); then
+                    log_success "ACG 삭제 완료: $acg_no"
+                    deleted=true
+                else
+                    log_warning "ACG $acg_no 삭제 실패. 30초 후 재시도..."
+                    sleep 30
+                fi
+                attempt=$((attempt + 1))
+            done
+
+            if [[ "$deleted" == "false" ]]; then
+                log_error "ACG $acg_no 삭제 실패: 최대 재시도 횟수 초과"
+            fi
+        fi
+    done
+}
 # 초기화 스크립트 삭제
 delete_init_scripts() {
     log_info "초기화 스크립트 삭제 중..."
@@ -894,94 +909,122 @@ check_vpc_resources() {
         has_resources=true
     fi
     
+    # ACG 확인 (기본 ACG 제외)
+    local acg_list=$(cd "$HOME/.ncloud" && ./ncloud vserver getAccessControlGroupList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local acg_count=$(echo "$acg_list" | jq '.getAccessControlGroupListResponse.accessControlGroupList[] | select(.isDefault == false) | length // 0' 2>/dev/null || echo 0)
+    if [[ "$acg_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 ACG $acg_count개가 남아있습니다"
+        has_resources=true
+    fi
+
+    # 네트워크 ACL 확인 (기본 ACL 제외)
+    local acl_list=$(cd "$HOME/.ncloud" && ./ncloud vpc getNetworkAclList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local acl_count=$(echo "$acl_list" | jq '.getNetworkAclListResponse.networkAclList[] | select(.isDefault == false) | length // 0' 2>/dev/null || echo 0)
+    if [[ "$acl_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 네트워크 ACL $acl_count개가 남아있습니다"
+        has_resources=true
+    fi
+
+    # 라우트 테이블 확인 (기본 RT 제외)
+    local rt_list=$(cd "$HOME/.ncloud" && ./ncloud vpc getRouteTableList --vpcNo "$vpc_no" --output json 2>/dev/null || echo '{}')
+    local rt_count=$(echo "$rt_list" | jq '.getRouteTableListResponse.routeTableList[] | select(.isDefault == false) | length // 0' 2>/dev/null || echo 0)
+    if [[ "$rt_count" -gt 0 ]]; then
+        log_warning "VPC $vpc_no에 라우트 테이블 $rt_count개가 남아있습니다"
+        has_resources=true
+    fi
+
     if [[ "$has_resources" == "true" ]]; then
-        return 1  # 리소스가 남아있음
+        return 1
     else
-        return 0  # 삭제 가능
+        return 0
     fi
 }
-
 # VPC 삭제 (개선된 버전)
 delete_vpcs() {
     log_info "VPC 삭제 중..."
-    local vpc_list=$(cd "$HOME/.ncloud" && ./ncloud vpc getVpcList --output json 2>&1)
+    local vpc_list_json=$(cd "$HOME/.ncloud" && ./ncloud vpc getVpcList --output json 2>&1)
     
     # Forbidden 오류 처리
-    if [[ "$vpc_list" == *"Forbidden"* ]]; then
+    if [[ "$vpc_list_json" == *"Forbidden"* ]]; then
         log_warning "VPC 목록 조회 권한이 없습니다."
         return 0
     fi
     
     # JSON 유효성 확인
-    if ! echo "$vpc_list" | jq empty 2>/dev/null; then
+    if ! echo "$vpc_list_json" | jq empty 2>/dev/null; then
         log_warning "VPC 목록 조회 실패 또는 빈 응답"
         return 0
     fi
     
-    local vpc_count=$(echo "$vpc_list" | jq '.getVpcListResponse.vpcList | length // 0')
+    local vpc_list=$(echo "$vpc_list_json" | jq -c '.getVpcListResponse.vpcList[]')
     
-    if [[ "$vpc_count" -gt 0 ]]; then
-        # 삭제 가능한 VPC 목록 수집
-        local vpcs_to_delete=()
-        while IFS= read -r vpc_info; do
-            if [[ -n "$vpc_info" ]]; then
-                local vpc_no=$(echo "$vpc_info" | cut -d' ' -f1)
-                local vpc_name=$(echo "$vpc_info" | cut -d' ' -f2-)
-                
-                # 기본 VPC가 아닌지 확인
-                if [[ "$vpc_name" != *"default"* && "$vpc_no" != "null" ]]; then
-                    vpcs_to_delete+=("$vpc_no")
-                fi
+    if [[ -z "$vpc_list" ]]; then
+        log_info "삭제할 VPC가 없습니다."
+        return
+    fi
+
+    # 삭제 가능한 VPC 목록 수집
+    local vpcs_to_delete=()
+    while IFS= read -r vpc_json; do
+        if [[ -n "$vpc_json" ]]; then
+            local vpc_no=$(echo "$vpc_json" | jq -r '.vpcNo')
+            local vpc_name=$(echo "$vpc_json" | jq -r '.vpcName')
+            
+            # 이름에 "default"가 포함되지 않은 VPC만 대상으로 함
+            if [[ "$vpc_name" != *"default"* && -n "$vpc_no" ]]; then
+                vpcs_to_delete+=("$vpc_no")
+            else
+                log_info "기본 VPC 또는 이름 없는 VPC는 건너뜁니다: $vpc_name ($vpc_no)"
             fi
-        done < <(echo "$vpc_list" | jq -r '.getVpcListResponse.vpcList[] | select(.isDefault == false) | .vpcNo + " " + (.vpcName // "unnamed")')
+        fi
+    done <<< "$vpc_list"
+    
+    if [[ ${#vpcs_to_delete[@]} -eq 0 ]]; then
+        log_info "삭제할 대상 VPC가 없습니다."
+        return
+    fi
         
-        # VPC 삭제 시도 (최대 3회 재시도)
-        for vpc_no in "${vpcs_to_delete[@]}"; do
-            if [[ -n "$vpc_no" ]]; then
-                log_info "VPC 삭제 준비 중: $vpc_no"
+    # VPC 삭제 시도 (최대 3회 재시도)
+    for vpc_no in "${vpcs_to_delete[@]}"; do
+        log_info "VPC 삭제 준비 중: $vpc_no"
+        
+        local max_attempts=3
+        local attempt=1
+        local deleted=false
+        
+        while [[ $attempt -le $max_attempts && "$deleted" == "false" ]]; do
+            log_info "VPC $vpc_no 삭제 시도 $attempt/$max_attempts"
+            
+            # VPC 내부 리소스 확인
+            if check_vpc_resources "$vpc_no"; then
+                log_info "VPC $vpc_no는 삭제 가능한 상태입니다"
                 
-                local max_attempts=3
-                local attempt=1
-                local deleted=false
-                
-                while [[ $attempt -le $max_attempts && "$deleted" == "false" ]]; do
-                    log_info "VPC $vpc_no 삭제 시도 $attempt/$max_attempts"
-                    
-                    # VPC 내부 리소스 확인
-                    if check_vpc_resources "$vpc_no"; then
-                        log_info "VPC $vpc_no는 삭제 가능한 상태입니다"
-                        
-                        # VPC 삭제 시도
-                        if cd "$HOME/.ncloud" && ./ncloud vpc deleteVpc --vpcNo "$vpc_no" 2>/dev/null; then
-                            log_success "VPC 삭제 완료: $vpc_no"
-                            deleted=true
-                        else
-                            log_warning "VPC $vpc_no 삭제 실패 (시도 $attempt/$max_attempts)"
-                        fi
-                    else
-                        log_warning "VPC $vpc_no에 아직 리소스가 남아있어 삭제할 수 없습니다 (시도 $attempt/$max_attempts)"
-                    fi
-                    
-                    if [[ "$deleted" == "false" ]]; then
-                        if [[ $attempt -lt $max_attempts ]]; then
-                            log_info "30초 후 다시 시도합니다..."
-                            sleep 30
-                        fi
-                        attempt=$((attempt + 1))
-                    fi
-                done
-                
-                if [[ "$deleted" == "false" ]]; then
-                    log_error "VPC $vpc_no 삭제 실패: 최대 재시도 횟수 초과"
-                    log_info "수동으로 네이버클라우드 콘솔에서 VPC를 확인해주세요"
+                # VPC 삭제 시도 (오류 메시지 확인을 위해 2>/dev/null 제거)
+                if (cd "$HOME/.ncloud" && ./ncloud vpc deleteVpc --vpcNo "$vpc_no"); then
+                    log_success "VPC 삭제 완료: $vpc_no"
+                    deleted=true
+                else
+                    log_warning "VPC $vpc_no 삭제 실패 (시도 $attempt/$max_attempts). 오류 메시지를 확인하세요."
                 fi
+            else
+                log_warning "VPC $vpc_no에 아직 리소스가 남아있어 삭제할 수 없습니다 (시도 $attempt/$max_attempts)"
+            fi
+            
+            if [[ "$deleted" == "false" ]]; then
+                if [[ $attempt -lt $max_attempts ]]; then
+                    log_info "30초 후 다시 시도합니다..."
+                    sleep 30
+                fi
+                attempt=$((attempt + 1))
             fi
         done
-    else
-        log_info "삭제할 VPC가 없습니다"
-    fi
+        
+        if [[ "$deleted" == "false" ]]; then
+            log_error "VPC $vpc_no 삭제 실패: 최대 재시도 횟수 초과"
+            log_info "수동으로 네이버클라우드 콘솔에서 VPC를 확인해주세요"
+        fi
+    done
 }
-
 # LifeBit 전체 정리 (로컬 + 클라우드)
 cleanup_all() {
     log_cleanup "LifeBit 전체 리소스 정리 시작..."
@@ -1048,23 +1091,23 @@ cleanup_all() {
         delete_network_interfaces
         total_deleted=$((total_deleted + 1))
         
-        # 6. ACG 삭제 (기본 ACG 제외)
-        delete_acgs
-        total_deleted=$((total_deleted + 1))
-        
-        # 7. 서브넷 삭제
+        # 6. 서브넷 삭제 (ACG, ACL 등 보다 먼저)
         delete_subnets
         total_deleted=$((total_deleted + 1))
         
-        # 7-1. 네트워크 ACL 삭제
+        # 7. ACG 삭제 (기본 ACG 제외)
+        delete_acgs
+        total_deleted=$((total_deleted + 1))
+        
+        # 8. 네트워크 ACL 삭제
         delete_network_acls
         total_deleted=$((total_deleted + 1))
         
-        # 8. Route Table 삭제
+        # 9. Route Table 삭제
         delete_route_tables
         total_deleted=$((total_deleted + 1))
         
-        # 9. Internet Gateway 삭제
+        # 10. Internet Gateway 삭제
         delete_internet_gateways
         total_deleted=$((total_deleted + 1))
         
@@ -1072,7 +1115,7 @@ cleanup_all() {
         log_info "VPC 삭제 전 모든 리소스 삭제 완료 대기 중... (60초)"
         sleep 60
         
-        # 10. VPC 삭제 (마지막)
+        # 11. VPC 삭제 (마지막)
         delete_vpcs
         total_deleted=$((total_deleted + 1))
         
@@ -1083,7 +1126,6 @@ cleanup_all() {
     
     log_success "LifeBit 전체 리소스 정리 완료 (총 $total_deleted개 항목)"
 }
-
 # 특정 리소스만 삭제 (LifeBit용으로 개선)
 cleanup_specific() {
     local resource_type="$1"
@@ -1194,8 +1236,8 @@ cleanup_specific() {
                 delete_nat_gateways
                 delete_public_ips
                 delete_network_interfaces
-                delete_acgs
                 delete_subnets
+                delete_acgs
                 delete_network_acls
                 delete_route_tables
                 delete_internet_gateways
@@ -1233,7 +1275,6 @@ cleanup_specific() {
             ;;
     esac
 }
-
 # 자동 정리 스케줄링
 schedule_cleanup() {
     local hours="$1"
@@ -1341,7 +1382,7 @@ LifeBit 프로젝트 구조:
     
     클라우드 리소스 삭제 순서 (의존성 고려):
     1. 서버 인스턴스 → 2. 초기화 스크립트 → 3. 로드밸런서 → 4. NAT Gateway → 5. 퍼블릭 IP
-    6. 네트워크 인터페이스 → 7. ACG → 8. 서브넷 → 9. 네트워크 ACL → 10. Route Table
+    6. 네트워크 인터페이스 → 7. 서브넷 → 8. ACG → 9. 네트워크 ACL → 10. Route Table
     11. Internet Gateway → 12. VPC (마지막, 재시도 로직 포함)
     
     - 기본 리소스(기본 VPC, 기본 ACG, 기본 네트워크 ACL)는 보호되어 삭제되지 않습니다.

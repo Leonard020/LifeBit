@@ -33,6 +33,8 @@ interface ChatInterfaceProps {
   }>;
   onAddMoreFood?: () => void;
   isAddingMoreFood?: boolean;
+  hasSaved: boolean;
+  setHasSaved: (v: boolean) => void;
 }
 
 // 카카오톡 스타일 메시지 컴포넌트
@@ -165,28 +167,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   conversationHistory,
   currentMealFoods = [],
   onAddMoreFood,
-  isAddingMoreFood = false
+  isAddingMoreFood = false,
+  hasSaved,
+  setHasSaved
 }) => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-  
     // 💬 스크롤 항상 맨 아래로
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  
+
     // ✅ 자동 저장 키워드 감지
     const lowered = inputText.toLowerCase();
     const saveKeywords = /저장|기록|완료|끝|등록|저장해줘|기록해줘|등록해줘/;
-  
-    if (saveKeywords.test(lowered) && structuredData) {
-      console.log('💾 [ChatInterface] 자동 저장 조건 감지됨');
-      onSaveRecord();  // 🔥 부모로부터 받은 저장 함수 실행
+
+    if (saveKeywords.test(lowered) && structuredData && !hasSaved) {
+      setHasSaved(true);
+      onSaveRecord();
     }
-  }, [conversationHistory, aiFeedback, inputText, structuredData, onSaveRecord]);
-  
-  
+  }, [conversationHistory, aiFeedback, inputText, structuredData, onSaveRecord, hasSaved, setHasSaved]);
 
   if (!recordType) {
     return (
