@@ -210,6 +210,9 @@ update_ansible_inventory() {
     local key_name="$(terraform output -raw login_key_name)"
     sed -i "s|ansible_ssh_private_key_file=.*|ansible_ssh_private_key_file=~/.ssh/${key_name}.pem|g" "$inventory_file"
     
+    # update user
+    sed -i "s/ansible_user=.*/ansible_user=ubuntu/g" "$inventory_file"
+    
     log_success "Ansible 인벤토리 업데이트 완료"
 }
 
