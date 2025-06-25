@@ -99,6 +99,14 @@
       ignore_errors: yes
       tags: [docker]
 
+    - name: Docker SDK(Python) 및 Compose 라이브러리 설치
+      pip:
+        name:
+          - docker
+          - docker-compose
+        state: present
+      tags: [docker]
+
     # ================================================
     # 3. 방화벽 설정
     # ================================================

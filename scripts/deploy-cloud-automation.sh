@@ -19,6 +19,7 @@ LOG_FILE="$PROJECT_ROOT/logs/deploy-cloud-$TIMESTAMP.log"
 DEPLOY_MODE="${1:-full}"  # full, infra-only, app-only
 ENVIRONMENT="${2:-demo}"  # demo, dev, prod
 DRY_RUN="${3:-false}"     # true, false
+AUTO_APPROVE="${4:-false}"    # true, false
 
 # NCP 설정 (환경변수에서 로드)
 NCP_ACCESS_KEY="${NCP_ACCESS_KEY}"
@@ -83,6 +84,7 @@ EOF
     echo "배포 모드: $DEPLOY_MODE"
     echo "환경: $ENVIRONMENT"
     echo "DRY RUN: $DRY_RUN"
+    echo "AUTO_APPROVE: $AUTO_APPROVE"
     echo "시작 시간: $(date)"
     echo "로그 파일: $LOG_FILE"
     echo "================================================"
@@ -120,10 +122,14 @@ check_prerequisites() {
     # Git 상태 확인
     if [ -n "$(git status --porcelain)" ]; then
         log_warning "Git 작업 디렉토리에 커밋되지 않은 변경사항이 있습니다."
-        read -p "계속 진행하시겠습니까? (y/N): " confirm
-        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-            log_info "배포가 취소되었습니다."
-            exit 0
+        if [ "$AUTO_APPROVE" = "true" ]; then
+            log_info "AUTO_APPROVE 모드: 변경사항 무시하고 계속 진행합니다."
+        else
+            read -p "계속 진행하시겠습니까? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                log_info "배포가 취소되었습니다."
+                exit 0
+            fi
         fi
     fi
     
@@ -156,13 +162,15 @@ deploy_infrastructure() {
         return 0
     fi
     
-    # 사용자 확인
-    echo ""
-    log_warning "위의 Terraform 계획을 검토하세요."
-    read -p "인프라를 배포하시겠습니까? (y/N): " confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        log_info "인프라 배포가 취소되었습니다."
-        exit 0
+    if [ "$AUTO_APPROVE" = "true" ]; then
+        log_info "AUTO_APPROVE 모드: 사용자 확인을 건너뜁니다."
+    else
+        log_warning "위의 Terraform 계획을 검토하세요."
+        read -p "인프라를 배포하시겠습니까? (y/N): " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            log_info "인프라 배포가 취소되었습니다."
+            exit 0
+        fi
     fi
     
     # Terraform 적용
@@ -190,8 +198,12 @@ update_ansible_inventory() {
     cp "$inventory_file" "$inventory_file.backup-$TIMESTAMP"
     
     # 서버 IP 업데이트
-    sed -i "s/ansible_host=YOUR_SERVER_IP_HERE/ansible_host=$server_ip/g" "$inventory_file"
     sed -i "s/lifebit-demo-server ansible_host=.*/lifebit-$ENVIRONMENT-server ansible_host=$server_ip/g" "$inventory_file"
+    # ansible_host placeholder (백워드 호환)
+    sed -i "s/ansible_host=YOUR_SERVER_IP_HERE/ansible_host=$server_ip/g" "$inventory_file"
+
+    # SSH 개인키 경로 업데이트
+    sed -i "s|ansible_ssh_private_key_file=.*|ansible_ssh_private_key_file=~/.ssh/lifebit-$ENVIRONMENT-key.pem|g" "$inventory_file"
     
     log_success "Ansible 인벤토리 업데이트 완료"
 }
@@ -374,7 +386,7 @@ main() {
             ;;
         *)
             log_error "잘못된 배포 모드: $DEPLOY_MODE"
-            log_info "사용법: $0 [full|infra-only|app-only] [demo|dev|prod] [true|false]"
+            log_info "사용법: $0 [full|infra-only|app-only] [demo|dev|prod] [true|false] [true|false]"
             exit 1
             ;;
     esac
