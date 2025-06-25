@@ -95,33 +95,33 @@ export interface DietRecord {
   createdAt?: string;
 }
 
-// 식단 기록 생성 요청 타입
+// 식단 기록 생성 요청 타입 (DB 스키마에 맞게 snake_case 사용)
 export interface DietRecordCreateRequest {
-  foodItemId: number;
+  food_item_id: number;
   quantity: number;
-  mealTime?: string;
-  inputSource?: string;
-  confidenceScore?: number;
-  originalAudioPath?: string;
-  validationStatus?: string;
-  validationNotes?: string;
-  createdAt?: string;
-  userId?: number;
-  logDate?: string;
+  meal_time?: string;
+  input_source?: string;
+  confidence_score?: number;
+  original_audio_path?: string;
+  validation_status?: string;
+  validation_notes?: string;
+  created_at?: string;
+  user_id?: number;
+  log_date?: string;
   unit?: string;
 }
 
-// 식단 기록 수정 요청 타입
+// 식단 기록 수정 요청 타입 (DB 스키마에 맞게 snake_case 사용)
 export interface DietRecordUpdateRequest {
-  foodItemId?: number;
+  food_item_id?: number;
   quantity?: number;
-  mealTime?: string;
-  inputSource?: string;
-  confidenceScore?: number;
-  originalAudioPath?: string;
-  validationStatus?: string;
-  validationNotes?: string;
-  logDate?: string;
+  meal_time?: string;
+  input_source?: string;
+  confidence_score?: number;
+  original_audio_path?: string;
+  validation_status?: string;
+  validation_notes?: string;
+  log_date?: string;
   unit?: string;
 }
 
