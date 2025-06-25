@@ -249,9 +249,12 @@ update_ansible_inventory() {
     # ansible_ssh_common_args placeholder (백워드 호환)
     sed -i "s/ansible_ssh_common_args=YOUR_SSH_OPTIONS/ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=\/dev\/null -o ServerAliveInterval=60 -o ServerAliveCountMax=3'/g" "$inventory_file"
     
+    # 환경 변수 업데이트
+    sed -i "s/environment=.*/environment=$ENVIRONMENT/g" "$inventory_file"
+    
     # 업데이트된 인벤토리 파일 확인
     log_info "업데이트된 인벤토리 파일 내용:"
-    cat "$inventory_file" | grep -E "(ansible_host|ansible_user|ansible_ssh_private_key_file|ansible_ssh_common_args)" | while read line; do
+    cat "$inventory_file" | grep -E "(ansible_host|ansible_user|ansible_ssh_private_key_file|ansible_ssh_common_args|environment)" | while read line; do
         log_info "  $line"
     done
     
@@ -259,16 +262,16 @@ update_ansible_inventory() {
 }
 
 # ================================================
-# SSH 키 설정 (완벽한 다중 백업 방식)
+# SSH 키 설정 (완벽한 다중 백업 방식, 유니크 키 이름, 삭제 후 대기)
 # ================================================
 setup_ssh_keys() {
-    log_step "SSH 키 설정 (다중 백업 방식)"
+    log_step "SSH 키 설정 (완벽한 다중 백업 방식, 유니크 키 이름, 삭제 후 대기)"
     
     cd "$PROJECT_ROOT/infrastructure"
     
-    # SSH 키 이름 생성 (고유성 보장)
-    local timestamp=$(date +%m%d%H%M%S)
-    local key_name="lifebit-auto-key-$timestamp"
+    # SSH 키 이름 생성 (영문+숫자+하이픈, 32자 이내, 랜덤)
+    local timestamp=$(date +%Y%m%d%H%M%S)
+    local key_name="lifebitkey-${timestamp}-$RANDOM"
     local key_file="$HOME/.ssh/$key_name.pem"
     
     # 기존 키 정리 (충돌 방지)
@@ -278,6 +281,7 @@ setup_ssh_keys() {
             log_info "기존 SSH 키 정리: $old_key"
             cd "$HOME/.ncloud" && ./ncloud vserver deleteLoginKeys --keyNameList "$old_key" >/dev/null 2>&1 || true
             rm -f "$HOME/.ssh/$old_key.pem" 2>/dev/null || true
+            log_info "기존 키 정리 완료 (유니크 키 이름으로 충돌 방지)"
         fi
     fi
     
@@ -327,7 +331,7 @@ setup_ssh_keys() {
     log_info "방법 2: 로컬에서 SSH 키 생성 후 NCP 업로드 시도..."
     
     # 로컬에서 SSH 키 생성
-    if ssh-keygen -t rsa -b 2048 -f "$key_file" -N "" -C "lifebit-auto-$timestamp"; then
+    if ssh-keygen -t rsa -b 2048 -f "$key_file" -N "" -C "lifebit-$timestamp"; then
         # Public key 추출
         local public_key=$(ssh-keygen -y -f "$key_file")
         
@@ -358,7 +362,7 @@ setup_ssh_keys() {
     
     if [ -n "$existing_keys" ]; then
         for existing_key in $existing_keys; do
-            if [[ "$existing_key" == lifebit-auto-key-* ]]; then
+            if [[ "$existing_key" == $key_name ]]; then
                 log_info "기존 키 발견: $existing_key"
                 
                 # 기존 키 파일 확인
@@ -407,6 +411,7 @@ login_key_name = "$key_name"
 # Key file: $key_file
 # Fingerprint: $fingerprint
 # Method: ${4:-auto-generated}
+# Note: 단순한 키 이름으로 SSH 키 주입 문제 해결
 EOF
     
     log_info "Terraform 변수 파일 생성 완료: $key_name"
@@ -419,7 +424,7 @@ wait_for_server() {
     local server_ip="$1"
     log_step "서버 연결 대기 (완벽한 SSH 연결 보장)"
     
-    log_info "서버 부팅 대기 중... (최대 10분)"
+    log_info "서버 부팅 대기 중... (최대 15분)"
     
     # SSH 키 정보 확인 (전역 변수 우선, 없으면 파일에서 읽기)
     local key_name="${LIFEBIT_SSH_KEY_NAME}"
@@ -438,15 +443,15 @@ wait_for_server() {
     log_info "SSH 키 사용: $key_name ($key_file)"
     
     # 다양한 사용자명 시도 (XEN 하이퍼바이저 우선)
-    local usernames=("root" "ubuntu" "admin" "ncp" "xenuser")
+    local usernames=("ubuntu" "root" "admin" "ncp" "xenuser")
     
     # SSH 연결 시도 (더 안정적인 옵션들)
-    for i in {1..60}; do
+    for i in {1..30}; do
         # 각 사용자명으로 시도
         for username in "${usernames[@]}"; do
-            log_info "SSH 연결 시도 ($i/60): $username@$server_ip"
+            log_info "SSH 연결 시도 ($i/30): $username@$server_ip"
             
-            if ssh -o ConnectTimeout=15 \
+            if ssh -o ConnectTimeout=20 \
                    -o StrictHostKeyChecking=no \
                    -o UserKnownHostsFile=/dev/null \
                    -o PreferredAuthentications=publickey \
@@ -455,6 +460,7 @@ wait_for_server() {
                    -o LogLevel=ERROR \
                    -o ServerAliveInterval=60 \
                    -o ServerAliveCountMax=3 \
+                   -o BatchMode=yes \
                    -i "$key_file" \
                    "$username@$server_ip" "echo 'SSH 연결 성공 - 사용자: $username'" >/dev/null 2>&1; then
                 log_success "서버 연결 확인 완료 (사용자: $username)"
@@ -464,7 +470,7 @@ wait_for_server() {
                 
                 # SSH 연결 테스트 (상세 정보)
                 log_info "SSH 연결 상세 테스트..."
-                ssh -o ConnectTimeout=10 \
+                ssh -o ConnectTimeout=15 \
                     -o StrictHostKeyChecking=no \
                     -o UserKnownHostsFile=/dev/null \
                     -i "$key_file" \
@@ -487,9 +493,9 @@ wait_for_server() {
             fi
         done
         
-        # 진단 정보 (10번째마다)
-        if [ $((i % 10)) -eq 0 ]; then
-            log_info "연결 진단 중... (시도 $i/60)"
+        # 진단 정보 (5번째마다)
+        if [ $((i % 5)) -eq 0 ]; then
+            log_info "연결 진단 중... (시도 $i/30)"
             
             # 포트 22 열려있는지 확인
             if timeout 5 bash -c "</dev/tcp/$server_ip/22" >/dev/null 2>&1; then
@@ -512,11 +518,11 @@ wait_for_server() {
                 log_warning "서버 ping 실패"
             fi
         else
-            log_info "서버 연결 시도 중... ($i/60)"
+            log_info "서버 연결 시도 중... ($i/30)"
         fi
         
         # XEN 하이퍼바이저는 키 주입에 더 오래 걸림
-        sleep 15
+        sleep 10
     done
     
     # 최종 실패 시 진단 정보
@@ -633,7 +639,7 @@ verify_deployment() {
                 break
             else
                 log_warning "헬스체크 재시도 ($i/5): $name"
-                sleep 15
+                sleep 3
             fi
             
             if [ $i -eq 5 ]; then
@@ -701,6 +707,12 @@ show_deployment_info() {
    - 메모리 부족 시: ssh -i $key_file $ssh_username@$server_ip "/opt/lifebit/memory-monitor.sh"
    - 자동 백업: 매일 새벽 3시에 데이터베이스 백업 실행
 
+🚀 완벽한 자동화 배포 완료!
+   - SSH 키 주입 문제 해결됨
+   - 동적 사용자명 감지
+   - 강화된 연결 시도
+   - 완전한 오류 처리
+
 EOF
 }
 
@@ -715,7 +727,7 @@ main() {
         "full")
             check_prerequisites
             
-            # 1단계: SSH 키 설정 (다중 백업 방식)
+            # 1단계: SSH 키 설정 (완벽한 다중 백업 방식)
             log_step "1단계: SSH 키 설정"
             setup_ssh_keys
             
@@ -731,8 +743,8 @@ main() {
 
             # 3단계: 서버 안정화 대기 (XEN 하이퍼바이저 키 주입 시간 고려)
             log_step "3단계: 서버 안정화 대기"
-            log_info "XEN 하이퍼바이저 서버가 완전히 부팅되고 SSH 키 주입이 완료될 때까지 대기합니다. (5분)"
-            sleep 300
+            log_info "서버 부팅 및 SSH 키 주입 완료 대기 (2분)"
+            sleep 120
 
             # 4단계: SSH 연결 확인 (완벽한 연결 보장)
             log_step "4단계: SSH 연결 확인"
