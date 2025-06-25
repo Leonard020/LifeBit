@@ -44,13 +44,13 @@ output "ssh_connection" {
 output "application_urls" {
   description = "Application access URLs"
   value = {
-    frontend      = "http://${ncloud_public_ip.web.public_ip}:3000"
-    spring_api    = "http://${ncloud_public_ip.web.public_ip}:8080"
-    fastapi       = "http://${ncloud_public_ip.web.public_ip}:8001"
-    airflow       = "http://${ncloud_public_ip.web.public_ip}:8081"
-    grafana       = "http://${ncloud_public_ip.web.public_ip}:3001"
-    prometheus    = "http://${ncloud_public_ip.web.public_ip}:9090"
-    nginx_proxy   = "http://${ncloud_public_ip.web.public_ip}:8082"
+    frontend    = "http://${ncloud_public_ip.web.public_ip}:3000"
+    spring_api  = "http://${ncloud_public_ip.web.public_ip}:8080"
+    fastapi     = "http://${ncloud_public_ip.web.public_ip}:8001"
+    airflow     = "http://${ncloud_public_ip.web.public_ip}:8081"
+    grafana     = "http://${ncloud_public_ip.web.public_ip}:3001"
+    prometheus  = "http://${ncloud_public_ip.web.public_ip}:9090"
+    nginx_proxy = "http://${ncloud_public_ip.web.public_ip}:8082"
   }
 }
 
@@ -80,7 +80,7 @@ output "additional_storage_id" {
 # 배포 가이드
 output "deployment_guide" {
   description = "Quick deployment guide"
-  value = <<-EOT
+  value       = <<-EOT
 🚀 LifeBit 학원용 배포 완료!
 
 📋 접속 정보:
@@ -109,13 +109,13 @@ EOT
 output "resource_summary" {
   description = "Created resources summary"
   value = {
-    vpc_name              = ncloud_vpc.main.name
-    subnet_name           = ncloud_subnet.public.name
-    server_name           = ncloud_server.web.name
-    server_type           = var.server_instance_type
-    public_ip             = ncloud_public_ip.web.public_ip
-    environment           = var.environment
-    project_name          = var.project_name
-    additional_storage    = var.enable_additional_storage
+    vpc_name           = ncloud_vpc.main.name
+    subnet_name        = ncloud_subnet.public.name
+    server_name        = ncloud_server.web.name
+    server_type        = var.server_instance_type
+    public_ip          = ncloud_public_ip.web.public_ip
+    environment        = var.environment
+    project_name       = var.project_name
+    additional_storage = var.enable_additional_storage
   }
 } 
