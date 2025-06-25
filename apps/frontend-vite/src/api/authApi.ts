@@ -1206,8 +1206,8 @@ export const useExerciseCalendarHeatmap = (userId: string) => {
     queryKey: ['exercise-calendar-heatmap', userId],
     queryFn: () => getExerciseCalendarHeatmapData(userId),
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
-    gcTime: 1000 * 60 * 10, // 10분간 가비지 컬렉션 지연
+    staleTime: 0, // 캐시 시간을 0으로 설정하여 항상 최신 데이터 조회
+    gcTime: 1000 * 60 * 5, // 5분으로 줄임
   });
 };
 

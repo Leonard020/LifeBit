@@ -278,4 +278,10 @@ public class ExerciseService {
             .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
             .sum();
     }
+
+    public List<ExerciseSession> getExerciseSessions(Long userId, LocalDate startDate, LocalDate endDate) {
+        User user = new User(userId);
+        return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+            user, startDate, endDate);
+    }
 } 
