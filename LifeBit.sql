@@ -197,6 +197,7 @@ CREATE TABLE user_ranking (
     rank_position INTEGER NOT NULL DEFAULT 0,
     previous_rank INTEGER NOT NULL DEFAULT 0,
     season INTEGER NOT NULL DEFAULT 1,
+    tier VARCHAR(10) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -410,28 +411,7 @@ EXECUTE FUNCTION update_processed_at();
 CREATE INDEX IF NOT EXISTS idx_user_ranking_total_score ON user_ranking(total_score DESC);
 CREATE INDEX IF NOT EXISTS idx_user_ranking_user_id ON user_ranking(user_id);
 
--- 등급 구간별 tier 값 일괄 업데이트 (점수 기준, 필요에 따라 조정)
-UPDATE user_ranking SET tier = 'UNRANK'      WHERE total_score < 100;
-UPDATE user_ranking SET tier = 'BRONZE'      WHERE total_score >= 100   AND total_score < 500;
-UPDATE user_ranking SET tier = 'SILVER'      WHERE total_score >= 500   AND total_score < 1000;
-UPDATE user_ranking SET tier = 'GOLD'        WHERE total_score >= 1000  AND total_score < 2000;
-UPDATE user_ranking SET tier = 'PLATINUM'    WHERE total_score >= 2000  AND total_score < 3000;
-UPDATE user_ranking SET tier = 'DIAMOND'     WHERE total_score >= 3000  AND total_score < 4000;
-UPDATE user_ranking SET tier = 'MASTER'      WHERE total_score >= 4000  AND total_score < 5000;
-UPDATE user_ranking SET tier = 'GRANDMASTER' WHERE total_score >= 5000  AND total_score < 6000;
-UPDATE user_ranking SET tier = 'CHALLENGER'  WHERE total_score >= 6000;
 
--- ranking_history.user_id 값 동기화 (user_ranking_id → user_id)
-UPDATE ranking_history rh
-SET user_id = ur.user_id
-FROM user_ranking ur
-WHERE rh.user_ranking_id = ur.id;
-
--- ranking_history.tier 값 동기화 (user_id 기준)
-UPDATE ranking_history rh
-SET tier = ur.tier
-FROM user_ranking ur
-WHERE rh.user_id = ur.user_id;
 
 -- (선택) 더미 데이터 삽입 예시
 -- INSERT INTO user_ranking (user_id, total_score, tier, rank_position, streak_days, is_active)
