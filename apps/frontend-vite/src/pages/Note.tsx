@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
@@ -549,73 +549,26 @@ const Note = () => {
 
   // ✅ 오늘 운동 기록 불러오기
   const fetchExercise = async () => {
-    if (!authToken) {
-      console.warn('인증 토큰이 없습니다.');
+    const userId = getUserIdFromToken();
+    if (!userId) {
       setTodayExercise([]);
       return;
     }
-
-    if (!isTokenValid()) {
-      console.error('토큰이 유효하지 않습니다. 로그인 페이지로 이동합니다.');
-      removeToken();
-      navigate('/login');
-      return;
-    }
-
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-    console.log('[운동기록 조회 호출]', formattedDate);
-
     try {
-      // exercise_sessions 테이블의 모든 필드를 포함하여 요청
-      const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error(`API 요청 실패: ${res.status}`);
-      }
-
-      const data = await res.json();
-      console.log('[운동기록 원본 데이터]', JSON.stringify(data, null, 2));
-
+      const data = await getDailyExerciseRecords(formattedDate, userId);
       // 날짜 필터 적용 (exerciseDate 기준)
-      const filtered = data.filter((e: ExerciseRecordDTO) => {
-        const matches = e.exerciseDate && e.exerciseDate.startsWith(formattedDate);
-        // 각 레코드의 세부 정보 로깅
-        console.log('[운동 기록 상세]', {
-          id: e.exerciseSessionId,
-          name: e.exerciseName,
-          bodyPart: e.bodyPart,
-          sets: e.sets,
-          reps: e.reps,
-          weight: e.weight,
-          duration: e.durationMinutes,
-          calories: e.calories_burned
-        });
-        return matches;
-      });
-
-      console.log('[필터링된 운동기록]', filtered);
-
+      const filtered = data.filter((e: ExerciseRecordDTO) => e.exerciseDate && e.exerciseDate.startsWith(formattedDate));
       // 데이터 정제: undefined나 null이 아닌 값만 포함
       const cleanedData = filtered.map(record => ({
         ...record,
-        sets: record.sets ?? record.set ?? record.set_count ?? undefined,
-        reps: record.reps ?? record.rep ?? record.rep_count ?? undefined,
-        weight: record.weight ?? record.weight_kg ?? undefined,
+        sets: record.sets,
+        reps: record.reps,
+        weight: record.weight,
         durationMinutes: record.durationMinutes || undefined,
         calories_burned: record.calories_burned || undefined
       }));
-
       setTodayExercise(cleanedData.sort((a, b) => b.exerciseSessionId - a.exerciseSessionId));
-
-      if (!filtered || filtered.length === 0) {
-        console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
-      }
     } catch (err) {
       console.error("운동 기록 불러오기 실패:", err);
       setTodayExercise([]);
@@ -887,34 +840,16 @@ const Note = () => {
 
   const addExerciseRecord = async () => {
     try {
-      const token = getToken();
-      console.log('운동 추가 토큰:', token); // 토큰 값 확인
-      const userInfo = getUserInfo();
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-
-      const request = {
+      const request: any = {
         exerciseName: exerciseName.trim(),
         sets: sets || 1,
         reps: reps || 10,
         weight: weight || 0.0,
-        time: time || null,
         exerciseDate: formattedDate
       };
-      console.log('💪 운동 추가 요청:', request);
-
-      const res = await fetch('/api/note/exercise', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(request)
-      });
-
-      if (!res.ok) throw new Error("운동 기록 추가 실패");
-
-      await fetchExercise(); // 운동 추가 후 오늘의 운동 기록을 강제로 다시 불러옴
-
+      await createExerciseSession(request);
+      await fetchExercise();
       setIsAddExerciseDialogOpen(false);
       setExerciseName('');
       setSets(1);
@@ -988,17 +923,8 @@ const Note = () => {
   }
 
   const deleteExerciseRecord = async (sessionId: number) => {
-    if (!authToken) {
-      console.warn('인증 토큰이 없습니다.');
-      return;
-    }
-
     try {
-      await axios.delete(`/api/note/exercise/${sessionId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      // 삭제 후 목록 새로고침
+      await deleteExerciseSession(sessionId);
       await fetchExercise();
     } catch (err) {
       console.error("운동 기록 삭제 실패:", err);
@@ -1006,17 +932,13 @@ const Note = () => {
   };
 
   const saveExerciseEdit = async () => {
-    if (!editingExercise || !authToken) return;
-
+    if (!editingExercise) return;
     try {
-      await axios.put(`/api/note/exercise/${editingExercise.exerciseSessionId}`, {
+      await updateExerciseSession(editingExercise.exerciseSessionId, {
         sets: exerciseEditForm.sets,
         reps: exerciseEditForm.reps,
         weight: exerciseEditForm.weight,
-      }, {
-        headers: { Authorization: `Bearer ${authToken}` },
       });
-
       setIsEditExerciseDialogOpen(false);
       setEditingExercise(null);
       await fetchExercise();
