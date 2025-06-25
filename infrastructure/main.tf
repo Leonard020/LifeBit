@@ -186,6 +186,7 @@ resource "ncloud_server" "web" {
   server_product_code       = var.server_instance_type
   login_key_name           = ncloud_login_key.main.key_name
   init_script_no           = ncloud_init_script.web_init.id
+  subnet_no                = ncloud_subnet.public.id
   
   network_interface {
     network_interface_no = ncloud_network_interface.web.id
