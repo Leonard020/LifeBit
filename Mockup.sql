@@ -1,5 +1,3 @@
--- 기존 데이터 정리 (의존성 순서 고려)
-
 
 -- ===================================================================
 -- 1. 사용자 데이터 50명 (관리자 1명 + 일반 사용자 49명)
@@ -728,6 +726,7 @@ FROM generate_series(1, 200);
 
 
 
+
 -- 등급 구간별 tier 값 일괄 업데이트 (점수 기준, 필요에 따라 조정)
 UPDATE user_ranking SET tier = 'UNRANK'      WHERE total_score < 100;
 UPDATE user_ranking SET tier = 'BRONZE'      WHERE total_score >= 100   AND total_score < 500;
@@ -741,7 +740,7 @@ UPDATE user_ranking SET tier = 'CHALLENGER'  WHERE total_score >= 6000;
 
 -- ranking_history.user_id 값 동기화 (user_ranking_id → user_id)
 UPDATE ranking_history rh
-SET user_id = ur.user_id
+SET user_ranking_id = ur.user_id
 FROM user_ranking ur
 WHERE rh.user_ranking_id = ur.id;
 
@@ -749,4 +748,10 @@ WHERE rh.user_ranking_id = ur.id;
 UPDATE ranking_history rh
 SET tier = ur.tier
 FROM user_ranking ur
-WHERE rh.user_id = ur.user_id;
+WHERE rh.user_ranking_id = ur.user_id;
+
+
+
+
+
+
