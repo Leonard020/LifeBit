@@ -16,6 +16,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.UUID;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/diet")
@@ -151,11 +154,29 @@ public class DietController {
                 request.get("log_date").toString() : 
                 (request.get("logDate") != null ? request.get("logDate").toString() : LocalDate.now().toString());
             
-            // 필수 값 검증
+            // 1. food_item_id 파싱
+            foodItemId = request.get("food_item_id") != null ? 
+                Long.valueOf(request.get("food_item_id").toString()) : 
+                (request.get("foodItemId") != null ? Long.valueOf(request.get("foodItemId").toString()) : null);
+            
+            // 2. 직접입력 음식 정보 파싱
+            String foodName = (String) request.get("food_name");
+            Double calories = request.get("calories") != null ? Double.valueOf(request.get("calories").toString()) : null;
+            Double carbs = request.get("carbs") != null ? Double.valueOf(request.get("carbs").toString()) : null;
+            Double protein = request.get("protein") != null ? Double.valueOf(request.get("protein").toString()) : null;
+            Double fat = request.get("fat") != null ? Double.valueOf(request.get("fat").toString()) : null;
+
+            // 3. 분기 처리
             if (foodItemId == null) {
-                Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("error", "food_item_id 또는 foodItemId가 필요합니다.");
-                return ResponseEntity.badRequest().body(errorResponse);
+                // 직접입력 음식 정보가 충분한지 체크
+                if (foodName != null && calories != null && carbs != null && protein != null && fat != null) {
+                    // 임시 FoodItem 생성
+                    foodItemId = dietService.createCustomFoodItem(foodName, calories, carbs, protein, fat);
+                } else {
+                    Map<String, Object> errorResponse = new HashMap<>();
+                    errorResponse.put("error", "food_item_id 또는 (food_name, calories, carbs, protein, fat) 정보가 필요합니다.");
+                    return ResponseEntity.badRequest().body(errorResponse);
+                }
             }
             
             // DietLogDTO 생성 (토큰에서 가져온 사용자 ID 사용)
