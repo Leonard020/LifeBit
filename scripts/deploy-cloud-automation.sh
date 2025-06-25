@@ -435,16 +435,10 @@ wait_for_server() {
         fi
     fi
     
-    # SSH 키 파일 존재 확인
-    if [ ! -f "$key_file" ]; then
-        log_error "SSH 키 파일이 존재하지 않습니다: $key_file"
-        exit 1
-    fi
-    
     log_info "SSH 키 사용: $key_name ($key_file)"
     
-    # 다양한 사용자명 시도 (NCP Ubuntu 이미지별 차이)
-    local usernames=("ubuntu" "root" "admin" "ncp")
+    # 다양한 사용자명 시도 (XEN 하이퍼바이저 우선)
+    local usernames=("root" "ubuntu" "admin" "ncp" "xenuser")
     
     # SSH 연결 시도 (더 안정적인 옵션들)
     for i in {1..60}; do
@@ -485,6 +479,8 @@ wait_for_server() {
                     ip addr show
                     echo '=== SSH 데몬 상태 ==='
                     systemctl status ssh --no-pager -l
+                    echo '=== SSH 키 확인 ==='
+                    ls -la ~/.ssh/ || echo 'SSH 키 디렉토리 없음'
                 " 2>/dev/null || log_warning "상세 정보 조회 실패 (정상적인 경우)"
                 
                 return 0
@@ -519,7 +515,8 @@ wait_for_server() {
             log_info "서버 연결 시도 중... ($i/60)"
         fi
         
-        sleep 10
+        # XEN 하이퍼바이저는 키 주입에 더 오래 걸림
+        sleep 15
     done
     
     # 최종 실패 시 진단 정보
@@ -574,13 +571,24 @@ deploy_application() {
 }
 
 # ================================================
-# 배포 검증
+# 배포 검증 (개선된 버전)
 # ================================================
 verify_deployment() {
-    log_step "배포 검증"
+    log_step "배포 검증 (개선된 버전)"
     
     cd "$PROJECT_ROOT/infrastructure"
     local server_ip=$(terraform output -raw public_ip)
+    
+    # SSH 사용자명 결정
+    local ssh_username="${LIFEBIT_SSH_USERNAME:-ubuntu}"
+    local key_file="${LIFEBIT_SSH_KEY_FILE}"
+    
+    if [ -z "$key_file" ]; then
+        if [ -f terraform.tfvars ]; then
+            local key_name=$(grep "login_key_name" terraform.tfvars | cut -d'"' -f2)
+            key_file="$HOME/.ssh/${key_name}.pem"
+        fi
+    fi
     
     local services=(
         "http://$server_ip:8082:Nginx Proxy"
@@ -593,11 +601,31 @@ verify_deployment() {
     
     log_info "서비스 헬스체크 시작..."
     
+    # 원격 헬스체크 스크립트 실행
+    log_info "원격 헬스체크 스크립트 실행..."
+    if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "$key_file" "$ssh_username@$server_ip" "/opt/lifebit/health-check.sh"; then
+        log_success "원격 헬스체크 성공"
+    else
+        log_warning "원격 헬스체크 실패 - 수동 확인 필요"
+    fi
+    
+    # 메모리 사용량 확인
+    log_info "메모리 사용량 확인..."
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "$key_file" "$ssh_username@$server_ip" "
+        echo '=== 메모리 사용량 ==='
+        free -h
+        echo '=== 디스크 사용량 ==='
+        df -h
+        echo '=== Docker 컨테이너 상태 ==='
+        docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+    " || log_warning "시스템 정보 조회 실패"
+    
+    # HTTP 헬스체크
     for service_info in "${services[@]}"; do
         local url="${service_info%:*}"
         local name="${service_info##*:}"
         
-        log_info "헬스체크: $name"
+        log_info "HTTP 헬스체크: $name"
         
         for i in {1..5}; do
             if curl -f -s --max-time 10 "$url" > /dev/null 2>&1; then
@@ -660,6 +688,9 @@ show_deployment_info() {
    - 로그 확인: docker-compose -f docker-compose.single-server.yml logs -f
    - 서비스 재시작: docker-compose -f docker-compose.single-server.yml restart
    - 시스템 정보: ssh -i $key_file $ssh_username@$server_ip "df -h && free -h"
+   - 헬스체크: ssh -i $key_file $ssh_username@$server_ip "/opt/lifebit/health-check.sh"
+   - 메모리 모니터링: ssh -i $key_file $ssh_username@$server_ip "/opt/lifebit/memory-monitor.sh"
+   - 로그 확인: ssh -i $key_file $ssh_username@$server_ip "tail -f /opt/lifebit/logs/health-check.log"
 
 💰 예상 비용: 월 3-5만원 (NCP 서버 1대)
 
@@ -667,6 +698,8 @@ show_deployment_info() {
    - SSH 연결 실패 시: NCP 콘솔에서 서버 상태 확인
    - 서비스 접속 불가 시: docker-compose -f docker-compose.single-server.yml ps
    - 로그 확인: docker-compose -f docker-compose.single-server.yml logs [서비스명]
+   - 메모리 부족 시: ssh -i $key_file $ssh_username@$server_ip "/opt/lifebit/memory-monitor.sh"
+   - 자동 백업: 매일 새벽 3시에 데이터베이스 백업 실행
 
 EOF
 }
@@ -696,10 +729,10 @@ main() {
                 exit 0
             fi
 
-            # 3단계: 서버 안정화 대기 (Ubuntu 22.04 부팅 시간 고려)
+            # 3단계: 서버 안정화 대기 (XEN 하이퍼바이저 키 주입 시간 고려)
             log_step "3단계: 서버 안정화 대기"
-            log_info "Ubuntu 22.04 서버가 완전히 부팅되고 SSH 키 주입이 완료될 때까지 대기합니다. (3분)"
-            sleep 180
+            log_info "XEN 하이퍼바이저 서버가 완전히 부팅되고 SSH 키 주입이 완료될 때까지 대기합니다. (5분)"
+            sleep 300
 
             # 4단계: SSH 연결 확인 (완벽한 연결 보장)
             log_step "4단계: SSH 연결 확인"
