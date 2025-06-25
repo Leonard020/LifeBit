@@ -211,7 +211,7 @@ cleanup_lifebit_docker() {
     fi
 }
 
-# Terraform 상태 및 캐시 정리
+# Terraform 상태 및 캐시 정리 (완전한 캐시 정리)
 cleanup_terraform() {
     log_cleanup "Terraform 상태 및 캐시 정리 중..."
     
@@ -242,7 +242,7 @@ cleanup_terraform() {
         log_success "Terraform 백업 상태 파일 정리 완료"
     fi
     
-    # .terraform 캐시 디렉토리 삭제
+    # .terraform 캐시 디렉토리 삭제 (완전한 캐시 정리)
     if [[ -d ".terraform" ]]; then
         log_info ".terraform 캐시 디렉토리 삭제 중..."
         rm -rf ".terraform" 2>/dev/null || true
@@ -271,8 +271,71 @@ cleanup_terraform() {
         log_success "Terraform 로그 파일 정리 완료"
     fi
     
+    # Terraform 변수 파일들 정리 (자동 생성된 것들)
+    if [[ -f "terraform.tfvars.auto" ]]; then
+        local backup_name="terraform.tfvars.auto.cleanup-backup-$(date +%Y%m%d_%H%M%S)"
+        log_info "Terraform 자동 변수 파일 백업: $backup_name"
+        cp "terraform.tfvars.auto" "$backup_name" 2>/dev/null || true
+        rm -f "terraform.tfvars.auto" 2>/dev/null || true
+        log_success "Terraform 자동 변수 파일 정리 완료"
+    fi
+    
+    # Terraform 백업 변수 파일들 정리
+    if ls terraform.tfvars.auto.backup-* 1> /dev/null 2>&1; then
+        log_info "Terraform 백업 변수 파일들 삭제 중..."
+        rm -f terraform.tfvars.auto.backup-* 2>/dev/null || true
+        log_success "Terraform 백업 변수 파일 정리 완료"
+    fi
+    
+    # Terraform 백업 상태 파일들 정리
+    if ls terraform.tfstate.cleanup-backup-* 1> /dev/null 2>&1; then
+        log_info "Terraform 백업 상태 파일들 삭제 중..."
+        rm -f terraform.tfstate.cleanup-backup-* 2>/dev/null || true
+        log_success "Terraform 백업 상태 파일 정리 완료"
+    fi
+    
+    # Terraform 백업 백업 상태 파일들 정리
+    if ls terraform.tfstate.backup.cleanup-backup-* 1> /dev/null 2>&1; then
+        log_info "Terraform 백업 백업 상태 파일들 삭제 중..."
+        rm -f terraform.tfstate.backup.cleanup-backup-* 2>/dev/null || true
+        log_success "Terraform 백업 백업 상태 파일 정리 완료"
+    fi
+    
+    # Terraform 임시 파일들 정리
+    local temp_files=(
+        "*.tmp"
+        "*.temp"
+        "crash.log"
+        "crash.*.log"
+        ".terraform.tfstate.lock.info"
+        ".terraform.tfstate.lock"
+    )
+    
+    for pattern in "${temp_files[@]}"; do
+        if ls $pattern 1> /dev/null 2>&1; then
+            log_info "Terraform 임시 파일 삭제: $pattern"
+            rm -f $pattern 2>/dev/null || true
+        fi
+    done
+    
+    # Terraform 플러그인 캐시 정리 (전역 캐시)
+    local terraform_cache_dir="$HOME/.terraform.d/plugin-cache"
+    if [[ -d "$terraform_cache_dir" ]]; then
+        log_info "Terraform 플러그인 캐시 정리 중..."
+        rm -rf "$terraform_cache_dir" 2>/dev/null || true
+        log_success "Terraform 플러그인 캐시 정리 완료"
+    fi
+    
+    # Terraform 작업 디렉토리 정리
+    local terraform_workspace_dir="$HOME/.terraform.d/workspaces"
+    if [[ -d "$terraform_workspace_dir" ]]; then
+        log_info "Terraform 작업 디렉토리 정리 중..."
+        rm -rf "$terraform_workspace_dir" 2>/dev/null || true
+        log_success "Terraform 작업 디렉토리 정리 완료"
+    fi
+    
     cd "$SCRIPT_DIR"
-    log_success "Terraform 정리 완료"
+    log_success "Terraform 완전한 캐시 정리 완료"
 }
 
 # Terraform destroy 실행 (위험한 작업)

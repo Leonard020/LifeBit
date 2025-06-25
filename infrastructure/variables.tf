@@ -77,14 +77,24 @@ variable "server_instance_type" {
 }
 
 variable "server_image_product_code" {
-  description = "Server image product code (Ubuntu 20.04)"
+  description = "Server image product code (Ubuntu 22.04 LTS - 더 안정적인 SSH 키 주입)"
   type        = string
-  default     = "SW.VSVR.OS.LNX64.UBNTU.SVR2004.B050"
+  default     = "SW.VSVR.OS.LNX64.UBNTU.SVR2204.B050"  # Ubuntu 22.04 LTS
+
+  validation {
+    condition     = can(regex("^SW\\.VSVR\\.OS\\.LNX64\\.UBNTU\\.", var.server_image_product_code))
+    error_message = "Server image must be a valid Ubuntu server image product code."
+  }
 }
 
 variable "login_key_name" {
   description = "Name of the login key to use (created by deploy script)"
   type        = string
+  
+  validation {
+    condition     = length(var.login_key_name) > 0
+    error_message = "Login key name cannot be empty."
+  }
 }
 
 # 보안 설정 (학원용으로 완화)
