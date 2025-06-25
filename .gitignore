@@ -12,10 +12,26 @@ node_modules
 .terraform/
 .terraform.lock.hcl
 terraform-outputs.json
+tfplan-*
+*.backup
+
+# SSH Keys and Certificates
+*.pem
+*.key
+*.crt
+*.csr
+id_rsa*
+id_ed25519*
 
 # Logs
 logs/
 *.log
+deploy-*.log
+*-deploy.log
+
+# Deployment artifacts
+ansible/inventory.ini.backup*
+*.retry
 
 # Build artifacts
 target/
