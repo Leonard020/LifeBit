@@ -53,3 +53,5 @@ Thumbs.db
 
 # Terraform backup files
 infrastructure/terraform.tfvars.backup-*
+*.done
+tfplan

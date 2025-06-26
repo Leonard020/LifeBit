@@ -240,160 +240,41 @@
       tags: [security]
 
     # ================================================
-    # 5. 프로젝트 디렉토리 설정
+    # 6. Git 소스 클론
     # ================================================
-    - name: 프로젝트 디렉토리 생성
+    - name: 기존 프로젝트 디렉토리 삭제 (초기화)
       file:
-        path: "/opt/{{ project_name }}/{{ item }}"
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      loop:
-        - ""
-        - "logs"
-        - "backups"
-        - "ssl"
-        - "data"
-      tags: [project]
-
-    # ================================================
-    # 6. Git 저장소 클론
-    # ================================================
-    - name: 기존 프로젝트 디렉토리 정리
-      file:
-        path: "/opt/{{ project_name }}/app"
+        path: "/opt/{{ project_name }}"
         state: absent
       tags: [deploy]
 
     - name: Git 저장소 클론
       git:
-        repo: "{{ git_repository_url }}"
-        dest: "/opt/{{ project_name }}/app"
-        version: "main"
+        repo: "{{ git_repo }}"
+        dest: "/opt/{{ project_name }}"
+        version: "{{ git_branch }}"
         force: yes
       tags: [deploy]
 
     # ================================================
-    # 7. 환경 설정 파일 생성
+    # 7. .env 파일 생성
     # ================================================
-    - name: 환경 설정 파일 생성
+    - name: .env 파일 템플릿으로 생성
       template:
-        src: "{{ item.src }}"
-        dest: "/opt/{{ project_name }}/app/{{ item.dest }}"
-        mode: '0644'
-      loop:
-        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
-        - { src: 'env.j2', dest: '.env' }
-      tags: [config]
+        src: templates/env.j2
+        dest: "/opt/{{ project_name }}/.env"
+      tags: [deploy]
 
     # ================================================
-    # 8. 모니터링 도구 설치
+    # 8. Docker Compose 실행
     # ================================================
-    - name: Node Exporter 다운로드 및 설치
-      unarchive:
-        src: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/node_exporter-1.7.0.linux-amd64
-      tags: [monitoring]
-
-    - name: Node Exporter 바이너리 복사
-      copy:
-        src: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
-        dest: /usr/local/bin/node_exporter
-        mode: '0755'
-        remote_src: yes
-      tags: [monitoring]
-
-    - name: Node Exporter 서비스 파일 생성
-      copy:
-        content: |
-          [Unit]
-          Description=Node Exporter
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          User=nobody
-          Group=nogroup
-          Type=simple
-          ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100
-          Restart=always
-
-          [Install]
-          WantedBy=multi-user.target
-        dest: /etc/systemd/system/node_exporter.service
-      tags: [monitoring]
-
-    - name: Node Exporter 서비스 시작
-      systemd:
-        name: node_exporter
-        state: started
-        enabled: yes
-        daemon_reload: yes
-      tags: [monitoring]
-
-    # ================================================
-    # 9. 애플리케이션 배포 (개선된 방식)
-    # ================================================
-    - name: Docker Compose로 애플리케이션 시작 (리소스 최적화된 방식)
+    - name: 모든 Docker 컨테이너 중지 및 제거 (정리)
       shell: |
-        cd /opt/{{ project_name }}/app
-        
-        # 기존 컨테이너 정리
+        cd /opt/{{ project_name }}
         docker-compose down --volumes --remove-orphans || true
         docker system prune -f || true
-        
-        echo "=== 시스템 리소스 확인 ==="
-        df -h /
-        free -h
-        
-        # 단계별 서비스 시작 (리소스 부족 방지)
-        echo "=== 1단계: 데이터베이스 서비스 시작 ==="
-        docker-compose up -d postgres-db redis-cache
-        sleep 15
-        docker system prune -f || true
-        
-        echo "=== 2단계: 백엔드 서비스 빌드 및 시작 ==="
-        if ! docker-compose build --no-cache spring-app; then
-          echo "Spring 빌드 실패 - 재시도"
-          docker system prune -f
-          docker-compose build spring-app
-        fi
-        docker-compose up -d spring-app
-        docker system prune -f || true
-        
-        echo "=== 3단계: AI API 서비스 빌드 및 시작 ==="
-        if ! docker-compose build --no-cache fastapi-app; then
-          echo "FastAPI 빌드 실패 - 재시도"
-          docker system prune -f
-          docker-compose build fastapi-app
-        fi
-        docker-compose up -d fastapi-app
-        docker system prune -f || true
-        
-        echo "=== 4단계: 프론트엔드 서비스 빌드 및 시작 ==="
-        if ! docker-compose build --no-cache frontend-app; then
-          echo "Frontend 빌드 실패 - 기본 이미지로 대체"
-          docker-compose up -d frontend-app || true
-        else
-          docker-compose up -d frontend-app
-        fi
-        docker system prune -f || true
-        
-        echo "=== 5단계: 나머지 서비스 시작 ==="
-        docker-compose up -d nginx-proxy || true
-        docker-compose up -d grafana prometheus || true
-        
-        echo "=== 최종 정리 ==="
-        docker system prune -f || true
-        
-        echo "=== 배포 완료 ==="
-        df -h /
-        docker-compose ps
       args:
-        chdir: "/opt/{{ project_name }}/app"
+        chdir: "/opt/{{ project_name }}"
       register: docker_compose_result
       failed_when: docker_compose_result.rc != 0
       async: 3600  # 1시간 타임아웃
@@ -402,10 +283,10 @@
 
     - name: Docker Compose 상태 확인
       shell: |
-        cd /opt/{{ project_name }}/app
+        cd /opt/{{ project_name }}
         docker-compose ps
       args:
-        chdir: "/opt/{{ project_name }}/app"
+        chdir: "/opt/{{ project_name }}"
       register: docker_status
       tags: [deploy]
 
@@ -433,10 +314,10 @@
 
     - name: PostgreSQL DB 초기화 (LifeBit.sql 실행)
       shell: |
-        cd /opt/{{ project_name }}/app
+        cd /opt/{{ project_name }}
         docker-compose exec -T postgres-db psql -U {{ postgres_user | default('lifebit_user') }} -d {{ postgres_db | default('lifebit_db') }} < /opt/{{ project_name }}/LifeBit.sql
       args:
-        chdir: "/opt/{{ project_name }}/app"
+        chdir: "/opt/{{ project_name }}"
       register: db_init_result
       failed_when: db_init_result.rc != 0
       tags: [database]
@@ -611,7 +492,7 @@
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"
-          job: "cd /opt/{{ project_name }}/app && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
+          job: "cd /opt/{{ project_name }} && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
         - name: "Docker 정리"
           minute: "0"
           hour: "2"

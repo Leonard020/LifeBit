@@ -17,8 +17,10 @@ openai_api_key: "{{ vault_openai_api_key | default('your-api-key-here') }}"
 use_gpt: "False"
 
 # OAuth 설정 (선택사항)
+kakao_client_id: "YOUR_KAKAO_CLIENT_ID"
 kakao_redirect_uri: ""
-google_client_secret: ""
+google_client_id: "YOUR_GOOGLE_CLIENT_ID"
+google_client_secret: "YOUR_GOOGLE_CLIENT_SECRET"
 google_redirect_uri: ""
 
 # PostgreSQL 데이터베이스 설정 (Docker Compose)

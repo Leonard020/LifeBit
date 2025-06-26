@@ -169,6 +169,9 @@ services:
     build:
       context: .
       dockerfile: ./apps/frontend-vite/Dockerfile
+      args:
+        - VITE_KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     container_name: lifebit-frontend
     restart: unless-stopped
     environment:

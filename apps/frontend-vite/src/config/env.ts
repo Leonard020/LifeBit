@@ -25,7 +25,7 @@ const getApiUrls = () => {
     if (currentPort === '8082') {
         console.log('🐳 Docker Nginx 프록시 환경 감지 - 통합 엔드포인트 사용');
         return {
-            BASE_URL: `http://${currentHost}:8082/api`,
+            BASE_URL: `http://${currentHost}:8082`,
             AI_API_URL: `http://${currentHost}:8082/ai`
         };
     }
