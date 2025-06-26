@@ -143,6 +143,8 @@ resource "aws_instance" "web" {
     Project     = var.project_name
     Environment = var.environment
   }
+  
+  # 기본 시스템 설정만 포함 (SSH 키는 AWS가 자동 설정)
   user_data = <<-EOF
 #!/bin/bash
 # 로그 파일 설정
@@ -152,21 +154,12 @@ echo "User Data 스크립트 시작: $(date)"
 # 시스템 업데이트
 apt-get update -y
 
-# SSH 키 디렉토리 생성 및 권한 설정
-mkdir -p /home/ubuntu/.ssh
-chown ubuntu:ubuntu /home/ubuntu/.ssh
-chmod 700 /home/ubuntu/.ssh
+# 기본 패키지 설치
+apt-get install -y curl wget git unzip
 
-# SSH 공개키 추가 (기존 키 덮어쓰기 방지)
-echo "${tls_private_key.lifebit.public_key_openssh}" > /home/ubuntu/.ssh/authorized_keys
-chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
-chmod 600 /home/ubuntu/.ssh/authorized_keys
+# Docker 설치를 위한 준비
+apt-get install -y apt-transport-https ca-certificates gnupg lsb-release
 
-# SSH 서비스 재시작
-systemctl restart ssh
-
-# 완료 로그
-echo "SSH 키 설정 완료: $(date)" >> /var/log/ssh-key-setup.log
 echo "User Data 스크립트 완료: $(date)"
 EOF
 }
