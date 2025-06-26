@@ -581,7 +581,11 @@ terraform_destroy() {
     fi
     
     log_info "Terraform 인프라 삭제 시작 (terraform destroy)..."
-    terraform destroy -auto-approve || log_warning "Terraform 인프라 삭제 중 일부 오류가 발생했습니다. 수동 정리를 계속 진행합니다."
+    terraform destroy \
+        -var="aws_access_key_id=$AWS_ACCESS_KEY_ID" \
+        -var="aws_secret_access_key=$AWS_SECRET_ACCESS_KEY" \
+        -var="aws_region=$AWS_DEFAULT_REGION" \
+        -auto-approve || log_warning "Terraform 인프라 삭제 중 일부 오류가 발생했습니다. 수동 정리를 계속 진행합니다."
     
     log_success "Terraform destroy 실행 완료"
     cd "$SCRIPT_DIR"
