@@ -1,7 +1,6 @@
 package com.lifebit.coreapi.controller;
 
 import com.lifebit.coreapi.dto.ExerciseRecordRequest;
-import com.lifebit.coreapi.dto.ExerciseSessionResponse;
 import com.lifebit.coreapi.entity.ExerciseCatalog;
 import com.lifebit.coreapi.entity.ExerciseSession;
 import com.lifebit.coreapi.entity.User;
@@ -32,7 +31,7 @@ public class ExerciseController {
     }
 
     @PostMapping("/record")
-    public ResponseEntity<ExerciseSessionResponse> recordExercise(
+    public ResponseEntity<ExerciseSession> recordExercise(
             @RequestHeader("Authorization") String token,
             @RequestBody ExerciseRecordRequest request) {
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
@@ -49,21 +48,18 @@ public class ExerciseController {
             request.getExerciseDate(),
             timePeriod
         );
-        return ResponseEntity.ok(new ExerciseSessionResponse(session));
+        return ResponseEntity.ok(session);
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<ExerciseSessionResponse>> getExerciseHistory(
+    public ResponseEntity<List<ExerciseSession>> getExerciseHistory(
             @RequestHeader("Authorization") String token,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
         List<ExerciseSession> history = exerciseService.getExerciseHistory(
             new User(userId), startDate, endDate);
-        List<ExerciseSessionResponse> responseList = history.stream()
-            .map(ExerciseSessionResponse::new)
-            .toList();
-        return ResponseEntity.ok(responseList);
+        return ResponseEntity.ok(history);
     }
 
     @GetMapping("/search")

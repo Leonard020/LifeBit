@@ -55,14 +55,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   console.log('🚀 [EnhancedHealthDashboard] 컴포넌트 렌더링 시작!', { userId, period });
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  // localStorage를 사용하여 새로고침 후에도 탭 상태 유지
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'calendar'>(() => {
-    const savedTab = localStorage.getItem('enhanced-health-dashboard-active-tab');
-    console.log('🔍 [EnhancedHealthDashboard] 저장된 탭 상태:', savedTab);
-    return (savedTab === 'dashboard' || savedTab === 'nutrition' || savedTab === 'exercise' || savedTab === 'calendar') 
-      ? savedTab as 'dashboard' | 'nutrition' | 'exercise' | 'calendar'
-      : 'dashboard';
-  });
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'calendar'>('dashboard');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +119,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     isLoading: nutritionLoading, 
     error: nutritionError 
   } = useDailyNutritionStats(userId);
-
+  
 
 
   // 전체 로딩 상태 계산
@@ -279,13 +272,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   return (
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
-      <Tabs value={activeTab} onValueChange={(value) => {
-        const newTab = value as 'dashboard' | 'nutrition' | 'exercise' | 'calendar';
-        console.log('🔄 [EnhancedHealthDashboard] 탭 변경:', newTab);
-        setActiveTab(newTab);
-        // localStorage에 탭 상태 저장
-        localStorage.setItem('enhanced-health-dashboard-active-tab', newTab);
-      }}>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'exercise' | 'calendar')}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="dashboard" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
@@ -459,7 +446,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
             currentMonth={currentMonth}
-            onMonthChange={setCurrentMonth}
+                onMonthChange={setCurrentMonth}
           />
         </TabsContent>
       </Tabs>
