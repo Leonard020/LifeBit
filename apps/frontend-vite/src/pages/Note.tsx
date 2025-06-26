@@ -185,6 +185,28 @@ const Note = () => {
     { key: 'weekly_cardio', label: '유산소' },
   ];
 
+  // 영어 bodyPart → 한글 label 매핑
+  const bodyPartLabelMap = {
+    chest: '가슴',
+    back: '등',
+    legs: '하체',
+    shoulders: '어깨',
+    abs: '복근',
+    arms: '팔',
+    cardio: '유산소',
+  };
+
+  // 오늘의 운동 기록을 부위별로 집계
+  const todayBodyPartCount = bodyPartMap.reduce((acc, { label }) => {
+    acc[label] = 0;
+    return acc;
+  }, {} as Record<string, number>);
+
+  todayExercise.forEach(record => {
+    const label = bodyPartLabelMap[record.bodyPart];
+    if (label) todayBodyPartCount[label]++;
+  });
+
   // Always show all 7 body parts in the graph, with 0 for unselected
   const exerciseGoals = React.useMemo(() => {
     if (!userGoalsData) return {};
@@ -202,8 +224,8 @@ const Note = () => {
   const MAX_EDGE_VALUE = 7;
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: weeklySummary[label] || 0,
-    goal: exerciseGoals[label] || 0,
+    today: todayBodyPartCount[label] || 0, // 오늘 실제 수행값
+    goal: exerciseGoals[label] || 0,       // 목표값
   }));
 
   // 운동데이터터 - 저장된 토큰 사용
@@ -926,13 +948,14 @@ const Note = () => {
 
   // Custom tooltip for radar chart
   const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
-    if (active && payload && payload.length > 0) {
-      // Find the goal value
-      const part = payload[0].payload.subject;
-      const goal = payload[0].payload.goal;
+    if (active && payload && (payload as unknown[]).length > 0) {
+      const part = (payload as any)[0].payload.subject;
+      const goal = (payload as any)[0].payload.goal;
+      const today = (payload as any)[0].payload.today;
       return (
         <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <strong>{part}</strong>: {goal}회
+          <div><strong>목표</strong> - {part}: {goal}회</div>
+          <div><strong>달성</strong> - {part}: {today}회</div>
         </div>
       );
     }
@@ -1062,7 +1085,7 @@ const Note = () => {
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
                         <Tooltip content={<RadarGoalTooltip />} />
-                        <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
+                        <Radar name="오늘 운동" dataKey="today" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                       </RadarChart>
                     </ResponsiveContainer>
