@@ -348,12 +348,34 @@ cleanup_ec2() {
         log_info "종료할 EC2 인스턴스가 없습니다"
     fi
     
-    # Elastic IP 해제
+    # Network Interfaces 정리 (VPC 삭제 전에 필요)
+    local network_interfaces=$(aws ec2 describe-network-interfaces --filters "Name=tag:Project,Values=LifeBit" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text)
+    if [[ -n "$network_interfaces" ]]; then
+        log_info "Network Interfaces 정리 중..."
+        for eni in $network_interfaces; do
+            log_info "Network Interface 삭제: $eni"
+            aws ec2 delete-network-interface --network-interface-id "$eni" || true
+        done
+        log_success "Network Interfaces 정리 완료"
+    fi
+    
+    # Elastic IP 해제 (더 포괄적으로)
     local eips=$(aws ec2 describe-addresses --filters "Name=tag:Project,Values=LifeBit" --query 'Addresses[*].AllocationId' --output text)
-    for eip in $eips; do
-        log_info "Elastic IP 해제: $eip"
-        aws ec2 release-address --allocation-id "$eip" || true
-    done
+    local eips2=$(aws ec2 describe-addresses --query 'Addresses[?NetworkInterfaceId==null].AllocationId' --output text)
+    
+    # 모든 EIP를 합치고 중복 제거
+    local all_eips=$(echo "$eips $eips2" | tr ' ' '\n' | sort -u | grep -v '^$')
+    
+    if [[ -n "$all_eips" ]]; then
+        log_info "Elastic IP 해제 중..."
+        for eip in $all_eips; do
+            log_info "Elastic IP 해제: $eip"
+            aws ec2 release-address --allocation-id "$eip" || true
+        done
+        log_success "Elastic IP 해제 완료"
+    else
+        log_info "해제할 Elastic IP가 없습니다"
+    fi
 
     # EBS 볼륨 삭제 (detached 상태)
     local volumes=$(aws ec2 describe-volumes --filters "Name=status,Values=available" "Name=tag:Project,Values=LifeBit" --query 'Volumes[*].VolumeId' --output text)
@@ -383,37 +405,125 @@ cleanup_ec2() {
 cleanup_networking() {
     log_cleanup "네트워킹 리소스 정리 중... (Terraform 외 남은 리소스)"
     
-    # LifeBit 관련 VPC 찾기
-    local vpcs=$(aws ec2 describe-vpcs --filters "Name=tag:Project,Values=LifeBit" "Name=tag:Name,Values=*lifebit*" --query 'Vpcs[*].VpcId' --output text)
+    # LifeBit 관련 VPC 찾기 (더 포괄적인 검색)
+    local vpcs=$(aws ec2 describe-vpcs --filters "Name=tag:Project,Values=LifeBit" --query 'Vpcs[*].VpcId' --output text)
+    local vpcs2=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=*lifebit*" --query 'Vpcs[*].VpcId' --output text)
+    local vpcs3=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=*LifeBit*" --query 'Vpcs[*].VpcId' --output text)
     
-    for vpc in $vpcs; do
+    # 모든 VPC ID를 합치고 중복 제거
+    local all_vpcs=$(echo "$vpcs $vpcs2 $vpcs3" | tr ' ' '\n' | sort -u | grep -v '^$')
+    
+    for vpc in $all_vpcs; do
         [[ -z "$vpc" ]] && continue
         log_warning "Terraform으로 삭제되지 않은 VPC 발견: $vpc. 수동 정리를 시도합니다."
         
-        # 인터넷 게이트웨이 분리 및 삭제
+        # 1. VPC 엔드포인트 삭제
+        local vpc_endpoints=$(aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$vpc" --query 'VpcEndpoints[*].VpcEndpointId' --output text)
+        for endpoint in $vpc_endpoints; do
+            log_info "VPC 엔드포인트 삭제: $endpoint"
+            aws ec2 delete-vpc-endpoint --vpc-endpoint-id "$endpoint" || true
+        done
+        
+        # 2. NAT Gateway 삭제
+        local nat_gateways=$(aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc" --query 'NatGateways[*].NatGatewayId' --output text)
+        for nat in $nat_gateways; do
+            log_info "NAT Gateway 삭제: $nat"
+            aws ec2 delete-nat-gateway --nat-gateway-id "$nat" || true
+        done
+        
+        # 3. VPC Peering Connections 삭제
+        local peering_connections=$(aws ec2 describe-vpc-peering-connections --filters "Name=requester-vpc-info.vpc-id,Values=$vpc" --query 'VpcPeeringConnections[*].VpcPeeringConnectionId' --output text)
+        for peering in $peering_connections; do
+            log_info "VPC Peering Connection 삭제: $peering"
+            aws ec2 delete-vpc-peering-connection --vpc-peering-connection-id "$peering" || true
+        done
+        
+        # 4. Network ACLs 삭제 (기본 ACL 제외)
+        local network_acls=$(aws ec2 describe-network-acls --filters "Name=vpc-id,Values=$vpc" "Name=default,Values=false" --query 'NetworkAcls[*].NetworkAclId' --output text)
+        for acl in $network_acls; do
+            log_info "Network ACL 삭제: $acl"
+            aws ec2 delete-network-acl --network-acl-id "$acl" || true
+        done
+        
+        # 5. 라우팅 테이블 연결 해제 및 삭제 (기본 라우팅 테이블 제외)
+        local route_tables=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].RouteTableId' --output text)
+        for rt in $route_tables; do
+            log_info "라우팅 테이블 처리: $rt"
+            
+            # 라우팅 테이블 연결 해제
+            local associations=$(aws ec2 describe-route-tables --route-table-ids "$rt" --query 'RouteTables[0].Associations[?Main==`false`].RouteTableAssociationId' --output text)
+            for assoc in $associations; do
+                log_info "라우팅 테이블 연결 해제: $assoc"
+                aws ec2 disassociate-route-table --association-id "$assoc" || true
+            done
+            
+            # 기본 라우팅 테이블이 아닌 경우 삭제
+            local is_main=$(aws ec2 describe-route-tables --route-table-ids "$rt" --query 'RouteTables[0].Associations[?Main==`true`]' --output text)
+            if [[ -z "$is_main" ]]; then
+                log_info "라우팅 테이블 삭제: $rt"
+                aws ec2 delete-route-table --route-table-id "$rt" || true
+            else
+                log_info "기본 라우팅 테이블이므로 삭제하지 않음: $rt"
+            fi
+        done
+        
+        # 6. 서브넷 삭제
+        local subnets=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query 'Subnets[*].SubnetId' --output text)
+        for subnet in $subnets; do
+            log_info "서브넷 삭제: $subnet"
+            aws ec2 delete-subnet --subnet-id "$subnet" || true
+        done
+        
+        # 7. 인터넷 게이트웨이 분리 및 삭제
         local igws=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query 'InternetGateways[*].InternetGatewayId' --output text)
         for igw in $igws; do
+            log_info "인터넷 게이트웨이 분리 및 삭제: $igw"
             aws ec2 detach-internet-gateway --internet-gateway-id "$igw" --vpc-id "$vpc" || true
             aws ec2 delete-internet-gateway --internet-gateway-id "$igw" || true
         done
         
-        # 서브넷 삭제
-        local subnets=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query 'Subnets[*].SubnetId' --output text)
-        for subnet in $subnets; do
-            aws ec2 delete-subnet --subnet-id "$subnet" || true
-        done
-
-        # 보안 그룹 삭제
-        local security_groups=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName != `default`].GroupId' --output text)
+        # 8. 보안 그룹 삭제 (기본 보안 그룹 제외)
+        local security_groups=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" "Name=group-name,Values=!default" --query 'SecurityGroups[*].GroupId' --output text)
         for sg in $security_groups; do
+            log_info "보안 그룹 삭제: $sg"
             aws ec2 delete-security-group --group-id "$sg" || true
         done
         
-        # VPC 삭제
-        aws ec2 delete-vpc --vpc-id "$vpc" || log_error "VPC $vpc 최종 삭제 실패. 수동 확인이 필요합니다."
+        # 9. VPC 삭제 시도
+        log_info "VPC 삭제 시도: $vpc"
+        if aws ec2 delete-vpc --vpc-id "$vpc"; then
+            log_success "VPC $vpc 삭제 완료"
+        else
+            log_error "VPC $vpc 삭제 실패. 남은 의존성 리소스를 확인해주세요."
+            
+            # 남은 리소스 확인
+            local remaining_resources=""
+            
+            # Network Interfaces 확인
+            local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text)
+            if [[ -n "$enis" ]]; then
+                remaining_resources="$remaining_resources NetworkInterfaces: $enis"
+            fi
+            
+            # Elastic IPs 확인
+            local eips=$(aws ec2 describe-addresses --filters "Name=domain,Values=vpc" --query 'Addresses[?NetworkInterfaceId==null].AllocationId' --output text)
+            if [[ -n "$eips" ]]; then
+                remaining_resources="$remaining_resources ElasticIPs: $eips"
+            fi
+            
+            # 라우팅 테이블 확인
+            local remaining_rts=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].RouteTableId' --output text)
+            if [[ -n "$remaining_rts" ]]; then
+                remaining_resources="$remaining_resources RouteTables: $remaining_rts"
+            fi
+            
+            if [[ -n "$remaining_resources" ]]; then
+                log_warning "남은 리소스: $remaining_resources"
+            fi
+        fi
     done
 
-    if [[ -z "$vpcs" ]]; then
+    if [[ -z "$all_vpcs" ]]; then
         log_success "남아있는 VPC 네트워킹 리소스가 없습니다."
     fi
 }
@@ -640,9 +750,55 @@ verify_cleanup() {
     fi
 }
 
+# 강제 VPC 정리 (마지막 수단)
+force_cleanup_vpc() {
+    log_cleanup "강제 VPC 정리 중... (마지막 수단)"
+    
+    # 모든 VPC 찾기 (태그와 관계없이)
+    local all_vpcs=$(aws ec2 describe-vpcs --query 'Vpcs[*].VpcId' --output text)
+    
+    for vpc in $all_vpcs; do
+        [[ -z "$vpc" ]] && continue
+        
+        # VPC 정보 확인
+        local vpc_info=$(aws ec2 describe-vpcs --vpc-ids "$vpc" --query 'Vpcs[0].[VpcId,Tags[?Key==`Project`].Value|[0],Tags[?Key==`Name`].Value|[0]]' --output text)
+        local vpc_name=$(echo "$vpc_info" | cut -f3)
+        
+        # LifeBit 관련 VPC인지 확인
+        if [[ "$vpc_name" == *"lifebit"* ]] || [[ "$vpc_name" == *"LifeBit"* ]]; then
+            log_warning "강제 VPC 정리 시도: $vpc ($vpc_name)"
+            
+            # 모든 Network Interface 강제 삭제
+            local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text)
+            for eni in $enis; do
+                log_info "Network Interface 강제 삭제: $eni"
+                aws ec2 delete-network-interface --network-interface-id "$eni" --force || true
+            done
+            
+            # 모든 라우팅 테이블 연결 해제
+            local route_tables=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].RouteTableId' --output text)
+            for rt in $route_tables; do
+                local associations=$(aws ec2 describe-route-tables --route-table-ids "$rt" --query 'RouteTables[0].Associations[*].RouteTableAssociationId' --output text)
+                for assoc in $associations; do
+                    log_info "라우팅 테이블 연결 강제 해제: $assoc"
+                    aws ec2 disassociate-route-table --association-id "$assoc" || true
+                done
+            done
+            
+            # VPC 삭제 재시도
+            log_info "VPC 강제 삭제 재시도: $vpc"
+            if aws ec2 delete-vpc --vpc-id "$vpc"; then
+                log_success "VPC $vpc 강제 삭제 완료"
+            else
+                log_error "VPC $vpc 강제 삭제도 실패. AWS 콘솔에서 수동 삭제가 필요합니다."
+            fi
+        fi
+    done
+}
+
 # 메인 실행
 main() {
-    log_info "🍃 LifeBit AWS 완전 삭제 스크립트 시작 (v2.0)"
+    log_info "🍃 LifeBit AWS 완전 삭제 스크립트 시작 (v2.2)"
     
     load_env
     check_dependencies
@@ -658,15 +814,18 @@ main() {
     cleanup_api_gateway
     cleanup_load_balancers
     cleanup_rds # DB 삭제 및 대기
-    cleanup_ec2 # 인스턴스 종료 및 대기
     
-    # 2. Terraform으로 생성된 핵심 인프라 삭제 (VPC, Subnet, IGW, SG, KeyPair 등)
-    log_info "--- 2단계: Terraform으로 인프라 삭제 ---"
+    # 2. EC2 리소스 정리 (Network Interface, EIP 포함)
+    log_info "--- 2단계: EC2 리소스 정리 ---"
+    cleanup_ec2 # 인스턴스 종료, Network Interface, EIP 해제
+    
+    # 3. Terraform으로 생성된 핵심 인프라 삭제 (VPC, Subnet, IGW, SG, KeyPair 등)
+    log_info "--- 3단계: Terraform으로 인프라 삭제 ---"
     terraform_destroy
     
-    # 3. Terraform으로 삭제되지 않았을 수 있는 리소스들 정리 (Fallback)
-    log_info "--- 3단계: 남은 리소스 정리 (Fallback) ---"
-    cleanup_networking    # 남은 VPC 관련 리소스
+    # 4. Terraform으로 삭제되지 않았을 수 있는 리소스들 정리 (Fallback)
+    log_info "--- 4단계: 남은 리소스 정리 (Fallback) ---"
+    cleanup_networking    # 남은 VPC 관련 리소스 (개선된 순서)
     cleanup_key_pairs     # 남은 키 페어 (Terraform 실패 대비)
     cleanup_s3
     cleanup_ecr
@@ -674,12 +833,16 @@ main() {
     cleanup_route53
     cleanup_iam           # 다른 리소스가 모두 삭제된 후 마지막에 정리
     
-    # 4. 로컬 배포 파일 정리
-    log_info "--- 4단계: 로컬 배포 파일 정리 ---"
+    # 5. 로컬 배포 파일 정리
+    log_info "--- 5단계: 로컬 배포 파일 정리 ---"
     cleanup_deployment_files
     
-    # 5. 최종 검증
-    log_info "--- 5단계: 최종 검증 ---"
+    # 6. 강제 VPC 정리 (마지막 수단)
+    log_info "--- 6단계: 강제 VPC 정리 (마지막 수단) ---"
+    force_cleanup_vpc
+    
+    # 7. 최종 검증
+    log_info "--- 7단계: 최종 검증 ---"
     verify_cleanup
     
     log_success "🎉 LifeBit AWS 완전 삭제 완료!"

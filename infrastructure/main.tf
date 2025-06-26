@@ -18,7 +18,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region     = var.aws_region
   access_key = var.aws_access_key_id
   secret_key = var.aws_secret_access_key
 }
@@ -40,7 +40,10 @@ resource "aws_key_pair" "lifebit" {
 
 # VPC
 resource "aws_vpc" "main" {
-  cidr_block = var.vpc_cidr
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
   tags = {
     Name        = "${var.project_name}-${var.environment}-vpc"
     Project     = var.project_name
@@ -103,6 +106,15 @@ resource "aws_security_group" "web" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All TCP"
   }
+  
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "ICMP (ping)"
+  }
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -119,11 +131,11 @@ resource "aws_security_group" "web" {
 
 # EC2 인스턴스 (t3.small, Ubuntu 22.04)
 resource "aws_instance" "web" {
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.web.id]
-  key_name               = aws_key_pair.lifebit.key_name
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.web.id]
+  key_name                    = aws_key_pair.lifebit.key_name
   associate_public_ip_address = true
   
   # EBS 루트 볼륨 크기 증가 (Docker 빌드 공간 확보)
@@ -164,14 +176,23 @@ echo "User Data 스크립트 완료: $(date)"
 EOF
 }
 
-# EIP 할당
+# EIP 할당 (최신 방식)
 resource "aws_eip" "web" {
-  instance = aws_instance.web.id
+  domain = "vpc"
+  
   tags = {
     Name        = "${var.project_name}-${var.environment}-eip"
     Project     = var.project_name
     Environment = var.environment
   }
+  
+  depends_on = [aws_internet_gateway.gw]
+}
+
+# EIP와 인스턴스 연결
+resource "aws_eip_association" "web" {
+  instance_id   = aws_instance.web.id
+  allocation_id = aws_eip.web.id
 }
 
  
