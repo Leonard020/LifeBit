@@ -1234,12 +1234,12 @@ const Note = () => {
                         if (record.weight !== undefined) infoParts.push(`${record.weight}kg`);
                       }
                       return (
-                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                           <div>
                             <p className="font-medium">
                               {record.exerciseName}
                               {record.bodyPart && (
-                                <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
+                                <span className="ml-2 text-xs font-bold italic px-1 rounded text-gray-700 dark:text-gray-100 bg-gray-100 dark:bg-white/10 opacity-90">({record.bodyPart})</span>
                               )}
                             </p>
                             <p className="text-sm text-gray-600 flex items-center flex-wrap gap-x-2">
