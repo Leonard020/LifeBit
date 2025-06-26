@@ -9,7 +9,6 @@
   become: yes
   vars:
     project_name: "lifebit"
-    deploy_env: "{{ env | default('demo') }}"
     git_repo: "{{ git_repository_url | default('https://github.com/Hyeon6492/LifeBit.git') }}"
     
   tasks:
@@ -261,7 +260,7 @@
 
     - name: 로컬 프로젝트 파일을 원격 서버로 동기화 (rsync)
       synchronize:
-        src: ../
+        src: ../../
         dest: "/opt/{{ project_name }}"
         archive: yes
         checksum: yes
