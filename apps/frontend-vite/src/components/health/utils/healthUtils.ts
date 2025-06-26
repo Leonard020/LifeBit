@@ -62,6 +62,15 @@ export const processTodayData = (
     nutritionStats
   });
   
+  // 운동 세션 데이터 상세 로깅
+  console.log('🏋️ [healthUtils] 운동 세션 데이터:', {
+    allSessions: exerciseSessions,
+    sessionDates: exerciseSessions.map(session => ({
+      date: getDate(session),
+      duration: getDuration(session)
+    }))
+  });
+  
   // nutritionStats 상세 구조 확인
   console.log('🔍 [healthUtils] nutritionStats 상세 구조:', {
     nutritionStats,
@@ -73,7 +82,20 @@ export const processTodayData = (
   const todayExercise = exerciseSessions.filter(session => {
     const sessionDate = getDate(session);
     const isToday = sessionDate && sessionDate.slice(0, 10) === today;
+    console.log('🎯 [healthUtils] 운동 세션 날짜 비교:', {
+      sessionDate,
+      today,
+      isToday,
+      duration: session.duration_minutes,
+      session
+    });
     return isToday;
+  });
+  
+  console.log('💪 [healthUtils] 오늘의 운동 세션:', {
+    todayExercise,
+    count: todayExercise.length,
+    durations: todayExercise.map(session => session.duration_minutes)
   });
   
   // 🍽️ meal_logs에서 오늘 날짜 데이터 직접 계산 (정확한 필드명 사용)
@@ -100,10 +122,10 @@ export const processTodayData = (
   
   // 영양 데이터 처리 (nutritionStats 우선 사용)
   const finalNutritionData = {
-    dailyCalories: nutritionStats?.dailyCalories || nutritionStats?.calories || healthStats?.dailyCalories || 0,
-    dailyCarbs: nutritionStats?.dailyCarbs || nutritionStats?.carbs || healthStats?.dailyCarbs || 0,
-    dailyProtein: nutritionStats?.dailyProtein || nutritionStats?.protein || healthStats?.dailyProtein || 0,
-    dailyFat: nutritionStats?.dailyFat || nutritionStats?.fat || healthStats?.dailyFat || 0
+    dailyCalories: nutritionStats?.totalCalories || nutritionStats?.calories || healthStats?.dailyCalories || 0,
+    dailyCarbs: nutritionStats?.totalCarbs || nutritionStats?.carbs || healthStats?.dailyCarbs || 0,
+    dailyProtein: nutritionStats?.totalProtein || nutritionStats?.protein || healthStats?.dailyProtein || 0,
+    dailyFat: nutritionStats?.totalFat || nutritionStats?.fat || healthStats?.dailyFat || 0
   };
   
   console.log('✅ [healthUtils] 계산된 오늘 영양소:', finalNutritionData);
@@ -116,12 +138,51 @@ export const processTodayData = (
   const targetMinutes = averageExerciseMinutes;
   
   const exerciseMinutes = todayExercise.reduce((sum, session) => {
-    return sum + getDuration(session);
+    const duration = session.duration_minutes || 0;
+    console.log('⏱️ [healthUtils] 운동 시간 계산:', {
+      session,
+      duration,
+      currentSum: sum
+    });
+    return sum + duration;
   }, 0);
+  
+  console.log('⌛ [healthUtils] 총 운동 시간:', exerciseMinutes);
   
   const caloriesBurned = todayExercise.reduce((sum, session) => {
     return sum + getCalories(session);
   }, 0);
+  
+  todayMealLogs.forEach(meal => {
+    console.log('🔍 [healthUtils] meal 데이터:', meal);
+    console.log('🔍 [healthUtils] meal.food_item:', meal.food_item);
+    console.log('🔍 [healthUtils] Object.keys(meal):', Object.keys(meal));
+    
+    // food_items 테이블의 영양소 데이터 사용
+    if (meal.food_item) {
+      const quantity = meal.quantity || 0;
+      const servingSize = meal.food_item.serving_size || 100; // 기본값 100g
+      const ratio = quantity / servingSize;
+
+      finalNutritionData.dailyCalories += (meal.food_item.calories || 0) * ratio;
+      finalNutritionData.dailyCarbs += (meal.food_item.carbs || 0) * ratio;
+      finalNutritionData.dailyProtein += (meal.food_item.protein || 0) * ratio;
+      finalNutritionData.dailyFat += (meal.food_item.fat || 0) * ratio;
+
+      console.log('🍳 [healthUtils] 음식 영양소 계산:', {
+        foodName: meal.food_item.name,
+        quantity,
+        servingSize,
+        ratio,
+        calories: meal.food_item.calories * ratio,
+        carbs: meal.food_item.carbs * ratio,
+        protein: meal.food_item.protein * ratio,
+        fat: meal.food_item.fat * ratio
+      });
+    } else {
+      console.log('❌ [healthUtils] meal.food_item이 없습니다! 전체 meal 구조:', JSON.stringify(meal, null, 2));
+    }
+  });
   
   const result = {
     exerciseMinutes,

@@ -390,4 +390,26 @@ public class DietService {
         FoodItem saved = foodItemRepository.save(foodItem);
         return saved.getFoodItemId();
     }
+
+    @Transactional
+    public Map<String, Object> updateFoodItem(Long id, Double calories, Double carbs, Double protein, Double fat) {
+        FoodItem foodItem = foodItemRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Food item not found with id: " + id));
+        
+        if (calories != null) {
+            foodItem.setCalories(BigDecimal.valueOf(calories));
+        }
+        if (carbs != null) {
+            foodItem.setCarbs(BigDecimal.valueOf(carbs));
+        }
+        if (protein != null) {
+            foodItem.setProtein(BigDecimal.valueOf(protein));
+        }
+        if (fat != null) {
+            foodItem.setFat(BigDecimal.valueOf(fat));
+        }
+        
+        FoodItem updatedFoodItem = foodItemRepository.save(foodItem);
+        return convertFoodItemToMap(updatedFoodItem);
+    }
 } 
