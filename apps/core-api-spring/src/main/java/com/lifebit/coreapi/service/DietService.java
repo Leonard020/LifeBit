@@ -47,8 +47,8 @@ public class DietService {
     }
 
     public List<DietNutritionDTO> getNutritionGoals(LocalDate date, Long userId) {
-        // 사용자별 목표 가져오기
-        UserGoal userGoal = userGoalRepository.findByUserId(userId)
+        // 사용자별 목표 가져오기 - 최신 목표만 가져오도록 수정
+        UserGoal userGoal = userGoalRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
             .orElse(userGoalService.getDefaultDietGoalByGender(userId));
 
         // 해당 날짜의 실제 섭취량 계산 (직접 엔티티 조회)
