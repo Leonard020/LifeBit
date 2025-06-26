@@ -29,6 +29,9 @@ RUN npm install && npm run build
 # Runtime stage with Nginx
 FROM nginx:alpine
 
+# curl 설치 (healthcheck용)
+RUN apk add --no-cache curl
+
 # Nginx 설정 파일 복사
 COPY apps/frontend-vite/nginx.conf /etc/nginx/conf.d/default.conf
 

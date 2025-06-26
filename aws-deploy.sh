@@ -538,8 +538,9 @@ manual_docker_deploy() {
         sudo systemctl status docker --no-pager -l || echo "Docker 서비스 확인 필요"
         
         echo "=== 애플리케이션 디렉토리로 이동 ==="
-        cd /opt/lifebit/app || {
+        cd /opt/lifebit || {
             echo "애플리케이션 디렉토리를 찾을 수 없습니다"
+            ls -la /opt/ || true
             exit 1
         }
         
@@ -627,7 +628,7 @@ manual_docker_deploy() {
         fi
         
         # FastAPI 응답 테스트
-        if curl -f -s --max-time 10 http://localhost:8001/health > /dev/null; then
+        if curl -f -s --max-time 10 http://localhost:8001/api/py/health > /dev/null; then
             echo "✅ FastAPI: 정상 응답"
             services_status="${services_status}fastapi:ok "
         else
@@ -655,7 +656,7 @@ EOF
         log_error "단계별 Docker 배포 실패"
         log_info "수동 배포 가이드:"
         log_info "1. SSH 접속: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP"
-        log_info "2. 애플리케이션 디렉토리: cd /opt/lifebit/app"
+        log_info "2. 애플리케이션 디렉토리: cd /opt/lifebit"
         log_info "3. Docker 상태 확인: sudo docker ps"
         log_info "4. 서비스 재시작: sudo /usr/local/bin/docker-compose restart"
         exit 1

@@ -476,6 +476,11 @@ class AnalyticsRequest(BaseModel):
 def health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
 
+# 간단한 헬스 체크 엔드포인트 (Docker healthcheck용)
+@app.get("/health")
+def simple_health_check():
+    return {"status": "OK", "service": "LifeBit AI-API"}
+
 # 🚀 새로 추가: 건강 데이터 종합 분석 엔드포인트
 @app.post("/api/py/analytics/health-report")
 async def generate_health_analytics_report(request: AnalyticsRequest):
