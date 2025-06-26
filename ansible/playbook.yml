@@ -257,42 +257,40 @@
       tags: [deploy]
 
     # ================================================
-    # 7. .env 파일 생성
+    # 7. 환경 설정 파일 생성
     # ================================================
-    - name: .env 파일 템플릿으로 생성
+    - name: .env 및 docker-compose.yml 파일 템플릿으로 생성
       template:
-        src: templates/env.j2
-        dest: "/opt/{{ project_name }}/.env"
+        src: "templates/{{ item.src }}"
+        dest: "/opt/{{ project_name }}/{{ item.dest }}"
+      loop:
+        - { src: 'env.j2', dest: '.env' }
+        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
       tags: [deploy]
 
     # ================================================
     # 8. Docker Compose 실행
     # ================================================
-    - name: 모든 Docker 컨테이너 중지 및 제거 (정리)
+    - name: Docker Compose로 애플리케이션 빌드 및 실행
       shell: |
+        set -e
         cd /opt/{{ project_name }}
-        docker-compose down --volumes --remove-orphans || true
-        docker system prune -f || true
+
+        echo "--- Docker 애플리케이션을 빌드하고 시작합니다. ---"
+        docker-compose up -d --build --remove-orphans
+        
+        echo "--- 배포 완료. 30초 후 서비스 상태 확인 ---"
+        sleep 30
+        docker-compose ps
       args:
         chdir: "/opt/{{ project_name }}"
       register: docker_compose_result
       failed_when: docker_compose_result.rc != 0
-      async: 3600  # 1시간 타임아웃
-      poll: 30     # 30초마다 상태 확인
-      tags: [deploy]
-
-    - name: Docker Compose 상태 확인
-      shell: |
-        cd /opt/{{ project_name }}
-        docker-compose ps
-      args:
-        chdir: "/opt/{{ project_name }}"
-      register: docker_status
       tags: [deploy]
 
     - name: Docker Compose 상태 출력
       debug:
-        var: docker_status.stdout_lines
+        var: docker_compose_result.stdout_lines
       tags: [deploy]
 
     # ================================================
