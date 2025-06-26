@@ -11,7 +11,6 @@
     project_name: "lifebit"
     environment: "{{ env | default('demo') }}"
     git_repo: "{{ git_repository_url | default('https://github.com/your-repo/LifeBit.git') }}"
-    git_branch: "{{ git_branch | default('main') }}"
     
   tasks:
     # ================================================
@@ -240,178 +239,57 @@
       tags: [security]
 
     # ================================================
-    # 5. 프로젝트 디렉토리 설정
+    # 6. Git 소스 클론
     # ================================================
-    - name: 프로젝트 디렉토리 생성
+    - name: 기존 프로젝트 디렉토리 삭제 (초기화)
       file:
-        path: "/opt/{{ project_name }}/{{ item }}"
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      loop:
-        - ""
-        - "logs"
-        - "backups"
-        - "ssl"
-        - "data"
-      tags: [project]
-
-    # ================================================
-    # 6. Git 저장소 클론
-    # ================================================
-    - name: 기존 프로젝트 디렉토리 정리
-      file:
-        path: "/opt/{{ project_name }}/app"
+        path: "/opt/{{ project_name }}"
         state: absent
       tags: [deploy]
 
     - name: Git 저장소 클론
       git:
-        repo: "{{ git_repository_url }}"
-        dest: "/opt/{{ project_name }}/app"
-        version: "main"
+        repo: "{{ git_repo }}"
+        dest: "/opt/{{ project_name }}"
+        version: "{{ git_branch }}"
         force: yes
       tags: [deploy]
 
     # ================================================
     # 7. 환경 설정 파일 생성
     # ================================================
-    - name: 환경 설정 파일 생성
+    - name: .env 및 docker-compose.yml 파일 템플릿으로 생성
       template:
-        src: "{{ item.src }}"
-        dest: "/opt/{{ project_name }}/app/{{ item.dest }}"
-        mode: '0644'
+        src: "templates/{{ item.src }}"
+        dest: "/opt/{{ project_name }}/{{ item.dest }}"
       loop:
-        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
         - { src: 'env.j2', dest: '.env' }
-      tags: [config]
-
-    # ================================================
-    # 8. 모니터링 도구 설치
-    # ================================================
-    - name: Node Exporter 다운로드 및 설치
-      unarchive:
-        src: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/node_exporter-1.7.0.linux-amd64
-      tags: [monitoring]
-
-    - name: Node Exporter 바이너리 복사
-      copy:
-        src: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
-        dest: /usr/local/bin/node_exporter
-        mode: '0755'
-        remote_src: yes
-      tags: [monitoring]
-
-    - name: Node Exporter 서비스 파일 생성
-      copy:
-        content: |
-          [Unit]
-          Description=Node Exporter
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          User=nobody
-          Group=nogroup
-          Type=simple
-          ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100
-          Restart=always
-
-          [Install]
-          WantedBy=multi-user.target
-        dest: /etc/systemd/system/node_exporter.service
-      tags: [monitoring]
-
-    - name: Node Exporter 서비스 시작
-      systemd:
-        name: node_exporter
-        state: started
-        enabled: yes
-        daemon_reload: yes
-      tags: [monitoring]
-
-    # ================================================
-    # 9. 애플리케이션 배포 (개선된 방식)
-    # ================================================
-    - name: Docker Compose로 애플리케이션 시작 (리소스 최적화된 방식)
-      shell: |
-        cd /opt/{{ project_name }}/app
-        
-        # 기존 컨테이너 정리
-        docker-compose down --volumes --remove-orphans || true
-        docker system prune -f || true
-        
-        echo "=== 시스템 리소스 확인 ==="
-        df -h /
-        free -h
-        
-        # 단계별 서비스 시작 (리소스 부족 방지)
-        echo "=== 1단계: 데이터베이스 서비스 시작 ==="
-        docker-compose up -d postgres-db redis-cache
-        sleep 15
-        docker system prune -f || true
-        
-        echo "=== 2단계: 백엔드 서비스 빌드 및 시작 ==="
-        if ! docker-compose build --no-cache spring-app; then
-          echo "Spring 빌드 실패 - 재시도"
-          docker system prune -f
-          docker-compose build spring-app
-        fi
-        docker-compose up -d spring-app
-        docker system prune -f || true
-        
-        echo "=== 3단계: AI API 서비스 빌드 및 시작 ==="
-        if ! docker-compose build --no-cache fastapi-app; then
-          echo "FastAPI 빌드 실패 - 재시도"
-          docker system prune -f
-          docker-compose build fastapi-app
-        fi
-        docker-compose up -d fastapi-app
-        docker system prune -f || true
-        
-        echo "=== 4단계: 프론트엔드 서비스 빌드 및 시작 ==="
-        if ! docker-compose build --no-cache frontend-app; then
-          echo "Frontend 빌드 실패 - 기본 이미지로 대체"
-          docker-compose up -d frontend-app || true
-        else
-          docker-compose up -d frontend-app
-        fi
-        docker system prune -f || true
-        
-        echo "=== 5단계: 나머지 서비스 시작 ==="
-        docker-compose up -d nginx-proxy || true
-        docker-compose up -d grafana prometheus || true
-        
-        echo "=== 최종 정리 ==="
-        docker system prune -f || true
-        
-        echo "=== 배포 완료 ==="
-        df -h /
-        docker-compose ps
-      args:
-        chdir: "/opt/{{ project_name }}/app"
-      register: docker_compose_result
-      failed_when: docker_compose_result.rc != 0
-      async: 3600  # 1시간 타임아웃
-      poll: 30     # 30초마다 상태 확인
+        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
       tags: [deploy]
 
-    - name: Docker Compose 상태 확인
+    # ================================================
+    # 8. Docker Compose 실행
+    # ================================================
+    - name: Docker Compose로 애플리케이션 빌드 및 실행
       shell: |
-        cd /opt/{{ project_name }}/app
+        set -e
+        cd /opt/{{ project_name }}
+
+        echo "--- Docker 애플리케이션을 빌드하고 시작합니다. ---"
+        docker-compose up -d --build --remove-orphans
+        
+        echo "--- 배포 완료. 30초 후 서비스 상태 확인 ---"
+        sleep 30
         docker-compose ps
       args:
-        chdir: "/opt/{{ project_name }}/app"
-      register: docker_status
+        chdir: "/opt/{{ project_name }}"
+      register: docker_compose_result
+      failed_when: docker_compose_result.rc != 0
       tags: [deploy]
 
     - name: Docker Compose 상태 출력
       debug:
-        var: docker_status.stdout_lines
+        var: docker_compose_result.stdout_lines
       tags: [deploy]
 
     # ================================================
@@ -433,10 +311,10 @@
 
     - name: PostgreSQL DB 초기화 (LifeBit.sql 실행)
       shell: |
-        cd /opt/{{ project_name }}/app
+        cd /opt/{{ project_name }}
         docker-compose exec -T postgres-db psql -U {{ postgres_user | default('lifebit_user') }} -d {{ postgres_db | default('lifebit_db') }} < /opt/{{ project_name }}/LifeBit.sql
       args:
-        chdir: "/opt/{{ project_name }}/app"
+        chdir: "/opt/{{ project_name }}"
       register: db_init_result
       failed_when: db_init_result.rc != 0
       tags: [database]
@@ -445,72 +323,6 @@
       debug:
         var: db_init_result.stdout_lines
       tags: [database]
-
-    # ================================================
-    # 10. 메모리 모니터링 및 최적화
-    # ================================================
-    - name: 메모리 모니터링 스크립트 생성
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 메모리 모니터링 스크립트
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          SWAP_USAGE=$(free | awk 'NR==3{printf "%.1f", $3*100/$2}')
-          
-          # Docker 메모리 사용량
-          DOCKER_MEMORY=$(docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}" | tail -n +2)
-          
-          # 로그 파일에 기록
-          echo "$(date): Memory Usage: ${MEMORY_USAGE}%, Swap Usage: ${SWAP_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-          
-          # 메모리 사용량이 80% 이상이면 경고
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              echo "WARNING: High memory usage detected: ${MEMORY_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # Docker 컨테이너 메모리 사용량 출력
-              echo "Docker Memory Usage:" >> /opt/{{ project_name }}/logs/memory.log
-              echo "$DOCKER_MEMORY" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # 메모리 사용량이 높은 컨테이너 재시작
-              docker stats --no-stream --format "table {{.Container}}\t{{.MemPerc}}" | awk '$2 > 50 {print $1}' | while read container; do
-                  echo "Restarting high memory usage container: $container" >> /opt/{{ project_name }}/logs/memory.log
-                  docker restart "$container" || true
-              done
-          fi
-        dest: "/opt/{{ project_name }}/memory-monitor.sh"
-        mode: '0755'
-      tags: [monitoring]
-
-    - name: 메모리 최적화 설정
-      copy:
-        content: |
-          # Docker 메모리 제한 설정
-          # /etc/docker/daemon.json
-          {
-            "default-ulimits": {
-              "nofile": {
-                "Hard": 64000,
-                "Name": "nofile",
-                "Soft": 64000
-              }
-            },
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2"
-          }
-        dest: /etc/docker/daemon.json
-      tags: [docker]
-
-    - name: Docker 서비스 재시작 (설정 적용)
-      systemd:
-        name: docker
-        state: restarted
-      tags: [docker]
 
     # ================================================
     # 11. 헬스체크 스크립트 생성 (개선된 버전)
@@ -605,13 +417,10 @@
         - name: "LifeBit 헬스체크"
           minute: "*/5"
           job: "/opt/{{ project_name }}/health-check.sh > /dev/null 2>&1"
-        - name: "메모리 모니터링"
-          minute: "*/10"
-          job: "/opt/{{ project_name }}/memory-monitor.sh > /dev/null 2>&1"
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"
-          job: "cd /opt/{{ project_name }}/app && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
+          job: "cd /opt/{{ project_name }} && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
         - name: "Docker 정리"
           minute: "0"
           hour: "2"

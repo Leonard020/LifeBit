@@ -3,6 +3,10 @@ FROM node:18-alpine AS build
 
 WORKDIR /app
 
+# 빌드 시점에 외부에서 주입될 환경변수 선언
+ARG VITE_KAKAO_CLIENT_ID
+ARG VITE_GOOGLE_CLIENT_ID
+
 # shared-types 전체 복사
 COPY packages/shared-types/ ./packages/shared-types/
 
@@ -11,6 +15,10 @@ COPY apps/frontend-vite/ ./apps/frontend-vite/
 
 # 프론트엔드 디렉토리로 이동
 WORKDIR /app/apps/frontend-vite
+
+# 주입된 환경변수를 사용하여 .env 파일 생성
+RUN echo "VITE_KAKAO_CLIENT_ID=${VITE_KAKAO_CLIENT_ID}" > .env
+RUN echo "VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}" >> .env
 
 # workspace 참조를 로컬 경로로 변경
 RUN sed -i 's/"shared-types": "workspace:\*"/"shared-types": "file:..\/..\/packages\/shared-types"/g' package.json

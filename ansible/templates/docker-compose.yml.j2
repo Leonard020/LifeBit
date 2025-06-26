@@ -118,7 +118,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
   # ================================================
   # AI API (FastAPI) - 메모리 제한 추가
@@ -140,6 +141,10 @@ services:
       - REDIS_HOST=redis-cache
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - LOG_LEVEL=${LOG_LEVEL}
     ports:
       - "8001:8001"
     networks:
@@ -160,7 +165,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/py/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
   # ================================================
   # 프론트엔드 (React + Vite)
@@ -169,6 +175,9 @@ services:
     build:
       context: .
       dockerfile: ./apps/frontend-vite/Dockerfile
+      args:
+        - VITE_KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     container_name: lifebit-frontend
     restart: unless-stopped
     environment:
