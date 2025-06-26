@@ -58,11 +58,8 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Excepti
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:5173",    // Vite 개발서버
-            "http://localhost:3000",    // Docker 프론트엔드
-            "http://localhost:8082"     // Nginx 프록시
-        ));
+        // 배포 환경의 IP나 도메인이 동적으로 달라질 수 있어 와일드카드 허용
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

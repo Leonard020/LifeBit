@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -74,7 +75,7 @@ public class HealthStatisticsService {
             // 🏋️ 운동 부위별 빈도 데이터 추가
             Map<String, Object> bodyPartStats = getBodyPartFrequencyData(userId, period);
             
-            // 🍽️ 실제 식단 기록 기반 영양소 통계 계산
+            // ��️ 실제 식단 기록 기반 영양소 통계 계산
             Map<String, Object> realMealNutritionStats = getRealMealNutritionStatistics(userId, period);
             
             // 종합 통계 구성
@@ -823,26 +824,47 @@ public class HealthStatisticsService {
                 }
             }
             
-            // 영양소 합계 계산
+            // 영양소 합계 계산 (FoodItem에서 계산)
             BigDecimal totalCalories = BigDecimal.ZERO;
             BigDecimal totalCarbs = BigDecimal.ZERO;
             BigDecimal totalProtein = BigDecimal.ZERO;
             BigDecimal totalFat = BigDecimal.ZERO;
             
             for (MealLog mealLog : todayMealLogs) {
-                // 🔒 데이터 무결성 검증: 음수 값 방지
-                if (mealLog.getCalories() != null && mealLog.getCalories().compareTo(BigDecimal.ZERO) >= 0) {
-                    totalCalories = totalCalories.add(mealLog.getCalories());
+                FoodItem foodItem = mealLog.getFoodItem();
+                if (foodItem == null) {
+                    log.warn("⚠️ [HealthStatisticsService] FoodItem이 null인 MealLog: {}", mealLog.getMealLogId());
+                    continue;
                 }
-                if (mealLog.getCarbs() != null && mealLog.getCarbs().compareTo(BigDecimal.ZERO) >= 0) {
-                    totalCarbs = totalCarbs.add(mealLog.getCarbs());
+                
+                BigDecimal quantity = mealLog.getQuantity();
+                if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                    log.warn("⚠️ [HealthStatisticsService] 잘못된 quantity: {}", quantity);
+                    continue;
                 }
-                if (mealLog.getProtein() != null && mealLog.getProtein().compareTo(BigDecimal.ZERO) >= 0) {
-                    totalProtein = totalProtein.add(mealLog.getProtein());
+                
+                // FoodItem의 영양소 정보를 quantity에 비례하여 계산 (100g 기준)
+                BigDecimal HUNDRED = new BigDecimal("100");
+                
+                if (foodItem.getCalories() != null && foodItem.getCalories().compareTo(BigDecimal.ZERO) >= 0) {
+                    BigDecimal calories = foodItem.getCalories().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                    totalCalories = totalCalories.add(calories);
                 }
-                if (mealLog.getFat() != null && mealLog.getFat().compareTo(BigDecimal.ZERO) >= 0) {
-                    totalFat = totalFat.add(mealLog.getFat());
+                if (foodItem.getCarbs() != null && foodItem.getCarbs().compareTo(BigDecimal.ZERO) >= 0) {
+                    BigDecimal carbs = foodItem.getCarbs().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                    totalCarbs = totalCarbs.add(carbs);
                 }
+                if (foodItem.getProtein() != null && foodItem.getProtein().compareTo(BigDecimal.ZERO) >= 0) {
+                    BigDecimal protein = foodItem.getProtein().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                    totalProtein = totalProtein.add(protein);
+                }
+                if (foodItem.getFat() != null && foodItem.getFat().compareTo(BigDecimal.ZERO) >= 0) {
+                    BigDecimal fat = foodItem.getFat().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                    totalFat = totalFat.add(fat);
+                }
+                
+                log.debug("🔢 [HealthStatisticsService] MealLog {} 계산: {}g × (영양소/100g)", 
+                    mealLog.getMealLogId(), quantity);
             }
             
             result.put("dailyCalories", totalCalories.doubleValue());
