@@ -168,13 +168,13 @@ export interface ExerciseSessionCreateRequest {
 // 운동 세션 수정 요청 타입
 export interface ExerciseSessionUpdateRequest {
   exercise_catalog_id?: number;
-  duration_minutes?: number;
   calories_burned?: number;
   notes?: string;
   exercise_date?: string; // YYYY-MM-DD 형식
   sets?: number;
   reps?: number;
   weight?: number;
+  duration_minutes?: number;
 }
 
 // 운동 카탈로그 타입
@@ -197,7 +197,7 @@ export interface ExerciseRecordDTO {
   reps?: number;
   weight?: number;
   exerciseDate: string;
-  durationMinutes?: number;
+  duration_minutes?: number;
   calories_burned?: number;
   time_period?: string; // 시간대(아침/점심/저녁 등) 추가
 }
