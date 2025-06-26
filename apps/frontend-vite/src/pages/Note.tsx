@@ -1433,67 +1433,78 @@ const Note = () => {
                           )
                         )}
 
-                        {selectedFood && selectedFood.foodItemId === undefined && (
+                        {selectedFood && (
                           <div className="mt-4 space-y-2">
-                            <Label>음식명</Label>
-                            <Input
-                              value={selectedFood.name}
-                              onChange={e => setSelectedFood({ ...selectedFood, name: e.target.value })}
-                              placeholder="음식명을 입력하세요"
-                            />
+                            {selectedFood.foodItemId === undefined && (
+                              <>
+                                <Label>음식명</Label>
+                                <Input
+                                  value={selectedFood.name}
+                                  onChange={e => setSelectedFood({ ...selectedFood, name: e.target.value })}
+                                  placeholder="음식명을 입력하세요"
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label>칼로리 (100g당)</Label>
+                                    <Input
+                                      type="number"
+                                      value={selectedFood.calories}
+                                      onChange={e => setSelectedFood({ ...selectedFood, calories: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>탄수화물 (100g당)</Label>
+                                    <Input
+                                      type="number"
+                                      value={selectedFood.carbs}
+                                      onChange={e => setSelectedFood({ ...selectedFood, carbs: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>단백질 (100g당)</Label>
+                                    <Input
+                                      type="number"
+                                      value={selectedFood.protein}
+                                      onChange={e => setSelectedFood({ ...selectedFood, protein: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>지방 (100g당)</Label>
+                                    <Input
+                                      type="number"
+                                      value={selectedFood.fat}
+                                      onChange={e => setSelectedFood({ ...selectedFood, fat: Number(e.target.value) })}
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <Label>칼로리 (100g당)</Label>
+                                <Label>섭취량 (g)</Label>
                                 <Input
                                   type="number"
-                                  value={selectedFood.calories}
-                                  onChange={e => setSelectedFood({ ...selectedFood, calories: Number(e.target.value) })}
+                                  value={quantity}
+                                  onChange={e => setQuantity(e.target.value)}
+                                  min="1"
                                 />
                               </div>
                               <div>
-                                <Label>탄수화물 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.carbs}
-                                  onChange={e => setSelectedFood({ ...selectedFood, carbs: Number(e.target.value) })}
-                                />
-                              </div>
-                              <div>
-                                <Label>단백질 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.protein}
-                                  onChange={e => setSelectedFood({ ...selectedFood, protein: Number(e.target.value) })}
-                                />
-                              </div>
-                              <div>
-                                <Label>지방 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.fat}
-                                  onChange={e => setSelectedFood({ ...selectedFood, fat: Number(e.target.value) })}
-                                />
+                                <Label>식사 시간</Label>
+                                <select
+                                  value={mealTime}
+                                  onChange={e => setMealTime(e.target.value)}
+                                  className="block w-full border rounded px-2 py-1"
+                                >
+                                  <option value="breakfast">아침</option>
+                                  <option value="lunch">점심</option>
+                                  <option value="dinner">저녁</option>
+                                  <option value="snack">간식</option>
+                                  <option value="midnight">야식</option>
+                                </select>
                               </div>
                             </div>
-                            <Label>섭취량 (g)</Label>
-                            <Input
-                              type="number"
-                              value={quantity}
-                              onChange={e => setQuantity(e.target.value)}
-                              min="1"
-                            />
-                            <Label>식사 시간</Label>
-                            <select
-                              value={mealTime}
-                              onChange={e => setMealTime(e.target.value)}
-                              className="block w-full border rounded px-2 py-1"
-                            >
-                              <option value="breakfast">아침</option>
-                              <option value="lunch">점심</option>
-                              <option value="dinner">저녁</option>
-                              <option value="snack">간식</option>
-                              <option value="midnight">야식</option>
-                            </select>
                           </div>
                         )}
 
