@@ -324,13 +324,11 @@ update_inventory() {
     
     cd "$SCRIPT_DIR"
     
-    # inventory.ini 업데이트 (실제 패턴으로 수정)
-    if grep -q "ansible_host=" ansible/inventory.ini; then
-        # 기존 IP 교체
-        sed -i "s/ansible_host=[0-9.]\+/ansible_host=$PUBLIC_IP/g" ansible/inventory.ini
-        log_success "기존 IP를 $PUBLIC_IP로 업데이트 완료"
+    # inventory.ini의 __SERVER_IP__ 플레이스홀더를 실제 IP로 교체
+    if sed -i.bak "s/__SERVER_IP__/$PUBLIC_IP/" ansible/inventory.ini; then
+        log_success "inventory.ini 업데이트 완료: $PUBLIC_IP"
     else
-        log_error "inventory.ini에서 ansible_host 패턴을 찾을 수 없습니다."
+        log_error "inventory.ini 업데이트 실패"
         cleanup_on_failure "inventory_update"
     fi
     
@@ -360,8 +358,18 @@ wait_for_ssh_ready() {
             -o UserKnownHostsFile=/dev/null \
             ubuntu@"$PUBLIC_IP" 'echo "SSH OK"' 2>/dev/null | grep -q "SSH OK"; then
             log_success "SSH 연결 성공 (시도: $attempt)"
-            create_checkpoint "ssh_ready"
-            return 0
+            
+            log_info "서버 초기화(cloud-init) 완료 대기 중... (최대 5분)"
+            if timeout 300 ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" 'cloud-init status --wait' 2>/dev/null; then
+                log_success "서버 초기화 완료."
+                create_checkpoint "ssh_ready"
+                return 0
+            else
+                log_warning "서버 초기화(cloud-init) 대기 시간 초과. 계속 진행하지만 문제가 발생할 수 있습니다."
+                # 실패하더라도 일단 진행하도록 return 0 처리. Ansible에서 재시도 로직이 있으므로.
+                create_checkpoint "ssh_ready"
+                return 0
+            fi
         else
             log_warning "SSH 연결 대기 중... ($attempt/$max_attempts)"
             sleep 15
@@ -497,7 +505,7 @@ deploy_application() {
             --timeout 3600 \
             -v \
             --ssh-extra-args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=60 -o ServerAliveCountMax=10' \
-            --extra-vars "ansible_ssh_common_args='-o ServerAliveInterval=60 -o ServerAliveCountMax=10'"; then
+            --extra-vars "server_public_ip=$PUBLIC_IP ansible_ssh_common_args='-o ServerAliveInterval=60 -o ServerAliveCountMax=10'"; then
             log_success "Ansible 배포 완료"
             create_checkpoint "ansible_deploy"
             return 0
@@ -937,6 +945,9 @@ main() {
     save_ssh_key
     update_inventory
     wait_for_ssh_ready
+    
+    log_info "서버 초기화 안정화를 위해 30초 대기합니다..."
+    sleep 30
     
     # 애플리케이션 배포 (Ansible 실패 시 단계별 배포로 대체)
     if ! deploy_application; then

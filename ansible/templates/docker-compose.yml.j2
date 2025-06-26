@@ -184,8 +184,8 @@ services:
     container_name: lifebit-frontend
     restart: unless-stopped
     environment:
-      - VITE_CORE_API_URL=http://{{ ansible_default_ipv4.address }}:8082/api
-      - VITE_AI_API_URL=http://{{ ansible_default_ipv4.address }}:8082/ai
+      - VITE_CORE_API_URL=http://{{ server_public_ip }}:8082/api
+      - VITE_AI_API_URL=http://{{ server_public_ip }}:8082/ai
     ports:
       - "3000:80"
     networks:
