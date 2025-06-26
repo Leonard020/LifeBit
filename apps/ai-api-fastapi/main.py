@@ -85,25 +85,38 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 app = FastAPI()
 app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 
-# CORS 설정
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173", 
-    "http://localhost:8082",  # Nginx 프록시
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8082",
-]
+# =======================
+# CORS 설정 (동적/배포 대응)
+# =======================
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,  # 수정: origins 배열 사용
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
-)
+# 1) 환경 변수 CORS_ALLOWED_ORIGINS 에 콤마로 구분된 도메인/IP 목록이 있으면 우선 사용
+# 2) 없으면 정규식(https?://.*) 으로 모든 Origin 허용
+#    - allow_credentials=True 와 함께 쓰려면 와일드카드(*) 대신 정규식을 사용해야 함
+
+cors_env = os.getenv("CORS_ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS")
+
+if cors_env:
+    allow_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=3600,
+    )
+else:
+    # 정규식으로 http/https 모든 출처 허용
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex="https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=3600,
+    )
 
 # 라우터 등록
 app.include_router(auth_router, prefix="/api/py/auth")
@@ -465,6 +478,11 @@ class AnalyticsRequest(BaseModel):
 # 헬스 체크 엔드포인트
 @app.get("/api/py/health")
 def health_check():
+    return {"status": "OK", "service": "LifeBit AI-API"}
+
+# 간단한 헬스 체크 엔드포인트 (Docker healthcheck용)
+@app.get("/health")
+def simple_health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
 
 # 🚀 새로 추가: 건강 데이터 종합 분석 엔드포인트

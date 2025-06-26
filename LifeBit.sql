@@ -184,10 +184,6 @@ CREATE TABLE meal_logs (
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
-    calories DECIMAL(6,2),
-    carbs DECIMAL(6,2),
-    protein DECIMAL(6,2),
-    fat DECIMAL(6,2),
     created_at TIMESTAMP DEFAULT NOW()
 );
 

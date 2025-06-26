@@ -1,0 +1,101 @@
+#!/bin/bash
+# LifeBit 서비스 상태를 확인하는 헬스체크 스크립트 (Jinja2 템플릿)
+
+# ================================================
+# 설정
+# ================================================
+# 로그 파일 경로
+LOG_FILE="/var/log/lifebit_healthcheck.log"
+
+# 애플리케이션 디렉토리 (Ansible 변수로 전달받음)
+APP_DIR="{{ remote_app_dir | default('/opt/lifebit/app') }}"
+
+# Docker Compose 실행 경로 (서버 환경에 맞게 수정)
+DOCKER_COMPOSE_CMD="/usr/local/bin/docker-compose"
+
+# 서비스 목록 (서비스 이름: 헬스체크 방식)
+# 방식: http, tcp, redis, postgres
+declare -A SERVICES
+SERVICES=(
+    ["spring-app"]="http:8080/actuator/health"
+    ["fastapi-app"]="http:8001/api/py/health"
+    ["postgres-db"]="postgres:5432"
+    ["redis-cache"]="redis:6379"
+    ["frontend-app"]="tcp:3000"
+    ["nginx-proxy"]="tcp:8082"
+    ["airflow-webserver"]="tcp:8081"
+)
+
+# ================================================
+# 헬스체크 함수
+# ================================================
+
+# 로그 기록 함수
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# 서비스 상태 확인 및 로그 기록
+check_service() {
+    local service_name="$1"
+    local check_method="$2"
+    local status="DOWN"
+    local IFS=':'
+    read -r -a method_parts <<< "$check_method"
+    local type="${method_parts[0]}"
+    local target="${method_parts[1]}"
+    local path="${method_parts[2]}"
+
+    case "$type" in
+        http)
+            if curl --fail --silent --max-time 10 "http://localhost:$target/$path" > /dev/null; then
+                status="UP"
+            fi
+            ;;
+        tcp)
+            if nc -z localhost "$target" > /dev/null 2>&1; then
+                status="UP"
+            fi
+            ;;
+        postgres)
+            # docker-compose.yml에 정의된 컨테이너(lifebit-postgres)와 사용자(lifebit) 이름을 사용
+            if $DOCKER_COMPOSE_CMD exec -T postgres-db pg_isready -U {{ lookup('env', 'POSTGRES_USER') | default('lifebit') }} -d {{ lookup('env', 'POSTGRES_DB') | default('lifebit') }} > /dev/null 2>&1; then
+                status="UP"
+            fi
+            ;;
+        redis)
+            # docker-compose.yml에 정의된 컨테이너 이름(redis-cache) 사용
+            if $DOCKER_COMPOSE_CMD exec -T redis-cache redis-cli ping | grep -q "PONG"; then
+                status="UP"
+            fi
+            ;;
+        *)
+            log "[ERROR] 알 수 없는 체크 방식입니다: $type"
+            return
+            ;;
+    esac
+    
+    log "[INFO] 서비스: ${service_name}, 상태: ${status}"
+}
+
+# ================================================
+# 메인 스크립트 실행
+# ================================================
+
+log "=== LifeBit 헬스체크 시작 ==="
+
+# 애플리케이션 디렉토리로 이동
+cd "$APP_DIR" || {
+    log "[ERROR] 애플리케이션 디렉토리로 이동할 수 없습니다: $APP_DIR"
+    exit 1
+}
+
+# 모든 서비스에 대해 헬스체크 실행
+for service in "${!SERVICES[@]}"; do
+    check_service "$service" "${SERVICES[$service]}"
+done
+
+log "=== LifeBit 헬스체크 종료 ==="
+
+# 스크립트가 cron에서 실행될 때 출력이 메일로 가지 않도록 함
+exit 0 

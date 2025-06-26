@@ -33,13 +33,16 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
   period
 }) => {
   // 현재 날짜와 기간 설정
-  const today = new Date();
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
+  const today = new Date().toISOString().split('T')[0];
+  const currentMonth = new Date(today).getMonth();
+  const currentYear = new Date(today).getFullYear();
 
   // 운동 데이터를 날짜별로 그룹핑
   const exerciseByDate = useMemo(() => {
     const grouped: Record<string, { workouts: number; totalMinutes: number; totalCalories: number }> = {};
+    
+    // 오늘 날짜의 데이터도 포함하도록 수정
+    const todayStr = today;
     
     exerciseSessions.forEach(session => {
       const date = session.exercise_date;
@@ -52,7 +55,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
     });
 
     return grouped;
-  }, [exerciseSessions]);
+  }, [exerciseSessions, today]);
 
   // 캘린더 데이터 생성 (완전한 5주 = 현재 주가 마지막에 오도록)
   const calendarData = useMemo(() => {
@@ -60,8 +63,8 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
     
     // 현재 주의 일요일을 찾기
     const currentSunday = new Date(today);
-    const currentDayOfWeek = today.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
-    currentSunday.setDate(today.getDate() - currentDayOfWeek); // 이번 주 일요일로 이동
+    const currentDayOfWeek = new Date(today).getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+    currentSunday.setDate(new Date(today).getDate() - currentDayOfWeek); // 이번 주 일요일로 이동
     
     // 4주 전 일요일부터 시작 (현재 주가 5주차가 되도록)
     const startDate = new Date(currentSunday);
@@ -91,7 +94,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
         totalMinutes: dayData.totalMinutes,
         totalCalories: dayData.totalCalories,
         intensity,
-        isToday: dateString === today.toISOString().split('T')[0],
+        isToday: dateString === today,
         isCurrentMonth: currentDate.getMonth() === currentMonth,
         isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6,
         monthName: currentDate.toLocaleDateString('ko-KR', { month: 'short' }),
@@ -177,6 +180,10 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
 
     return { totalWorkouts, totalMinutes, totalCalories, activeDays };
   }, [calendarData]);
+
+  const todayExercise = exerciseSessions.filter(session =>
+    session.exercise_date && session.exercise_date.slice(0, 10) === today
+  );
 
   return (
     <Card className="w-full bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100">

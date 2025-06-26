@@ -94,17 +94,6 @@ public class NoteExerciseController {
         return ResponseEntity.ok(summary);
     }
 
-    // ✅ 3. 운동 기록 추가
-    @PostMapping
-    public ResponseEntity<ExerciseRecordDTO> addExercise(
-            @RequestHeader("Authorization") String token,
-            @RequestBody ExerciseRecordDTO dto) {
-        Long userId = extractUserId(token);
-        dto.setUserId(userId); // ✨ 사용자 ID 설정
-        ExerciseRecordDTO saved = noteExerciseService.addExercise(dto);
-        return ResponseEntity.ok(saved);
-    }
-
     // ✅ 4. 운동 기록 삭제
     @DeleteMapping("/{sessionId}")
     public ResponseEntity<Void> deleteExercise(
