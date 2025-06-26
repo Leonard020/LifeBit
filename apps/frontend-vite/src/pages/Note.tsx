@@ -754,10 +754,10 @@ const Note = () => {
       foodItemId: dietLog.foodItemId,
       foodName: dietLog.foodName,
       quantity: dietLog.quantity,
-      calories: dietLog.calories * per100gFactor,
-      carbs: dietLog.carbs * per100gFactor,
-      protein: dietLog.protein * per100gFactor,
-      fat: dietLog.fat * per100gFactor,
+      calories: Math.round(dietLog.calories * per100gFactor * 100) / 100,
+      carbs: Math.round(dietLog.carbs * per100gFactor * 100) / 100,
+      protein: Math.round(dietLog.protein * per100gFactor * 100) / 100,
+      fat: Math.round(dietLog.fat * per100gFactor * 100) / 100,
       mealTime: dietLog.mealTime || 'breakfast', // 추가: 식사 시간
     });
 
@@ -1723,10 +1723,10 @@ const Note = () => {
 
                   <div className="text-sm text-muted-foreground mt-2 p-2 bg-slate-50 rounded-md">
                     <h4 className="font-medium mb-1">총 섭취량</h4>
-                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(0)} kcal<br />
-                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(1)} g<br />
-                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(1)} g<br />
-                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(1)} g
+                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(2)} kcal<br />
+                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(2)} g<br />
+                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(2)} g<br />
+                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(2)} g
                   </div>
                   <div>
                     <Label htmlFor="editMealTime">식사 시간</Label>
