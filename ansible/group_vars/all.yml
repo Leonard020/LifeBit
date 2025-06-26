@@ -31,14 +31,6 @@ POSTGRES_PASSWORD: "{{ vault_db_password | default('lifebit_password') }}"
 POSTGRES_HOST: "postgres-db"  # Docker Compose 서비스명
 POSTGRES_PORT: "5432"
 
-# 기존 호환성을 위한 소문자 변수
-postgres_db: "{{ POSTGRES_DB }}"
-postgres_user: "{{ POSTGRES_USER }}"
-postgres_password: "{{ POSTGRES_PASSWORD }}"
-db_name: "{{ POSTGRES_DB }}"
-db_user: "{{ POSTGRES_USER }}"
-db_password: "{{ POSTGRES_PASSWORD }}"
-
 # Redis 설정 (대문자로 통일)
 REDIS_PASSWORD: "{{ vault_redis_password | default('redis_password') }}"
 
