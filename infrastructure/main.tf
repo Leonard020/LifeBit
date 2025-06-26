@@ -126,10 +126,10 @@ resource "aws_instance" "web" {
   key_name               = aws_key_pair.lifebit.key_name
   associate_public_ip_address = true
   
-  # EBS 루트 볼륨 크기 증가 (8GB -> 20GB)
+  # EBS 루트 볼륨 크기 증가 (Docker 빌드 공간 확보)
   root_block_device {
     volume_type = "gp3"
-    volume_size = 20
+    volume_size = var.root_volume_size
     encrypted   = true
     tags = {
       Name        = "${var.project_name}-${var.environment}-root-volume"

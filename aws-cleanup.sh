@@ -4,6 +4,12 @@ set -e
 # 스크립트 정보
 SCRIPT_NAME=$(basename "$0")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FORCE_DELETE=false
+
+# --force or -y flag check
+if [[ "$1" == "--force" || "$1" == "-y" ]]; then
+    FORCE_DELETE=true
+fi
 
 # 색상 정의
 RED='\033[0;31m'
@@ -26,6 +32,7 @@ load_env() {
     local env_file="$SCRIPT_DIR/.env"
     if [[ -f "$env_file" ]]; then
         log_info ".env 파일 로드 중..."
+        set -a  # .env 변수 자동 export
         source "$env_file"
         log_success ".env 파일 로드 완료"
     else
@@ -33,11 +40,37 @@ load_env() {
     fi
 }
 
-# AWS CLI 설치 확인
-check_aws_cli() {
+# 필요한 도구들 설치 확인
+check_dependencies() {
+    log_info "필요한 도구들 확인 중..."
+    
+    # AWS CLI 확인
     if ! command -v aws &> /dev/null; then
         log_error "AWS CLI가 설치되지 않았습니다. 설치 후 다시 실행해주세요."
         exit 1
+    fi
+    
+    # jq 확인 및 자동 설치
+    if ! command -v jq &> /dev/null; then
+        log_warning "jq가 설치되지 않았습니다. 자동 설치를 시도합니다..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y jq
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y jq
+        elif command -v brew &> /dev/null; then
+            brew install jq
+        else
+            log_error "jq 자동 설치에 실패했습니다. 수동으로 설치하세요: https://stedolan.github.io/jq/"
+            exit 1
+        fi
+        
+        if ! command -v jq &> /dev/null; then
+            log_error "jq 설치에 실패했습니다."
+            exit 1
+        fi
+        log_success "jq 설치 완료"
     fi
     
     # AWS 자격 증명 확인
@@ -46,11 +79,15 @@ check_aws_cli() {
         exit 1
     fi
     
-    log_success "AWS CLI 및 자격 증명 확인 완료"
+    log_success "모든 의존성 확인 완료"
 }
 
 # 확인 프롬프트
 confirm_deletion() {
+    if [[ "$FORCE_DELETE" == "true" ]]; then
+        log_info "강제 삭제 모드가 활성화되었습니다. 확인 프롬프트를 건너뜁니다."
+        return
+    fi
     log_warning "⚠️  이 스크립트는 LifeBit 프로젝트 관련 모든 AWS 리소스를 삭제합니다."
     log_warning "⚠️  삭제된 리소스는 복구할 수 없습니다."
     echo -e "\n${RED}정말로 모든 AWS 리소스를 삭제하시겠습니까? (yes/no):${NC}"
@@ -89,6 +126,11 @@ cleanup_ecs() {
     
     # ECS 서비스 삭제
     local clusters=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'LifeBit') || contains(@, 'lifebit')]" --output text)
+    if [[ -z "$clusters" ]]; then
+        log_info "삭제할 ECS 클러스터가 없습니다."
+        return
+    fi
+
     for cluster in $clusters; do
         local services=$(aws ecs list-services --cluster "$cluster" --query "serviceArns" --output text)
         for service in $services; do
@@ -170,23 +212,39 @@ cleanup_rds() {
     
     # RDS 인스턴스 삭제
     local db_instances=$(aws rds describe-db-instances --query "DBInstances[?contains(DBInstanceIdentifier, 'lifebit')].DBInstanceIdentifier" --output text)
-    for instance in $db_instances; do
-        log_info "RDS 인스턴스 삭제: $instance"
-        aws rds delete-db-instance --db-instance-identifier "$instance" --skip-final-snapshot --delete-automated-backups || true
-    done
-    
+    if [[ -n "$db_instances" ]]; then
+        for instance in $db_instances; do
+            log_info "RDS 인스턴스 삭제: $instance"
+            aws rds delete-db-instance --db-instance-identifier "$instance" --skip-final-snapshot --delete-automated-backups || true
+        done
+
+        # RDS 인스턴스 삭제 대기
+        for instance in $db_instances; do
+            log_info "RDS 인스턴스 삭제 완료 대기: $instance"
+            aws rds wait db-instance-deleted --db-instance-identifier "$instance" || true
+        done
+    fi
+
+    # RDS 클러스터 삭제
+    local clusters=$(aws rds describe-db-clusters --query "DBClusters[?contains(DBClusterIdentifier, 'lifebit')].DBClusterIdentifier" --output text)
+    if [[ -n "$clusters" ]]; then
+        for cluster in $clusters; do
+            log_info "RDS 클러스터 삭제: $cluster"
+            aws rds delete-db-cluster --db-cluster-identifier "$cluster" --skip-final-snapshot || true
+        done
+        
+        # RDS 클러스터 삭제 대기
+        for cluster in $clusters; do
+            log_info "RDS 클러스터 삭제 완료 대기: $cluster"
+            aws rds wait db-cluster-deleted --db-cluster-identifier "$cluster" || true
+        done
+    fi
+
     # RDS 스냅샷 삭제
     local snapshots=$(aws rds describe-db-snapshots --query "DBSnapshots[?contains(DBSnapshotIdentifier, 'lifebit')].DBSnapshotIdentifier" --output text)
     for snapshot in $snapshots; do
         log_info "RDS 스냅샷 삭제: $snapshot"
         aws rds delete-db-snapshot --db-snapshot-identifier "$snapshot" || true
-    done
-    
-    # RDS 클러스터 삭제
-    local clusters=$(aws rds describe-db-clusters --query "DBClusters[?contains(DBClusterIdentifier, 'lifebit')].DBClusterIdentifier" --output text)
-    for cluster in $clusters; do
-        log_info "RDS 클러스터 삭제: $cluster"
-        aws rds delete-db-cluster --db-cluster-identifier "$cluster" --skip-final-snapshot || true
     done
     
     # DB 서브넷 그룹 삭제
@@ -236,25 +294,8 @@ cleanup_s3() {
     for bucket in $buckets; do
         log_info "S3 버킷 정리: $bucket"
         
-        # 버전이 있는 객체 삭제
-        aws s3api list-object-versions --bucket "$bucket" --query "Versions[].{Key:Key,VersionId:VersionId}" --output text | while read key version; do
-            if [[ -n "$key" && -n "$version" ]]; then
-                aws s3api delete-object --bucket "$bucket" --key "$key" --version-id "$version" || true
-            fi
-        done
-        
-        # 삭제 마커 제거
-        aws s3api list-object-versions --bucket "$bucket" --query "DeleteMarkers[].{Key:Key,VersionId:VersionId}" --output text | while read key version; do
-            if [[ -n "$key" && -n "$version" ]]; then
-                aws s3api delete-object --bucket "$bucket" --key "$key" --version-id "$version" || true
-            fi
-        done
-        
-        # 모든 객체 삭제
-        aws s3 rm "s3://$bucket" --recursive || true
-        
-        # 버킷 삭제
-        aws s3api delete-bucket --bucket "$bucket" || true
+        # 모든 객체 삭제 (버전 포함)
+        aws s3 rb "s3://$bucket" --force || true
     done
     
     if [[ -n "$buckets" ]]; then
@@ -271,7 +312,7 @@ cleanup_autoscaling() {
     
     for asg in $asgs; do
         log_info "Auto Scaling Group 삭제: $asg"
-        aws autoscaling update-auto-scaling-group --auto-scaling-group-name "$asg" --min-size 0 --desired-capacity 0 || true
+        aws autoscaling update-auto-scaling-group --auto-scaling-group-name "$asg" --min-size 0 --desired-capacity 0 --force-delete || true
         aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$asg" --force-delete || true
     done
     
@@ -294,21 +335,26 @@ cleanup_ec2() {
     log_cleanup "EC2 리소스 정리 중..."
     
     # EC2 인스턴스 종료
-    local instance_ids=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text)
+    local instance_ids=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text)
     if [[ -n "$instance_ids" ]]; then
         log_info "EC2 인스턴스 종료 중..."
         aws ec2 terminate-instances --instance-ids $instance_ids || true
         
         # 인스턴스 종료 대기
-        for instance in $instance_ids; do
-            log_info "인스턴스 종료 대기: $instance"
-            aws ec2 wait instance-terminated --instance-ids "$instance" || true
-        done
+        log_info "인스턴스 종료 완료 대기: $instance_ids"
+        aws ec2 wait instance-terminated --instance-ids $instance_ids || true
         log_success "EC2 인스턴스 종료 완료"
     else
         log_info "종료할 EC2 인스턴스가 없습니다"
     fi
     
+    # Elastic IP 해제
+    local eips=$(aws ec2 describe-addresses --filters "Name=tag:Project,Values=LifeBit" --query 'Addresses[*].AllocationId' --output text)
+    for eip in $eips; do
+        log_info "Elastic IP 해제: $eip"
+        aws ec2 release-address --allocation-id "$eip" || true
+    done
+
     # EBS 볼륨 삭제 (detached 상태)
     local volumes=$(aws ec2 describe-volumes --filters "Name=status,Values=available" "Name=tag:Project,Values=LifeBit" --query 'Volumes[*].VolumeId' --output text)
     for volume in $volumes; do
@@ -330,78 +376,45 @@ cleanup_ec2() {
         aws ec2 deregister-image --image-id "$ami" || true
     done
     
-    # Elastic IP 해제
-    local eips=$(aws ec2 describe-addresses --filters "Name=tag:Project,Values=LifeBit" --query 'Addresses[*].AllocationId' --output text)
-    for eip in $eips; do
-        log_info "Elastic IP 해제: $eip"
-        aws ec2 release-address --allocation-id "$eip" || true
-    done
-    
-    # Key Pairs 삭제
-    local keypairs=$(aws ec2 describe-key-pairs --filters "Name=tag:Project,Values=LifeBit" --query 'KeyPairs[*].KeyName' --output text)
-    for keypair in $keypairs; do
-        log_info "Key Pair 삭제: $keypair"
-        aws ec2 delete-key-pair --key-name "$keypair" || true
-    done
-    
-    log_success "EC2 리소스 정리 완료"
+    log_success "EC2 관련 리소스(EIP, 볼륨, 스냅샷, AMI) 정리 완료"
 }
 
-# VPC 및 네트워킹 리소스 정리
+# VPC 및 네트워킹 리소스 정리 (Terraform에 주로 의존)
 cleanup_networking() {
-    log_cleanup "네트워킹 리소스 정리 중..."
+    log_cleanup "네트워킹 리소스 정리 중... (Terraform 외 남은 리소스)"
     
     # LifeBit 관련 VPC 찾기
-    local vpcs=$(aws ec2 describe-vpcs --filters "Name=tag:Project,Values=LifeBit" --query 'Vpcs[*].VpcId' --output text)
+    local vpcs=$(aws ec2 describe-vpcs --filters "Name=tag:Project,Values=LifeBit" "Name=tag:Name,Values=*lifebit*" --query 'Vpcs[*].VpcId' --output text)
     
     for vpc in $vpcs; do
-        log_info "VPC 관련 리소스 정리: $vpc"
-        
-        # NAT Gateway 삭제
-        local nat_gateways=$(aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc" --query 'NatGateways[*].NatGatewayId' --output text)
-        for nat in $nat_gateways; do
-            log_info "NAT Gateway 삭제: $nat"
-            aws ec2 delete-nat-gateway --nat-gateway-id "$nat" || true
-        done
+        [[ -z "$vpc" ]] && continue
+        log_warning "Terraform으로 삭제되지 않은 VPC 발견: $vpc. 수동 정리를 시도합니다."
         
         # 인터넷 게이트웨이 분리 및 삭제
         local igws=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query 'InternetGateways[*].InternetGatewayId' --output text)
         for igw in $igws; do
-            log_info "인터넷 게이트웨이 분리 및 삭제: $igw"
             aws ec2 detach-internet-gateway --internet-gateway-id "$igw" --vpc-id "$vpc" || true
             aws ec2 delete-internet-gateway --internet-gateway-id "$igw" || true
-        done
-        
-        # 라우트 테이블 삭제 (메인 테이블 제외)
-        local route_tables=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[?Associations[0].Main != `true`].RouteTableId' --output text)
-        for rt in $route_tables; do
-            log_info "라우트 테이블 삭제: $rt"
-            aws ec2 delete-route-table --route-table-id "$rt" || true
-        done
-        
-        # 보안 그룹 삭제 (default 제외)
-        local security_groups=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName != `default`].GroupId' --output text)
-        for sg in $security_groups; do
-            log_info "보안 그룹 삭제: $sg"
-            aws ec2 delete-security-group --group-id "$sg" || true
         done
         
         # 서브넷 삭제
         local subnets=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query 'Subnets[*].SubnetId' --output text)
         for subnet in $subnets; do
-            log_info "서브넷 삭제: $subnet"
             aws ec2 delete-subnet --subnet-id "$subnet" || true
+        done
+
+        # 보안 그룹 삭제
+        local security_groups=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName != `default`].GroupId' --output text)
+        for sg in $security_groups; do
+            aws ec2 delete-security-group --group-id "$sg" || true
         done
         
         # VPC 삭제
-        log_info "VPC 삭제: $vpc"
-        aws ec2 delete-vpc --vpc-id "$vpc" || true
+        aws ec2 delete-vpc --vpc-id "$vpc" || log_error "VPC $vpc 최종 삭제 실패. 수동 확인이 필요합니다."
     done
-    
-    if [[ -n "$vpcs" ]]; then
-        log_success "네트워킹 리소스 정리 완료"
-    else
-        log_info "삭제할 VPC가 없습니다"
+
+    if [[ -z "$vpcs" ]]; then
+        log_success "남아있는 VPC 네트워킹 리소스가 없습니다."
     fi
 }
 
@@ -438,12 +451,12 @@ cleanup_route53() {
     for zone in $hosted_zones; do
         log_info "Route53 호스팅 존 정리: $zone"
         
-        # A, AAAA, CNAME 레코드 삭제
-        local records=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone" --query "ResourceRecordSets[?Type != \`NS\` && Type != \`SOA\`]" --output json)
+        local records_to_delete=""
+        local records=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone" --query "ResourceRecordSets[?Type != 'NS' && Type != 'SOA']" --output json)
+        
         if [[ -n "$records" && "$records" != "[]" ]]; then
-            echo "$records" | jq -c '.[]' | while read -r record; do
-                aws route53 change-resource-record-sets --hosted-zone-id "$zone" --change-batch "{\"Changes\":[{\"Action\":\"DELETE\",\"ResourceRecordSet\":$record}]}" || true
-            done
+            records_to_delete=$(echo "$records" | jq '. | { "Changes": [ { "Action": "DELETE", "ResourceRecordSet": . } ] }' | jq -s '{"Changes": map(.Changes[])}')
+            aws route53 change-resource-record-sets --hosted-zone-id "$zone" --change-batch "$records_to_delete" || true
         fi
         
         # 호스팅 존 삭제
@@ -461,145 +474,97 @@ cleanup_route53() {
 cleanup_iam() {
     log_cleanup "IAM 리소스 정리 중..."
     
-    # IAM 역할 삭제
+    # IAM 역할 정리
     local roles=$(aws iam list-roles --query "Roles[?contains(RoleName, 'LifeBit') || contains(RoleName, 'lifebit')].RoleName" --output text)
     for role in $roles; do
         log_info "IAM 역할 정리: $role"
         
-        # 역할에서 정책 분리
         local attached_policies=$(aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[*].PolicyArn' --output text)
         for policy in $attached_policies; do
             aws iam detach-role-policy --role-name "$role" --policy-arn "$policy" || true
         done
         
-        # 인라인 정책 삭제
         local inline_policies=$(aws iam list-role-policies --role-name "$role" --query 'PolicyNames[*]' --output text)
         for policy in $inline_policies; do
             aws iam delete-role-policy --role-name "$role" --policy-name "$policy" || true
         done
         
-        # 인스턴스 프로필에서 역할 제거
         local instance_profiles=$(aws iam list-instance-profiles-for-role --role-name "$role" --query 'InstanceProfiles[*].InstanceProfileName' --output text)
         for profile in $instance_profiles; do
             aws iam remove-role-from-instance-profile --instance-profile-name "$profile" --role-name "$role" || true
+            aws iam delete-instance-profile --instance-profile-name "$profile" || true
         done
         
-        # 역할 삭제
         aws iam delete-role --role-name "$role" || true
     done
     
-    # IAM 사용자 삭제
-    local users=$(aws iam list-users --query "Users[?contains(UserName, 'lifebit')].UserName" --output text)
-    for user in $users; do
-        log_info "IAM 사용자 정리: $user"
-        
-        # 사용자 정책 분리
-        local attached_policies=$(aws iam list-attached-user-policies --user-name "$user" --query 'AttachedPolicies[*].PolicyArn' --output text)
-        for policy in $attached_policies; do
-            aws iam detach-user-policy --user-name "$user" --policy-arn "$policy" || true
-        done
-        
-        # 인라인 정책 삭제
-        local inline_policies=$(aws iam list-user-policies --user-name "$user" --query 'PolicyNames[*]' --output text)
-        for policy in $inline_policies; do
-            aws iam delete-user-policy --user-name "$user" --policy-name "$policy" || true
-        done
-        
-        # 액세스 키 삭제
-        local access_keys=$(aws iam list-access-keys --user-name "$user" --query 'AccessKeyMetadata[*].AccessKeyId' --output text)
-        for key in $access_keys; do
-            aws iam delete-access-key --user-name "$user" --access-key-id "$key" || true
-        done
-        
-        # 사용자 삭제
-        aws iam delete-user --user-name "$user" || true
-    done
-    
-    # IAM 정책 삭제 (AWS 관리형 정책 제외)
+    # IAM 정책 삭제
     local policies=$(aws iam list-policies --scope Local --query "Policies[?contains(PolicyName, 'LifeBit') || contains(PolicyName, 'lifebit')].Arn" --output text)
     for policy in $policies; do
         log_info "IAM 정책 삭제: $policy"
-        
-        # 정책 버전 삭제 (기본 버전 제외)
-        local versions=$(aws iam list-policy-versions --policy-arn "$policy" --query 'Versions[?IsDefaultVersion != `true`].VersionId' --output text)
-        for version in $versions; do
-            aws iam delete-policy-version --policy-arn "$policy" --version-id "$version" || true
-        done
-        
-        # 정책 삭제
         aws iam delete-policy --policy-arn "$policy" || true
     done
     
-    if [[ -n "$roles" || -n "$users" || -n "$policies" ]]; then
+    if [[ -n "$roles" || -n "$policies" ]]; then
         log_success "IAM 리소스 정리 완료"
     else
         log_info "삭제할 IAM 리소스가 없습니다"
     fi
 }
 
-# Docker 리소스 정리
-cleanup_docker_compose() {
-    log_cleanup "Docker Compose 리소스 정리 중..."
-    if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]]; then
-        cd "$SCRIPT_DIR"
-        docker-compose down --volumes --remove-orphans || true
-        log_success "Docker Compose 리소스 정리 완료"
-    else
-        log_info "docker-compose.yml 파일이 없습니다"
+# Key Pairs 정리 (안정화 버전)
+cleanup_key_pairs() {
+    log_cleanup "키 페어 정리 중..."
+    local keys=$(aws ec2 describe-key-pairs --query 'KeyPairs[?contains(KeyName, `lifebit`)].KeyName' --output text)
+    
+    if [[ -z "$keys" ]]; then
+        log_info "삭제할 lifebit 관련 키 페어가 없습니다."
+        return
     fi
+
+    log_info "삭제 대상 키 페어: $keys"
+    for key in $keys; do
+        if [[ -n "$key" ]]; then
+            log_info "키 페어 삭제 시도: $key"
+            aws ec2 delete-key-pair --key-name "$key" || log_error "키 페어 '$key' 삭제 실패"
+        fi
+    done
+    log_success "키 페어 정리 완료"
 }
 
-# LifeBit 관련 Docker 리소스 정리
-cleanup_lifebit_docker() {
-    log_cleanup "LifeBit Docker 리소스 정리 중..."
+# 배포 관련 로컬 파일 정리
+cleanup_deployment_files() {
+    log_cleanup "배포 관련 로컬 파일 정리 중..."
     
-    # LifeBit 관련 컨테이너 정지 및 삭제
-    local containers=$(docker ps -a --filter "name=lifebit" --format "{{.ID}}" 2>/dev/null || true)
-    if [[ -n "$containers" ]]; then
-        log_info "LifeBit 컨테이너 정리..."
-        docker stop $containers 2>/dev/null || true
-        docker rm $containers 2>/dev/null || true
-    fi
-    
-    # LifeBit 관련 이미지 삭제
-    local images=$(docker images --filter "reference=*lifebit*" --format "{{.ID}}" 2>/dev/null || true)
-    if [[ -n "$images" ]]; then
-        log_info "LifeBit 이미지 정리..."
-        docker rmi -f $images 2>/dev/null || true
-    fi
-    
-    # LifeBit 관련 볼륨 삭제
-    local volumes=$(docker volume ls --filter "name=lifebit" --format "{{.Name}}" 2>/dev/null || true)
-    if [[ -n "$volumes" ]]; then
-        log_info "LifeBit 볼륨 정리..."
-        docker volume rm $volumes 2>/dev/null || true
-    fi
-    
-    # LifeBit 관련 네트워크 삭제
-    local networks=$(docker network ls --filter "name=lifebit" --format "{{.ID}}" 2>/dev/null || true)
-    if [[ -n "$networks" ]]; then
-        log_info "LifeBit 네트워크 정리..."
-        docker network rm $networks 2>/dev/null || true
-    fi
-    
-    log_success "LifeBit Docker 리소스 정리 완료"
-}
-
-# Terraform 상태 및 캐시 정리
-cleanup_terraform() {
-    log_cleanup "Terraform 상태 및 캐시 정리 중..."
     local terraform_dir="$SCRIPT_DIR/infrastructure"
     if [[ -d "$terraform_dir" ]]; then
+        log_info "Terraform 상태 및 캐시 정리..."
         cd "$terraform_dir"
         rm -rf .terraform* terraform.tfstate* tfplan* 2>/dev/null || true
-        log_success "Terraform 상태 및 캐시 정리 완료"
         cd "$SCRIPT_DIR"
-    else
-        log_info "infrastructure 디렉토리가 없습니다"
     fi
+    
+    if [[ -d "$SCRIPT_DIR/.deploy_checkpoints" ]]; then
+        log_info "배포 체크포인트 정리..."
+        rm -rf "$SCRIPT_DIR/.deploy_checkpoints"
+    fi
+    
+    if [[ -f ~/.ssh/lifebit.pem ]]; then
+        log_info "SSH 키 파일 정리..."
+        rm -f ~/.ssh/lifebit.pem*
+    fi
+    
+    if [[ -d "$SCRIPT_DIR/logs" ]]; then
+        log_info "로그 파일 정리..."
+        rm -rf "$SCRIPT_DIR/logs"/* 2>/dev/null || true
+    fi
+
+    rm -f "$SCRIPT_DIR"/*.log "$SCRIPT_DIR"/*.tmp "$SCRIPT_DIR"/*.backup 2>/dev/null || true
+    
+    log_success "배포 관련 로컬 파일 정리 완료"
 }
 
-# Terraform destroy (AWS provider)
+# Terraform destroy
 terraform_destroy() {
     log_cleanup "Terraform 인프라 삭제 중..."
     local terraform_dir="$SCRIPT_DIR/infrastructure"
@@ -615,102 +580,106 @@ terraform_destroy() {
         return 0
     fi
     
-    log_info "Terraform 인프라 삭제 시작..."
-    if terraform destroy \
-        -var="aws_access_key_id=${AWS_ACCESS_KEY_ID:-}" \
-        -var="aws_secret_access_key=${AWS_SECRET_ACCESS_KEY:-}" \
-        -var="aws_region=${AWS_DEFAULT_REGION:-ap-northeast-2}" \
-        -auto-approve 2>/dev/null; then
-        log_success "Terraform 인프라 삭제 완료"
-    else
-        log_warning "Terraform 인프라 삭제 중 일부 오류가 발생했습니다. 수동 정리를 진행합니다."
-    fi
+    log_info "Terraform 인프라 삭제 시작 (terraform destroy)..."
+    terraform destroy -auto-approve || log_warning "Terraform 인프라 삭제 중 일부 오류가 발생했습니다. 수동 정리를 계속 진행합니다."
+    
+    log_success "Terraform destroy 실행 완료"
     cd "$SCRIPT_DIR"
-}
-
-# 로컬 파일 정리
-cleanup_local_files() {
-    log_cleanup "로컬 파일 정리 중..."
-    
-    # 로그 파일 정리
-    if [[ -d "$SCRIPT_DIR/logs" ]]; then
-        rm -rf "$SCRIPT_DIR/logs"/* 2>/dev/null || true
-        log_info "로그 파일 정리 완료"
-    fi
-    
-    # 임시 파일 정리
-    rm -f "$SCRIPT_DIR"/*.log "$SCRIPT_DIR"/*.tmp 2>/dev/null || true
-    
-    log_success "로컬 파일 정리 완료"
 }
 
 # 최종 검증
 verify_cleanup() {
-    log_info "🔍 정리 상태 검증 중..."
+    log_info "🔍 최종 정리 상태 검증 중..."
+    local issues_found=0
     
-    # EC2 인스턴스 확인
-    local running_instances=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending" --query 'Reservations[*].Instances[*].InstanceId' --output text)
+    # 1. EC2 인스턴스
+    local running_instances=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text)
     if [[ -n "$running_instances" ]]; then
-        log_warning "아직 실행 중인 EC2 인스턴스가 있습니다: $running_instances"
+        log_warning "남은 EC2 인스턴스: $running_instances"
+        ((issues_found++))
     fi
     
-    # EBS 볼륨 확인
-    local volumes=$(aws ec2 describe-volumes --filters "Name=tag:Project,Values=LifeBit" --query 'Volumes[*].VolumeId' --output text)
-    if [[ -n "$volumes" ]]; then
-        log_warning "아직 남아있는 EBS 볼륨이 있습니다: $volumes"
+    # 2. VPC
+    local vpcs=$(aws ec2 describe-vpcs --filters "Name=tag:Project,Values=LifeBit" --query 'Vpcs[*].VpcId' --output text)
+    if [[ -n "$vpcs" ]]; then
+        log_warning "남은 VPC: $vpcs"
+        ((issues_found++))
     fi
     
-    # S3 버킷 확인
+    # 3. 키 페어
+    local key_pairs=$(aws ec2 describe-key-pairs --query 'KeyPairs[?contains(KeyName, `lifebit`)].KeyName' --output text)
+    if [[ -n "$key_pairs" ]]; then
+        log_warning "남은 키 페어: $key_pairs"
+        ((issues_found++))
+    fi
+
+    # 4. S3 버킷
     local s3_buckets=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'lifebit')].Name" --output text)
     if [[ -n "$s3_buckets" ]]; then
-        log_warning "아직 남아있는 S3 버킷이 있습니다: $s3_buckets"
+        log_warning "남은 S3 버킷: $s3_buckets"
+        ((issues_found++))
+    fi
+
+    # 5. IAM 역할
+    local iam_roles=$(aws iam list-roles --query "Roles[?contains(RoleName, 'LifeBit') || contains(RoleName, 'lifebit')].RoleName" --output text)
+     if [[ -n "$iam_roles" ]]; then
+        log_warning "남은 IAM 역할: $iam_roles"
+        ((issues_found++))
     fi
     
-    log_success "정리 상태 검증 완료"
+    # 종합 결과
+    if (( issues_found > 0 )); then
+        log_error "⚠️  $issues_found 종류의 리소스가 삭제되지 않았습니다. AWS 콘솔에서 수동으로 확인 및 삭제해주세요."
+        exit 1
+    else
+        log_success "✅ 모든 주요 AWS 리소스가 깔끔하게 정리되었습니다!"
+    fi
 }
 
 # 메인 실행
 main() {
-    log_info "🍃 LifeBit AWS 완전 삭제 스크립트 시작..."
+    log_info "🍃 LifeBit AWS 완전 삭제 스크립트 시작 (v2.0)"
     
-    # 사전 검사
-    check_aws_cli
     load_env
+    check_dependencies
     confirm_deletion
     
-    # 리소스 정리 순서 (의존성 고려)
-    cleanup_cloudformation
+    # 리소스 정리 순서 (의존성 높은 순서 -> 낮은 순서)
+    
+    # 1. 애플리케이션 및 컴퓨팅 리소스 (VPC 내부에서 실행)
+    log_info "--- 1단계: 애플리케이션 및 컴퓨팅 리소스 정리 ---"
+    cleanup_autoscaling
     cleanup_ecs
     cleanup_lambda
     cleanup_api_gateway
     cleanup_load_balancers
-    cleanup_rds
-    cleanup_autoscaling
-    cleanup_ec2
-    cleanup_networking
+    cleanup_rds # DB 삭제 및 대기
+    cleanup_ec2 # 인스턴스 종료 및 대기
+    
+    # 2. Terraform으로 생성된 핵심 인프라 삭제 (VPC, Subnet, IGW, SG, KeyPair 등)
+    log_info "--- 2단계: Terraform으로 인프라 삭제 ---"
+    terraform_destroy
+    
+    # 3. Terraform으로 삭제되지 않았을 수 있는 리소스들 정리 (Fallback)
+    log_info "--- 3단계: 남은 리소스 정리 (Fallback) ---"
+    cleanup_networking    # 남은 VPC 관련 리소스
+    cleanup_key_pairs     # 남은 키 페어 (Terraform 실패 대비)
     cleanup_s3
     cleanup_ecr
     cleanup_cloudwatch
     cleanup_route53
-    cleanup_iam
+    cleanup_iam           # 다른 리소스가 모두 삭제된 후 마지막에 정리
     
-    # Terraform 정리
-    terraform_destroy
-    cleanup_terraform
+    # 4. 로컬 배포 파일 정리
+    log_info "--- 4단계: 로컬 배포 파일 정리 ---"
+    cleanup_deployment_files
     
-    # Docker 정리
-    cleanup_docker_compose
-    cleanup_lifebit_docker
-    
-    # 로컬 파일 정리
-    cleanup_local_files
-    
-    # 최종 검증
+    # 5. 최종 검증
+    log_info "--- 5단계: 최종 검증 ---"
     verify_cleanup
     
     log_success "🎉 LifeBit AWS 완전 삭제 완료!"
-    log_info "💡 AWS 콘솔에서 추가로 확인하시기 바랍니다."
-    log_info "💡 요금 청구를 완전히 중단하려면 AWS 계정 자체를 닫는 것을 고려해보세요."
+    log_info "💡 AWS 콘솔에서 최종 확인하는 것을 권장합니다."
 }
 
 # 스크립트 실행

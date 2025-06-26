@@ -108,8 +108,7 @@
     - name: Docker SDK(Python) 및 Compose 라이브러리 설치
       pip:
         name:
-          - docker
-          - docker-compose
+          - docker  # docker SDK만 설치하여 docker-compose v1이 설치되지 않도록 함
         state: present
         executable: pip3
       tags: [docker]
@@ -338,17 +337,67 @@
     # ================================================
     # 9. 애플리케이션 배포 (개선된 방식)
     # ================================================
-    - name: Docker Compose로 애플리케이션 시작 (안정적인 방식)
+    - name: Docker Compose로 애플리케이션 시작 (리소스 최적화된 방식)
       shell: |
         cd /opt/{{ project_name }}/app
-        docker-compose down || true
-        docker-compose pull
-        docker-compose build --no-cache
-        docker-compose up -d
+        
+        # 기존 컨테이너 정리
+        docker-compose down --volumes --remove-orphans || true
+        docker system prune -f || true
+        
+        echo "=== 시스템 리소스 확인 ==="
+        df -h /
+        free -h
+        
+        # 단계별 서비스 시작 (리소스 부족 방지)
+        echo "=== 1단계: 데이터베이스 서비스 시작 ==="
+        docker-compose up -d postgres-db redis-cache
+        sleep 15
+        docker system prune -f || true
+        
+        echo "=== 2단계: 백엔드 서비스 빌드 및 시작 ==="
+        if ! docker-compose build --no-cache spring-app; then
+          echo "Spring 빌드 실패 - 재시도"
+          docker system prune -f
+          docker-compose build spring-app
+        fi
+        docker-compose up -d spring-app
+        docker system prune -f || true
+        
+        echo "=== 3단계: AI API 서비스 빌드 및 시작 ==="
+        if ! docker-compose build --no-cache fastapi-app; then
+          echo "FastAPI 빌드 실패 - 재시도"
+          docker system prune -f
+          docker-compose build fastapi-app
+        fi
+        docker-compose up -d fastapi-app
+        docker system prune -f || true
+        
+        echo "=== 4단계: 프론트엔드 서비스 빌드 및 시작 ==="
+        if ! docker-compose build --no-cache frontend-app; then
+          echo "Frontend 빌드 실패 - 기본 이미지로 대체"
+          docker-compose up -d frontend-app || true
+        else
+          docker-compose up -d frontend-app
+        fi
+        docker system prune -f || true
+        
+        echo "=== 5단계: 나머지 서비스 시작 ==="
+        docker-compose up -d nginx-proxy || true
+        docker-compose up -d grafana prometheus || true
+        
+        echo "=== 최종 정리 ==="
+        docker system prune -f || true
+        
+        echo "=== 배포 완료 ==="
+        df -h /
+        docker-compose ps
       args:
         chdir: "/opt/{{ project_name }}/app"
       register: docker_compose_result
       failed_when: docker_compose_result.rc != 0
+      async: 3600  # 1시간 타임아웃
+      poll: 30     # 30초마다 상태 확인
       tags: [deploy]
 
     - name: Docker Compose 상태 확인

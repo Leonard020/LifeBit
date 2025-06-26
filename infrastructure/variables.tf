@@ -60,13 +60,25 @@ variable "public_subnet_cidrs" {
 
 # EC2 설정
 variable "instance_type" {
-  description = "EC2 instance type (t3.small for 2GB RAM)"
+  description = "EC2 instance type (t3.small for 2GB RAM - 비용 최적화)"
   type        = string
   default     = "t3.small"
 
   validation {
     condition     = can(regex("^t3\\.", var.instance_type))
     error_message = "Instance type should be t3 series for cost optimization."
+  }
+}
+
+# EBS 볼륨 크기 (Docker 빌드 공간 확보)
+variable "root_volume_size" {
+  description = "Root EBS volume size in GB (Docker 빌드를 위해 증가)"
+  type        = number
+  default     = 30
+  
+  validation {
+    condition     = var.root_volume_size >= 20 && var.root_volume_size <= 100
+    error_message = "Root volume size must be between 20 and 100 GB."
   }
 }
 
