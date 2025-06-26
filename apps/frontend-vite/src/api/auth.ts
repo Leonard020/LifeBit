@@ -369,6 +369,17 @@ export const useMealLogs = (userId: string, period: string = 'month') => {
         });
         
         console.log('✅ [useMealLogs] API 호출 성공:', response.data);
+        
+        // 각 meal log 항목의 구조를 자세히 확인
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          console.log('🔍 [useMealLogs] 첫 번째 meal log 상세 구조:', response.data[0]);
+          console.log('🔍 [useMealLogs] food_item 존재 여부:', !!response.data[0].food_item);
+          if (response.data[0].food_item) {
+            console.log('🔍 [useMealLogs] food_item 내용:', response.data[0].food_item);
+          }
+          console.log('🔍 [useMealLogs] 전체 키 목록:', Object.keys(response.data[0]));
+        }
+        
         return response.data;
       } catch (error) {
         console.error('❌ [useMealLogs] API 호출 실패:', {
