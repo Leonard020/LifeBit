@@ -14,6 +14,7 @@ from datetime import date, datetime
 from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, ExerciseRecord
 import models
 from note_routes import router as note_router  # ✅ 상단에 추가
+import requests
 
 # 🔧 Docker 환경 감지 및 데이터베이스 설정 오버라이드
 def setup_database():
@@ -75,6 +76,9 @@ print(f"[ENV] KAKAO_CLIENT_ID: {os.getenv('KAKAO_CLIENT_ID')}")
 print(f"[ENV] GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
 print(f"[ENV] KAKAO_REDIRECT_URI: {os.getenv('KAKAO_REDIRECT_URI')}")
 print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
+
+# Food Data API constants
+# (Remove all FOOD_STD_API_* and FOOD_PROC_API_* variables and related prints)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -885,7 +889,7 @@ async def chat(request: ChatRequest):
                                 parsed_data = [parsed_data]
                         else:
                             parsed_data = []
-
+                    
                     if (response_type == "confirmation" and 
                         request.message.strip().lower() in ["네", "yes", "y"] and 
                         request.current_data and 
@@ -993,124 +997,37 @@ def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
     db.refresh(exercise)
     return {"message": "운동 기록 저장 성공", "id": exercise.exercise_session_id}
 
-# 🍽️ 식단 기록 저장 (Chat 기반)
-class DietRecord(BaseModel):
-    user_id: int
-    food_name: str
-    amount: str  # 섭취량 (예: "5개", "100g", "1그릇")
-    meal_time: str  # "아침|점심|저녁|야식|간식"
+# 🍽️ 식단 기록 저장 (Chat 기반) - COMMENTED OUT: Use note_routes.py instead
+# class DietRecord(BaseModel):
+#     user_id: int
+#     food_name: str
+#     amount: str  # 섭취량 (예: "5개", "100g", "1그릇")
+#     meal_time: str  # "아침|점심|저녁|야식|간식"
 
-@app.post("/api/py/note/diet")
-def save_diet_record(data: DietRecord, db: Session = Depends(get_db)):
-    """
-    사용자 요구사항에 맞는 식단 기록 저장:
-    1. food_name이 food_items에 없으면 GPT로 자동 생성
-    2. food_item에 저장 후 다시 검색하여 food_item_id 획득
-    3. meal_logs에 저장 (amount → quantity, meal_time 매핑)
-    """
+def estimate_grams_with_gpt(food_name: str, amount: str) -> float:
     try:
-        print(f"[DEBUG] 식단 기록 저장 시작:")
-        print(f"  사용자 ID: {data.user_id}")
-        print(f"  음식명: {data.food_name}")
-        print(f"  섭취량: {data.amount}")
-        print(f"  식사시간: {data.meal_time}")
-        
-        # 🔍 1단계: food_items 테이블에서 음식 검색
-        food_item = db.query(models.FoodItem).filter(
-            models.FoodItem.name == data.food_name
-        ).first()
-        
-        if not food_item:
-            print(f"[INFO] '{data.food_name}' 음식이 DB에 없음 → GPT로 자동 생성")
-            
-            # 🤖 2단계: GPT로 100g 기준 영양정보 계산
-            nutrition_data = calculate_nutrition_from_gpt_for_100g(data.food_name)
-            
-            # 💾 3단계: 새로운 food_item 생성
-            food_item = models.FoodItem(
-                name=data.food_name,
-                serving_size=100.0,  # 기본 100g
-                calories=nutrition_data['calories'],
-                carbs=nutrition_data['carbs'], 
-                protein=nutrition_data['protein'],
-                fat=nutrition_data['fat']
-            )
-            db.add(food_item)
-            db.commit()
-            db.refresh(food_item)
-            print(f"[SUCCESS] 새로운 음식 생성 완료 - food_item_id: {food_item.food_item_id}")
-        else:
-            print(f"[INFO] 기존 음식 발견 - food_item_id: {food_item.food_item_id}")
-        
-        # 🔄 4단계: food_item에서 다시 검색하여 확실한 food_item_id 획득
-        confirmed_food_item = db.query(models.FoodItem).filter(
-            models.FoodItem.name == data.food_name
-        ).first()
-        
-        if not confirmed_food_item:
-            raise HTTPException(status_code=500, detail="음식 아이템 생성/검색 실패")
-        
-        # 📊 5단계: 사용자 섭취량 기준 영양정보 계산 (GPT 활용)
-        user_nutrition = calculate_nutrition_from_gpt(data.food_name, data.amount)
-        
-        # 🗃️ 6단계: meal_logs에 최종 저장
-        # amount → quantity 변환 (숫자 추출)
-        import re
-        quantity_match = re.findall(r'[\d.]+', data.amount)
-        quantity = float(quantity_match[0]) if quantity_match else 1.0
-        
-        # meal_time 매핑 (한글 → 영어)
-        meal_time_mapping = {
-            "아침": "breakfast",
-            "점심": "lunch", 
-            "저녁": "dinner",
-            "야식": "midnight",
-            "간식": "snack"
-        }
-        meal_time_eng = meal_time_mapping.get(data.meal_time, data.meal_time)
-        
-        meal_log = models.MealLog(
-            user_id=data.user_id,
-            food_item_id=confirmed_food_item.food_item_id,  # 확실한 food_item_id 사용
-            quantity=quantity,  # amount → quantity 변환
-            meal_time=meal_time_eng,  # 한글 → 영어 변환
-            log_date=date.today(),
-            calories=user_nutrition.get('calories'),
-            carbs=user_nutrition.get('carbs'),
-            protein=user_nutrition.get('protein'),
-            fat=user_nutrition.get('fat')
+        prompt = (
+            f"{food_name} {amount}는(은) 몇 g입니까? "
+            f"예시: 1개=30g이면 2개=60g. 숫자만 답변하세요."
         )
-        
-        db.add(meal_log)
-        db.commit() 
-        db.refresh(meal_log)
-        
-        print(f"[SUCCESS] 식단 기록 저장 완료:")
-        print(f"  meal_log_id: {meal_log.meal_log_id}")
-        print(f"  food_item_id: {meal_log.food_item_id}")
-        print(f"  quantity: {meal_log.quantity}")
-        print(f"  meal_time: {meal_log.meal_time}")
-        print(f"  영양정보 - 칼로리: {meal_log.calories}kcal")
-        
-        return {
-            "message": "식단 기록 저장 성공",
-            "meal_log_id": meal_log.meal_log_id,
-            "food_item_id": meal_log.food_item_id,
-            "food_name": data.food_name,
-            "quantity": float(meal_log.quantity),
-            "meal_time": meal_log.meal_time,
-            "nutrition": {
-                "calories": float(meal_log.calories) if meal_log.calories else None,
-                "carbs": float(meal_log.carbs) if meal_log.carbs else None,
-                "protein": float(meal_log.protein) if meal_log.protein else None,
-                "fat": float(meal_log.fat) if meal_log.fat else None
-            }
-        }
-        
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=20
+        )
+        result = response.choices[0].message["content"].strip()
+        print(f"[DEBUG] GPT raw response for grams: {result}")
+        grams = float(''.join(filter(lambda c: c.isdigit() or c == '.', result)))
+        print(f"[DEBUG] GPT grams estimate for {food_name} {amount}: {grams}")
+        return grams if grams > 0 else 100
     except Exception as e:
-        print(f"[ERROR] 식단 기록 저장 실패: {e}")
-        raise HTTPException(status_code=500, detail=f"식단 기록 저장 실패: {e}")
+        print(f"[ERROR] GPT grams estimate failed: {e}")
+        return 100
 
+# COMMENTED OUT: Use /api/py/note/diet from note_routes.py instead
+# @app.post("/api/py/note/diet")
+# def save_diet_record(data: DietRecord, db: Session = Depends(get_db)):
 
 # ✅ 오늘 날짜 운동 기록 조회
 @app.get("/api/py/note/exercise/daily", response_model=list[DailyExerciseRecord])
@@ -1253,12 +1170,31 @@ def create_food_item_from_gpt(food_name: str, db: Session = Depends(get_db)):
         print(f"[ERROR] 음식 아이템 생성 실패: {e}")
         raise HTTPException(status_code=500, detail=f"음식 아이템 생성 실패: {e}")
 
-# GPT 기반 100g 기준 영양소 계산 함수 (새로운 food_item 생성용)
+# Food name normalization helper
+FOOD_NAME_SYNONYMS = {
+    '토스트': '식빵',
+    '계란후라이': '계란',
+    '프렌치프라이': '감자튀김',
+    '후라이드치킨': '치킨',
+    '오렌지주스': '오렌지',
+    '햄버거': '햄버거',  # can add more mappings as needed
+    '삶은 계란': '계란',
+    '계란찜': '계란',
+    '계란말이': '계란',
+    '감자튀김': '감자튀김',
+    '식빵': '식빵',
+}
+
+def normalize_food_name(food_name: str) -> str:
+    for key, value in FOOD_NAME_SYNONYMS.items():
+        if key in food_name:
+            return value
+    return food_name
+
+# Remove get_best_food_api_search_term and fetch_nutrition_from_public_api
+
 def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
-    """
-    GPT를 사용하여 100g 기준 영양정보를 계산합니다.
-    food_items 테이블에 저장하기 위한 표준화된 영양정보를 제공합니다.
-    """
+    # Only use GPT to generate nutrition info
     try:
         prompt = f"""
 다음 음식의 100g 기준 영양 정보를 정확히 계산해주세요.
@@ -1266,7 +1202,7 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
 음식명: {food_name}
 기준량: 100g
 
-일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
+일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 답변해주세요:
 {{
   "calories": 100g당_칼로리(kcal),
   "carbs": 100g당_탄수화물(g),
@@ -1276,29 +1212,18 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
 
 값은 소수점 첫째자리까지 반올림하여 제공해주세요.
 """
-
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200
         )
-        
         result = response.choices[0].message["content"].strip()
         nutrition_data = json.loads(result)
-        
-        print(f"[DEBUG] 100g 기준 영양소 계산 완료:")
-        print(f"  음식명: {food_name}")
-        print(f"  칼로리: {nutrition_data['calories']}kcal/100g")
-        print(f"  탄수화물: {nutrition_data['carbs']}g/100g")
-        print(f"  단백질: {nutrition_data['protein']}g/100g")
-        print(f"  지방: {nutrition_data['fat']}g/100g")
-        
+        print(f"[GPT] '{food_name}' 100g 기준 영양소: {nutrition_data}")
         return nutrition_data
-        
     except Exception as e:
         print(f"[ERROR] GPT 100g 영양소 계산 실패: {e}")
-        # 기본값 반환 (일반적인 건과일 기준)
         return {
             "calories": 250.0,
             "carbs": 60.0,
@@ -1306,12 +1231,8 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
             "fat": 1.0
         }
 
-# GPT 기반 영양소 계산 함수
 def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
-    """
-    GPT를 사용하여 음식명과 섭취량을 기반으로 영양소를 계산합니다.
-    하드코딩된 DB 대신 GPT의 영양학 지식을 활용합니다.
-    """
+    # Only use GPT to generate nutrition info
     try:
         prompt = f"""
 다음 음식의 영양 정보를 정확히 계산해주세요.
@@ -1319,7 +1240,7 @@ def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
 음식명: {food_name}
 섭취량: {amount}
 
-일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
+일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 답변해주세요:
 {{
   "calories": 칼로리(kcal),
   "carbs": 탄수화물(g),
@@ -1329,31 +1250,18 @@ def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
 
 값은 소수점 첫째자리까지 반올림하여 제공해주세요.
 """
-
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200
         )
-        
         result = response.choices[0].message["content"].strip()
+        print(f"[GPT] '{food_name}' 섭취량 '{amount}' 기준 영양소: {result}")
         nutrition_data = json.loads(result)
-        
-        # 디버그 콘솔 출력 (식단 기록용)
-        print(f"[DEBUG] 영양소 계산 완료:")
-        print(f"  음식명: {food_name}")
-        print(f"  섭취량: {amount}")
-        print(f"  칼로리: {nutrition_data['calories']}kcal")
-        print(f"  탄수화물: {nutrition_data['carbs']}g")
-        print(f"  단백질: {nutrition_data['protein']}g")
-        print(f"  지방: {nutrition_data['fat']}g")
-        
         return nutrition_data
-        
     except Exception as e:
         print(f"[ERROR] GPT 영양소 계산 실패: {e}")
-        # 기본값 반환
         return {
             "calories": 100.0,
             "carbs": 20.0,
