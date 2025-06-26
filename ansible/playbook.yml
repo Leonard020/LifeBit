@@ -268,18 +268,82 @@
       tags: [deploy]
 
     # ================================================
-    # 8. Docker Compose 실행
+    # 8. Docker 이미지 순차 빌드 및 실행 (메모리 최적화)
     # ================================================
-    - name: Docker Compose로 애플리케이션 빌드 및 실행
+
+    - name: Docker 베이스 이미지 다운로드 (pull)
       shell: |
         set -e
         cd /opt/{{ project_name }}
+        echo "--- 베이스 이미지를 다운로드합니다(pull) ---"
+        docker-compose pull
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
 
-        echo "--- Docker 애플리케이션을 빌드하고 시작합니다. ---"
-        docker-compose up -d --build --remove-orphans
-        
-        echo "--- 배포 완료. 30초 후 서비스 상태 확인 ---"
-        sleep 30
+    - name: "1단계: Spring Boot 이미지 빌드"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- Spring 이미지 빌드 ---"
+        docker-compose build --no-cache spring-app
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 정리 (Spring 빌드 후)
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: "2단계: FastAPI 이미지 빌드"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- FastAPI 이미지 빌드 ---"
+        docker-compose build --no-cache fastapi-app
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 정리 (FastAPI 빌드 후)
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: "3단계: Frontend 이미지 빌드 (옵션)"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- Frontend 이미지 빌드 ---"
+        docker-compose build --no-cache frontend-app || true  # 메모리 부족 시 무시
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 정리 (Frontend 빌드 후)
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: "4단계: Nginx Proxy 이미지 빌드 (옵션)"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- Nginx 이미지 빌드 ---"
+        docker-compose build --no-cache nginx-proxy || true
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 최종 정리
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: Docker Compose로 컨테이너 실행 (이미지 빌드 없이)
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- 컨테이너 실행 ---"
+        docker-compose up -d --remove-orphans
+        echo "--- 컨테이너 상태 ---"
         docker-compose ps
       args:
         chdir: "/opt/{{ project_name }}"
