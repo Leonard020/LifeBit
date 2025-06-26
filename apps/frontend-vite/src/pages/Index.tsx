@@ -15,9 +15,8 @@ import {
 import { safeConvertMealTime } from '../utils/mealTimeConverter';
 import { getUserIdFromToken, getToken } from '@/utils/auth';
 import { useAuth } from '@/AuthContext';
-import { searchFoodItems } from '@/api/authApi';
 import { useNavigate } from 'react-router-dom';
-import { createFoodItemFromGPT, type NutritionData, parseAmountToGrams } from '@/utils/nutritionUtils';
+import { estimateGramsWithGPT } from '@/utils/nutritionUtils';
 
 
 
@@ -369,43 +368,49 @@ const Index = () => {
           continue;
         }
         try {
-          let foodItemId = dietData.food_item_id || dietData.foodItemId;
-          if (!foodItemId && dietData.food_name) {
-            const searchResults = await searchFoodItems(dietData.food_name);
-            if (searchResults && searchResults.length > 0) {
-              foodItemId = searchResults[0].foodItemId;
-            } else {
-              const createdFoodItemId = await createFoodItemFromGPT(dietData.food_name);
-              if (createdFoodItemId) {
-                foodItemId = createdFoodItemId;
-                toast({ title: "새로운 음식 추가 완료", description: `"${dietData.food_name}"이 GPT 분석으로 자동 추가되었습니다.` });
-              } else {
-                toast({ title: "음식 정보 생성 실패", description: `"${dietData.food_name}"의 정보를 생성할 수 없습니다.`, variant: "destructive" });
-                continue;
-              }
-            }
+          // Use GPT to estimate grams for the amount before saving
+          let grams = 100;
+          if (!String(dietData.amount).includes('g') && !String(dietData.amount).includes('그램')) {
+            grams = await estimateGramsWithGPT(dietData.food_name, String(dietData.amount));
+            console.log('[DEBUG] GPT grams estimate:', grams, 'for', dietData.food_name, dietData.amount);
+          } else {
+            grams = parseFloat(String(dietData.amount).replace(/[^0-9.]/g, '')) || 100;
           }
-          const englishMealTime = safeConvertMealTime(dietData.meal_time);
-          const response = await fetch('/api/diet/record', {
+          
+          // Convert meal_time to English format
+          const mealTimeMapping = {
+            "아침": "breakfast",
+            "점심": "lunch", 
+            "저녁": "dinner",
+            "야식": "midnight",
+            "간식": "snack"
+          };
+          const mealTimeEng = mealTimeMapping[dietData.meal_time] || dietData.meal_time;
+          
+          // Save diet record using the correct FastAPI endpoint (note_routes.py)
+          const response = await fetch('/api/py/note/diet', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-              food_item_id: foodItemId,
-              quantity: parseAmountToGrams(String(dietData.amount), dietData.food_name),
-              meal_time: englishMealTime,
-              input_source: "TYPING",
-              confidence_score: dietData.confidence_score || 1.0,
-              validation_status: "VALIDATED"
+              user_id: getUserIdFromToken(),
+              food_name: dietData.food_name,
+              quantity: grams,  // Use estimated grams as quantity
+              meal_time: mealTimeEng,  // Use English meal time
+              log_date: new Date().toISOString().split('T')[0]  // Today's date
             })
           });
-          if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
-          await response.json();
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`서버 응답 오류: ${response.status} - ${errorText}`);
+          }
+          const result = await response.json();
+          console.log('[식단기록] FastAPI 저장 성공:', result);
         } catch (err) {
           toast({ title: '저장 오류', description: '식단 데이터를 저장하지 못했습니다.', variant: 'destructive' });
-          console.error('[식단기록] Spring Boot API 저장 실패:', err);
+          console.error('[식단기록] FastAPI 저장 실패:', err);
         }
       }
       toast({ title: '기록 완료', description: '식단이 성공적으로 저장되었습니다.' });
