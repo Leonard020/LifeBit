@@ -15,52 +15,16 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession, type UpdateDietRequest, type DietLogDTO, type DietNutritionDTO, type FoodItem, type DietRecordRequest, type ApiErrorResponse } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
 import type { TooltipProps } from 'recharts';
 import { useQueryClient } from '@tanstack/react-query';
 
-// 백엔드 API 응답 타입 정의
-interface DietLogDTO {
-  id: number;
-  userId: number;
-  foodItemId: number;
-  foodName: string;
-  quantity: number;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  logDate: string;
-  unit: string;
-  mealTime?: string; // ENUM: breakfast, lunch, dinner, snack
-  inputSource?: string; // ENUM: VOICE, TYPING
-  confidenceScore?: number;
-  originalAudioPath?: string;
-  validationStatus?: string; // ENUM: PENDING, VALIDATED, REJECTED
-  validationNotes?: string;
-  createdAt?: string;
-}
 
-interface DietNutritionDTO {
-  name: string;
-  target: number;
-  current: number;
-  unit: string;
-  percentage: number;
-}
 
-interface FoodItem {
-  foodItemId: number;
-  name: string;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  servingSize: number;
-}
+
 
 const Note = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -389,7 +353,7 @@ const Note = () => {
         return;
       }
 
-      const request: any = {
+      const request: DietRecordRequest = {
         quantity: parseFloat(quantity),
         meal_time: mealTime,
         unit: 'g',
@@ -427,8 +391,9 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      const apiError = error as ApiErrorResponse;
+      if (apiError?.response?.status === 403) {
         toast({
           title: "권한 오류",
           description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
@@ -794,31 +759,43 @@ const Note = () => {
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
     setIsUpdatingDiet(true);
+  
     try {
-      const request: any = {
-        userId: getUserIdFromToken(), // PUT에는 반드시 포함
+      const userId = getUserIdFromToken();
+      if (!userId) throw new Error("User not found");
+  
+      const request: UpdateDietRequest = {
+        userId,
         quantity: editFormData.quantity,
         mealTime: editFormData.mealTime,
         unit: 'g',
         logDate: selectedDate.toISOString().split('T')[0],
         inputSource: 'TYPING',
       };
+  
       if (editFormData.foodItemId) {
         request.foodItemId = editFormData.foodItemId;
       } else {
-        request.foodName = editFormData.foodName;
-        request.calories = editFormData.calories;
-        request.carbs = editFormData.carbs;
-        request.protein = editFormData.protein;
-        request.fat = editFormData.fat;
+        Object.assign(request, {
+          foodName: editFormData.foodName,
+          calories: editFormData.calories,
+          carbs: editFormData.carbs,
+          protein: editFormData.protein,
+          fat: editFormData.fat,
+        });
       }
+  
       const updatedRecord = await updateDietRecord(editingDietLog.id, request);
+  
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
+  
       await fetchCalendarRecords();
+  
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
+  
       toast({
         title: "식단이 수정되었습니다.",
         description: "식단 기록이 성공적으로 업데이트되었습니다.",
