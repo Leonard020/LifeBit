@@ -25,20 +25,26 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
 }) => {
   const [selectedPeriod, setSelectedPeriod] = useState<'일간' | '주간' | '월간'>('일간');
   
-  const { data: healthRecords } = useHealthRecords(userId, 'year'); // 더 많은 데이터 조회
+  const { data: healthRecords } = useHealthRecords(userId, 'year');
   const { data: userGoals } = useUserGoals(userId);
 
   // 체중 데이터 계산
   const weightData = useMemo(() => {
     const healthRecordsData = healthRecords?.data || healthRecords || [];
     
+    // 가장 최근 체중 찾기
+    const latestWeight = healthRecordsData.length > 0 
+      ? healthRecordsData[healthRecordsData.length - 1].weight || 0
+      : 0;
+
     if (!Array.isArray(healthRecordsData) || healthRecordsData.length === 0) {
       return {
-        current: 0,
-        target: userGoals?.data?.weight_target || 70,
+        current: latestWeight,
+        target: userGoals?.data?.weight_target || latestWeight || 70,
         change: 0,
         trend: 'stable' as 'up' | 'down' | 'stable',
-        weeklyData: [],
+        weeklyData: Array(7).fill(latestWeight),
+        monthlyData: Array(7).fill(latestWeight),
         weights: [],
         hasData: false
       };
@@ -54,11 +60,12 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
 
     if (weights.length === 0) {
       return {
-        current: 0,
-        target: userGoals?.data?.weight_target || 70,
+        current: latestWeight,
+        target: userGoals?.data?.weight_target || latestWeight || 70,
         change: 0,
         trend: 'stable' as 'up' | 'down' | 'stable',
-        weeklyData: [],
+        weeklyData: Array(7).fill(latestWeight),
+        monthlyData: Array(7).fill(latestWeight),
         weights: [],
         hasData: false
       };
@@ -75,24 +82,71 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
     // 최근 7일 데이터 생성
     const today = new Date();
     const weeklyData = [];
+    const weeklyDates = [];
+    
     for (let i = 6; i >= 0; i--) {
       const targetDate = new Date(today);
       targetDate.setDate(targetDate.getDate() - i);
+      weeklyDates.push(new Date(targetDate));
       
-      // 해당 날짜에 가장 가까운 체중 데이터 찾기
       const dateWeight = weights.find(w => {
         const weightDate = w.date;
         return weightDate.toDateString() === targetDate.toDateString();
       });
       
-      if (dateWeight) {
-        weeklyData.push(dateWeight.weight);
-      } else if (weeklyData.length > 0) {
-        // 이전 데이터가 있으면 마지막 값 사용
-        weeklyData.push(weeklyData[weeklyData.length - 1]);
+      weeklyData.push(dateWeight ? dateWeight.weight : latestWeight);
+    }
+
+    // 최근 7주 데이터 생성
+    const weeklyAverages = [];
+    for (let i = 6; i >= 0; i--) {
+      const weekEndDate = new Date(today);
+      weekEndDate.setDate(weekEndDate.getDate() - (i * 7));
+      const weekStartDate = new Date(weekEndDate);
+      weekStartDate.setDate(weekStartDate.getDate() - 6);
+
+      const weekWeights = weights.filter(w => 
+        w.date >= weekStartDate && w.date <= weekEndDate
+      ).map(w => w.weight);
+
+      if (weekWeights.length > 0) {
+        const avg = weekWeights.reduce((sum, w) => sum + w, 0) / weekWeights.length;
+        weeklyAverages.push({
+          weight: avg,
+          count: weekWeights.length
+        });
       } else {
-        // 첫 번째 데이터가 없으면 전체 데이터의 첫 번째 값 사용
-        weeklyData.push(weights[0].weight);
+        weeklyAverages.push({
+          weight: latestWeight,
+          count: 0
+        });
+      }
+    }
+
+    // 최근 7개월 데이터 생성
+    const monthlyAverages = [];
+    for (let i = 6; i >= 0; i--) {
+      const monthEndDate = new Date(today);
+      monthEndDate.setMonth(monthEndDate.getMonth() - i);
+      const monthStartDate = new Date(monthEndDate);
+      monthStartDate.setDate(1);
+
+      const monthWeights = weights.filter(w =>
+        w.date.getMonth() === monthEndDate.getMonth() &&
+        w.date.getFullYear() === monthEndDate.getFullYear()
+      ).map(w => w.weight);
+
+      if (monthWeights.length > 0) {
+        const avg = monthWeights.reduce((sum, w) => sum + w, 0) / monthWeights.length;
+        monthlyAverages.push({
+          weight: avg,
+          count: monthWeights.length
+        });
+      } else {
+        monthlyAverages.push({
+          weight: latestWeight,
+          count: 0
+        });
       }
     }
 
@@ -102,6 +156,8 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
       change,
       trend,
       weeklyData,
+      weeklyAverages,
+      monthlyAverages,
       weights,
       hasData: true
     };
@@ -309,8 +365,8 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
                   {weightData.weeklyData.map((weight, index) => {
                     const minWeight = Math.min(...weightData.weeklyData);
                     const maxWeight = Math.max(...weightData.weeklyData);
-                    const range = maxWeight - minWeight || 1; // 0으로 나누기 방지
-                    const height = ((weight - minWeight) / range) * 80 + 20; // 20-100% 범위
+                    const range = maxWeight - minWeight || 1;
+                    const height = ((weight - minWeight) / range) * 70 + 30;
                     
                     return (
                       <div key={index} className="flex flex-col items-center gap-1">
@@ -331,7 +387,7 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
                 </div>
                 
                 {/* 추가 통계 */}
-                <div className="grid grid-cols-2 gap-4 text-center text-sm bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-3 gap-4 text-center text-sm bg-gray-50 rounded-lg p-4">
                   <div>
                     <div className="font-semibold text-gray-900">
                       {Math.min(...weightData.weeklyData).toFixed(1)}kg
@@ -344,23 +400,129 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({
                     </div>
                     <div className="text-gray-600">최근 7일 최고</div>
                   </div>
+                  <div>
+                    <div className="font-semibold text-blue-600">
+                      {weightData.weeklyData.length}회
+                    </div>
+                    <div className="text-gray-600">기록 횟수</div>
+                  </div>
                 </div>
               </div>
             </TabsContent>
 
             <TabsContent value="주간" className="mt-4">
-              <div className="text-center text-gray-500 py-8">
-                <Weight className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>주간 데이터 분석 기능을 준비 중입니다.</p>
-                <p className="text-xs mt-1">더 많은 데이터가 쌓이면 제공됩니다.</p>
+              <div className="space-y-4">
+                {/* 주간 평균 체중 막대 차트 */}
+                <div className="flex items-end justify-between h-32 px-2">
+                  {weightData.weeklyAverages.map((data, index) => {
+                    const weights = weightData.weeklyAverages.map(w => w.weight);
+                    const minWeight = Math.min(...weights);
+                    const maxWeight = Math.max(...weights);
+                    const range = maxWeight - minWeight || 1;
+                    const height = ((data.weight - minWeight) / range) * 70 + 30;
+                    
+                    return (
+                      <div key={index} className="flex flex-col items-center gap-1">
+                        <div className="text-xs text-gray-700 font-medium">
+                          {data.weight.toFixed(1)}
+                        </div>
+                        <div 
+                          className={`w-8 rounded-t-sm transition-all duration-300 relative ${
+                            data.count > 0 ? 'bg-green-400' : 'bg-gray-200'
+                          }`}
+                          style={{ height: `${height}%` }}
+                          title={`${data.weight.toFixed(1)}kg (${data.count}회 측정)`}
+                        />
+                        <div className="text-[10px] text-blue-600 font-medium">
+                          {data.count}회
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {index === 6 ? '이번 주' : `${6-index}주 전`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* 주간 통계 */}
+                <div className="grid grid-cols-3 gap-4 text-center text-sm bg-gray-50 rounded-lg p-4">
+                  <div>
+                    <div className="font-semibold text-gray-900">
+                      {Math.min(...weightData.weeklyAverages.map(w => w.weight)).toFixed(1)}kg
+                    </div>
+                    <div className="text-gray-600">최저 주간 평균</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">
+                      {Math.max(...weightData.weeklyAverages.map(w => w.weight)).toFixed(1)}kg
+                    </div>
+                    <div className="text-gray-600">최고 주간 평균</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-blue-600">
+                      {weightData.weeklyAverages.reduce((sum, w) => sum + w.count, 0)}회
+                    </div>
+                    <div className="text-gray-600">총 측정 횟수</div>
+                  </div>
+                </div>
               </div>
             </TabsContent>
 
             <TabsContent value="월간" className="mt-4">
-              <div className="text-center text-gray-500 py-8">
-                <Weight className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>월간 데이터 분석 기능을 준비 중입니다.</p>
-                <p className="text-xs mt-1">더 많은 데이터가 쌓이면 제공됩니다.</p>
+              <div className="space-y-4">
+                {/* 월간 평균 체중 막대 차트 */}
+                <div className="flex items-end justify-between h-32 px-2">
+                  {weightData.monthlyAverages.map((data, index) => {
+                    const weights = weightData.monthlyAverages.map(w => w.weight);
+                    const minWeight = Math.min(...weights);
+                    const maxWeight = Math.max(...weights);
+                    const range = maxWeight - minWeight || 1;
+                    const height = ((data.weight - minWeight) / range) * 70 + 30;
+                    
+                    return (
+                      <div key={index} className="flex flex-col items-center gap-1">
+                        <div className="text-xs text-gray-700 font-medium">
+                          {data.weight.toFixed(1)}
+                        </div>
+                        <div 
+                          className={`w-8 rounded-t-sm transition-all duration-300 relative ${
+                            data.count > 0 ? 'bg-green-400' : 'bg-gray-200'
+                          }`}
+                          style={{ height: `${height}%` }}
+                          title={`${data.weight.toFixed(1)}kg (${data.count}회 측정)`}
+                        />
+                        <div className="text-[10px] text-blue-600 font-medium">
+                          {data.count}회
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {index === 6 ? '이번 달' : `${6-index}개월 전`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* 월간 통계 */}
+                <div className="grid grid-cols-3 gap-4 text-center text-sm bg-gray-50 rounded-lg p-4">
+                  <div>
+                    <div className="font-semibold text-gray-900">
+                      {Math.min(...weightData.monthlyAverages.map(w => w.weight)).toFixed(1)}kg
+                    </div>
+                    <div className="text-gray-600">최저 월간 평균</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">
+                      {Math.max(...weightData.monthlyAverages.map(w => w.weight)).toFixed(1)}kg
+                    </div>
+                    <div className="text-gray-600">최고 월간 평균</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-blue-600">
+                      {weightData.monthlyAverages.reduce((sum, w) => sum + w.count, 0)}회
+                    </div>
+                    <div className="text-gray-600">총 측정 횟수</div>
+                  </div>
+                </div>
               </div>
             </TabsContent>
           </Tabs>

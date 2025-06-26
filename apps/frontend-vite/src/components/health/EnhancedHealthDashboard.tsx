@@ -126,7 +126,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     isLoading: nutritionLoading, 
     error: nutritionError 
   } = useDailyNutritionStats(userId);
-
+  
 
 
   // 전체 로딩 상태 계산
@@ -459,7 +459,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
             currentMonth={currentMonth}
-            onMonthChange={setCurrentMonth}
+                onMonthChange={setCurrentMonth}
           />
         </TabsContent>
       </Tabs>
