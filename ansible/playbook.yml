@@ -325,72 +325,6 @@
       tags: [database]
 
     # ================================================
-    # 10. 메모리 모니터링 및 최적화
-    # ================================================
-    - name: 메모리 모니터링 스크립트 생성
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 메모리 모니터링 스크립트
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          SWAP_USAGE=$(free | awk 'NR==3{printf "%.1f", $3*100/$2}')
-          
-          # Docker 메모리 사용량
-          DOCKER_MEMORY=$(docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}" | tail -n +2)
-          
-          # 로그 파일에 기록
-          echo "$(date): Memory Usage: ${MEMORY_USAGE}%, Swap Usage: ${SWAP_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-          
-          # 메모리 사용량이 80% 이상이면 경고
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              echo "WARNING: High memory usage detected: ${MEMORY_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # Docker 컨테이너 메모리 사용량 출력
-              echo "Docker Memory Usage:" >> /opt/{{ project_name }}/logs/memory.log
-              echo "$DOCKER_MEMORY" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # 메모리 사용량이 높은 컨테이너 재시작
-              docker stats --no-stream --format "table {{.Container}}\t{{.MemPerc}}" | awk '$2 > 50 {print $1}' | while read container; do
-                  echo "Restarting high memory usage container: $container" >> /opt/{{ project_name }}/logs/memory.log
-                  docker restart "$container" || true
-              done
-          fi
-        dest: "/opt/{{ project_name }}/memory-monitor.sh"
-        mode: '0755'
-      tags: [monitoring]
-
-    - name: 메모리 최적화 설정
-      copy:
-        content: |
-          # Docker 메모리 제한 설정
-          # /etc/docker/daemon.json
-          {
-            "default-ulimits": {
-              "nofile": {
-                "Hard": 64000,
-                "Name": "nofile",
-                "Soft": 64000
-              }
-            },
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2"
-          }
-        dest: /etc/docker/daemon.json
-      tags: [docker]
-
-    - name: Docker 서비스 재시작 (설정 적용)
-      systemd:
-        name: docker
-        state: restarted
-      tags: [docker]
-
-    # ================================================
     # 11. 헬스체크 스크립트 생성 (개선된 버전)
     # ================================================
     - name: 헬스체크 스크립트 생성 (개선된 버전)
@@ -483,9 +417,6 @@
         - name: "LifeBit 헬스체크"
           minute: "*/5"
           job: "/opt/{{ project_name }}/health-check.sh > /dev/null 2>&1"
-        - name: "메모리 모니터링"
-          minute: "*/10"
-          job: "/opt/{{ project_name }}/memory-monitor.sh > /dev/null 2>&1"
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"

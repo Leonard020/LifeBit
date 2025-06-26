@@ -118,7 +118,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
   # ================================================
   # AI API (FastAPI) - 메모리 제한 추가
@@ -164,7 +165,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/py/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
   # ================================================
   # 프론트엔드 (React + Vite)
