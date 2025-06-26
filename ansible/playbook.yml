@@ -11,6 +11,30 @@
     project_name: "lifebit"
     git_repo: "{{ git_repository_url | default('https://github.com/Hyeon6492/LifeBit.git') }}"
     
+  pre_tasks:
+    - name: 프로젝트 소스 코드를 서버로 복사 (전체)
+      ansible.builtin.synchronize:
+        src: ../../
+        dest: "/srv/{{ project_name }}"
+        delete: yes
+        recursive: yes
+        archive: no
+        checksum: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.idea"
+          - "--exclude=*.log"
+          - "--exclude=logs/"
+          - "--exclude=node_modules/"
+          - "--exclude=venv/"
+          - "--exclude=.DS_Store"
+          - "--exclude=__pycache__/"
+          - "--exclude=*.tmp"
+          - "--exclude=ansible/"
+          - "--exclude=.env"
+      delegate_to: "{{ inventory_hostname }}"
+      tags: [always]
+    
   tasks:
     # ================================================
     # 0. 방화벽 설정 (최우선 실행)
@@ -365,23 +389,17 @@
       shell: "docker system prune -f"
       tags: [deploy]
 
-    - name: Docker Compose로 컨테이너 실행 (이미지 빌드 없이)
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- 컨테이너 실행 ---"
-        docker-compose up -d --remove-orphans
-        echo "--- 컨테이너 상태 ---"
-        docker-compose ps
-      args:
-        chdir: "/opt/{{ project_name }}"
-      register: docker_compose_result
-      failed_when: docker_compose_result.rc != 0
-      tags: [deploy]
-
-    - name: Docker Compose 상태 출력
-      debug:
-        var: docker_compose_result.stdout_lines
+    - name: Deploy and run Docker containers via Docker Compose (using community.docker.docker_compose)
+      community.docker.docker_compose:
+        project_src: "/srv/{{ project_name }}"
+        files:
+          - docker-compose.local.yml
+        state: present
+        restarted: yes
+        build: yes
+        pull: yes
+        remove_orphans: yes
+      ignore_errors: yes
       tags: [deploy]
 
     # ================================================
@@ -389,9 +407,10 @@
     # ================================================
     - name: PostgreSQL 컨테이너가 준비될 때까지 대기
       wait_for:
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "127.0.0.1"
         port: 5432
-        timeout: 60
+        timeout: 120
+        delay: 10
       tags: [database]
 
     - name: LifeBit.sql 파일을 서버로 복사

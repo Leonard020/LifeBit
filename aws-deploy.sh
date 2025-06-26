@@ -180,8 +180,8 @@ check_environment() {
     log_success "AWS 인증 정보 확인 완료"
     log_info "리전: $AWS_DEFAULT_REGION"
     
-    # 네트워크 연결 테스트
-    test_network_connectivity
+    # 네트워크 연결 테스트 (일시적으로 비활성화)
+    # test_network_connectivity
     
     create_checkpoint "check_env"
 }
@@ -790,55 +790,6 @@ show_deployment_info() {
     create_checkpoint "show_info"
 }
 
-# 배포 전 AWS 리소스 정리 (개선된 버전)
-cleanup_previous_deployment() {
-    if is_step_completed "cleanup"; then
-        log_info "⏭️  리소스 정리 단계 건너뛰기 (이미 완료됨)"
-        return 0
-    fi
-    
-    log_info "이전 배포 리소스 정리 중..."
-    
-    # 선택적 정리 (사용자 확인)
-    if [[ -x "./aws-cleanup.sh" ]] && [[ "${FORCE_CLEANUP:-}" == "true" ]]; then
-        log_info "전체 리소스 정리를 자동 모드로 실행합니다..."
-        if echo "yes" | timeout 600 ./aws-cleanup.sh 2>/dev/null || log_warning "리소스 정리 중 일부 오류 발생 (계속 진행)"; then
-            log_success "전체 리소스 정리 완료"
-        fi
-    else
-        # 기본적인 정리만 수행
-        log_info "기본 정리 작업 수행 중..."
-        
-        # Terraform 상태 정리
-        if [[ -d "$SCRIPT_DIR/infrastructure" ]]; then
-            cd "$SCRIPT_DIR/infrastructure"
-            if [[ -f "terraform.tfstate" ]] && terraform show > /dev/null 2>&1; then
-                log_info "기존 Terraform 상태 발견 - 정리 중..."
-                terraform destroy \
-                    -var="aws_access_key_id=$AWS_ACCESS_KEY_ID" \
-                    -var="aws_secret_access_key=$AWS_SECRET_ACCESS_KEY" \
-                    -var="aws_region=$AWS_DEFAULT_REGION" \
-                    -auto-approve 2>/dev/null || log_warning "Terraform 정리 중 일부 오류 발생"
-            fi
-            cd "$SCRIPT_DIR"
-        fi
-        
-        # 체크포인트 정리
-        if [[ -d "$CHECKPOINT_DIR" ]]; then
-            rm -rf "$CHECKPOINT_DIR"
-            log_info "이전 체크포인트 정리 완료"
-        fi
-    fi
-    
-    # SSH known_hosts 정리
-    if [[ -f ~/.ssh/known_hosts ]]; then
-        log_info "SSH known_hosts 정리 중..."
-        sed -i.bak '/13\.124\./d; /3\.34\./d; /52\.78\./d; /54\.180\./d; /15\.164\./d; /52\.79\./d; /3\.35\./d' ~/.ssh/known_hosts 2>/dev/null || true
-    fi
-    
-    create_checkpoint "cleanup"
-}
-
 # 명령행 인수 처리
 handle_command_line_args() {
     case "${1:-}" in
@@ -846,24 +797,9 @@ handle_command_line_args() {
             log_warning "강제 모드: 모든 체크포인트를 무시하고 처음부터 시작합니다"
             clear_checkpoints
             ;;
-        --force-cleanup)
-            log_warning "강제 정리 모드: 배포 전 모든 리소스를 정리합니다"
-            export FORCE_CLEANUP=true
-            clear_checkpoints
-            ;;
         --reset)
             log_info "체크포인트를 리셋합니다"
             clear_checkpoints
-            exit 0
-            ;;
-        --cleanup-and-exit)
-            log_info "전체 정리를 실행하고 종료합니다"
-            if [[ -x "./aws-cleanup.sh" ]]; then
-                ./aws-cleanup.sh
-            else
-                log_error "aws-cleanup.sh를 찾을 수 없습니다"
-                exit 1
-            fi
             exit 0
             ;;
         --from-step)
@@ -898,9 +834,7 @@ handle_command_line_args() {
             echo ""
             echo "옵션:"
             echo "  --force                모든 체크포인트를 무시하고 처음부터 시작"
-            echo "  --force-cleanup        배포 전 모든 AWS 리소스를 강제로 정리"
             echo "  --reset                체크포인트만 리셋하고 종료"
-            echo "  --cleanup-and-exit     전체 리소스 정리 후 종료"
             echo "  --from-step STEP       지정된 단계부터 시작"
             echo "  --help, -h             이 도움말 표시"
             echo ""
@@ -918,7 +852,6 @@ handle_command_line_args() {
             echo "예시:"
             echo "  $0                     정상 배포"
             echo "  $0 --force             처음부터 강제 재배포"
-            echo "  $0 --force-cleanup     모든 리소스 정리 후 배포"
             echo "  $0 --cleanup-and-exit  리소스만 정리하고 종료"
             exit 0
             ;;
@@ -938,7 +871,6 @@ main() {
 
     # 단계별 실행
     check_environment
-    cleanup_previous_deployment
     initialize_terraform
     deploy_infrastructure
     save_ssh_key
