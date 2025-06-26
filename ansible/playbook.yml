@@ -396,9 +396,8 @@
         state: present
         restarted: yes
         build: yes
-        pull: yes
+        pull: "always"
         remove_orphans: yes
-      ignore_errors: yes
       tags: [deploy]
 
     # ================================================
