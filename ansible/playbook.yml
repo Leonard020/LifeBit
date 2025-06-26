@@ -391,79 +391,9 @@
     # ================================================
     # 11. 헬스체크 스크립트 생성 (개선된 버전)
     # ================================================
-    - name: 헬스체크 스크립트 생성 (개선된 버전)
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 헬스체크 스크립트 (개선된 버전)
-          
-          LOG_FILE="/opt/{{ project_name }}/logs/health-check.log"
-          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-          
-          # 로그 함수
-          log_message() {
-              echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
-          }
-          
-          # 시스템 서비스 확인
-          SERVICES=("docker" "nginx" "fail2ban" "node_exporter")
-          FAILED_SERVICES=()
-          
-          log_message "=== 헬스체크 시작 ==="
-          
-          for service in "${SERVICES[@]}"; do
-              if systemctl is-active --quiet "$service"; then
-                  log_message "✓ $service: 정상"
-              else
-                  log_message "✗ $service: 실패"
-                  FAILED_SERVICES+=("$service")
-              fi
-          done
-          
-          # Docker 컨테이너 상태 확인
-          log_message "=== Docker 컨테이너 상태 ==="
-          CONTAINERS=$(docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v NAMES)
-          if [ -n "$CONTAINERS" ]; then
-              echo "$CONTAINERS" | while read line; do
-                  log_message "  $line"
-              done
-          else
-              log_message "  경고: 실행 중인 컨테이너가 없습니다"
-          fi
-          
-          # 디스크 사용량 확인
-          DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
-          log_message "=== 디스크 사용량: ${DISK_USAGE}% ==="
-          if [ "$DISK_USAGE" -gt 80 ]; then
-              log_message "  경고: 디스크 사용량이 80%를 초과했습니다"
-          fi
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          log_message "=== 메모리 사용량: ${MEMORY_USAGE}% ==="
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              log_message "  경고: 메모리 사용량이 80%를 초과했습니다"
-          fi
-          
-          # 네트워크 연결 확인
-          log_message "=== 네트워크 연결 확인 ==="
-          PORTS=(3000 8080 8001 8081 8082 3001 9090 9100)
-          for port in "${PORTS[@]}"; do
-              if netstat -tlnp | grep ":$port " > /dev/null; then
-                  log_message "  ✓ 포트 $port: 열림"
-              else
-                  log_message "  ✗ 포트 $port: 닫힘"
-              fi
-          done
-          
-          # 결과 요약
-          if [ ${#FAILED_SERVICES[@]} -eq 0 ]; then
-              log_message "=== 결과: 모든 서비스가 정상입니다 ==="
-              exit 0
-          else
-              log_message "=== 결과: 실패한 서비스: ${FAILED_SERVICES[*]} ==="
-              exit 2
-          fi
+    - name: "헬스체크 스크립트 배포 (템플릿)"
+      template:
+        src: "healthcheck.sh.j2"
         dest: "/opt/{{ project_name }}/health-check.sh"
         mode: '0755'
       tags: [monitoring]
