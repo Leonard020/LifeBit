@@ -21,6 +21,20 @@ spring:
     init:
       mode: never
 
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+  health:
+    defaults:
+      enabled: true
+
 logging:
   level:
     com.lifebit: INFO
