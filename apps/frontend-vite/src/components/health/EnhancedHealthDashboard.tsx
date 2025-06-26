@@ -7,6 +7,7 @@ import { Calendar } from '../ui/calendar';
 import { WeightTrendChart } from './WeightTrendChart';
 import { BodyPartFrequencyChart } from './BodyPartFrequencyChart';
 import { ExerciseCalendarHeatmap } from './ExerciseCalendarHeatmap';
+import { ActivityCalendar } from './ActivityCalendar';
 import { HealthCharacter } from './HealthCharacter';
 import { MealCard } from './MealCard';
 import { NutritionChart } from './NutritionChart';
@@ -125,6 +126,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     isLoading: nutritionLoading, 
     error: nutritionError 
   } = useDailyNutritionStats(userId);
+
+
 
   // 전체 로딩 상태 계산
   const allLoading = healthLoading || mealLoading || exerciseLoading || goalsLoading || healthStatsLoading || heatmapLoading || nutritionLoading;
@@ -450,54 +453,14 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             period={period}
           />
           
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5" />
-                  {currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handlePrevMonth}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleNextMonth}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                month={currentMonth}
-                onMonthChange={setCurrentMonth}
-                className="rounded-md border"
-              />
-              
-              {/* 범례 */}
-              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span>먹었어요</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <span>태웠어요</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                  <span>몸무게</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span>물 섭취</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* 활동 캘린더 */}
+          <ActivityCalendar
+            userId={userId}
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            currentMonth={currentMonth}
+            onMonthChange={setCurrentMonth}
+          />
         </TabsContent>
       </Tabs>
     </div>
