@@ -845,7 +845,8 @@ const Note = () => {
         sets: sets || 1,
         reps: reps || 10,
         weight: weight || 0.0,
-        exerciseDate: formattedDate
+        exerciseDate: formattedDate,
+        bodyPart: bodyPart, // 선택한 부위(GPT 분류)도 함께 전달
       };
       await createExerciseSession(request);
       await fetchExercise();
