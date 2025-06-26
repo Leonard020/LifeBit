@@ -21,7 +21,7 @@ volumes:
 
 services:
   # ================================================
-  # 데이터베이스 (PostgreSQL) - 메모리 제한 추가
+  # 데이터베이스 (PostgreSQL) - 메모리 제한 완화
   # ================================================
   postgres-db:
     image: postgres:14-alpine
@@ -42,24 +42,24 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 800M
         reservations:
           memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }}"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
 
   # ================================================
-  # 캐시 (Redis) - 메모리 제한 추가
+  # 캐시 (Redis) - 메모리 제한 완화
   # ================================================
   redis-cache:
     image: redis:7-alpine
     container_name: lifebit-redis
     restart: unless-stopped
-    command: redis-server --requirepass {{ REDIS_PASSWORD }} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass {{ REDIS_PASSWORD }} --maxmemory 400mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
@@ -70,18 +70,18 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 400M
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "{{ REDIS_PASSWORD }}", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "{{ REDIS_PASSWORD }}", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # ================================================
-  # 백엔드 API (Spring Boot) - 메모리 제한 추가
+  # 백엔드 API (Spring Boot) - 메모리 제한 완화
   # ================================================
   spring-app:
     build:
@@ -100,6 +100,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD={{ REDIS_PASSWORD }}
       - JWT_SECRET={{ JWT_SECRET }}
+      - JAVA_OPTS=-Xmx800m -Xms256m
     ports:
       - "8080:8080"
     networks:
@@ -108,9 +109,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 400M
+          memory: 1G
         reservations:
-          memory: 200M
+          memory: 256M
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -118,13 +119,13 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 45s
+      timeout: 15s
+      retries: 8
+      start_period: 120s
 
   # ================================================
-  # AI API (FastAPI) - 메모리 제한 추가
+  # AI API (FastAPI) - 메모리 제한 완화
   # ================================================
   fastapi-app:
     build:
@@ -155,7 +156,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 400M
+          memory: 800M
         reservations:
           memory: 200M
     depends_on:
@@ -168,10 +169,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   # ================================================
-  # 프론트엔드 (React + Vite)
+  # 프론트엔드 (React + Vite) - 메모리 최적화
   # ================================================
   frontend-app:
     build:
@@ -190,6 +191,12 @@ services:
     networks:
       lifebit-network:
         ipv4_address: 172.20.0.30
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     depends_on:
       - spring-app
       - fastapi-app
@@ -198,46 +205,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   # ================================================
-  # 데이터 파이프라인 (Airflow) - 경량화
-  # ================================================
-  airflow-webserver:
-    image: apache/airflow:2.7.0-python3.10
-    container_name: lifebit-airflow
-    restart: unless-stopped
-    command: >
-      bash -c "airflow db upgrade &&
-               airflow users create --username {{ AIRFLOW_ADMIN_USER }} --password {{ AIRFLOW_ADMIN_PASSWORD }} --firstname Admin --lastname User --role Admin --email admin@example.com &&
-               airflow webserver"
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://{{ POSTGRES_USER }}:{{ POSTGRES_PASSWORD }}@postgres-db:5432/{{ POSTGRES_DB }}
-      - AIRFLOW__CORE__FERNET_KEY={{ AIRFLOW_FERNET_KEY }}
-      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
-      - AIRFLOW__CORE__LOAD_EXAMPLES=false
-      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
-      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
-    volumes:
-      - airflow_data:/opt/airflow
-    ports:
-      - "8081:8080"
-    networks:
-      lifebit-network:
-        ipv4_address: 172.20.0.40
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-
-  # ================================================
-  # 웹 프록시 (Nginx) - 간단한 설정
+  # 웹 프록시 (Nginx) - 단순화
   # ================================================
   nginx-proxy:
     build:
@@ -265,6 +236,48 @@ services:
       start_period: 30s
 
   # ================================================
+  # 웹 프록시 (Nginx) - 단순화
+  # ================================================
+  airflow-webserver:
+    image: apache/airflow:2.7.0-python3.10
+    container_name: lifebit-airflow
+    restart: unless-stopped
+    command: >
+      bash -c "airflow db upgrade &&
+               airflow users create --username {{ AIRFLOW_ADMIN_USER }} --password {{ AIRFLOW_ADMIN_PASSWORD }} --firstname Admin --lastname User --role Admin --email admin@example.com &&
+               airflow webserver"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://{{ POSTGRES_USER }}:{{ POSTGRES_PASSWORD }}@postgres-db:5432/{{ POSTGRES_DB }}
+      - AIRFLOW__CORE__FERNET_KEY={{ AIRFLOW_FERNET_KEY }}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+    volumes:
+      - airflow_data:/opt/airflow
+    ports:
+      - "8081:8080"
+    networks:
+      lifebit-network:
+        ipv4_address: 172.20.0.40
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+        reservations:
+          memory: 200M
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
+
+  # ================================================
   # 모니터링 (Prometheus) - 경량화
   # ================================================
   prometheus:
@@ -287,6 +300,12 @@ services:
     networks:
       lifebit-network:
         ipv4_address: 172.20.0.60
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 128M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 30s
@@ -313,6 +332,12 @@ services:
     networks:
       lifebit-network:
         ipv4_address: 172.20.0.61
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 100M
     depends_on:
       prometheus:
         condition: service_healthy
@@ -321,7 +346,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   # ================================================
   # 시스템 모니터링 (Node Exporter) - 안전한 설정
@@ -342,6 +367,12 @@ services:
     networks:
       lifebit-network:
         ipv4_address: 172.20.0.70
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9100/-/healthy"]
       interval: 30s

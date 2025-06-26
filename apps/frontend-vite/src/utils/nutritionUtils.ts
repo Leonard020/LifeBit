@@ -270,4 +270,30 @@ export function parseAmountToGrams(amount: string, foodName?: string): number {
   }
   // fallback: treat as 100g per unit
   return num * 100;
+}
+
+/**
+ * Uses GPT to estimate the gram value for a given food and amount string.
+ * Returns a number (grams). Falls back to 100g if GPT fails.
+ */
+export async function estimateGramsWithGPT(foodName: string, amount: string): Promise<number> {
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) return 100;
+  const prompt = `${foodName} ${amount}는(은) 몇 g입니까? 숫자만 답변하세요.`;
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 20,
+      temperature: 0.1,
+    }),
+  });
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content?.replace(/[^0-9.]/g, '') ?? '';
+  return parseFloat(content) || 100;
 } 
