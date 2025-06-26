@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession, type UpdateDietRequest, type DietLogDTO, type DietNutritionDTO, type FoodItem, type DietRecordRequest, type ApiErrorResponse } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession, type UpdateDietRequest, type DietLogDTO, type DietNutritionDTO, type FoodItem, type DietRecordRequest, type ApiErrorResponse, getNutritionGoals } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
@@ -260,23 +260,19 @@ const Note = () => {
     if (!authToken) return;
     setIsLoadingDietData(true);
     setDietError(null);
-    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+  
     try {
       const userId = getUserIdFromToken();
-
       if (!userId) {
-        console.warn('🚨 [fetchDietData] 사용자 ID를 찾을 수 없습니다.');
-        setDietError("사용자 인증이 필요합니다.");
+        setDietError("사용자 정보를 찾을 수 없습니다.");
         return;
       }
-
-      console.log(`🍽️ [fetchDietData] 식단 데이터 조회 시작: ${formattedDate}, 사용자: ${userId}`);
-
-      // ✅ authApi.ts의 함수 사용 (충돌 방지)
-      const dietRecords = await getDailyDietRecords(formattedDate, userId);
-
-      // DietRecord → DietLogDTO 변환
-      const convertedRecords: DietLogDTO[] = dietRecords.map(record => ({
+  
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      
+      // 1. 식단 기록 조회
+      const records = await getDailyDietRecords(formattedDate, userId);
+      const convertedRecords: DietLogDTO[] = records.map(record => ({
         id: record.id,
         userId: record.userId,
         foodItemId: record.foodItemId,
@@ -296,22 +292,17 @@ const Note = () => {
         validationNotes: record.validationNotes,
         createdAt: record.createdAt
       }));
-
-      // 영양소 목표는 임시로 기본값 설정 (추후 authApi.ts에 함수 추가 필요)
-      const defaultGoals: DietNutritionDTO[] = [
-        { name: '칼로리', target: 2000, current: 0, unit: 'kcal', percentage: 0 },
-        { name: '탄수화물', target: 250, current: 0, unit: 'g', percentage: 0 },
-        { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
-        { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
-      ];
-
+  
+      // 2. 실제 사용자의 영양소 목표 조회 (새로 추가)
+      const nutritionGoals = await getNutritionGoals(formattedDate, userId);
+  
       console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
       setDailyDietLogs(convertedRecords);
-      setDailyNutritionGoals(defaultGoals);
-
+      setDailyNutritionGoals(nutritionGoals); // 실제 사용자 목표 사용
+  
     } catch (error) {
       console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
-
+  
       if (error instanceof Error) {
         if (error.message.includes('403')) {
           setDietError("권한이 없습니다. 다시 로그인해주세요.");

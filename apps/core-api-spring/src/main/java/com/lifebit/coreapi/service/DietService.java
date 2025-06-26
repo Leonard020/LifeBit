@@ -9,6 +9,7 @@ import com.lifebit.coreapi.repository.MealLogRepository;
 import com.lifebit.coreapi.repository.UserGoalRepository;
 import com.lifebit.coreapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -38,17 +40,57 @@ public class DietService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
         
+        log.info("🔍 [DietService] 일일 식단 기록 조회 시작 - 사용자: {}, 날짜: {}", userId, date);
+        
+        // 디버깅: SQL로 직접 확인
+        log.info("🔍 [DietService] SQL 확인 - SELECT * FROM meal_logs WHERE user_id = {} AND log_date = '{}'", userId, date);
+        log.info("🔍 [DietService] SQL 확인 - SELECT * FROM food_items WHERE food_item_id = 53");
+        
         List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateOrderByLogDateDescCreatedAtDesc(user, date);
         
-        return mealLogs.stream()
+        log.info("📊 [DietService] 조회된 MealLog 수: {}", mealLogs.size());
+        
+        // 각 MealLog의 상세 정보 로깅
+        for (int i = 0; i < mealLogs.size(); i++) {
+            MealLog mealLog = mealLogs.get(i);
+            FoodItem foodItem = mealLog.getFoodItem();
+            
+            log.info("🍽️ [DietService] MealLog[{}]: ID={}, FoodItem={}, Quantity={}", 
+                i, mealLog.getMealLogId(), 
+                foodItem != null ? "존재(ID:" + foodItem.getFoodItemId() + ")" : "NULL",
+                mealLog.getQuantity());
+                
+            // FoodItem이 null인 경우 추가 조사
+            if (foodItem == null) {
+                log.warn("❌ [DietService] FoodItem이 null - MealLogId: {}, 직접 조회 시도", mealLog.getMealLogId());
+                
+                // 직접 FoodItem 조회 시도 (디버깅용)
+                try {
+                    // MealLog에서 food_item_id를 직접 확인할 수 없으므로 Repository로 재조회
+                    MealLog reloadedMealLog = mealLogRepository.findById(mealLog.getMealLogId()).orElse(null);
+                    if (reloadedMealLog != null && reloadedMealLog.getFoodItem() != null) {
+                        log.info("✅ [DietService] 재조회 성공 - FoodItemId: {}", reloadedMealLog.getFoodItem().getFoodItemId());
+                    } else {
+                        log.error("❌ [DietService] 재조회도 실패 - MealLogId: {}", mealLog.getMealLogId());
+                    }
+                } catch (Exception e) {
+                    log.error("❌ [DietService] FoodItem 재조회 중 오류: {}", e.getMessage());
+                }
+            }
+        }
+        
+        List<DietLogDTO> result = mealLogs.stream()
             .map(this::convertToDietLogDTO)
-            .filter(Objects::nonNull)
             .collect(Collectors.toList());
+            
+        log.info("✅ [DietService] 변환 완료된 DietLogDTO 수: {}", result.size());
+        
+        return result;
     }
 
     public List<DietNutritionDTO> getNutritionGoals(LocalDate date, Long userId) {
-        // 사용자별 목표 가져오기
-        UserGoal userGoal = userGoalRepository.findByUserId(userId)
+        // 사용자별 목표 가져오기 - 최신 목표만 가져오도록 수정
+        UserGoal userGoal = userGoalRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
             .orElse(userGoalService.getDefaultDietGoalByGender(userId));
 
         // 해당 날짜의 실제 섭취량 계산 (직접 엔티티 조회)
@@ -245,19 +287,34 @@ public class DietService {
     private DietLogDTO convertToDietLogDTO(MealLog mealLog) {
         FoodItem foodItem = mealLog.getFoodItem();
 
-        if (foodItem == null) {
-            return null;
-        }
+        log.debug("🔄 [DietService] convertToDietLogDTO 시작 - MealLogId: {}, FoodItem: {}", 
+            mealLog.getMealLogId(), foodItem != null ? foodItem.getFoodItemId() : "NULL");
 
         DietLogDTO dto = new DietLogDTO();
         dto.setId(mealLog.getMealLogId());
-        dto.setFoodItemId(foodItem.getFoodItemId());
-        dto.setFoodName(foodItem.getName());
         dto.setQuantity(mealLog.getQuantity().doubleValue());
         dto.setMealTime(mealLog.getMealTime().name());
         dto.setUnit("g"); // 기본 단위 설정
         dto.setLogDate(mealLog.getLogDate().toString());
         dto.setCreatedAt(mealLog.getCreatedAt().toString());
+
+        if (foodItem == null) {
+            log.warn("⚠️ [DietService] FoodItem이 null입니다 - MealLogId: {}, 기본값으로 설정", mealLog.getMealLogId());
+            
+            // FoodItem이 null이어도 기본 정보는 반환
+            dto.setFoodItemId(null);
+            dto.setFoodName("알 수 없는 음식");
+            dto.setCalories(0.0);
+            dto.setCarbs(0.0);
+            dto.setProtein(0.0);
+            dto.setFat(0.0);
+            
+            return dto;
+        }
+
+        // FoodItem이 존재하는 경우 정상 처리
+        dto.setFoodItemId(foodItem.getFoodItemId());
+        dto.setFoodName(foodItem.getName());
 
         BigDecimal quantity = mealLog.getQuantity();
         BigDecimal HUNDRED = new BigDecimal("100.0");
@@ -266,6 +323,9 @@ public class DietService {
         dto.setCarbs(foodItem.getCarbs() != null ? foodItem.getCarbs().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
         dto.setProtein(foodItem.getProtein() != null ? foodItem.getProtein().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
         dto.setFat(foodItem.getFat() != null ? foodItem.getFat().multiply(quantity).divide(HUNDRED, 2, RoundingMode.HALF_UP).doubleValue() : 0.0);
+
+        log.debug("✅ [DietService] convertToDietLogDTO 완료 - MealLogId: {}, FoodName: {}", 
+            mealLog.getMealLogId(), dto.getFoodName());
 
         return dto;
     }

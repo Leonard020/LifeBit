@@ -95,6 +95,37 @@ export interface DietLogDTO {
   createdAt?: string;
 }
 
+
+/**
+ * 사용자의 영양소 목표 조회
+ * @param date 조회할 날짜 (YYYY-MM-DD)
+ * @param userId 사용자 ID
+ * @returns 영양소 목표 및 현재 섭취량 정보
+ */
+export const getNutritionGoals = async (date: string, userId: number): Promise<DietNutritionDTO[]> => {
+  try {
+    console.log('��️ [API] 영양소 목표 조회 요청:', { date, userId });
+    
+    const response = await axiosInstance.get<DietNutritionDTO[]>(`/api/diet/nutrition-goals/${date}`, {
+      params: { userId }
+    });
+    
+    console.log('✅ [API] 영양소 목표 조회 성공:', response.data);
+    return response.data;
+    
+  } catch (error: unknown) {
+    console.error('❌ [API] 영양소 목표 조회 실패:', error);
+    
+    // 에러 시 기본값 반환
+    return [
+      { name: '칼로리', target: 2000, current: 0, unit: 'kcal', percentage: 0 },
+      { name: '탄수화물', target: 250, current: 0, unit: 'g', percentage: 0 },
+      { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
+      { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
+    ];
+  }
+};
+
 // 영양소 목표 DTO
 export interface DietNutritionDTO {
   name: string;
