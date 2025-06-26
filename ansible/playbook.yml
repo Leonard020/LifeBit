@@ -14,7 +14,7 @@
   pre_tasks:
     - name: 프로젝트 소스 코드를 서버로 복사 (전체)
       ansible.builtin.synchronize:
-        src: ../../
+        src: ../
         dest: "/srv/{{ project_name }}"
         delete: yes
         recursive: yes
@@ -32,7 +32,6 @@
           - "--exclude=*.tmp"
           - "--exclude=ansible/"
           - "--exclude=.env"
-      delegate_to: "{{ inventory_hostname }}"
       tags: [always]
     
   tasks:
@@ -389,8 +388,8 @@
       shell: "docker system prune -f"
       tags: [deploy]
 
-    - name: Deploy and run Docker containers via Docker Compose (using community.docker.docker_compose)
-      community.docker.docker_compose:
+    - name: Deploy and run Docker containers via Docker Compose v2
+      community.docker.docker_compose_v2:
         project_src: "/srv/{{ project_name }}"
         files:
           - docker-compose.local.yml
