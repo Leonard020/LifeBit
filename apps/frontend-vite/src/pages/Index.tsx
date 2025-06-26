@@ -139,6 +139,9 @@ const Index = () => {
     
     if (!chatInputText.trim() || !recordType) return;
 
+    // Clear the input box immediately after sending
+    setChatInputText('');
+
     try {
       console.log(`📤 [Index handleSendMessage] 시작 (시도: ${retryCount + 1}/${maxRetries + 1})`);
       setChatIsProcessing(true);
@@ -505,8 +508,13 @@ const Index = () => {
             networkError={chatNetworkError}
             onVoiceToggle={() => setChatIsRecording(!chatIsRecording)}
 
-            // 👇 handleSendMessage 안쓰도록 더미 함수 연결
-            onSendMessage={handleSendMessage}
+            // Fix: Wrap handleSendMessage to match expected signature
+            onSendMessage={(transcript?: string) => {
+              if (typeof transcript === 'string') {
+                setChatInputText(transcript);
+              }
+              handleSendMessage(0);
+            }}
 
             onRetry={() => {
               setChatNetworkError(false);
