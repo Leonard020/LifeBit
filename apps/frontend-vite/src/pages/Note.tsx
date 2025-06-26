@@ -15,16 +15,53 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, updateExerciseSession, deleteExerciseSession, type UpdateDietRequest, type DietLogDTO, type DietNutritionDTO, type FoodItem, type DietRecordRequest, type ApiErrorResponse, getNutritionGoals } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
 import type { TooltipProps } from 'recharts';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUpdateExerciseSession } from '@/api/authApi';
 
+// 백엔드 API 응답 타입 정의
+interface DietLogDTO {
+  id: number;
+  userId: number;
+  foodItemId: number;
+  foodName: string;
+  quantity: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  logDate: string;
+  unit: string;
+  mealTime?: string; // ENUM: breakfast, lunch, dinner, snack
+  inputSource?: string; // ENUM: VOICE, TYPING
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string; // ENUM: PENDING, VALIDATED, REJECTED
+  validationNotes?: string;
+  createdAt?: string;
+}
 
+interface DietNutritionDTO {
+  name: string;
+  target: number;
+  current: number;
+  unit: string;
+  percentage: number;
+}
 
-
+interface FoodItem {
+  foodItemId: number;
+  name: string;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  servingSize: number;
+}
 
 const Note = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -49,6 +86,15 @@ const Note = () => {
   const [mealTime, setMealTime] = useState('breakfast');
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+
+  // 운동 추가 관련 상태
+  const [isAddExerciseDialogOpen, setIsAddExerciseDialogOpen] = useState(false);
+  const [exerciseName, setExerciseName] = useState('');
+  const [sets, setSets] = useState(1);
+  const [reps, setReps] = useState(10);
+  const [weight, setWeight] = useState(0);
+  const [time, setTime] = useState('');
+  const [exerciseOptions, setExerciseOptions] = useState<{ value: string; label: string }[]>([]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,6 +211,21 @@ const Note = () => {
     }
   }, [userId, queryClient]);
 
+  // 운동부위 한글화
+  const getBodyPartLabel = (key: string) => {
+    const map: Record<string, string> = {
+      chest: '가슴',
+      back: '등',
+      legs: '하체',
+      shoulders: '어깨',
+      arms: '팔',
+      abs: '복부',
+      cardio: '유산소',
+      full_body: '전신',
+    };
+    return map[key] || key;
+  };
+
   // 3. Map backend fields to radar chart axes
   const bodyPartMap = [
     { key: 'weekly_chest', label: '가슴' },
@@ -175,28 +236,6 @@ const Note = () => {
     { key: 'weekly_arms', label: '팔' },
     { key: 'weekly_cardio', label: '유산소' },
   ];
-
-  // 영어 bodyPart → 한글 label 매핑
-  const bodyPartLabelMap = {
-    chest: '가슴',
-    back: '등',
-    legs: '하체',
-    shoulders: '어깨',
-    abs: '복근',
-    arms: '팔',
-    cardio: '유산소',
-  };
-
-  // 오늘의 운동 기록을 부위별로 집계
-  const todayBodyPartCount = bodyPartMap.reduce((acc, { label }) => {
-    acc[label] = 0;
-    return acc;
-  }, {} as Record<string, number>);
-
-  todayExercise.forEach(record => {
-    const label = bodyPartLabelMap[record.bodyPart];
-    if (label) todayBodyPartCount[label]++;
-  });
 
   // Always show all 7 body parts in the graph, with 0 for unselected
   const exerciseGoals = React.useMemo(() => {
@@ -215,8 +254,8 @@ const Note = () => {
   const MAX_EDGE_VALUE = 7;
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    today: todayBodyPartCount[label] || 0, // 오늘 실제 수행값
-    goal: exerciseGoals[label] || 0,       // 목표값
+    value: weeklySummary[label] || 0,
+    goal: exerciseGoals[label] || 0,
   }));
 
   // 운동데이터터 - 저장된 토큰 사용
@@ -251,19 +290,23 @@ const Note = () => {
     if (!authToken) return;
     setIsLoadingDietData(true);
     setDietError(null);
-  
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
     try {
       const userId = getUserIdFromToken();
+
       if (!userId) {
-        setDietError("사용자 정보를 찾을 수 없습니다.");
+        console.warn('🚨 [fetchDietData] 사용자 ID를 찾을 수 없습니다.');
+        setDietError("사용자 인증이 필요합니다.");
         return;
       }
-  
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
-      // 1. 식단 기록 조회
-      const records = await getDailyDietRecords(formattedDate, userId);
-      const convertedRecords: DietLogDTO[] = records.map(record => ({
+
+      console.log(`🍽️ [fetchDietData] 식단 데이터 조회 시작: ${formattedDate}, 사용자: ${userId}`);
+
+      // ✅ authApi.ts의 함수 사용 (충돌 방지)
+      const dietRecords = await getDailyDietRecords(formattedDate, userId);
+
+      // DietRecord → DietLogDTO 변환
+      const convertedRecords: DietLogDTO[] = dietRecords.map(record => ({
         id: record.id,
         userId: record.userId,
         foodItemId: record.foodItemId,
@@ -283,17 +326,22 @@ const Note = () => {
         validationNotes: record.validationNotes,
         createdAt: record.createdAt
       }));
-  
-      // 2. 실제 사용자의 영양소 목표 조회 (새로 추가)
-      const nutritionGoals = await getNutritionGoals(formattedDate, userId);
-  
+
+      // 영양소 목표는 임시로 기본값 설정 (추후 authApi.ts에 함수 추가 필요)
+      const defaultGoals: DietNutritionDTO[] = [
+        { name: '칼로리', target: 2000, current: 0, unit: 'kcal', percentage: 0 },
+        { name: '탄수화물', target: 250, current: 0, unit: 'g', percentage: 0 },
+        { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
+        { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
+      ];
+
       console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
       setDailyDietLogs(convertedRecords);
-      setDailyNutritionGoals(nutritionGoals); // 실제 사용자 목표 사용
-  
+      setDailyNutritionGoals(defaultGoals);
+
     } catch (error) {
       console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
-  
+
       if (error instanceof Error) {
         if (error.message.includes('403')) {
           setDietError("권한이 없습니다. 다시 로그인해주세요.");
@@ -357,7 +405,7 @@ const Note = () => {
         return;
       }
 
-      const request: DietRecordRequest = {
+      const request: any = {
         quantity: parseFloat(quantity),
         meal_time: mealTime,
         unit: 'g',
@@ -395,9 +443,8 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error: unknown) {
-      const apiError = error as ApiErrorResponse;
-      if (apiError?.response?.status === 403) {
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
         toast({
           title: "권한 오류",
           description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
@@ -534,7 +581,7 @@ const Note = () => {
         sets: record.sets,
         reps: record.reps,
         weight: record.weight,
-        durationMinutes: record.durationMinutes || undefined,
+        duration_minutes: record.duration_minutes || undefined,
         calories_burned: record.calories_burned || undefined
       }));
       setTodayExercise(cleanedData.sort((a, b) => b.exerciseSessionId - a.exerciseSessionId));
@@ -745,10 +792,10 @@ const Note = () => {
       foodItemId: dietLog.foodItemId,
       foodName: dietLog.foodName,
       quantity: dietLog.quantity,
-      calories: Math.round(dietLog.calories * per100gFactor * 100) / 100,
-      carbs: Math.round(dietLog.carbs * per100gFactor * 100) / 100,
-      protein: Math.round(dietLog.protein * per100gFactor * 100) / 100,
-      fat: Math.round(dietLog.fat * per100gFactor * 100) / 100,
+      calories: dietLog.calories * per100gFactor,
+      carbs: dietLog.carbs * per100gFactor,
+      protein: dietLog.protein * per100gFactor,
+      fat: dietLog.fat * per100gFactor,
       mealTime: dietLog.mealTime || 'breakfast', // 추가: 식사 시간
     });
 
@@ -763,43 +810,31 @@ const Note = () => {
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
     setIsUpdatingDiet(true);
-  
     try {
-      const userId = getUserIdFromToken();
-      if (!userId) throw new Error("User not found");
-  
-      const request: UpdateDietRequest = {
-        userId,
+      const request: any = {
+        userId: getUserIdFromToken(), // PUT에는 반드시 포함
         quantity: editFormData.quantity,
         mealTime: editFormData.mealTime,
         unit: 'g',
         logDate: selectedDate.toISOString().split('T')[0],
         inputSource: 'TYPING',
       };
-  
       if (editFormData.foodItemId) {
         request.foodItemId = editFormData.foodItemId;
       } else {
-        Object.assign(request, {
-          foodName: editFormData.foodName,
-          calories: editFormData.calories,
-          carbs: editFormData.carbs,
-          protein: editFormData.protein,
-          fat: editFormData.fat,
-        });
+        request.foodName = editFormData.foodName;
+        request.calories = editFormData.calories;
+        request.carbs = editFormData.carbs;
+        request.protein = editFormData.protein;
+        request.fat = editFormData.fat;
       }
-  
       const updatedRecord = await updateDietRecord(editingDietLog.id, request);
-  
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
-  
       await fetchCalendarRecords();
-  
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
-  
       toast({
         title: "식단이 수정되었습니다.",
         description: "식단 기록이 성공적으로 업데이트되었습니다.",
@@ -816,7 +851,37 @@ const Note = () => {
     }
   };
 
-  
+  // 💪 일일 운동 추가 - Spring API 사용
+  const [bodyPart, setBodyPart] = useState('chest');         // 선택한 부위
+
+  const addExerciseRecord = async () => {
+    try {
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      const request: any = {
+        exerciseName: exerciseName.trim(),
+        sets: sets || 1,
+        reps: reps || 10,
+        weight: weight || 0.0,
+        exerciseDate: formattedDate
+      };
+      await createExerciseSession(request);
+      await fetchExercise();
+      setIsAddExerciseDialogOpen(false);
+      setExerciseName('');
+      setSets(1);
+      setReps(10);
+      setWeight(0);
+      setTime('');
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "운동 추가 실패",
+        description: "기록을 저장하는 중 문제가 발생했습니다.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // 일일 운동 기록 수정
   const [isEditExerciseDialogOpen, setIsEditExerciseDialogOpen] = useState(false);
   const [editingExercise, setEditingExercise] = useState<ExerciseRecordDTO | null>(null);
@@ -824,6 +889,7 @@ const Note = () => {
     sets: 1,
     reps: 10,
     weight: 0,
+    duration_minutes: 0,
   });
 
 
@@ -833,9 +899,31 @@ const Note = () => {
       sets: record.sets || 1,
       reps: record.reps || 10,
       weight: record.weight || 0,
+      duration_minutes: record.duration_minutes || 0,
     });
     setIsEditExerciseDialogOpen(true);
   };
+
+
+  useEffect(() => {
+    const fetchExercises = async () => {
+      try {
+        console.log(`🏋️ [fetchExercises] 운동 카탈로그 조회 시작`);
+
+        const data = await getExerciseCatalog();
+        console.log('✅ [fetchExercises] 운동 카탈로그 조회 성공:', data);
+
+        setExerciseOptions(data.map(item => ({
+          value: item.name,
+          label: item.name
+        })));
+      } catch (err) {
+        console.error("❌ [fetchExercises] 운동 카탈로그 조회 실패:", err);
+      }
+    };
+
+    fetchExercises();
+  }, []);
 
 
   // 점(●) 표시용 modifiers와 classNames 추가
@@ -861,32 +949,55 @@ const Note = () => {
     }
   };
 
-  const saveExerciseEdit = async () => {
-    if (!editingExercise) return;
-    try {
-      await updateExerciseSession(editingExercise.exerciseSessionId, {
-        sets: exerciseEditForm.sets,
-        reps: exerciseEditForm.reps,
-        weight: exerciseEditForm.weight,
-      });
-      setIsEditExerciseDialogOpen(false);
-      setEditingExercise(null);
-      await fetchExercise();
-    } catch (err) {
-      console.error("운동 기록 수정 실패:", err);
-    }
+
+  // 운동 기록 수정 saveExerciseEdit
+  const { mutate: updateSession } = useUpdateExerciseSession();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const saveExerciseEdit = () => {
+    if (!editingExercise || isSaving) return;
+    setIsSaving(true);
+
+    const dataToSend = {
+      sets: exerciseEditForm.sets ?? 0,
+      reps: exerciseEditForm.reps ?? 0,
+      weight: exerciseEditForm.weight ?? 0,
+      duration_minutes: exerciseEditForm.duration_minutes ?? 0,
+    };
+
+    console.log("📤 수정 요청 데이터:", dataToSend);
+
+    updateSession(
+      {
+        sessionId: editingExercise.exerciseSessionId,
+        data: dataToSend,
+      },
+      {
+        onSuccess: () => {
+          setIsSaving(false);
+          setIsEditExerciseDialogOpen(false);
+          setEditingExercise(null);
+          fetchExercise();
+        },
+        onError: (err) => {
+          setIsSaving(false);
+          console.error("❌ 운동 기록 수정 실패:", err);
+          alert("운동 기록 수정 중 오류가 발생했습니다.");
+        },
+      }
+    );
   };
+
 
   // Custom tooltip for radar chart
   const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
-    if (active && payload && (payload as unknown[]).length > 0) {
-      const part = (payload as any)[0].payload.subject;
-      const goal = (payload as any)[0].payload.goal;
-      const today = (payload as any)[0].payload.today;
+    if (active && payload && payload.length > 0) {
+      // Find the goal value
+      const part = payload[0].payload.subject;
+      const goal = payload[0].payload.goal;
       return (
         <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <div><strong>목표</strong> - {part}: {goal}회</div>
-          <div><strong>달성</strong> - {part}: {today}회</div>
+          <strong>{part}</strong>: {goal}회
         </div>
       );
     }
@@ -986,9 +1097,11 @@ const Note = () => {
                     <CardTitle>운동 부위별 목표</CardTitle>
                     <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
                   </div>
+                  {/* 총 주간 운동 목표 - no box, just text on background */}
                   <div className="ml-auto text-right">
                     <div className="text-base font-bold text-blue-700">
                       {(() => {
+                        // Calculate total weekly workout target
                         const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
                         const cardio = exerciseGoals['유산소'] || 0;
                         const total = strength + cardio;
@@ -1014,7 +1127,7 @@ const Note = () => {
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
                         <Tooltip content={<RadarGoalTooltip />} />
-                        <Radar name="오늘 운동" dataKey="today" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} strokeWidth={2} />
+                        <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                       </RadarChart>
                     </ResponsiveContainer>
@@ -1026,6 +1139,90 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
+                {isToday(selectedDate) && todayExercise.length > 0 && (
+                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
+                  </Button>
+                )}
+                <Dialog open={isAddExerciseDialogOpen} onOpenChange={setIsAddExerciseDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      운동 추가
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>운동 기록 추가</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {/* ✅ 운동 부위 선택 */}
+                      <div>
+                        <Label>운동 부위 선택</Label>
+                        <select
+                          value={bodyPart}
+                          onChange={(e) => setBodyPart(e.target.value as 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'abs' | 'cardio' | 'full_body')}
+                          className="w-full border p-2 rounded"
+                          title="운동 부위 선택"
+                        >
+                          <option value="chest">가슴</option>
+                          <option value="back">등</option>
+                          <option value="legs">하체</option>
+                          <option value="shoulders">어깨</option>
+                          <option value="arms">팔</option>
+                          <option value="abs">복부</option>
+                          <option value="cardio">유산소</option>
+                          <option value="full_body">전신</option>
+                        </select>
+                      </div>
+
+                      {/* ✅ 운동 이름 선택 */}
+                      <div>
+                        <Label>운동 선택</Label>
+                        <select
+                          value={exerciseName}
+                          onChange={(e) => setExerciseName(e.target.value)}
+                          className="w-full border p-2 rounded"
+                          disabled={exerciseOptions.length === 0}
+                          title="운동 선택"
+                        >
+                          <option value="">
+                            {exerciseOptions.length === 0 ? '운동 부위를 먼저 선택하세요' : '운동을 선택하세요'}
+                          </option>
+                          {exerciseOptions.map((exercise) => (
+                            <option key={exercise.value} value={exercise.value}>
+                              {exercise.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>세트</Label>
+                          <Input type="number" value={sets} onChange={(e) => setSets(Number(e.target.value))} min={1} />
+                        </div>
+                        <div>
+                          <Label>횟수</Label>
+                          <Input type="number" value={reps} onChange={(e) => setReps(Number(e.target.value))} min={1} />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>무게 (kg)</Label>
+                        <Input type="number" value={weight} onChange={(e) => setWeight(Number(e.target.value))} min={0} />
+                      </div>
+                      <div>
+                        <Label>운동 시간</Label>
+                        <Input value={time} onChange={(e) => setTime(e.target.value)} placeholder="예: 20분" />
+                      </div>
+
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setIsAddExerciseDialogOpen(false)}>취소</Button>
+                        <Button onClick={addExerciseRecord}>추가</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 {todayExercise.length > 0 ? (
@@ -1035,7 +1232,7 @@ const Note = () => {
                       const isCardio = record.bodyPart === 'cardio';
                       // 시간, 칼로리, 날짜 등 정보
                       const infoParts = [];
-                      if (record.durationMinutes !== undefined) infoParts.push(`${record.durationMinutes}분`);
+                      if (record.duration_minutes !== undefined) infoParts.push(`${record.duration_minutes}분`);
                       if (record.calories_burned !== undefined) infoParts.push(`${record.calories_burned}kcal`);
                       if (record.exerciseDate) infoParts.push(`${record.exerciseDate}`);
                       // 근력운동이면 세트, 무게, 횟수 추가
@@ -1062,12 +1259,34 @@ const Note = () => {
                               )}
                             </p>
                           </div>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+
+                          {/* 👉 삭제 + 수정 버튼 같이 */}
+                          <div className="flex gap-2 items-center">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary" onClick={() => {
+                              setEditingExercise(record);
+                              setExerciseEditForm({
+                                sets: record.sets,
+                                reps: record.reps,
+                                weight: record.weight,
+                                duration_minutes: record.duration_minutes,
+                              });
+                              setIsEditExerciseDialogOpen(true);
+                            }}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}
+                    {isToday(selectedDate) && !hasClaimedExerciseScore && (
+                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
@@ -1076,46 +1295,79 @@ const Note = () => {
             </Card>
           </TabsContent>
 
-          {/* ✅ 등록된 운동 수정정 */}
+          {/* ✅ 등록된 운동 수정 다이얼로그 */}
           <Dialog open={isEditExerciseDialogOpen} onOpenChange={setIsEditExerciseDialogOpen}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle>운동 수정</DialogTitle>
+                <DialogTitle>운동 기록 수정</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
+
+              {editingExercise && (
+                <div className="space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    운동 부위: {getBodyPartLabel(editingExercise.bodyPart)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    운동 종류: {editingExercise.exerciseName}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>세트 수</Label>
+                      <Input
+                        type="number"
+                        value={exerciseEditForm.sets}
+                        onChange={e => setExerciseEditForm(prev => ({ ...prev, sets: +e.target.value }))}
+                        min={0}
+                      />
+                    </div>
+                    <div>
+                      <Label>반복 횟수</Label>
+                      <Input
+                        type="number"
+                        value={exerciseEditForm.reps}
+                        onChange={e => setExerciseEditForm(prev => ({ ...prev, reps: +e.target.value }))}
+                        min={0}
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <Label>세트</Label>
+                    <Label>무게 (kg)</Label>
                     <Input
                       type="number"
-                      value={exerciseEditForm.sets}
-                      onChange={e => setExerciseEditForm(prev => ({ ...prev, sets: +e.target.value }))}
+                      value={exerciseEditForm.weight}
+                      onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
+                      min={0}
                     />
                   </div>
+
                   <div>
-                    <Label>횟수</Label>
+                    <Label>운동 시간 (분)</Label>
                     <Input
                       type="number"
-                      value={exerciseEditForm.reps}
-                      onChange={e => setExerciseEditForm(prev => ({ ...prev, reps: +e.target.value }))}
+                      value={exerciseEditForm.duration_minutes}
+                      onChange={e => setExerciseEditForm(prev => ({ ...prev, duration_minutes: +e.target.value }))}
+                      min={0}
                     />
                   </div>
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditExerciseDialogOpen(false)}
+                    >
+                      취소
+                    </Button>
+                    <Button onClick={saveExerciseEdit} disabled={isSaving}>
+                      {isSaving ? "저장 중..." : "저장"}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label>무게 (kg)</Label>
-                  <Input
-                    type="number"
-                    value={exerciseEditForm.weight}
-                    onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsEditExerciseDialogOpen(false)}>취소</Button>
-                  <Button onClick={saveExerciseEdit}>저장</Button>
-                </div>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
+
 
 
 
@@ -1319,7 +1571,7 @@ const Note = () => {
                                 </div>
                               </>
                             )}
-                            
+
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <Label>섭취량 (g)</Label>
@@ -1359,6 +1611,17 @@ const Note = () => {
                       </div>
                     </DialogContent>
                   </Dialog>
+                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
+                    <Button
+                      onClick={handleClaimDietScore}
+                      disabled={hasClaimedDietScore}
+                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
+                      size="sm"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -1418,6 +1681,13 @@ const Note = () => {
                         </div>
                       );
                     })}
+                    {isToday(selectedDate) && !hasClaimedDietScore && (
+                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-700 text-center">
+                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
@@ -1553,10 +1823,10 @@ const Note = () => {
 
                   <div className="text-sm text-muted-foreground mt-2 p-2 bg-slate-50 rounded-md">
                     <h4 className="font-medium mb-1">총 섭취량</h4>
-                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(2)} kcal<br />
-                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(2)} g<br />
-                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(2)} g<br />
-                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(2)} g
+                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(0)} kcal<br />
+                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(1)} g<br />
+                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(1)} g<br />
+                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(1)} g
                   </div>
                   <div>
                     <Label htmlFor="editMealTime">식사 시간</Label>

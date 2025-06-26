@@ -52,6 +52,56 @@ public class NoteExerciseService {
                 .toList();
     }
 
+    // ✅ 운동 기록 추가 + DTO 리턴
+    public ExerciseRecordDTO addExercise(ExerciseRecordDTO dto) {
+        ExerciseSession session = new ExerciseSession();
+
+        // 🔸 User 객체 설정
+        User user = userRepository.findById(dto.getUserId())
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        session.setUser(user);
+
+        // 🔸 운동 카탈로그 설정
+        ExerciseCatalog catalog = exerciseCatalogRepository.findByName(dto.getExerciseName())
+                .orElseGet(() -> {
+                    ExerciseCatalog newCatalog = new ExerciseCatalog();
+                    newCatalog.setName(dto.getExerciseName());
+                    return exerciseCatalogRepository.save(newCatalog);
+                });
+        session.setExerciseCatalog(catalog);
+
+        // 🔸 기본 필드 설정
+        session.setExerciseDate(dto.getExerciseDate());
+        session.setSets(dto.getSets());
+        session.setReps(dto.getReps());
+        session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
+        session.setDurationMinutes(dto.getDurationMinutes());
+
+        // ✅ 저장
+        ExerciseSession saved = exerciseSessionRepository.save(session);
+
+        // ✅ 업적 체크 및 업데이트
+        try {
+            // 연속 운동 일수 계산 및 업적 업데이트
+            int currentStreak = calculateCurrentStreak(dto.getUserId());
+            achievementService.updateStreakAchievements(dto.getUserId(), currentStreak);
+            
+            // 총 운동 일수 업적 업데이트
+            int totalWorkoutDays = getTotalWorkoutDays(dto.getUserId());
+            achievementService.updateUserAchievementProgress(dto.getUserId(), "총 운동 일수", totalWorkoutDays);
+            
+            // 주간 운동 횟수 업적 업데이트
+            int weeklyExerciseCount = getWeeklyExerciseCount(dto.getUserId());
+            achievementService.updateUserAchievementProgress(dto.getUserId(), "주간 운동", weeklyExerciseCount);
+            
+        } catch (Exception e) {
+            // 업적 업데이트 실패 시 로그만 남기고 계속 진행
+            System.err.println("Failed to update achievements: " + e.getMessage());
+        }
+
+        // ✅ DTO 반환
+        return new ExerciseRecordDTO(saved);
+    }
 
     // ✅ 운동 기록 삭제 기능
     public void deleteExercise(Long sessionId, Long userId) {
