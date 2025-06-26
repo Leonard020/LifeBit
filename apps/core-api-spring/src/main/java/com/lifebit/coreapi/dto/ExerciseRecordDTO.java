@@ -25,7 +25,6 @@ public class ExerciseRecordDTO {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate exerciseDate;
 
-    @JsonProperty("duration_minutes")
     private Integer durationMinutes;
 
     @JsonProperty("calories_burned")

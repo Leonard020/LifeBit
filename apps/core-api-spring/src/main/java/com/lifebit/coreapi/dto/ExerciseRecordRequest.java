@@ -2,8 +2,6 @@ package com.lifebit.coreapi.dto;
 
 import lombok.Getter;
 import lombok.Setter;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 
 import java.time.LocalDate;
 
@@ -15,7 +13,6 @@ public class ExerciseRecordRequest {
     private Integer reps;
     private Double weight;
 
-    @JsonProperty("duration_minutes")
     private Integer durationMinutes;
     private Integer caloriesBurned;
     private String notes;
