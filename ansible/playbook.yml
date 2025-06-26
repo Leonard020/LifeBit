@@ -9,8 +9,8 @@
   become: yes
   vars:
     project_name: "lifebit"
-    environment: "{{ env | default('demo') }}"
-    git_repo: "{{ git_repository_url | default('https://github.com/your-repo/LifeBit.git') }}"
+    deploy_env: "{{ env | default('demo') }}"
+    git_repo: "{{ git_repository_url | default('https://github.com/Hyeon6492/LifeBit.git') }}"
     
   tasks:
     # ================================================
@@ -59,9 +59,11 @@
     # 1. 시스템 기본 설정
     # ================================================
     - name: apt 잠금이 해제될 때까지 대기
-      shell: "while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do echo 'apt 잠금 대기 중...'; sleep 10; done"
-      args:
-        warn: false
+      ansible.builtin.shell: |
+        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo 'apt 잠금 대기 중...'
+          sleep 10
+        done
       changed_when: false
       tags: [system]
 
@@ -481,7 +483,7 @@
         content: |
           === LifeBit 서버 정보 ===
           배포 완료 시간: {{ ansible_date_time.iso8601 }}
-          환경: {{ environment }}
+          환경: {{ deploy_env }}
           프로젝트: {{ project_name }}
           
           === 시스템 정보 ===
@@ -529,7 +531,7 @@
           - Prometheus: http://{{ ansible_default_ipv4.address }}:9090
           
           🔑 SSH 접속:
-          ssh -i ~/.ssh/lifebit-{{ environment }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
+          ssh -i ~/.ssh/lifebit-{{ deploy_env }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
       tags: [info]
 
   handlers:

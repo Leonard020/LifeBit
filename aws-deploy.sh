@@ -324,13 +324,12 @@ update_inventory() {
     
     cd "$SCRIPT_DIR"
     
-    # inventory.ini의 __SERVER_IP__ 플레이스홀더를 실제 IP로 교체
-    if sed -i.bak "s/__SERVER_IP__/$PUBLIC_IP/" ansible/inventory.ini; then
-        log_success "inventory.ini 업데이트 완료: $PUBLIC_IP"
-    else
-        log_error "inventory.ini 업데이트 실패"
-        cleanup_on_failure "inventory_update"
-    fi
+    # inventory.ini를 항상 최신 PUBLIC_IP로 덮어쓰기
+    cat > ansible/inventory.ini << EOF
+[lifebit_servers]
+$PUBLIC_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/lifebit.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+EOF
+    log_success "inventory.ini 덮어쓰기 완료: $PUBLIC_IP"
     
     log_success "Ansible inventory 업데이트 완료"
     create_checkpoint "inventory_update"
