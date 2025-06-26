@@ -12,6 +12,15 @@ export interface NutritionData {
   protein: number;
   fat: number;
   calories: number;
+  dailyCalories?: number;
+  dailyCarbs?: number;
+  dailyProtein?: number;
+  dailyFat?: number;
+  totalCalories?: number;
+  totalCarbs?: number;
+  totalProtein?: number;
+  totalFat?: number;
+  mealCount?: number;
 }
 
 export interface NutritionGoals {

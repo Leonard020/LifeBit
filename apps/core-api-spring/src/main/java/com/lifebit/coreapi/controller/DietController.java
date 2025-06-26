@@ -246,4 +246,18 @@ public class DietController {
         List<Map<String, Object>> foodItems = dietService.searchFoodItems(keyword);
         return ResponseEntity.ok(foodItems);
     }
+
+    @PutMapping("/food-items/{id}")
+    public ResponseEntity<Map<String, Object>> updateFoodItem(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request) {
+        
+        Double calories = request.get("calories") != null ? Double.valueOf(request.get("calories").toString()) : null;
+        Double carbs = request.get("carbs") != null ? Double.valueOf(request.get("carbs").toString()) : null;
+        Double protein = request.get("protein") != null ? Double.valueOf(request.get("protein").toString()) : null;
+        Double fat = request.get("fat") != null ? Double.valueOf(request.get("fat").toString()) : null;
+        
+        Map<String, Object> updatedFoodItem = dietService.updateFoodItem(id, calories, carbs, protein, fat);
+        return ResponseEntity.ok(updatedFoodItem);
+    }
 } 

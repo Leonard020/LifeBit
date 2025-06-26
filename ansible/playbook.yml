@@ -268,18 +268,82 @@
       tags: [deploy]
 
     # ================================================
-    # 8. Docker Compose 실행
+    # 8. Docker 이미지 순차 빌드 및 실행 (메모리 최적화)
     # ================================================
-    - name: Docker Compose로 애플리케이션 빌드 및 실행
+
+    - name: Docker 베이스 이미지 다운로드 (pull)
       shell: |
         set -e
         cd /opt/{{ project_name }}
+        echo "--- 베이스 이미지를 다운로드합니다(pull) ---"
+        docker-compose pull
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
 
-        echo "--- Docker 애플리케이션을 빌드하고 시작합니다. ---"
-        docker-compose up -d --build --remove-orphans
-        
-        echo "--- 배포 완료. 30초 후 서비스 상태 확인 ---"
-        sleep 30
+    - name: "1단계: Spring Boot 이미지 빌드"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- Spring 이미지 빌드 ---"
+        docker-compose build --no-cache spring-app
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 정리 (Spring 빌드 후)
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: "2단계: FastAPI 이미지 빌드"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- FastAPI 이미지 빌드 ---"
+        docker-compose build --no-cache fastapi-app
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 정리 (FastAPI 빌드 후)
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: "3단계: Frontend 이미지 빌드 (옵션)"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- Frontend 이미지 빌드 ---"
+        docker-compose build --no-cache frontend-app || true  # 메모리 부족 시 무시
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 정리 (Frontend 빌드 후)
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: "4단계: Nginx Proxy 이미지 빌드 (옵션)"
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- Nginx 이미지 빌드 ---"
+        docker-compose build --no-cache nginx-proxy || true
+      args:
+        chdir: "/opt/{{ project_name }}"
+      tags: [deploy]
+
+    - name: Docker 캐시 최종 정리
+      shell: "docker system prune -f"
+      tags: [deploy]
+
+    - name: Docker Compose로 컨테이너 실행 (이미지 빌드 없이)
+      shell: |
+        set -e
+        cd /opt/{{ project_name }}
+        echo "--- 컨테이너 실행 ---"
+        docker-compose up -d --remove-orphans
+        echo "--- 컨테이너 상태 ---"
         docker-compose ps
       args:
         chdir: "/opt/{{ project_name }}"
@@ -325,147 +389,11 @@
       tags: [database]
 
     # ================================================
-    # 10. 메모리 모니터링 및 최적화
-    # ================================================
-    - name: 메모리 모니터링 스크립트 생성
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 메모리 모니터링 스크립트
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          SWAP_USAGE=$(free | awk 'NR==3{printf "%.1f", $3*100/$2}')
-          
-          # Docker 메모리 사용량
-          DOCKER_MEMORY=$(docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}" | tail -n +2)
-          
-          # 로그 파일에 기록
-          echo "$(date): Memory Usage: ${MEMORY_USAGE}%, Swap Usage: ${SWAP_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-          
-          # 메모리 사용량이 80% 이상이면 경고
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              echo "WARNING: High memory usage detected: ${MEMORY_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # Docker 컨테이너 메모리 사용량 출력
-              echo "Docker Memory Usage:" >> /opt/{{ project_name }}/logs/memory.log
-              echo "$DOCKER_MEMORY" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # 메모리 사용량이 높은 컨테이너 재시작
-              docker stats --no-stream --format "table {{.Container}}\t{{.MemPerc}}" | awk '$2 > 50 {print $1}' | while read container; do
-                  echo "Restarting high memory usage container: $container" >> /opt/{{ project_name }}/logs/memory.log
-                  docker restart "$container" || true
-              done
-          fi
-        dest: "/opt/{{ project_name }}/memory-monitor.sh"
-        mode: '0755'
-      tags: [monitoring]
-
-    - name: 메모리 최적화 설정
-      copy:
-        content: |
-          # Docker 메모리 제한 설정
-          # /etc/docker/daemon.json
-          {
-            "default-ulimits": {
-              "nofile": {
-                "Hard": 64000,
-                "Name": "nofile",
-                "Soft": 64000
-              }
-            },
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2"
-          }
-        dest: /etc/docker/daemon.json
-      tags: [docker]
-
-    - name: Docker 서비스 재시작 (설정 적용)
-      systemd:
-        name: docker
-        state: restarted
-      tags: [docker]
-
-    # ================================================
     # 11. 헬스체크 스크립트 생성 (개선된 버전)
     # ================================================
-    - name: 헬스체크 스크립트 생성 (개선된 버전)
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 헬스체크 스크립트 (개선된 버전)
-          
-          LOG_FILE="/opt/{{ project_name }}/logs/health-check.log"
-          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-          
-          # 로그 함수
-          log_message() {
-              echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
-          }
-          
-          # 시스템 서비스 확인
-          SERVICES=("docker" "nginx" "fail2ban" "node_exporter")
-          FAILED_SERVICES=()
-          
-          log_message "=== 헬스체크 시작 ==="
-          
-          for service in "${SERVICES[@]}"; do
-              if systemctl is-active --quiet "$service"; then
-                  log_message "✓ $service: 정상"
-              else
-                  log_message "✗ $service: 실패"
-                  FAILED_SERVICES+=("$service")
-              fi
-          done
-          
-          # Docker 컨테이너 상태 확인
-          log_message "=== Docker 컨테이너 상태 ==="
-          CONTAINERS=$(docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v NAMES)
-          if [ -n "$CONTAINERS" ]; then
-              echo "$CONTAINERS" | while read line; do
-                  log_message "  $line"
-              done
-          else
-              log_message "  경고: 실행 중인 컨테이너가 없습니다"
-          fi
-          
-          # 디스크 사용량 확인
-          DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
-          log_message "=== 디스크 사용량: ${DISK_USAGE}% ==="
-          if [ "$DISK_USAGE" -gt 80 ]; then
-              log_message "  경고: 디스크 사용량이 80%를 초과했습니다"
-          fi
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          log_message "=== 메모리 사용량: ${MEMORY_USAGE}% ==="
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              log_message "  경고: 메모리 사용량이 80%를 초과했습니다"
-          fi
-          
-          # 네트워크 연결 확인
-          log_message "=== 네트워크 연결 확인 ==="
-          PORTS=(3000 8080 8001 8081 8082 3001 9090 9100)
-          for port in "${PORTS[@]}"; do
-              if netstat -tlnp | grep ":$port " > /dev/null; then
-                  log_message "  ✓ 포트 $port: 열림"
-              else
-                  log_message "  ✗ 포트 $port: 닫힘"
-              fi
-          done
-          
-          # 결과 요약
-          if [ ${#FAILED_SERVICES[@]} -eq 0 ]; then
-              log_message "=== 결과: 모든 서비스가 정상입니다 ==="
-              exit 0
-          else
-              log_message "=== 결과: 실패한 서비스: ${FAILED_SERVICES[*]} ==="
-              exit 2
-          fi
+    - name: "헬스체크 스크립트 배포 (템플릿)"
+      template:
+        src: "healthcheck.sh.j2"
         dest: "/opt/{{ project_name }}/health-check.sh"
         mode: '0755'
       tags: [monitoring]
@@ -483,9 +411,6 @@
         - name: "LifeBit 헬스체크"
           minute: "*/5"
           job: "/opt/{{ project_name }}/health-check.sh > /dev/null 2>&1"
-        - name: "메모리 모니터링"
-          minute: "*/10"
-          job: "/opt/{{ project_name }}/memory-monitor.sh > /dev/null 2>&1"
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"

@@ -119,6 +119,20 @@ public class MealLogController {
                     logMap.put("meal_time", mealLog.getMealTime() != null ? mealLog.getMealTime().name() : null);
                     logMap.put("log_date", mealLog.getLogDate() != null ? mealLog.getLogDate().toString() : null);
                     logMap.put("created_at", mealLog.getCreatedAt() != null ? mealLog.getCreatedAt().toString() : null);
+                    
+                    // food_item 객체 추가
+                    if (mealLog.getFoodItem() != null) {
+                        Map<String, Object> foodItemMap = new HashMap<>();
+                        foodItemMap.put("food_item_id", mealLog.getFoodItem().getFoodItemId());
+                        foodItemMap.put("name", mealLog.getFoodItem().getName());
+                        foodItemMap.put("serving_size", mealLog.getFoodItem().getServingSize() != null ? mealLog.getFoodItem().getServingSize().doubleValue() : 100.0);
+                        foodItemMap.put("calories", mealLog.getFoodItem().getCalories() != null ? mealLog.getFoodItem().getCalories().doubleValue() : 0.0);
+                        foodItemMap.put("carbs", mealLog.getFoodItem().getCarbs() != null ? mealLog.getFoodItem().getCarbs().doubleValue() : 0.0);
+                        foodItemMap.put("protein", mealLog.getFoodItem().getProtein() != null ? mealLog.getFoodItem().getProtein().doubleValue() : 0.0);
+                        foodItemMap.put("fat", mealLog.getFoodItem().getFat() != null ? mealLog.getFoodItem().getFat().doubleValue() : 0.0);
+                        logMap.put("food_item", foodItemMap);
+                    }
+                    
                     return logMap;
                 })
                 .toList();

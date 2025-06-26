@@ -12,28 +12,47 @@ instance_type: "t3.small"
 git_repository_url: "https://github.com/Hyeon6492/LifeBit.git"  # 실제 저장소 URL로 변경
 git_branch: "main"
 
-# 애플리케이션 설정
-openai_api_key: "{{ vault_openai_api_key | default('your-api-key-here') }}"
-use_gpt: "False"
+# OpenAI API 설정 (대문자로 통일)
+OPENAI_API_KEY: "{{ vault_openai_api_key | default('your-api-key-here') }}"
+USE_GPT: "False"
 
-# OAuth 설정 (선택사항)
-kakao_client_id: "YOUR_KAKAO_CLIENT_ID"
-kakao_redirect_uri: ""
-google_client_id: "YOUR_GOOGLE_CLIENT_ID"
-google_client_secret: "YOUR_GOOGLE_CLIENT_SECRET"
-google_redirect_uri: ""
+# OAuth 설정 (대문자로 통일)
+KAKAO_CLIENT_ID: "YOUR_KAKAO_CLIENT_ID"
+KAKAO_REDIRECT_URI: ""
 
-# PostgreSQL 데이터베이스 설정 (Docker Compose)
-postgres_db: "lifebit_db"
-postgres_user: "lifebit_user"
-postgres_password: "{{ vault_db_password | default('lifebit_password') }}"
-postgres_host: "postgres-db"  # Docker Compose 서비스명
-postgres_port: "5432"
+GOOGLE_CLIENT_ID: "YOUR_GOOGLE_CLIENT_ID"
+GOOGLE_CLIENT_SECRET: "YOUR_GOOGLE_CLIENT_SECRET"
+GOOGLE_REDIRECT_URI: ""
 
-# 데이터베이스 설정 (기존 호환성)
-db_name: "{{ postgres_db }}"
-db_user: "{{ postgres_user }}"
-db_password: "{{ postgres_password }}"
+# PostgreSQL 데이터베이스 설정 (대문자로 통일)
+POSTGRES_DB: "lifebit_db"
+POSTGRES_USER: "lifebit_user"
+POSTGRES_PASSWORD: "{{ vault_db_password | default('lifebit_password') }}"
+POSTGRES_HOST: "postgres-db"  # Docker Compose 서비스명
+POSTGRES_PORT: "5432"
+
+# Redis 설정 (대문자로 통일)
+REDIS_PASSWORD: "{{ vault_redis_password | default('redis_password') }}"
+
+# JWT 설정 (대문자로 통일)
+JWT_SECRET: "{{ vault_jwt_secret | default('your-jwt-secret-key-here') }}"
+JWT_SECRET_KEY: "{{ vault_jwt_secret_key | default('your-jwt-secret-key-here') }}"
+JWT_ALGORITHM: "HS256"
+
+# CORS 설정 (대문자로 통일)
+CORS_ORIGINS: "*"
+
+# 로그 레벨 (대문자로 통일)
+LOG_LEVEL: "info"
+
+# Airflow 설정 (대문자로 통일)
+AIRFLOW_ADMIN_USER: "admin"
+AIRFLOW_ADMIN_PASSWORD: "{{ vault_airflow_password | default('admin_password') }}"
+AIRFLOW_FERNET_KEY: "{{ vault_airflow_fernet_key | default('your-fernet-key-here') }}"
+
+# Grafana 설정 (대문자로 통일)
+GRAFANA_ADMIN_USER: "admin"
+GRAFANA_ADMIN_PASSWORD: "{{ vault_grafana_password | default('admin_password') }}"
 
 # 모니터링 설정
 enable_monitoring: true
@@ -48,7 +67,6 @@ max_upload_size: "100M"
 worker_processes: "auto"
 
 # 로깅 설정
-log_level: "info"
 log_retention_days: 30
 
 # AWS 특화 설정

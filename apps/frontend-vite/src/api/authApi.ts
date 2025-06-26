@@ -73,6 +73,104 @@ interface ErrorResponse {
 // 식단 기록 관련 타입들
 // ============================================================================
 
+// 식단 기록 DTO
+export interface DietLogDTO {
+  id: number;
+  userId: number;
+  foodItemId: number;
+  foodName: string;
+  quantity: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  logDate: string;
+  unit: string;
+  mealTime?: string;
+  inputSource?: string;
+  confidenceScore?: number;
+  originalAudioPath?: string;
+  validationStatus?: string;
+  validationNotes?: string;
+  createdAt?: string;
+}
+
+
+/**
+ * 사용자의 영양소 목표 조회
+ * @param date 조회할 날짜 (YYYY-MM-DD)
+ * @param userId 사용자 ID
+ * @returns 영양소 목표 및 현재 섭취량 정보
+ */
+export const getNutritionGoals = async (date: string, userId: number): Promise<DietNutritionDTO[]> => {
+  try {
+    console.log('��️ [API] 영양소 목표 조회 요청:', { date, userId });
+    
+    const response = await axiosInstance.get<DietNutritionDTO[]>(`/api/diet/nutrition-goals/${date}`, {
+      params: { userId }
+    });
+    
+    console.log('✅ [API] 영양소 목표 조회 성공:', response.data);
+    return response.data;
+    
+  } catch (error: unknown) {
+    console.error('❌ [API] 영양소 목표 조회 실패:', error);
+    
+    // 에러 시 기본값 반환
+    return [
+      { name: '칼로리', target: 2000, current: 0, unit: 'kcal', percentage: 0 },
+      { name: '탄수화물', target: 250, current: 0, unit: 'g', percentage: 0 },
+      { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
+      { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
+    ];
+  }
+};
+
+// 영양소 목표 DTO
+export interface DietNutritionDTO {
+  name: string;
+  target: number;
+  current: number;
+  unit: string;
+  percentage: number;
+}
+
+// 음식 아이템
+export interface FoodItem {
+  foodItemId: number;
+  name: string;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  servingSize: number;
+}
+
+// 식단 추가 요청 타입
+export interface DietRecordRequest {
+  quantity: number;
+  meal_time: string;
+  unit: string;
+  log_date: string;
+  input_source: 'TYPING' | 'VOICE';
+  food_item_id?: number;
+  food_name?: string;
+  calories?: number;
+  carbs?: number;
+  protein?: number;
+  fat?: number;
+}
+
+// API 에러 응답 타입
+export interface ApiErrorResponse {
+  response?: {
+    status?: number;
+    data?: {
+      message?: string;
+    };
+  };
+}
+
 // 식단 기록 데이터 타입 (Note.tsx의 DietLogDTO 기반)
 export interface DietRecord {
   id: number;
@@ -97,18 +195,17 @@ export interface DietRecord {
 
 // 식단 기록 생성 요청 타입 (DB 스키마에 맞게 snake_case 사용)
 export interface DietRecordCreateRequest {
-  food_item_id: number;
   quantity: number;
-  meal_time?: string;
-  input_source?: string;
-  confidence_score?: number;
-  original_audio_path?: string;
-  validation_status?: string;
-  validation_notes?: string;
-  created_at?: string;
-  user_id?: number;
-  log_date?: string;
-  unit?: string;
+  meal_time: string;
+  unit: string;
+  log_date: string;
+  input_source: 'TYPING' | 'VOICE';
+  food_item_id?: number;
+  food_name?: string;
+  calories?: number;
+  carbs?: number;
+  protein?: number;
+  fat?: number;
 }
 
 // 식단 기록 수정 요청 타입 (DB 스키마에 맞게 snake_case 사용)
@@ -125,15 +222,20 @@ export interface DietRecordUpdateRequest {
   unit?: string;
 }
 
-// 식품 아이템 타입
-export interface FoodItem {
-  foodItemId: number;
-  name: string;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  servingSize: number;
+// Note.tsx에서 사용하는 식단 수정 요청 타입 (camelCase)
+export interface UpdateDietRequest {
+  userId: number;
+  quantity: number;
+  mealTime: string;
+  unit: 'g';
+  logDate: string;
+  inputSource: 'TYPING';
+  foodItemId?: number;
+  foodName?: string;
+  calories?: number;
+  carbs?: number;
+  protein?: number;
+  fat?: number;
 }
 
 // ============================================================================
@@ -1214,30 +1316,6 @@ export const useExerciseCalendarHeatmap = (userId: string) => {
 // ============================================================================
 // 🍽️ 영양소 통계 API
 // ============================================================================
-
-/**
- * 식단 기록 DTO (노트 페이지와 동일)
- */
-export interface DietLogDTO {
-  id: number;
-  userId: number;
-  foodItemId: number;
-  foodName: string;
-  quantity: number;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  logDate: string;
-  unit: string;
-  mealTime?: string;
-  inputSource?: string;
-  confidenceScore?: number;
-  originalAudioPath?: string;
-  validationStatus?: string;
-  validationNotes?: string;
-  createdAt?: string;
-}
 
 /**
  * 일일 영양소 통계 타입 정의

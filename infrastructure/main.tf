@@ -18,7 +18,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region     = var.aws_region
   access_key = var.aws_access_key_id
   secret_key = var.aws_secret_access_key
 }
@@ -40,7 +40,10 @@ resource "aws_key_pair" "lifebit" {
 
 # VPC
 resource "aws_vpc" "main" {
-  cidr_block = var.vpc_cidr
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
   tags = {
     Name        = "${var.project_name}-${var.environment}-vpc"
     Project     = var.project_name
@@ -103,6 +106,15 @@ resource "aws_security_group" "web" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All TCP"
   }
+  
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "ICMP (ping)"
+  }
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -119,11 +131,11 @@ resource "aws_security_group" "web" {
 
 # EC2 인스턴스 (t3.small, Ubuntu 22.04)
 resource "aws_instance" "web" {
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.web.id]
-  key_name               = aws_key_pair.lifebit.key_name
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.web.id]
+  key_name                    = aws_key_pair.lifebit.key_name
   associate_public_ip_address = true
   
   # EBS 루트 볼륨 크기 증가 (Docker 빌드 공간 확보)
@@ -143,6 +155,8 @@ resource "aws_instance" "web" {
     Project     = var.project_name
     Environment = var.environment
   }
+  
+  # 기본 시스템 설정만 포함 (SSH 키는 AWS가 자동 설정)
   user_data = <<-EOF
 #!/bin/bash
 # 로그 파일 설정
@@ -152,33 +166,33 @@ echo "User Data 스크립트 시작: $(date)"
 # 시스템 업데이트
 apt-get update -y
 
-# SSH 키 디렉토리 생성 및 권한 설정
-mkdir -p /home/ubuntu/.ssh
-chown ubuntu:ubuntu /home/ubuntu/.ssh
-chmod 700 /home/ubuntu/.ssh
+# 기본 패키지 설치
+apt-get install -y curl wget git unzip
 
-# SSH 공개키 추가 (기존 키 덮어쓰기 방지)
-echo "${tls_private_key.lifebit.public_key_openssh}" > /home/ubuntu/.ssh/authorized_keys
-chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
-chmod 600 /home/ubuntu/.ssh/authorized_keys
+# Docker 설치를 위한 준비
+apt-get install -y apt-transport-https ca-certificates gnupg lsb-release
 
-# SSH 서비스 재시작
-systemctl restart ssh
-
-# 완료 로그
-echo "SSH 키 설정 완료: $(date)" >> /var/log/ssh-key-setup.log
 echo "User Data 스크립트 완료: $(date)"
 EOF
 }
 
-# EIP 할당
+# EIP 할당 (최신 방식)
 resource "aws_eip" "web" {
-  instance = aws_instance.web.id
+  domain = "vpc"
+  
   tags = {
     Name        = "${var.project_name}-${var.environment}-eip"
     Project     = var.project_name
     Environment = var.environment
   }
+  
+  depends_on = [aws_internet_gateway.gw]
+}
+
+# EIP와 인스턴스 연결
+resource "aws_eip_association" "web" {
+  instance_id   = aws_instance.web.id
+  allocation_id = aws_eip.web.id
 }
 
  

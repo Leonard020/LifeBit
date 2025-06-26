@@ -167,6 +167,14 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     const goalData = userGoals?.data || userGoals;
     const healthData = healthStats?.data || healthStats;
 
+    console.log('🔍 [EnhancedHealthDashboard] todayData 계산 시작:', {
+      exerciseDataCount: exerciseData.length,
+      mealDataCount: mealData.length,
+      goalData,
+      healthData,
+      nutritionStats
+    });
+
     return processTodayData(
       exerciseData,
       mealData,

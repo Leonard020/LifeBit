@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession, type UpdateDietRequest, type DietLogDTO, type DietNutritionDTO, type FoodItem, type DietRecordRequest, type ApiErrorResponse, getNutritionGoals } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
@@ -23,45 +23,9 @@ import type { TooltipProps } from 'recharts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUpdateExerciseSession } from '@/api/authApi';
 
-// 백엔드 API 응답 타입 정의
-interface DietLogDTO {
-  id: number;
-  userId: number;
-  foodItemId: number;
-  foodName: string;
-  quantity: number;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  logDate: string;
-  unit: string;
-  mealTime?: string; // ENUM: breakfast, lunch, dinner, snack
-  inputSource?: string; // ENUM: VOICE, TYPING
-  confidenceScore?: number;
-  originalAudioPath?: string;
-  validationStatus?: string; // ENUM: PENDING, VALIDATED, REJECTED
-  validationNotes?: string;
-  createdAt?: string;
-}
 
-interface DietNutritionDTO {
-  name: string;
-  target: number;
-  current: number;
-  unit: string;
-  percentage: number;
-}
 
-interface FoodItem {
-  foodItemId: number;
-  name: string;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  servingSize: number;
-}
+
 
 const Note = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -237,6 +201,28 @@ const Note = () => {
     { key: 'weekly_cardio', label: '유산소' },
   ];
 
+  // 영어 bodyPart → 한글 label 매핑
+  const bodyPartLabelMap = {
+    chest: '가슴',
+    back: '등',
+    legs: '하체',
+    shoulders: '어깨',
+    abs: '복근',
+    arms: '팔',
+    cardio: '유산소',
+  };
+
+  // 오늘의 운동 기록을 부위별로 집계
+  const todayBodyPartCount = bodyPartMap.reduce((acc, { label }) => {
+    acc[label] = 0;
+    return acc;
+  }, {} as Record<string, number>);
+
+  todayExercise.forEach(record => {
+    const label = bodyPartLabelMap[record.bodyPart];
+    if (label) todayBodyPartCount[label]++;
+  });
+
   // Always show all 7 body parts in the graph, with 0 for unselected
   const exerciseGoals = React.useMemo(() => {
     if (!userGoalsData) return {};
@@ -254,8 +240,8 @@ const Note = () => {
   const MAX_EDGE_VALUE = 7;
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: weeklySummary[label] || 0,
-    goal: exerciseGoals[label] || 0,
+    today: todayBodyPartCount[label] || 0, // 오늘 실제 수행값
+    goal: exerciseGoals[label] || 0,       // 목표값
   }));
 
   // 운동데이터터 - 저장된 토큰 사용
@@ -290,23 +276,19 @@ const Note = () => {
     if (!authToken) return;
     setIsLoadingDietData(true);
     setDietError(null);
-    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+  
     try {
       const userId = getUserIdFromToken();
-
       if (!userId) {
-        console.warn('🚨 [fetchDietData] 사용자 ID를 찾을 수 없습니다.');
-        setDietError("사용자 인증이 필요합니다.");
+        setDietError("사용자 정보를 찾을 수 없습니다.");
         return;
       }
-
-      console.log(`🍽️ [fetchDietData] 식단 데이터 조회 시작: ${formattedDate}, 사용자: ${userId}`);
-
-      // ✅ authApi.ts의 함수 사용 (충돌 방지)
-      const dietRecords = await getDailyDietRecords(formattedDate, userId);
-
-      // DietRecord → DietLogDTO 변환
-      const convertedRecords: DietLogDTO[] = dietRecords.map(record => ({
+  
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      
+      // 1. 식단 기록 조회
+      const records = await getDailyDietRecords(formattedDate, userId);
+      const convertedRecords: DietLogDTO[] = records.map(record => ({
         id: record.id,
         userId: record.userId,
         foodItemId: record.foodItemId,
@@ -326,22 +308,17 @@ const Note = () => {
         validationNotes: record.validationNotes,
         createdAt: record.createdAt
       }));
-
-      // 영양소 목표는 임시로 기본값 설정 (추후 authApi.ts에 함수 추가 필요)
-      const defaultGoals: DietNutritionDTO[] = [
-        { name: '칼로리', target: 2000, current: 0, unit: 'kcal', percentage: 0 },
-        { name: '탄수화물', target: 250, current: 0, unit: 'g', percentage: 0 },
-        { name: '단백질', target: 120, current: 0, unit: 'g', percentage: 0 },
-        { name: '지방', target: 60, current: 0, unit: 'g', percentage: 0 }
-      ];
-
+  
+      // 2. 실제 사용자의 영양소 목표 조회 (새로 추가)
+      const nutritionGoals = await getNutritionGoals(formattedDate, userId);
+  
       console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
       setDailyDietLogs(convertedRecords);
-      setDailyNutritionGoals(defaultGoals);
-
+      setDailyNutritionGoals(nutritionGoals); // 실제 사용자 목표 사용
+  
     } catch (error) {
       console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
-
+  
       if (error instanceof Error) {
         if (error.message.includes('403')) {
           setDietError("권한이 없습니다. 다시 로그인해주세요.");
@@ -405,7 +382,7 @@ const Note = () => {
         return;
       }
 
-      const request: any = {
+      const request: DietRecordRequest = {
         quantity: parseFloat(quantity),
         meal_time: mealTime,
         unit: 'g',
@@ -443,8 +420,9 @@ const Note = () => {
         title: "식단 기록 추가 완료",
         description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
       });
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      const apiError = error as ApiErrorResponse;
+      if (apiError?.response?.status === 403) {
         toast({
           title: "권한 오류",
           description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
@@ -792,10 +770,10 @@ const Note = () => {
       foodItemId: dietLog.foodItemId,
       foodName: dietLog.foodName,
       quantity: dietLog.quantity,
-      calories: dietLog.calories * per100gFactor,
-      carbs: dietLog.carbs * per100gFactor,
-      protein: dietLog.protein * per100gFactor,
-      fat: dietLog.fat * per100gFactor,
+      calories: Math.round(dietLog.calories * per100gFactor * 100) / 100,
+      carbs: Math.round(dietLog.carbs * per100gFactor * 100) / 100,
+      protein: Math.round(dietLog.protein * per100gFactor * 100) / 100,
+      fat: Math.round(dietLog.fat * per100gFactor * 100) / 100,
       mealTime: dietLog.mealTime || 'breakfast', // 추가: 식사 시간
     });
 
@@ -810,31 +788,43 @@ const Note = () => {
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
     setIsUpdatingDiet(true);
+  
     try {
-      const request: any = {
-        userId: getUserIdFromToken(), // PUT에는 반드시 포함
+      const userId = getUserIdFromToken();
+      if (!userId) throw new Error("User not found");
+  
+      const request: UpdateDietRequest = {
+        userId,
         quantity: editFormData.quantity,
         mealTime: editFormData.mealTime,
         unit: 'g',
         logDate: selectedDate.toISOString().split('T')[0],
         inputSource: 'TYPING',
       };
+  
       if (editFormData.foodItemId) {
         request.foodItemId = editFormData.foodItemId;
       } else {
-        request.foodName = editFormData.foodName;
-        request.calories = editFormData.calories;
-        request.carbs = editFormData.carbs;
-        request.protein = editFormData.protein;
-        request.fat = editFormData.fat;
+        Object.assign(request, {
+          foodName: editFormData.foodName,
+          calories: editFormData.calories,
+          carbs: editFormData.carbs,
+          protein: editFormData.protein,
+          fat: editFormData.fat,
+        });
       }
+  
       const updatedRecord = await updateDietRecord(editingDietLog.id, request);
+  
       setDailyDietLogs(prevLogs =>
         prevLogs.map(log => (log.id === updatedRecord.id ? updatedRecord : log))
       );
+  
       await fetchCalendarRecords();
+  
       setIsEditDietDialogOpen(false);
       setEditingDietLog(null);
+  
       toast({
         title: "식단이 수정되었습니다.",
         description: "식단 기록이 성공적으로 업데이트되었습니다.",
@@ -862,7 +852,8 @@ const Note = () => {
         sets: sets || 1,
         reps: reps || 10,
         weight: weight || 0.0,
-        exerciseDate: formattedDate
+        exerciseDate: formattedDate,
+        bodyPart: bodyPart, // 선택한 부위(GPT 분류)도 함께 전달
       };
       await createExerciseSession(request);
       await fetchExercise();
@@ -991,13 +982,14 @@ const Note = () => {
 
   // Custom tooltip for radar chart
   const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
-    if (active && payload && payload.length > 0) {
-      // Find the goal value
-      const part = payload[0].payload.subject;
-      const goal = payload[0].payload.goal;
+    if (active && payload && (payload as unknown[]).length > 0) {
+      const part = (payload as any)[0].payload.subject;
+      const goal = (payload as any)[0].payload.goal;
+      const today = (payload as any)[0].payload.today;
       return (
         <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <strong>{part}</strong>: {goal}회
+          <div><strong>목표</strong> - {part}: {goal}회</div>
+          <div><strong>달성</strong> - {part}: {today}회</div>
         </div>
       );
     }
@@ -1127,7 +1119,7 @@ const Note = () => {
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
                         <Tooltip content={<RadarGoalTooltip />} />
-                        <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
+                        <Radar name="오늘 운동" dataKey="today" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
                       </RadarChart>
                     </ResponsiveContainer>
@@ -1823,10 +1815,10 @@ const Note = () => {
 
                   <div className="text-sm text-muted-foreground mt-2 p-2 bg-slate-50 rounded-md">
                     <h4 className="font-medium mb-1">총 섭취량</h4>
-                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(0)} kcal<br />
-                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(1)} g<br />
-                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(1)} g<br />
-                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(1)} g
+                    - 칼로리: {((editFormData.calories * editFormData.quantity) / 100).toFixed(2)} kcal<br />
+                    - 탄수화물: {((editFormData.carbs * editFormData.quantity) / 100).toFixed(2)} g<br />
+                    - 단백질: {((editFormData.protein * editFormData.quantity) / 100).toFixed(2)} g<br />
+                    - 지방: {((editFormData.fat * editFormData.quantity) / 100).toFixed(2)} g
                   </div>
                   <div>
                     <Label htmlFor="editMealTime">식사 시간</Label>
