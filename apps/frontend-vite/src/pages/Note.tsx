@@ -1028,11 +1028,9 @@ const Note = () => {
                     <CardTitle>운동 부위별 목표</CardTitle>
                     <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
                   </div>
-                  {/* 총 주간 운동 목표 - no box, just text on background */}
                   <div className="ml-auto text-right">
                     <div className="text-base font-bold text-blue-700">
                       {(() => {
-                        // Calculate total weekly workout target
                         const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
                         const cardio = exerciseGoals['유산소'] || 0;
                         const total = strength + cardio;
@@ -1070,12 +1068,6 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                {isToday(selectedDate) && todayExercise.length > 0 && (
-                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
-                  </Button>
-                )}
               </CardHeader>
               <CardContent>
                 {todayExercise.length > 0 ? (
@@ -1135,11 +1127,6 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedExerciseScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
@@ -1464,17 +1451,6 @@ const Note = () => {
                       </div>
                     </DialogContent>
                   </Dialog>
-                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
-                    <Button
-                      onClick={handleClaimDietScore}
-                      disabled={hasClaimedDietScore}
-                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
-                    </Button>
-                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -1534,13 +1510,6 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedDietScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">
-                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
-                        </p>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
