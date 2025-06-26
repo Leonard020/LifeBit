@@ -330,23 +330,107 @@ cleanup_autoscaling() {
     fi
 }
 
+# 강력한 EC2 인스턴스 정리 (모든 방법 시도)
+cleanup_ec2_instances() {
+    log_cleanup "강력한 EC2 인스턴스 정리 중..."
+    
+    # 1. 태그 기반 인스턴스 찾기 (LifeBit 프로젝트)
+    local tagged_instances=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    
+    # 2. 이름 기반 인스턴스 찾기 (lifebit 포함)
+    local name_instances=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    
+    # 3. 키 페어 기반 인스턴스 찾기 (lifebit 키 사용)
+    local key_instances=$(aws ec2 describe-instances --filters "Name=key-name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    
+    # 4. 보안 그룹 기반 인스턴스 찾기 (lifebit 보안 그룹 사용)
+    local sg_instances=$(aws ec2 describe-instances --filters "Name=instance.group-name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    
+    # 모든 인스턴스 ID 합치고 중복 제거
+    local all_instances=$(echo "$tagged_instances $name_instances $key_instances $sg_instances" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
+    
+    if [[ -n "$all_instances" && "$all_instances" != "None" ]]; then
+        log_info "발견된 LifeBit 관련 인스턴스: $all_instances"
+        
+                 # 인스턴스 상태별 처리
+        for instance_id in $all_instances; do
+            [[ -z "$instance_id" || "$instance_id" == "None" ]] && continue
+            
+            local instance_state=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null)
+            log_info "인스턴스 $instance_id 상태: $instance_state"
+            
+            # 종료 보호 확인 및 해제
+            local termination_protection=$(aws ec2 describe-instance-attribute --instance-id "$instance_id" --attribute disableApiTermination --query 'DisableApiTermination.Value' --output text 2>/dev/null)
+            if [[ "$termination_protection" == "true" ]]; then
+                log_warning "인스턴스 $instance_id 종료 보호 해제 중..."
+                aws ec2 modify-instance-attribute --instance-id "$instance_id" --no-disable-api-termination 2>/dev/null || true
+                sleep 2
+            fi
+            
+            case "$instance_state" in
+                "running"|"pending"|"stopped"|"stopping")
+                    log_info "인스턴스 종료 시도: $instance_id"
+                    aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
+                    ;;
+                "shutting-down"|"terminated")
+                    log_info "인스턴스 $instance_id 이미 종료 중/완료"
+                    ;;
+                *)
+                    log_warning "인스턴스 $instance_id 알 수 없는 상태: $instance_state"
+                    # 종료 보호 해제 후 종료 시도
+                    aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # 모든 인스턴스 종료 대기 (타임아웃 포함)
+        log_info "모든 인스턴스 종료 완료 대기 중... (최대 10분)"
+        local wait_timeout=600  # 10분
+        local wait_start=$(date +%s)
+        
+        while [[ -n "$all_instances" ]]; do
+            local current_time=$(date +%s)
+            if (( current_time - wait_start > wait_timeout )); then
+                log_warning "인스턴스 종료 대기 시간 초과 (10분). 강제 진행합니다."
+                break
+            fi
+            
+            local remaining_instances=""
+            for instance_id in $all_instances; do
+                [[ -z "$instance_id" || "$instance_id" == "None" ]] && continue
+                
+                local current_state=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null)
+                if [[ "$current_state" != "terminated" ]]; then
+                    remaining_instances="$remaining_instances $instance_id"
+                    log_info "인스턴스 $instance_id 여전히 $current_state 상태"
+                else
+                    log_success "인스턴스 $instance_id 종료 완료"
+                fi
+            done
+            
+            all_instances="$remaining_instances"
+            [[ -z "$all_instances" ]] && break
+            
+            sleep 30
+        done
+        
+        if [[ -n "$all_instances" ]]; then
+            log_error "다음 인스턴스들이 종료되지 않았습니다: $all_instances"
+            log_error "AWS 콘솔에서 수동으로 확인 및 종료해주세요."
+        else
+            log_success "모든 LifeBit 관련 인스턴스 종료 완료"
+        fi
+    else
+        log_info "종료할 LifeBit 관련 인스턴스가 없습니다"
+    fi
+}
+
 # EC2 인스턴스 및 관련 리소스 정리
 cleanup_ec2() {
     log_cleanup "EC2 리소스 정리 중..."
     
-    # EC2 인스턴스 종료
-    local instance_ids=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text)
-    if [[ -n "$instance_ids" ]]; then
-        log_info "EC2 인스턴스 종료 중..."
-        aws ec2 terminate-instances --instance-ids $instance_ids || true
-        
-        # 인스턴스 종료 대기
-        log_info "인스턴스 종료 완료 대기: $instance_ids"
-        aws ec2 wait instance-terminated --instance-ids $instance_ids || true
-        log_success "EC2 인스턴스 종료 완료"
-    else
-        log_info "종료할 EC2 인스턴스가 없습니다"
-    fi
+    # 강력한 인스턴스 정리 실행
+    cleanup_ec2_instances
     
     # Network Interfaces 정리 (VPC 삭제 전에 필요)
     local network_interfaces=$(aws ec2 describe-network-interfaces --filters "Name=tag:Project,Values=LifeBit" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text)
@@ -417,11 +501,49 @@ cleanup_networking() {
         [[ -z "$vpc" ]] && continue
         log_warning "Terraform으로 삭제되지 않은 VPC 발견: $vpc. 수동 정리를 시도합니다."
         
+        # 0. 모든 Network Interface 강제 정리 (가장 먼저)
+        log_info "Network Interface 강제 정리 중..."
+        local all_enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].[NetworkInterfaceId,Status,Attachment.AttachmentId]' --output text 2>/dev/null)
+        
+        if [[ -n "$all_enis" ]]; then
+            echo "$all_enis" | while read eni_id status attachment_id; do
+                [[ -z "$eni_id" || "$eni_id" == "None" ]] && continue
+                
+                log_info "Network Interface 처리: $eni_id (상태: $status)"
+                
+                # 연결 해제
+                if [[ -n "$attachment_id" && "$attachment_id" != "None" && "$attachment_id" != "null" ]]; then
+                    log_info "  - 연결 해제: $attachment_id"
+                    aws ec2 detach-network-interface --attachment-id "$attachment_id" --force 2>/dev/null || true
+                    sleep 3
+                fi
+                
+                # 삭제 시도
+                local max_eni_attempts=3
+                for eni_attempt in $(seq 1 $max_eni_attempts); do
+                    if aws ec2 delete-network-interface --network-interface-id "$eni_id" 2>/dev/null; then
+                        log_success "  - Network Interface 삭제 성공: $eni_id"
+                        break
+                    else
+                        if [[ $eni_attempt -eq $max_eni_attempts ]]; then
+                            log_warning "  - Network Interface 삭제 실패: $eni_id"
+                        else
+                            log_info "  - Network Interface 삭제 재시도 ($eni_attempt/$max_eni_attempts): $eni_id"
+                            sleep 5
+                        fi
+                    fi
+                done
+            done
+        fi
+        
+        sleep 5
+        
         # 1. VPC 엔드포인트 삭제
-        local vpc_endpoints=$(aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$vpc" --query 'VpcEndpoints[*].VpcEndpointId' --output text)
+        local vpc_endpoints=$(aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$vpc" --query 'VpcEndpoints[*].VpcEndpointId' --output text 2>/dev/null)
         for endpoint in $vpc_endpoints; do
+            [[ -z "$endpoint" || "$endpoint" == "None" ]] && continue
             log_info "VPC 엔드포인트 삭제: $endpoint"
-            aws ec2 delete-vpc-endpoint --vpc-endpoint-id "$endpoint" || true
+            aws ec2 delete-vpc-endpoint --vpc-endpoint-id "$endpoint" 2>/dev/null || true
         done
         
         # 2. NAT Gateway 삭제
@@ -474,53 +596,169 @@ cleanup_networking() {
             aws ec2 delete-subnet --subnet-id "$subnet" || true
         done
         
-        # 7. 인터넷 게이트웨이 분리 및 삭제
-        local igws=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query 'InternetGateways[*].InternetGatewayId' --output text)
+        # 7. 인터넷 게이트웨이 분리 및 삭제 (Elastic IP 먼저 해제)
+        local igws=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query 'InternetGateways[*].InternetGatewayId' --output text 2>/dev/null)
         for igw in $igws; do
+            [[ -z "$igw" || "$igw" == "None" ]] && continue
             log_info "인터넷 게이트웨이 분리 및 삭제: $igw"
-            aws ec2 detach-internet-gateway --internet-gateway-id "$igw" --vpc-id "$vpc" || true
-            aws ec2 delete-internet-gateway --internet-gateway-id "$igw" || true
+            
+            # VPC와 연결된 모든 Elastic IP 해제
+            local vpc_eips=$(aws ec2 describe-addresses --filters "Name=domain,Values=vpc" --query "Addresses[?NetworkInterfaceId!=null].AllocationId" --output text 2>/dev/null)
+            for eip in $vpc_eips; do
+                [[ -z "$eip" || "$eip" == "None" ]] && continue
+                log_info "Elastic IP 해제: $eip"
+                aws ec2 release-address --allocation-id "$eip" 2>/dev/null || true
+            done
+            
+            # 인터넷 게이트웨이 분리 및 삭제
+            aws ec2 detach-internet-gateway --internet-gateway-id "$igw" --vpc-id "$vpc" 2>/dev/null || true
+            sleep 3
+            aws ec2 delete-internet-gateway --internet-gateway-id "$igw" 2>/dev/null || true
         done
         
-        # 8. 보안 그룹 삭제 (기본 보안 그룹 제외)
-        local security_groups=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" "Name=group-name,Values=!default" --query 'SecurityGroups[*].GroupId' --output text)
-        for sg in $security_groups; do
-            log_info "보안 그룹 삭제: $sg"
-            aws ec2 delete-security-group --group-id "$sg" || true
-        done
+        # 8. 보안 그룹 정리 (콘솔과 동일한 방식)
+        log_info "보안 그룹 의존성 해결 중..."
         
-        # 9. VPC 삭제 시도
-        log_info "VPC 삭제 시도: $vpc"
-        if aws ec2 delete-vpc --vpc-id "$vpc"; then
-            log_success "VPC $vpc 삭제 완료"
-        else
-            log_error "VPC $vpc 삭제 실패. 남은 의존성 리소스를 확인해주세요."
+        # 먼저 모든 보안 그룹을 가져오기 (기본 제외)
+        local all_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName!=`default`]' --output json 2>/dev/null)
+        
+        if [[ "$all_sgs" != "[]" && "$all_sgs" != "null" && -n "$all_sgs" ]]; then
+            # 1단계: 모든 보안 그룹 간 참조 제거 (Self-referencing rules)
+            local sg_ids=$(echo "$all_sgs" | jq -r '.[].GroupId' 2>/dev/null)
+            for sg in $sg_ids; do
+                [[ -z "$sg" ]] && continue
+                log_info "보안 그룹 자기 참조 규칙 제거: $sg"
+                
+                # 다른 보안 그룹을 참조하는 Ingress 규칙 제거
+                local cross_ref_ingress=$(aws ec2 describe-security-groups --group-ids "$sg" --query "SecurityGroups[0].IpPermissions[?UserIdGroupPairs[0].GroupId]" --output json 2>/dev/null)
+                if [[ "$cross_ref_ingress" != "[]" && "$cross_ref_ingress" != "null" ]]; then
+                    log_info "  - 교차 참조 Ingress 규칙 제거: $sg"
+                    aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$cross_ref_ingress" 2>/dev/null || true
+                fi
+                
+                # 다른 보안 그룹을 참조하는 Egress 규칙 제거
+                local cross_ref_egress=$(aws ec2 describe-security-groups --group-ids "$sg" --query "SecurityGroups[0].IpPermissionsEgress[?UserIdGroupPairs[0].GroupId]" --output json 2>/dev/null)
+                if [[ "$cross_ref_egress" != "[]" && "$cross_ref_egress" != "null" ]]; then
+                    log_info "  - 교차 참조 Egress 규칙 제거: $sg"
+                    aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$cross_ref_egress" 2>/dev/null || true
+                fi
+            done
             
-            # 남은 리소스 확인
-            local remaining_resources=""
+            sleep 3
             
-            # Network Interfaces 확인
-            local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text)
-            if [[ -n "$enis" ]]; then
-                remaining_resources="$remaining_resources NetworkInterfaces: $enis"
-            fi
+            # 2단계: 모든 IP 기반 규칙 제거
+            for sg in $sg_ids; do
+                [[ -z "$sg" ]] && continue
+                log_info "보안 그룹 IP 규칙 제거: $sg"
+                
+                # 남은 모든 Ingress 규칙 제거
+                local remaining_ingress=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)
+                if [[ "$remaining_ingress" != "[]" && "$remaining_ingress" != "null" ]]; then
+                    aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$remaining_ingress" 2>/dev/null || true
+                fi
+                
+                # 남은 모든 Egress 규칙 제거 (기본 규칙 제외)
+                local remaining_egress=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null)
+                if [[ "$remaining_egress" != "[]" && "$remaining_egress" != "null" ]]; then
+                    aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$remaining_egress" 2>/dev/null || true
+                fi
+            done
             
-            # Elastic IPs 확인
-            local eips=$(aws ec2 describe-addresses --filters "Name=domain,Values=vpc" --query 'Addresses[?NetworkInterfaceId==null].AllocationId' --output text)
-            if [[ -n "$eips" ]]; then
-                remaining_resources="$remaining_resources ElasticIPs: $eips"
-            fi
+            sleep 5
             
-            # 라우팅 테이블 확인
-            local remaining_rts=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].RouteTableId' --output text)
-            if [[ -n "$remaining_rts" ]]; then
-                remaining_resources="$remaining_resources RouteTables: $remaining_rts"
-            fi
+            # 3단계: 보안 그룹 삭제 (여러 번 시도)
+            local max_attempts=3
+            for attempt in $(seq 1 $max_attempts); do
+                log_info "보안 그룹 삭제 시도 $attempt/$max_attempts"
+                local remaining_sgs=""
+                
+                for sg in $sg_ids; do
+                    [[ -z "$sg" ]] && continue
+                    
+                    if aws ec2 delete-security-group --group-id "$sg" 2>/dev/null; then
+                        log_success "보안 그룹 삭제 성공: $sg"
+                    else
+                        remaining_sgs="$remaining_sgs $sg"
+                        log_warning "보안 그룹 삭제 실패: $sg (재시도 예정)"
+                    fi
+                done
+                
+                sg_ids="$remaining_sgs"
+                [[ -z "$sg_ids" ]] && break
+                
+                if [[ $attempt -lt $max_attempts ]]; then
+                    log_info "5초 대기 후 재시도..."
+                    sleep 5
+                fi
+            done
             
-            if [[ -n "$remaining_resources" ]]; then
-                log_warning "남은 리소스: $remaining_resources"
+            if [[ -n "$sg_ids" ]]; then
+                log_error "삭제되지 않은 보안 그룹: $sg_ids"
             fi
         fi
+        
+        # 9. VPC 삭제 시도 (여러 번 재시도)
+        log_info "VPC 삭제 시도: $vpc"
+        local vpc_delete_attempts=5
+        local vpc_deleted=false
+        
+        for attempt in $(seq 1 $vpc_delete_attempts); do
+            log_info "VPC 삭제 시도 $attempt/$vpc_delete_attempts: $vpc"
+            
+            if aws ec2 delete-vpc --vpc-id "$vpc" 2>/dev/null; then
+                log_success "VPC $vpc 삭제 완료"
+                vpc_deleted=true
+                break
+            else
+                if [[ $attempt -eq $vpc_delete_attempts ]]; then
+                    log_error "VPC $vpc 삭제 최종 실패. 의존성 리소스 확인 중..."
+                    
+                    # 상세한 의존성 분석
+                    log_info "=== VPC 의존성 분석 ==="
+                    
+                    # Network Interfaces 확인
+                    local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].[NetworkInterfaceId,Status,Description]' --output text 2>/dev/null)
+                    if [[ -n "$enis" ]]; then
+                        log_warning "남은 Network Interfaces:"
+                        echo "$enis" | while read eni status desc; do
+                            [[ -n "$eni" ]] && log_warning "  - $eni ($status): $desc"
+                        done
+                    fi
+                    
+                    # 보안 그룹 확인
+                    local remaining_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[*].[GroupId,GroupName]' --output text 2>/dev/null)
+                    if [[ -n "$remaining_sgs" ]]; then
+                        log_warning "남은 보안 그룹:"
+                        echo "$remaining_sgs" | while read sg_id sg_name; do
+                            [[ -n "$sg_id" ]] && log_warning "  - $sg_id ($sg_name)"
+                        done
+                    fi
+                    
+                    # 라우팅 테이블 확인
+                    local remaining_rts=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].[RouteTableId,Associations[0].Main]' --output text 2>/dev/null)
+                    if [[ -n "$remaining_rts" ]]; then
+                        log_warning "남은 라우팅 테이블:"
+                        echo "$remaining_rts" | while read rt_id is_main; do
+                            [[ -n "$rt_id" ]] && log_warning "  - $rt_id (Main: $is_main)"
+                        done
+                    fi
+                    
+                    # VPC 엔드포인트 확인
+                    local vpc_endpoints=$(aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$vpc" --query 'VpcEndpoints[*].[VpcEndpointId,State]' --output text 2>/dev/null)
+                    if [[ -n "$vpc_endpoints" ]]; then
+                        log_warning "남은 VPC 엔드포인트:"
+                        echo "$vpc_endpoints" | while read ep_id state; do
+                            [[ -n "$ep_id" ]] && log_warning "  - $ep_id ($state)"
+                        done
+                    fi
+                    
+                    log_error "💡 해결 방법: AWS 콘솔에서 VPC -> $vpc -> Actions -> Delete VPC 사용"
+                else
+                    log_warning "VPC 삭제 실패 (재시도 $attempt/$vpc_delete_attempts). 10초 후 재시도..."
+                    sleep 10
+                fi
+            fi
+        done
     done
 
     if [[ -z "$all_vpcs" ]]; then
@@ -706,10 +944,37 @@ verify_cleanup() {
     log_info "🔍 최종 정리 상태 검증 중..."
     local issues_found=0
     
-    # 1. EC2 인스턴스
-    local running_instances=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text)
-    if [[ -n "$running_instances" ]]; then
-        log_warning "남은 EC2 인스턴스: $running_instances"
+    # 1. EC2 인스턴스 (더 포괄적 검사)
+    local running_instances=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    local name_instances=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    local key_instances=$(aws ec2 describe-instances --filters "Name=key-name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    
+    local all_remaining=$(echo "$running_instances $name_instances $key_instances" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
+    
+    if [[ -n "$all_remaining" && "$all_remaining" != "None" ]]; then
+        log_warning "남은 EC2 인스턴스: $all_remaining"
+        
+        # 각 인스턴스의 상태와 삭제 실패 원인 진단
+        for instance_id in $all_remaining; do
+            [[ -z "$instance_id" ]] && continue
+            
+            local instance_details=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].[State.Name,StateTransitionReason,Tags[?Key==`Name`].Value|[0]]' --output text 2>/dev/null)
+            log_warning "  - $instance_id: $instance_details"
+            
+            # 종료 보호 확인
+            local termination_protection=$(aws ec2 describe-instance-attribute --instance-id "$instance_id" --attribute disableApiTermination --query 'DisableApiTermination.Value' --output text 2>/dev/null)
+            if [[ "$termination_protection" == "true" ]]; then
+                log_error "    ❌ 종료 보호가 활성화되어 있음!"
+                log_info "    💡 해결 방법: aws ec2 modify-instance-attribute --instance-id $instance_id --no-disable-api-termination"
+            fi
+            
+            # 스팟 인스턴스 확인
+            local spot_request=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].SpotInstanceRequestId' --output text 2>/dev/null)
+            if [[ -n "$spot_request" && "$spot_request" != "None" ]]; then
+                log_info "    ℹ️  스팟 인스턴스입니다: $spot_request"
+            fi
+        done
+        
         ((issues_found++))
     fi
     
@@ -750,12 +1015,98 @@ verify_cleanup() {
     fi
 }
 
-# 강제 VPC 정리 (마지막 수단)
+# 모든 인스턴스 강제 검색 및 정리
+force_cleanup_all_instances() {
+    log_cleanup "모든 인스턴스 강제 검색 및 정리 중..."
+    
+    # 1. 모든 인스턴스 나열 후 lifebit 관련 필터링
+    log_info "모든 EC2 인스턴스 검색 중..."
+    local all_instances=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    
+    local lifebit_instances=""
+    for instance_id in $all_instances; do
+        [[ -z "$instance_id" || "$instance_id" == "None" ]] && continue
+        
+        # 인스턴스 세부 정보 확인
+        local instance_info=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].[Tags[?Key==`Name`].Value|[0],Tags[?Key==`Project`].Value|[0],KeyName,SecurityGroups[0].GroupName]' --output text 2>/dev/null)
+        
+        # lifebit 관련 인스턴스인지 확인
+        if echo "$instance_info" | grep -qi "lifebit"; then
+            log_info "LifeBit 관련 인스턴스 발견: $instance_id ($instance_info)"
+            lifebit_instances="$lifebit_instances $instance_id"
+        fi
+    done
+    
+    if [[ -n "$lifebit_instances" ]]; then
+        log_warning "강제 검색으로 발견된 LifeBit 인스턴스들: $lifebit_instances"
+        for instance_id in $lifebit_instances; do
+            [[ -z "$instance_id" ]] && continue
+            
+            # 종료 보호 해제
+            local termination_protection=$(aws ec2 describe-instance-attribute --instance-id "$instance_id" --attribute disableApiTermination --query 'DisableApiTermination.Value' --output text 2>/dev/null)
+            if [[ "$termination_protection" == "true" ]]; then
+                log_warning "강제 종료 보호 해제: $instance_id"
+                aws ec2 modify-instance-attribute --instance-id "$instance_id" --no-disable-api-termination 2>/dev/null || true
+                sleep 2
+            fi
+            
+            log_info "강제 인스턴스 종료: $instance_id"
+            aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
+        done
+        
+        # 종료 대기
+        log_info "강제 종료 인스턴스들 대기 중..."
+        for instance_id in $lifebit_instances; do
+            [[ -z "$instance_id" ]] && continue
+            aws ec2 wait instance-terminated --instance-ids "$instance_id" 2>/dev/null || true
+        done
+        log_success "강제 검색 인스턴스 정리 완료"
+    else
+        log_info "강제 검색에서 추가 LifeBit 인스턴스를 찾지 못했습니다"
+    fi
+}
+
+# 스마트 리소스 감지 및 정리
+smart_cleanup_remaining() {
+    log_cleanup "스마트 리소스 감지 및 정리 중..."
+    
+    # 1. 모든 lifebit 관련 태그를 가진 리소스 찾기
+    log_info "lifebit 관련 태그를 가진 모든 리소스 검색 중..."
+    
+    # EC2 인스턴스 (모든 상태)
+    local instances=$(aws ec2 describe-instances --filters "Name=tag:*,Values=*lifebit*" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    if [[ -n "$instances" && "$instances" != "None" ]]; then
+        log_info "태그 기반으로 발견된 EC2 인스턴스 종료: $instances"
+        aws ec2 terminate-instances --instance-ids $instances 2>/dev/null || true
+        aws ec2 wait instance-terminated --instance-ids $instances 2>/dev/null || true
+    fi
+    
+    # 2. 강제 전체 검색 실행
+    force_cleanup_all_instances
+    
+    # 모든 Elastic IP 해제 (연결되지 않은 것들)
+    local unattached_eips=$(aws ec2 describe-addresses --query 'Addresses[?InstanceId==null && NetworkInterfaceId==null].AllocationId' --output text 2>/dev/null)
+    for eip in $unattached_eips; do
+        [[ -z "$eip" || "$eip" == "None" ]] && continue
+        log_info "연결되지 않은 Elastic IP 해제: $eip"
+        aws ec2 release-address --allocation-id "$eip" 2>/dev/null || true
+    done
+    
+    # 모든 Network Interface 정리 (available 상태)
+    local available_enis=$(aws ec2 describe-network-interfaces --filters "Name=status,Values=available" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text 2>/dev/null)
+    for eni in $available_enis; do
+        [[ -z "$eni" || "$eni" == "None" ]] && continue
+        log_info "사용 가능한 Network Interface 삭제: $eni"
+        aws ec2 delete-network-interface --network-interface-id "$eni" 2>/dev/null || true
+    done
+}
+
+# 강화된 VPC 정리 (마지막 수단)
 force_cleanup_vpc() {
-    log_cleanup "강제 VPC 정리 중... (마지막 수단)"
+    log_cleanup "강화된 VPC 정리 중... (마지막 수단)"
     
     # 모든 VPC 찾기 (태그와 관계없이)
-    local all_vpcs=$(aws ec2 describe-vpcs --query 'Vpcs[*].VpcId' --output text)
+    local all_vpcs=$(aws ec2 describe-vpcs --query 'Vpcs[*].VpcId' --output text 2>/dev/null)
     
     for vpc in $all_vpcs; do
         [[ -z "$vpc" ]] && continue
@@ -772,13 +1123,21 @@ force_cleanup_vpc() {
             local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].NetworkInterfaceId' --output text)
             for eni in $enis; do
                 log_info "Network Interface 강제 삭제: $eni"
-                aws ec2 delete-network-interface --network-interface-id "$eni" --force || true
+                # 먼저 연결 해제 시도
+                local attachment_id=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" --query 'NetworkInterfaces[0].Attachment.AttachmentId' --output text 2>/dev/null)
+                if [[ "$attachment_id" != "None" && "$attachment_id" != "null" && -n "$attachment_id" ]]; then
+                    log_info "Network Interface 연결 해제: $eni ($attachment_id)"
+                    aws ec2 detach-network-interface --attachment-id "$attachment_id" --force || true
+                    sleep 5
+                fi
+                # 삭제 시도
+                aws ec2 delete-network-interface --network-interface-id "$eni" || true
             done
             
-            # 모든 라우팅 테이블 연결 해제
+            # 모든 라우팅 테이블 연결 해제 (메인 라우팅 테이블 제외)
             local route_tables=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].RouteTableId' --output text)
             for rt in $route_tables; do
-                local associations=$(aws ec2 describe-route-tables --route-table-ids "$rt" --query 'RouteTables[0].Associations[*].RouteTableAssociationId' --output text)
+                local associations=$(aws ec2 describe-route-tables --route-table-ids "$rt" --query 'RouteTables[0].Associations[?Main==`false`].RouteTableAssociationId' --output text)
                 for assoc in $associations; do
                     log_info "라우팅 테이블 연결 강제 해제: $assoc"
                     aws ec2 disassociate-route-table --association-id "$assoc" || true
@@ -823,8 +1182,12 @@ main() {
     log_info "--- 3단계: Terraform으로 인프라 삭제 ---"
     terraform_destroy
     
-    # 4. Terraform으로 삭제되지 않았을 수 있는 리소스들 정리 (Fallback)
-    log_info "--- 4단계: 남은 리소스 정리 (Fallback) ---"
+    # 4. 스마트 리소스 감지 및 정리
+    log_info "--- 4단계: 스마트 리소스 감지 및 정리 ---"
+    smart_cleanup_remaining
+    
+    # 5. Terraform으로 삭제되지 않았을 수 있는 리소스들 정리 (Fallback)
+    log_info "--- 5단계: 남은 리소스 정리 (Fallback) ---"
     cleanup_networking    # 남은 VPC 관련 리소스 (개선된 순서)
     cleanup_key_pairs     # 남은 키 페어 (Terraform 실패 대비)
     cleanup_s3
@@ -833,16 +1196,16 @@ main() {
     cleanup_route53
     cleanup_iam           # 다른 리소스가 모두 삭제된 후 마지막에 정리
     
-    # 5. 로컬 배포 파일 정리
-    log_info "--- 5단계: 로컬 배포 파일 정리 ---"
+    # 6. 로컬 배포 파일 정리
+    log_info "--- 6단계: 로컬 배포 파일 정리 ---"
     cleanup_deployment_files
     
-    # 6. 강제 VPC 정리 (마지막 수단)
-    log_info "--- 6단계: 강제 VPC 정리 (마지막 수단) ---"
+    # 7. 강제 VPC 정리 (마지막 수단)
+    log_info "--- 7단계: 강제 VPC 정리 (마지막 수단) ---"
     force_cleanup_vpc
     
-    # 7. 최종 검증
-    log_info "--- 7단계: 최종 검증 ---"
+    # 8. 최종 검증
+    log_info "--- 8단계: 최종 검증 ---"
     verify_cleanup
     
     log_success "🎉 LifeBit AWS 완전 삭제 완료!"

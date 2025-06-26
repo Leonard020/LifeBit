@@ -85,7 +85,7 @@ variable "root_volume_size" {
 variable "ami_id" {
   description = "AMI ID for Ubuntu 22.04 LTS"
   type        = string
-  default     = "ami-0c9c942bd7bf113a2"  # Ubuntu 22.04 LTS in ap-northeast-2
+  default     = "ami-0e0509ce7c033c81c"  # Ubuntu 22.04 LTS in ap-northeast-2 (최신)
 
   validation {
     condition     = length(var.ami_id) > 0
