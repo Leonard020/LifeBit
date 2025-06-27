@@ -184,7 +184,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     exerciseErrorMessage: exerciseError?.message || 'Unknown error'
   });
 
-  // 차트 데이터 준비
+  // 차트 데이터 준비 (Forward Fill 방식으로 자연스러운 트렌드 생성)
   const chartData = useMemo(() => {
     // API 응답이 직접 배열인 경우와 data 속성을 가진 경우 모두 처리
     const healthRecordsData = Array.isArray(healthRecords) 
@@ -201,91 +201,135 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     
     const goalsData = userGoals?.data || userGoals;
 
-    // 기간별 데이터 그룹화
-    const groupedData: { [key: string]: {
-      label: string;
-      date: string;
-      weight: number;
-      bmi: number;
-      exerciseMinutes: number;
-      exerciseCalories: number;
-      mealCalories: number;
-      mealCount: number;
-    } } = {};
-    
-    // 현재 날짜 기준 기간별 라벨 생성
-    const now = new Date();
-    const labels = [];
-    
-    if (period === 'day') {
-      // 최근 7일
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - i);
-        const label = date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
-        const key = date.toISOString().split('T')[0];
-        labels.push(label);
-        groupedData[key] = {
-          label,
-          date: key,
-          weight: 0,
-          bmi: 0,
-          exerciseMinutes: 0,
-          exerciseCalories: 0,
-          mealCalories: 0,
-          mealCount: 0
-        };
+    // 기간별 데이터 그룹화를 위한 헬퍼 함수
+    const getDateKey = (dateStr: string, period: string): string => {
+      const date = new Date(dateStr);
+      switch (period) {
+        case 'day':
+          return dateStr; // YYYY-MM-DD 그대로 사용
+        case 'week': {
+          // 일요일 기준 주의 시작 날짜 반환
+          const dayOfWeek = date.getDay();
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - dayOfWeek);
+          return weekStart.toISOString().split('T')[0];
+        }
+        case 'month':
+          return dateStr.substring(0, 7); // YYYY-MM
+        default:
+          return dateStr;
       }
-    } else if (period === 'week') {
-      // 최근 8주
-      for (let i = 7; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - (i * 7));
-        const label = `${date.getMonth() + 1}월 ${Math.ceil(date.getDate() / 7)}주차`;
-        const key = date.toISOString().split('T')[0];
-        labels.push(label);
-        groupedData[key] = {
-          label,
-          date: key,
-          weight: 0,
-          bmi: 0,
-          exerciseMinutes: 0,
-          exerciseCalories: 0,
-          mealCalories: 0,
-          mealCount: 0
-        };
-      }
-    } else {
-      // 최근 12개월
-      for (let i = 11; i >= 0; i--) {
-        const date = new Date(now);
-        date.setMonth(date.getMonth() - i);
-        const label = date.toLocaleDateString('ko-KR', { year: '2-digit', month: 'short' });
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        labels.push(label);
-        groupedData[key] = {
-          label,
-          date: key,
-          weight: 0,
-          bmi: 0,
-          exerciseMinutes: 0,
-          exerciseCalories: 0,
-          mealCalories: 0,
-          mealCount: 0
-        };
-      }
-    }
+    };
 
-    // 건강 기록 데이터 매핑
+    // 기간별 라벨 생성 함수
+    const generatePeriodLabel = (baseDate: Date, period: string, index: number): string => {
+      switch (period) {
+        case 'day':
+          return baseDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+        case 'week': {
+          const weekEnd = new Date(baseDate);
+          weekEnd.setDate(baseDate.getDate() + 6);
+          return `${baseDate.getMonth() + 1}/${baseDate.getDate()}~${weekEnd.getMonth() + 1}/${weekEnd.getDate()}`;
+        }
+        case 'month':
+          return baseDate.toLocaleDateString('ko-KR', { year: '2-digit', month: 'short' });
+        default:
+          return baseDate.toLocaleDateString('ko-KR');
+      }
+    };
+
+    // 🔧 확장된 기간 설정 (3개월 전 데이터까지 포함하여 Forward Fill 적용)
+    const getExtendedPeriod = () => {
+      const now = new Date();
+      const extendedData: { [key: string]: {
+        label: string;
+        date: string;
+        weightValues: number[];
+        bmiValues: number[];
+        exerciseMinutes: number;
+        exerciseCalories: number;
+        mealCalories: number;
+        mealCount: number;
+        isDisplayPeriod: boolean; // 실제 표시할 기간인지 구분
+      } } = {};
+
+      if (period === 'day') {
+        // 표시할 최근 7일 + 3개월 전 데이터 (97일)
+        for (let i = 96; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          const key = date.toISOString().split('T')[0];
+          const label = generatePeriodLabel(date, period, i);
+          extendedData[key] = {
+            label,
+            date: key,
+            weightValues: [],
+            bmiValues: [],
+            exerciseMinutes: 0,
+            exerciseCalories: 0,
+            mealCalories: 0,
+            mealCount: 0,
+            isDisplayPeriod: i <= 6 // 최근 7일만 표시
+          };
+        }
+      } else if (period === 'week') {
+        // 표시할 최근 8주 + 3개월 전 데이터 (20주)
+        for (let i = 19; i >= 0; i--) {
+          const weekEnd = new Date(now);
+          weekEnd.setDate(weekEnd.getDate() - (i * 7));
+          
+          const dayOfWeek = weekEnd.getDay();
+          const weekStart = new Date(weekEnd);
+          weekStart.setDate(weekEnd.getDate() - dayOfWeek);
+          
+          const key = weekStart.toISOString().split('T')[0];
+          const label = generatePeriodLabel(weekStart, period, i);
+          extendedData[key] = {
+            label,
+            date: key,
+            weightValues: [],
+            bmiValues: [],
+            exerciseMinutes: 0,
+            exerciseCalories: 0,
+            mealCalories: 0,
+            mealCount: 0,
+            isDisplayPeriod: i <= 7 // 최근 8주만 표시
+          };
+        }
+      } else {
+        // 표시할 최근 12개월 + 3개월 전 데이터 (15개월)
+        for (let i = 14; i >= 0; i--) {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - i);
+          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const label = generatePeriodLabel(date, period, i);
+          extendedData[key] = {
+            label,
+            date: key,
+            weightValues: [],
+            bmiValues: [],
+            exerciseMinutes: 0,
+            exerciseCalories: 0,
+            mealCalories: 0,
+            mealCount: 0,
+            isDisplayPeriod: i <= 11 // 최근 12개월만 표시
+          };
+        }
+      }
+
+      return extendedData;
+    };
+
+    const groupedData = getExtendedPeriod();
+
+    // 건강 기록 데이터 매핑 (3개월 전 데이터까지 포함)
     if (Array.isArray(healthRecordsData)) {
       healthRecordsData.forEach(record => {
-        const dateKey = period === 'month' 
-          ? record.record_date.substring(0, 7)
-          : record.record_date;
+        const dateKey = getDateKey(record.record_date, period);
         
         if (groupedData[dateKey]) {
-          groupedData[dateKey].weight = record.weight;
-          groupedData[dateKey].bmi = record.bmi;
+          if (record.weight) groupedData[dateKey].weightValues.push(record.weight);
+          if (record.bmi) groupedData[dateKey].bmiValues.push(record.bmi);
         }
       });
     }
@@ -293,9 +337,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     // 운동 세션 데이터 매핑
     if (Array.isArray(exerciseSessionsData)) {
       exerciseSessionsData.forEach(session => {
-        const dateKey = period === 'month' 
-          ? session.exercise_date.substring(0, 7)
-          : session.exercise_date;
+        const dateKey = getDateKey(session.exercise_date, period);
         
         if (groupedData[dateKey]) {
           groupedData[dateKey].exerciseMinutes += session.duration_minutes || 0;
@@ -304,21 +346,81 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       });
     }
 
-    // 식단 데이터 매핑 (예시)
+    // 식단 데이터 매핑
     if (Array.isArray(mealLogsData)) {
       mealLogsData.forEach(meal => {
-        const dateKey = period === 'month' 
-          ? meal.log_date.substring(0, 7)
-          : meal.log_date;
+        const dateKey = getDateKey(meal.log_date, period);
         
         if (groupedData[dateKey]) {
-          groupedData[dateKey].mealCalories += 200; // 임시 칼로리 값
+          const mealCalories = meal.food_item ? 
+            (meal.food_item.calories_per_100g * (meal.amount || 100) / 100) : 
+            200;
+          groupedData[dateKey].mealCalories += mealCalories;
           groupedData[dateKey].mealCount += 1;
         }
       });
     }
 
-    return Object.values(groupedData);
+    // 🔧 Forward Fill 방식으로 자연스러운 데이터 처리
+    const sortedKeys = Object.keys(groupedData).sort();
+    let lastValidWeight: number | null = null;
+    let lastValidBmi: number | null = null;
+
+    const processedData = sortedKeys.map(key => {
+      const group = groupedData[key];
+      
+      // 현재 기간의 평균값 계산
+      let currentWeight = group.weightValues.length > 0 ? 
+        Math.round((group.weightValues.reduce((sum, val) => sum + val, 0) / group.weightValues.length) * 10) / 10 : null;
+      
+      let currentBmi = group.bmiValues.length > 0 ? 
+        Math.round((group.bmiValues.reduce((sum, val) => sum + val, 0) / group.bmiValues.length) * 10) / 10 : null;
+
+      // Forward Fill 적용: 데이터가 없으면 이전 유효값 사용
+      if (currentWeight !== null) {
+        lastValidWeight = currentWeight;
+      } else if (lastValidWeight !== null) {
+        currentWeight = lastValidWeight;
+      }
+
+      if (currentBmi !== null) {
+        lastValidBmi = currentBmi;
+      } else if (lastValidBmi !== null) {
+        currentBmi = lastValidBmi;
+      }
+
+      return {
+        label: group.label,
+        date: group.date,
+        // 🔧 차트 연결을 위해 null 처리 (값이 없으면 null, Forward Fill 값이 있으면 사용)
+        weight: currentWeight,
+        bmi: currentBmi,
+        exerciseMinutes: group.exerciseMinutes,
+        exerciseCalories: group.exerciseCalories,
+        mealCalories: Math.round(group.mealCalories),
+        mealCount: group.mealCount,
+        isDisplayPeriod: group.isDisplayPeriod,
+        // 🔧 데이터 존재 여부 표시 (점선/실선 구분용)
+        hasWeightData: group.weightValues.length > 0,
+        hasBmiData: group.bmiValues.length > 0,
+        hasExerciseData: group.exerciseMinutes > 0
+      };
+    });
+
+    // 표시할 기간만 필터링하여 반환
+    const displayData = processedData.filter(item => item.isDisplayPeriod);
+    
+    // 🔧 로그로 데이터 확인
+    console.log(`📊 [${period}] 처리된 차트 데이터:`, displayData.map(d => ({
+      label: d.label,
+      weight: d.weight,
+      bmi: d.bmi,
+      exerciseMinutes: d.exerciseMinutes,
+      hasWeightData: d.hasWeightData,
+      hasBmiData: d.hasBmiData
+    })));
+
+    return displayData;
   }, [healthRecords, exerciseSessions, mealLogs, period, userGoals]);
 
   // 목표 달성률 계산
@@ -598,19 +700,269 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <ComposedChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="exerciseMinutes" fill={COLORS.primary} name="운동 시간(분)" />
-                  <Line yAxisId="right" type="monotone" dataKey="weight" stroke={COLORS.danger} strokeWidth={3} name="체중(kg)" />
-                  <Line yAxisId="right" type="monotone" dataKey="bmi" stroke={COLORS.purple} strokeWidth={2} name="BMI" />
+              <ResponsiveContainer width="100%" height={450}>
+                <ComposedChart 
+                  data={chartData}
+                  margin={{
+                    top: 20,
+                    right: 60,
+                    left: 20,
+                    bottom: 80
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis 
+                    dataKey="label" 
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={-35}
+                    textAnchor="end"
+                    height={80}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    tickLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis 
+                    yAxisId="exercise" 
+                    label={{ value: '운동 시간(분)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                    domain={[0, 'dataMax + 20']}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis 
+                    yAxisId="weight" 
+                    orientation="right" 
+                    label={{ value: '체중(kg)', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' } }}
+                    domain={[(dataMin) => Math.max(dataMin - 3, 40), (dataMax) => dataMax + 3]}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis 
+                    yAxisId="bmi" 
+                    orientation="right" 
+                    label={{ value: 'BMI', angle: 90, position: 'outside', style: { textAnchor: 'middle' } }}
+                    domain={[(dataMin) => Math.max(dataMin - 2, 15), (dataMax) => Math.min(dataMax + 2, 35)]}
+                    tick={{ fontSize: 12 }}
+                    hide={true}
+                  />
+                  <Tooltip 
+                    formatter={(value, name) => {
+                      if (name === '운동 시간(분)') return [`${value}분`, name];
+                      if (name === '체중(kg)') return [`${value}kg`, name];
+                      if (name === 'BMI') return [value, name];
+                      return [value, name];
+                    }}
+                    labelFormatter={(label) => `기간: ${label}`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    iconType="line"
+                    wrapperStyle={{ fontSize: '14px', paddingTop: '20px' }}
+                  />
+                  <Bar 
+                    yAxisId="exercise" 
+                    dataKey="exerciseMinutes" 
+                    fill={COLORS.primary} 
+                    name="운동 시간(분)"
+                    radius={[2, 2, 0, 0]}
+                    opacity={0.8}
+                  />
+                  <Line 
+                    yAxisId="weight" 
+                    type="monotone" 
+                    dataKey="weight" 
+                    stroke={COLORS.danger} 
+                    strokeWidth={3} 
+                    name="체중(kg)" 
+                    dot={(props) => {
+                      const { cx, cy, payload, index } = props;
+                      const key = `weight-dot-${index}`;
+                      if (payload?.hasWeightData) {
+                        return <circle key={key} cx={cx} cy={cy} r={4} stroke={COLORS.danger} strokeWidth={2} fill="#fff" />;
+                      }
+                      return <circle key={key} cx={cx} cy={cy} r={2} stroke={COLORS.danger} strokeWidth={1} fill={COLORS.danger} opacity={0.5} />;
+                    }}
+                    activeDot={{ r: 6, strokeWidth: 2, fill: COLORS.danger }}
+                    connectNulls={true}
+                  />
+                  <Line 
+                    yAxisId="bmi" 
+                    type="monotone" 
+                    dataKey="bmi" 
+                    stroke={COLORS.purple} 
+                    strokeWidth={2} 
+                    name="BMI" 
+                    dot={(props) => {
+                      const { cx, cy, payload, index } = props;
+                      const key = `bmi-dot-${index}`;
+                      if (payload?.hasBmiData) {
+                        return <circle key={key} cx={cx} cy={cy} r={3} stroke={COLORS.purple} strokeWidth={2} fill="#fff" />;
+                      }
+                      return <circle key={key} cx={cx} cy={cy} r={1.5} stroke={COLORS.purple} strokeWidth={1} fill={COLORS.purple} opacity={0.5} />;
+                    }}
+                    activeDot={{ r: 5, strokeWidth: 2, fill: COLORS.purple }}
+                    connectNulls={true}
+                    strokeDasharray="5 5"
+                  />
                 </ComposedChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* 개선된 분석 인사이트 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Brain className="h-5 w-5 mr-2 text-purple-600" />
+                데이터 분석 인사이트
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 트렌드 분석 */}
+                <div>
+                  <h4 className="font-semibold mb-3">📈 트렌드 분석</h4>
+                  <div className="space-y-2 text-sm">
+                    {(() => {
+                      const firstPoint = chartData[0];
+                      const lastPoint = chartData[chartData.length - 1];
+                      
+                      if (!firstPoint || !lastPoint) {
+                        return <p className="text-gray-500">충분한 데이터가 없습니다.</p>;
+                      }
+
+                      const weightTrend = lastPoint.weight - firstPoint.weight;
+                      const bmiTrend = lastPoint.bmi - firstPoint.bmi;
+                      const avgExercise = chartData.reduce((sum, point) => sum + point.exerciseMinutes, 0) / chartData.length;
+
+                      return (
+                        <>
+                          <div className="flex items-center gap-2">
+                            {weightTrend > 0 ? (
+                              <TrendingUp className="h-4 w-4 text-red-500" />
+                            ) : weightTrend < 0 ? (
+                              <TrendingDown className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <div className="h-4 w-4 rounded-full bg-gray-300" />
+                            )}
+                            <span>
+                              체중 변화: {weightTrend > 0 ? '+' : ''}{weightTrend.toFixed(1)}kg
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {bmiTrend > 0 ? (
+                              <TrendingUp className="h-4 w-4 text-red-500" />
+                            ) : bmiTrend < 0 ? (
+                              <TrendingDown className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <div className="h-4 w-4 rounded-full bg-gray-300" />
+                            )}
+                            <span>
+                              BMI 변화: {bmiTrend > 0 ? '+' : ''}{bmiTrend.toFixed(1)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Activity className="h-4 w-4 text-blue-500" />
+                            <span>평균 운동 시간: {avgExercise.toFixed(0)}분</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* 개선 권장사항 */}
+                <div>
+                  <h4 className="font-semibold mb-3">💡 개선 권장사항</h4>
+                  <div className="space-y-2 text-sm">
+                    {(() => {
+                      const totalExercise = chartData.reduce((sum, point) => sum + point.exerciseMinutes, 0);
+                      const avgExercise = totalExercise / chartData.length;
+                      const recommendations = [];
+
+                      // 🔧 기간별 운동 권장량 계산
+                      const periodMultiplier = period === 'day' ? 1 : period === 'week' ? 7 : 30;
+                      const recommendedExercise = 30 * periodMultiplier; // 일일 30분 기준
+
+                      if (avgExercise < recommendedExercise) {
+                        recommendations.push(
+                          <div key="exercise" className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5" />
+                            <span>
+                              운동 시간을 늘려보세요. {getPeriodLabel()} 권장량은 {recommendedExercise}분 이상입니다.
+                              (현재 평균: {Math.round(avgExercise)}분)
+                            </span>
+                          </div>
+                        );
+                      } else {
+                        recommendations.push(
+                          <div key="exercise-good" className="flex items-start gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                            <span>운동 습관이 좋습니다! 현재 수준을 유지하세요. (평균: {Math.round(avgExercise)}분)</span>
+                          </div>
+                        );
+                      }
+
+                      // 🔧 데이터 품질 분석 개선
+                      const dataQuality = {
+                        weight: chartData.filter(point => point.hasWeightData).length,
+                        exercise: chartData.filter(point => point.hasExerciseData).length,
+                        total: chartData.length
+                      };
+
+                      if (dataQuality.weight < dataQuality.total * 0.5) {
+                        recommendations.push(
+                          <div key="weight-data" className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                            <span>
+                              체중 기록을 더 자주 해보세요. 현재 {dataQuality.weight}/{dataQuality.total} 기간에만 기록되었습니다.
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      if (dataQuality.exercise < dataQuality.total * 0.3) {
+                        recommendations.push(
+                          <div key="exercise-consistency" className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-amber-500 mt-0.5" />
+                            <span>
+                              꾸준한 운동 기록을 위해 노력해보세요. 현재 {dataQuality.exercise}/{dataQuality.total} 기간에만 운동했습니다.
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      // 🔧 Forward Fill 적용된 데이터 안내
+                      const forwardFilledData = chartData.filter(point => 
+                        (point.weight > 0 && !point.hasWeightData) || 
+                        (point.bmi > 0 && !point.hasBmiData)
+                      ).length;
+
+                      if (forwardFilledData > 0) {
+                        recommendations.push(
+                          <div key="forward-fill" className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-gray-500 mt-0.5" />
+                            <span className="text-gray-600">
+                              일부 구간은 이전 데이터를 기반으로 추정되었습니다. (점선 표시)
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return recommendations.length > 0 ? recommendations : (
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                          <span>전반적으로 건강한 패턴과 꾸준한 기록을 보이고 있습니다!</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
