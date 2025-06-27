@@ -100,6 +100,9 @@ const HealthLog: React.FC = () => {
   const [chatAiFeedback, setChatAiFeedback] = useState<Record<string, unknown> | null>(null);
   const [chatStructuredData, setChatStructuredData] = useState<Record<string, unknown> | null>(null);
 
+  // ChatInterface 필수 prop: hasSaved, setHasSaved
+  const [hasSaved, setHasSaved] = useState<boolean>(false);
+
   // 🔧 Spring Boot API mutation hooks
   const createExerciseMutation = useCreateExerciseSession();
   const createDietMutation = useCreateDietRecord();
@@ -740,6 +743,8 @@ const HealthLog: React.FC = () => {
                     }}
                     structuredData={chatStructuredData}
                     conversationHistory={conversationHistory}
+                    hasSaved={hasSaved}
+                    setHasSaved={(v: boolean) => setHasSaved(v)}
                   />
                 </div>
               </div>

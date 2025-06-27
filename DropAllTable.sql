@@ -50,6 +50,7 @@ BEGIN
 END $$;
 
 -- 3단계: 모든 테이블 삭제 (순서 중요)
+DROP TABLE IF EXISTS notification CASCADE;
 DROP TABLE IF EXISTS validation_history CASCADE;
 DROP TABLE IF EXISTS voice_recognition_logs CASCADE;
 DROP TABLE IF EXISTS log_y2024m01 CASCADE;
