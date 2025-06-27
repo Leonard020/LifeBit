@@ -503,6 +503,7 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  userId?: number; // 시스템 공용 알림의 경우 null
 }
 
 // 알림 목록 조회
