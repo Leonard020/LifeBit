@@ -7,7 +7,7 @@ services:
     container_name: lifebit_postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-      - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
+      - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro,Z
     environment:
       - POSTGRES_DB=lifebit_db
       - POSTGRES_USER=lifebit_user
