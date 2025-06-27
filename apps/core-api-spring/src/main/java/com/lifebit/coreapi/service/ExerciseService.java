@@ -74,27 +74,34 @@ public class ExerciseService {
 
     /**
      * 사용자의 최근 운동 세션 조회 (기간별)
+     * 차트 시작점에 적절한 데이터가 표시되도록 충분한 과거 데이터를 포함하여 조회
      */
     public List<ExerciseSession> getRecentExerciseSessions(Long userId, String period) {
-        LocalDate endDate = LocalDate.now();
+        LocalDate today = LocalDate.now();
         LocalDate startDate;
+        LocalDate endDate;
 
-        // 기간에 따른 시작 날짜 계산
+        // 기간에 따른 시작 날짜 계산 (3개월 전 데이터 포함 + 미래 데이터도 포함)
         switch (period.toLowerCase()) {
             case "day":
-                startDate = endDate.minusDays(1);
+                startDate = today.minusDays(97);  // 최근 7일 + 3개월 전 데이터 (7 + 90 = 97일)
+                endDate = today.plusDays(1);      // 내일까지
                 break;
             case "week":
-                startDate = endDate.minusDays(7);
+                startDate = today.minusDays(132); // 최근 6주 + 3개월 전 데이터 (42 + 90 = 132일)
+                endDate = today.plusWeeks(1);     // 다음 주까지
                 break;
             case "month":
-                startDate = endDate.minusMonths(1);
+                startDate = today.minusDays(270); // 최근 6개월 + 3개월 전 데이터 (180 + 90 = 270일)
+                endDate = today.plusMonths(1);    // 다음 달까지
                 break;
             case "year":
-                startDate = endDate.minusYears(1);
+                startDate = today.minusDays(455); // 최근 1년 + 3개월 전 데이터 (365 + 90 = 455일)
+                endDate = today.plusYears(1);     // 다음 년까지
                 break;
             default:
-                startDate = endDate.minusMonths(1); // 기본값: 1개월
+                startDate = today.minusDays(270); // 기본값: 9개월
+                endDate = today.plusMonths(1);    // 다음 달까지
         }
 
         User user = userRepository.getReferenceById(userId);

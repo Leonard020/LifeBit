@@ -27,11 +27,13 @@ public class HealthRecordService {
     }
 
     /**
-     * 사용자의 최근 N일간 건강 기록 조회
+     * 사용자의 최근 N일간 건강 기록 조회 (미래 데이터 포함)
      */
     public List<HealthRecord> getRecentHealthRecords(Long userId, int days) {
-        LocalDate startDate = LocalDate.now().minusDays(days);
-        return healthRecordRepository.findRecentHealthRecords(userId, startDate);
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusDays(days);
+        LocalDate endDate = today.plusDays(days); // 미래 데이터도 포함
+        return healthRecordRepository.findByUserIdAndRecordDateBetweenOrderByRecordDateDesc(userId, startDate, endDate);
     }
 
     /**
