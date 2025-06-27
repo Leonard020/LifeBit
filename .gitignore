@@ -143,3 +143,9 @@ ansible/inventory.ini.backup*
 # Help files
 # --------------------------------------------------
 HELP.md
+
+# Env
+.env
+
+# Ansible
+infrastructure/ansible/inventory

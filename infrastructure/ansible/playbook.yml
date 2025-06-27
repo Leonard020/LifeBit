@@ -1,8 +1,10 @@
-- name: Deploy LifeBit Application Server
-  hosts: all
+- name: Deploy Application Stack
+  hosts: servers
   become: true
+  vars:
+    project_dir: /home/ubuntu/LifeBit
   tasks:
-    - name: Update apt cache
+    - name: Ensure apt cache is updated
       apt:
         update_cache: yes
         cache_valid_time: 3600
@@ -10,11 +12,11 @@
     - name: Install required system packages
       apt:
         name:
+          - git
           - apt-transport-https
           - ca-certificates
           - curl
           - software-properties-common
-          - git
         state: present
 
     - name: Add Docker GPG key
@@ -24,17 +26,20 @@
 
     - name: Add Docker repository
       apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
         state: present
 
     - name: Install Docker
       apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
+        name: docker-ce
         state: present
         update_cache: yes
+
+    - name: Ensure Docker service is started
+      service:
+        name: docker
+        state: started
+        enabled: yes
 
     - name: Add ubuntu user to docker group
       user:
@@ -44,16 +49,25 @@
 
     - name: Install Docker Compose
       get_url:
-        url: https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-x86_64
+        url: "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-linux-x86_64"
         dest: /usr/local/bin/docker-compose
-        mode: 'u+x,g+x,o+x'
+        mode: '0755'
 
-    - name: Clone the project repository
+    - name: Clone or pull the repository
       git:
-        repo: 'https://github.com/LifeBit-project/LifeBit.git'
-        dest: /srv/lifebit
+        repo: 'https://github.com/Hyeon6492/LifeBit.git'
+        dest: "{{ project_dir }}"
         version: main
         force: yes
+
+    - name: Run Docker Compose
+      command: docker-compose -f "{{ project_dir }}/docker-compose.prod.yml" up -d --build
+      environment:
+        OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') }}"
+        JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') }}"
+        GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') }}"
+        KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') }}"
+        GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') }}"
 
     - name: Run docker-compose
       command: docker-compose -f /srv/lifebit/docker-compose.prod.yml up -d --build
