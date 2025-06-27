@@ -77,12 +77,6 @@ const Note = () => {
   const [dietError, setDietError] = useState<string | null>(null);
 
   // 식단 추가 관련 상태
-  const [isAddDietDialogOpen, setIsAddDietDialogOpen] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
-  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [quantity, setQuantity] = useState('100');
-  const [isSearching, setIsSearching] = useState(false);
   const [mealTime, setMealTime] = useState('breakfast');
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -371,98 +365,8 @@ const Note = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  // 음식 검색
-  const searchFood = async () => {
-    if (!searchKeyword.trim()) return;
-
-    setIsSearching(true);
-    try {
-      const results = await searchFoodItems(searchKeyword);
-      setSearchResults(results);
-    } catch (error) {
-      console.error("음식 검색 중 오류:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // 식단 추가
-  const addDietRecord = async () => {
-    if (!selectedFood || !quantity) {
-      alert('음식과 양을 입력해주세요.');
-      return;
-    }
-    try {
-      const userId = getUserIdFromToken();
-      if (!userId) {
-        toast({
-          title: "사용자 정보를 찾을 수 없습니다.",
-          description: "다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        navigate('/login');
-        return;
-      }
-
-      const request: any = {
-        quantity: parseFloat(quantity),
-        meal_time: mealTime,
-        unit: 'g',
-        log_date: selectedDate.toISOString().split('T')[0],
-        input_source: 'TYPING', // 항상 직접입력으로 고정
-      };
-
-      if (selectedFood.foodItemId) {
-        // DB에 있는 음식
-        request.food_item_id = selectedFood.foodItemId;
-      } else {
-        // 직접 입력 음식
-        request.food_name = selectedFood.name;
-        request.calories = selectedFood.calories;
-        request.carbs = selectedFood.carbs;
-        request.protein = selectedFood.protein;
-        request.fat = selectedFood.fat;
-      }
-
-      const newRecord = await createDietRecord(request);
-
-      setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
-      await fetchDietData();
-      await fetchCalendarRecords();
-
-      setIsAddDietDialogOpen(false);
-      setSearchKeyword('');
-      setSearchResults([]);
-      setSelectedFood(null);
-      setQuantity('100');
-      setMealTime('breakfast');
-      setInputSource('TYPING');
-
-      toast({
-        title: "식단 기록 추가 완료",
-        description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
-      });
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
-        toast({
-          title: "권한 오류",
-          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        removeToken();
-        navigate('/login');
-        return;
-      }
-      console.error('식단 기록 추가 중 오류:', error);
-      toast({
-        title: "식단 기록 추가 실패",
-        description: "기록 추가 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
-    }
-  };
-
+  
+  
   // 식단 기록 삭제
   const handleDeleteDietRecord = async (id: number) => {
     try {
@@ -1139,12 +1043,6 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                {isToday(selectedDate) && todayExercise.length > 0 && (
-                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
-                  </Button>
-                )}
                 <Dialog open={isAddExerciseDialogOpen} onOpenChange={setIsAddExerciseDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
@@ -1282,11 +1180,7 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedExerciseScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
-                      </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
@@ -1438,192 +1332,7 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 식단 기록</CardTitle>
-                <div className="flex space-x-2">
-                  <Dialog open={isAddDietDialogOpen} onOpenChange={setIsAddDietDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        식단 추가
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>식단 기록 추가</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="search">음식 검색</Label>
-                          <div className="flex space-x-2 mt-1">
-                            <Input
-                              id="search"
-                              value={searchKeyword}
-                              onChange={(e) => setSearchKeyword(e.target.value)}
-                              placeholder="음식명을 입력하세요"
-                              onKeyPress={(e) => e.key === 'Enter' && searchFood()}
-                            />
-                            <Button onClick={searchFood} disabled={isSearching}>
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="h-4 w-4"
-                              >
-                                <circle cx="11" cy="11" r="8" />
-                                <path d="m21 21-4.3-4.3" />
-                              </svg>
-                            </Button>
-                          </div>
-                        </div>
-
-                        {searchResults.length > 0 ? (
-                          <div>
-                            <Label>검색 결과</Label>
-                            <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
-                              {searchResults.map((food) => (
-                                <div
-                                  key={food.foodItemId}
-                                  className={`p-2 border rounded cursor-pointer hover:bg-accent ${selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
-                                    }`}
-                                  onClick={() => setSelectedFood(food)}
-                                >
-                                  <div className="font-medium">{food.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {Math.round(food.calories)}kcal / 100g
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          searchKeyword.trim() && (
-                            <div className="text-center text-muted-foreground mt-4">
-                              <div>검색 결과가 없습니다.</div>
-                              <Button
-                                className="mt-2"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedFood({
-                                    foodItemId: undefined,
-                                    name: searchKeyword,
-                                    calories: 0,
-                                    carbs: 0,
-                                    protein: 0,
-                                    fat: 0,
-                                    servingSize: 100
-                                  });
-                                }}
-                              >
-                                직접 입력하기
-                              </Button>
-                            </div>
-                          )
-                        )}
-
-                        {selectedFood && (
-                          <div className="mt-4 space-y-2">
-                            {selectedFood.foodItemId === undefined && (
-                              <>
-                                <Label>음식명</Label>
-                                <Input
-                                  value={selectedFood.name}
-                                  onChange={e => setSelectedFood({ ...selectedFood, name: e.target.value })}
-                                  placeholder="음식명을 입력하세요"
-                                />
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <Label>칼로리 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.calories}
-                                      onChange={e => setSelectedFood({ ...selectedFood, calories: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>탄수화물 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.carbs}
-                                      onChange={e => setSelectedFood({ ...selectedFood, carbs: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>단백질 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.protein}
-                                      onChange={e => setSelectedFood({ ...selectedFood, protein: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>지방 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.fat}
-                                      onChange={e => setSelectedFood({ ...selectedFood, fat: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                </div>
-                              </>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <Label>섭취량 (g)</Label>
-                                <Input
-                                  type="number"
-                                  value={quantity}
-                                  onChange={e => setQuantity(e.target.value)}
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <Label>식사 시간</Label>
-                                <select
-                                  value={mealTime}
-                                  onChange={e => setMealTime(e.target.value)}
-                                  className="block w-full border rounded px-2 py-1"
-                                >
-                                  <option value="breakfast">아침</option>
-                                  <option value="lunch">점심</option>
-                                  <option value="dinner">저녁</option>
-                                  <option value="snack">간식</option>
-                                  <option value="midnight">야식</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
-                            취소
-                          </Button>
-                          <Button onClick={addDietRecord} disabled={!selectedFood}>
-                            추가
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
-                    <Button
-                      onClick={handleClaimDietScore}
-                      disabled={hasClaimedDietScore}
-                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
+                </CardHeader>
               <CardContent>
                 {isLoadingDietData ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -1681,13 +1390,7 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedDietScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">
-                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
-                        </p>
-                      </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
