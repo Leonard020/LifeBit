@@ -37,11 +37,12 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/actuator/**",
-                                "/ws/**"
-                        ).permitAll()
-                        .anyRequest().authenticated()
-                )
-                .addFilterAfter(jwtAuthenticationFilter, AuthorizationFilter.class);
+                                "/ws/**")
+                        .permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter,
+                        org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class); // ✅
+                                                                                                                     // 수정
 
         return http.build();
     }
