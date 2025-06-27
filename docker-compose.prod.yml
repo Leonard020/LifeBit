@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # 1. Reverse Proxy
+  nginx-proxy:
+    image: nginx:1.27.0-alpine
+    container_name: lifebit_nginx_proxy
+    ports:
+      - "80:80"
+      - "443:443" # HTTPS를 위해 열어둠
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - lifebit-network
+    restart: unless-stopped
+    depends_on:
+      - core-api
+      - ai-api
+      - frontend
+      - airflow-webserver
+
+  # 2. Frontend (Vite + Nginx)
+  frontend:
+    container_name: lifebit_frontend
+    build:
+      context: ./apps/frontend-vite
+      dockerfile: Dockerfile
+    networks:
+      - lifebit-network
+    restart: unless-stopped
+
+  # 3. Core API (Spring Boot)
+  core-api:
+    container_name: lifebit_core_api
+    build:
+      context: ./apps/core-api-spring
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/lifebit_db
+      - SPRING_DATASOURCE_USERNAME=lifebit_user
+      - SPRING_DATASOURCE_PASSWORD=lifebit_password
+    networks:
+      - lifebit-network
+    restart: unless-stopped
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  # 4. AI API (FastAPI)
+  ai-api:
+    container_name: lifebit_ai_api
+    build:
+      context: ./apps/ai-api-fastapi
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://lifebit_user:lifebit_password@postgres-db:5432/lifebit_db
+    networks:
+      - lifebit-network
+    restart: unless-stopped
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  # 5. PostgreSQL Database
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: lifebit_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
+    environment:
+      - POSTGRES_DB=lifebit_db
+      - POSTGRES_USER=lifebit_user
+      - POSTGRES_PASSWORD=lifebit_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+      - TZ=Asia/Seoul
+    networks:
+      - lifebit-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifebit_user -d lifebit_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 6. Airflow Services
+  airflow-postgres:
+    image: postgres:13
+    container_name: airflow_postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    networks:
+      - lifebit-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+
+  airflow-webserver:
+    container_name: airflow_webserver
+    build:
+      context: ./apps/airflow-pipeline
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - lifebit-network
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      # Connect to the main LifeBit DB
+      - LIFEBIT_DB_HOST=postgres-db
+      - LIFEBIT_DB_PORT=5432
+      - LIFEBIT_DB_USER=lifebit_user
+      - LIFEBIT_DB_PASSWORD=lifebit_password
+      - LIFEBIT_DB_NAME=lifebit_db
+      # Set user for web UI
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin123!
+    volumes:
+      - ./apps/airflow-pipeline/dags:/opt/airflow/dags
+      - ./apps/airflow-pipeline/logs:/opt/airflow/logs
+
+  airflow-scheduler:
+    container_name: airflow_scheduler
+    build:
+      context: ./apps/airflow-pipeline
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - lifebit-network
+    volumes:
+      - ./apps/airflow-pipeline/dags:/opt/airflow/dags
+      - ./apps/airflow-pipeline/logs:/opt/airflow/logs
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+    command: scheduler
+
+networks:
+  lifebit-network:
+    name: lifebit-network
+
+volumes:
+  postgres_data:
+  airflow_postgres_data: 
