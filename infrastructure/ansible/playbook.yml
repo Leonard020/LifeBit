@@ -60,5 +60,15 @@
       args:
         chdir: /srv/lifebit
       environment:
-        # Pass environment variables if needed
-        # EXAMPLE_VAR: "example_value" 
+        # Secrets for backend services
+        OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') }}"
+        JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') }}"
+        GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') }}"
+
+        # Secrets for frontend build args
+        KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') }}"
+        GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') }}"
+
+        # Non-secret configurations
+        USE_GPT: "{{ lookup('env', 'USE_GPT') | default('True') }}"
+        CORS_ORIGINS: "{{ lookup('env', 'CORS_ORIGINS') | default('http://*') }}" 

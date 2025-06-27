@@ -25,6 +25,11 @@ services:
     build:
       context: ./apps/frontend-vite
       dockerfile: Dockerfile
+      args:
+        - VITE_KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+        - VITE_CORE_API_URL=/api
+        - VITE_AI_API_URL=/ai
     networks:
       - lifebit-network
     restart: unless-stopped
@@ -39,6 +44,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/lifebit_db
       - SPRING_DATASOURCE_USERNAME=lifebit_user
       - SPRING_DATASOURCE_PASSWORD=lifebit_password
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     networks:
       - lifebit-network
     restart: unless-stopped
@@ -54,6 +61,11 @@ services:
       dockerfile: Dockerfile
     environment:
       - DATABASE_URL=postgresql://lifebit_user:lifebit_password@postgres-db:5432/lifebit_db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - USE_GPT=${USE_GPT:-True}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://*} # 실제 도메인으로 변경 권장
     networks:
       - lifebit-network
     restart: unless-stopped

@@ -66,4 +66,11 @@ jobs:
 
       - name: Run Ansible Playbook
         run: ansible-playbook playbook.yml
-        working-directory: ./infrastructure/ansible 
+        working-directory: ./infrastructure/ansible
+        env:
+          # Pass secrets from GitHub to the Ansible environment
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }} 
