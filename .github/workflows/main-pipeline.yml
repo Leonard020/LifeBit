@@ -45,9 +45,11 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ./infrastructure/terraform
 
-      - name: Get instance public IP
+      - name: Set Instance IP
         if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
-        run: echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
+        run: |
+          terraform output -raw instance_public_ip > /tmp/instance_ip.txt
+          echo "INSTANCE_IP=$(cat /tmp/instance_ip.txt)" >> $GITHUB_ENV
         working-directory: ./infrastructure/terraform
 
       - name: Set up SSH key
