@@ -373,19 +373,33 @@ const Index = () => {
         try {
           // Use GPT to estimate grams for the amount before saving
           let grams = 100;
-          if (!String(dietData.amount).includes('g') && !String(dietData.amount).includes('그램')) {
-            grams = await estimateGramsWithGPT(dietData.food_name, String(dietData.amount));
-            console.log('[DEBUG] GPT grams estimate:', grams, 'for', dietData.food_name, dietData.amount);
+          const amountStr = String(dietData.amount);
+          
+          console.log(`[AMOUNT ESTIMATION] Processing: ${dietData.food_name} ${amountStr}`);
+          
+          if (!amountStr.includes('g') && !amountStr.includes('그램')) {
+            console.log(`[AMOUNT ESTIMATION] Using GPT for estimation: ${dietData.food_name} ${amountStr}`);
+            grams = await estimateGramsWithGPT(dietData.food_name, amountStr);
+            console.log(`[AMOUNT ESTIMATION] GPT estimated: ${grams}g for ${dietData.food_name} ${amountStr}`);
           } else {
-            grams = parseFloat(String(dietData.amount).replace(/[^0-9.]/g, '')) || 100;
+            grams = parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 100;
+            console.log(`[AMOUNT ESTIMATION] Direct gram conversion: ${grams}g from ${amountStr}`);
           }
+          
+          // Validate the estimated grams
+          if (grams <= 0 || grams > 5000) {
+            console.warn(`[AMOUNT ESTIMATION] Unrealistic grams detected: ${grams}g, using fallback`);
+            grams = 100;
+          }
+          
+          console.log(`[AMOUNT ESTIMATION] Final grams: ${grams}g for ${dietData.food_name}`);
           
           // Convert meal_time to English format
           const mealTimeMapping = {
             "아침": "breakfast",
             "점심": "lunch", 
             "저녁": "dinner",
-            "야식": "midnight",
+            "야식": "snack",
             "간식": "snack"
           };
           const mealTimeEng = mealTimeMapping[dietData.meal_time] || dietData.meal_time;

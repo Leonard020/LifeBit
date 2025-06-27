@@ -46,7 +46,7 @@ class MealLog(Base):
     food_item_id = Column(Integer, nullable=True)
     quantity = Column(DECIMAL(6, 2))
     log_date = Column(Date, nullable=False)
-    meal_time = Column(SqlEnum('breakfast', 'lunch', 'dinner', 'snack', 'midnight', name='meal_time_type'), nullable=False)
+    meal_time = Column(SqlEnum('breakfast', 'lunch', 'dinner', 'snack', name='meal_time_type'), nullable=False)
     created_at = Column(TIMESTAMP, default=get_kst_now)
 
 # 👤 사용자 테이블

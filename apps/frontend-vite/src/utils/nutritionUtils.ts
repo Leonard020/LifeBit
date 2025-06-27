@@ -1,5 +1,6 @@
 // 영양정보 계산 유틸리티 함수들
 import { getToken } from '@/utils/auth';
+import { normalizeKoreanAmount } from './koreanAmountNormalizer';
 
 // 영양정보 데이터 타입
 export interface NutritionData {
@@ -255,45 +256,165 @@ export const createFoodItemFromGPT = async (foodName: string, retryCount = 0): P
  */
 export function parseAmountToGrams(amount: string, foodName?: string): number {
   if (!amount) return 100;
+  
   const num = parseFloat(amount.replace(/[^0-9.]/g, '')) || 1;
   const lower = amount.toLowerCase();
-  if (lower.includes('g')) return num;
-  if (lower.includes('공기')) return num * 210;
-  if (lower.includes('장')) return num * 3;
-  if (lower.includes('컵')) return num * 240;
-  if (lower.includes('개')) {
-    if (foodName?.includes('계란')) return num * 60;
-    if (foodName?.includes('핫도그')) return num * 80;
-    if (foodName?.includes('사과')) return num * 200;
-    // Add more food-specific rules as needed
+  const foodLower = foodName?.toLowerCase() || '';
+  
+  // Direct gram measurements
+  if (lower.includes('g') || lower.includes('그램')) return num;
+  
+  // Korean food measurements
+  if (lower.includes('공기') || lower.includes('그릇')) {
+    if (foodLower.includes('밥') || foodLower.includes('쌀')) return num * 210;
+    if (foodLower.includes('국') || foodLower.includes('탕') || foodLower.includes('찌개')) return num * 350;
+    if (foodLower.includes('면') || foodLower.includes('라면') || foodLower.includes('스파게티')) return num * 300;
+    return num * 300; // default for 그릇
+  }
+  
+  if (lower.includes('컵') || lower.includes('잔')) {
+    if (foodLower.includes('우유') || foodLower.includes('물') || foodLower.includes('주스')) return num * 240;
+    if (foodLower.includes('쌀') || foodLower.includes('밥')) return num * 180;
+    return num * 240; // default for 컵
+  }
+  
+  if (lower.includes('접시') || lower.includes('판')) {
+    if (foodLower.includes('김밥') || foodLower.includes('초밥')) return num * 200;
+    if (foodLower.includes('샐러드')) return num * 150;
+    return num * 250; // default for 접시
+  }
+  
+  if (lower.includes('장') || lower.includes('개')) {
+    if (foodLower.includes('계란')) return num * 60;
+    if (foodLower.includes('사과')) return num * 200;
+    if (foodLower.includes('바나나')) return num * 120;
+    if (foodLower.includes('오렌지')) return num * 150;
+    if (foodLower.includes('토마토')) return num * 100;
+    if (foodLower.includes('햄버거')) return num * 200;
+    if (foodLower.includes('피자')) return num * 300;
+    if (foodLower.includes('샌드위치')) return num * 150;
+    if (foodLower.includes('도넛')) return num * 80;
+    if (foodLower.includes('케이크')) return num * 100;
+    if (foodLower.includes('빵') || foodLower.includes('토스트')) return num * 100;
+    if (foodLower.includes('김밥')) return num * 200;
+    if (foodLower.includes('초밥')) return num * 30;
     return num * 100; // fallback for unknown '개'
   }
-  // fallback: treat as 100g per unit
-  return num * 100;
+  
+  if (lower.includes('조각') || lower.includes('쪽')) {
+    if (foodLower.includes('피자')) return num * 150;
+    if (foodLower.includes('케이크')) return num * 80;
+    if (foodLower.includes('빵')) return num * 50;
+    return num * 75; // default for 조각
+  }
+  
+  if (lower.includes('스푼') || lower.includes('숟가락')) {
+    if (foodLower.includes('설탕') || foodLower.includes('소금')) return num * 5;
+    if (foodLower.includes('올리브유') || foodLower.includes('기름')) return num * 15;
+    return num * 10; // default for 스푼
+  }
+  
+  if (lower.includes('큰술') || lower.includes('테이블스푼')) {
+    if (foodLower.includes('설탕') || foodLower.includes('소금')) return num * 15;
+    if (foodLower.includes('올리브유') || foodLower.includes('기름')) return num * 15;
+    return num * 15; // default for 큰술
+  }
+  
+  if (lower.includes('작은술') || lower.includes('티스푼')) {
+    if (foodLower.includes('설탕') || foodLower.includes('소금')) return num * 5;
+    if (foodLower.includes('올리브유') || foodLower.includes('기름')) return num * 5;
+    return num * 5; // default for 작은술
+  }
+  
+  if (lower.includes('포기') || lower.includes('송이')) {
+    if (foodLower.includes('상추') || foodLower.includes('양상추')) return num * 50;
+    if (foodLower.includes('배추')) return num * 800;
+    return num * 100; // default for 포기/송이
+  }
+  
+  if (lower.includes('개') || lower.includes('알')) {
+    // Handle cases without specific food context
+    return num * 100; // conservative default
+  }
+  
+  // If no specific pattern matches, assume it's a number of grams
+  if (!isNaN(num)) {
+    return num;
+  }
+  
+  // Final fallback
+  return 100;
 }
 
 /**
  * Uses GPT to estimate the gram value for a given food and amount string.
- * Returns a number (grams). Falls back to 100g if GPT fails.
+ * Returns a number (grams). Falls back to parseAmountToGrams if GPT fails.
  */
 export async function estimateGramsWithGPT(foodName: string, amount: string): Promise<number> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) return 100;
-  const prompt = `${foodName} ${amount}는(은) 몇 g입니까? 숫자만 답변하세요.`;
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 20,
-      temperature: 0.1,
-    }),
-  });
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content?.replace(/[^0-9.]/g, '') ?? '';
-  return parseFloat(content) || 100;
+  try {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (!apiKey) {
+      console.log('[AMOUNT ESTIMATE] No API key, using fallback');
+      return parseAmountToGrams(amount, foodName);
+    }
+
+    // Normalize amount
+    const normalizedAmount = normalizeKoreanAmount(amount);
+    console.log('[AMOUNT ESTIMATE][NORMALIZED]:', normalizedAmount);
+
+    // If amount is a pure number or contains 'g'/'그램', use rule-based
+    const isNumeric = /^\d+(\.\d+)?$/.test(normalizedAmount.trim());
+    const isGram = normalizedAmount.includes('g') || normalizedAmount.includes('그램');
+    if (isNumeric || isGram) {
+      return parseAmountToGrams(normalizedAmount, foodName);
+    }
+
+    // Otherwise, always ask GPT
+    const prompt = `한국 음식 전문가로서, '${foodName} ${normalizedAmount}'의 일반적인 1회 제공량(그램)을 알려주세요. 숫자만 답변하세요.`;
+    console.log('[AMOUNT ESTIMATE][GPT PROMPT]:', prompt);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 50,
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    console.log('[AMOUNT ESTIMATE][GPT RESPONSE]:', content);
+    if (!content) {
+      throw new Error('No content in GPT response');
+    }
+
+    // Extract number from response
+    const numberMatch = content.match(/\d+(?:\.\d+)?/);
+    let grams = numberMatch ? parseFloat(numberMatch[0]) : NaN;
+
+    // Sanity fallback for suspiciously low values
+    if (isNaN(grams) || grams < 30) {
+      console.warn(`[AMOUNT ESTIMATE][FALLBACK]: GPT returned ${grams}g for '${foodName} ${normalizedAmount}', using fallback.`);
+      if (foodName.includes('국') || foodName.includes('탕') || foodName.includes('찌개')) {
+        grams = 350; // typical soup serving
+      } else {
+        grams = 100; // generic fallback
+      }
+    }
+
+    return grams;
+  } catch (error) {
+    console.error(`[AMOUNT ESTIMATE] GPT estimation failed: ${error}`);
+    return parseAmountToGrams(amount, foodName);
+  }
 } 
