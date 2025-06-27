@@ -63,6 +63,16 @@ interface FoodItem {
   servingSize: number;
 }
 
+// 영양소 데이터 타입 정의
+interface NutritionData {
+  name: string;
+  value: number;
+  goal: number;
+  color: string;
+  calories: number;
+  targetCalories: number;
+}
+
 const Note = () => {
   // 1. 다크모드 감지 state를 최상단에 위치
   const [isDarkMode, setIsDarkMode] = React.useState(false);
@@ -82,7 +92,6 @@ const Note = () => {
 
   // 식단 관련 상태
   const [dailyDietLogs, setDailyDietLogs] = useState<DietLogDTO[]>([]);
-  const [dailyNutritionGoals, setDailyNutritionGoals] = useState<DietNutritionDTO[]>([]);
   const [isLoadingDietData, setIsLoadingDietData] = useState(true);
   const [dietError, setDietError] = useState<string | null>(null);
 
@@ -359,37 +368,36 @@ const Note = () => {
       const nutritionGoals: DietNutritionDTO[] = [
         {
           name: '칼로리',
-          target: goals?.daily_calories_target || 2000,
-          current: 0,
+          target: goals?.daily_calories_target ?? 0,
+          current: dailyDietLogs.reduce((sum, log) => sum + log.calories, 0),
           unit: 'kcal',
-          percentage: 0
+          percentage: goals?.daily_calories_target ? (dailyDietLogs.reduce((sum, log) => sum + log.calories, 0) / goals.daily_calories_target) * 100 : 0
         },
         {
           name: '탄수화물',
-          target: goals?.daily_carbs_target || 250,
-          current: 0,
+          target: goals?.daily_carbs_target ?? 0,
+          current: dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0),
           unit: 'g',
-          percentage: 0
+          percentage: goals?.daily_carbs_target ? (dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0) / goals.daily_carbs_target) * 100 : 0
         },
         {
           name: '단백질',
-          target: goals?.daily_protein_target || 120,
-          current: 0,
+          target: goals?.daily_protein_target ?? 0,
+          current: dailyDietLogs.reduce((sum, log) => sum + log.protein, 0),
           unit: 'g',
-          percentage: 0
+          percentage: goals?.daily_protein_target ? (dailyDietLogs.reduce((sum, log) => sum + log.protein, 0) / goals.daily_protein_target) * 100 : 0
         },
         {
           name: '지방',
-          target: goals?.daily_fat_target || 60,
-          current: 0,
+          target: goals?.daily_fat_target ?? 0,
+          current: dailyDietLogs.reduce((sum, log) => sum + log.fat, 0),
           unit: 'g',
-          percentage: 0
+          percentage: goals?.daily_fat_target ? (dailyDietLogs.reduce((sum, log) => sum + log.fat, 0) / goals.daily_fat_target) * 100 : 0
         }
       ];
 
       console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
       setDailyDietLogs(convertedRecords);
-      setDailyNutritionGoals(nutritionGoals);
 
     } catch (error) {
       console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
@@ -475,55 +483,72 @@ const Note = () => {
   };
 
   // Get nutrition goals from DB (dailyNutritionGoals)
-  const getGoal = (name: string) => {
-    const found = dailyNutritionGoals.find(dto => dto.name === name);
-    return found ? found.target : 1; // fallback to 1 to avoid division by zero
-  };
+  const goals = React.useMemo(() => {
+    if (!userGoalsData) return undefined;
+    return Array.isArray(userGoalsData)
+      ? userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0])
+      : userGoalsData;
+  }, [userGoalsData]);
 
-  // 영양소 데이터 타입 정의
-  interface NutritionData {
-    name: string;
-    value: number;
-    goal: number;
-    color: string;
-    calories: number;
-    targetCalories: number;
-  }
-
-  const uiNutritionData: NutritionData[] = [
+  // 식단 목표치 계산을 userGoalsData에서 직접 가져오도록 변경
+  const nutritionGoals: DietNutritionDTO[] = [
+    {
+      name: '칼로리',
+      target: goals?.daily_calories_target ?? 0,
+      current: dailyDietLogs.reduce((sum, log) => sum + log.calories, 0),
+      unit: 'kcal',
+      percentage: goals?.daily_calories_target ? (dailyDietLogs.reduce((sum, log) => sum + log.calories, 0) / goals.daily_calories_target) * 100 : 0
+    },
     {
       name: '탄수화물',
-      value: (dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0) / getGoal('탄수화물')) * 100,
-      goal: 100,
-      color: '#3B4A9C',
-      calories: dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0),
-      targetCalories: getGoal('탄수화물'),
+      target: goals?.daily_carbs_target ?? 0,
+      current: dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0),
+      unit: 'g',
+      percentage: goals?.daily_carbs_target ? (dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0) / goals.daily_carbs_target) * 100 : 0
     },
     {
       name: '단백질',
-      value: (dailyDietLogs.reduce((sum, log) => sum + log.protein, 0) / getGoal('단백질')) * 100,
-      goal: 100,
-      color: '#E67E22',
-      calories: dailyDietLogs.reduce((sum, log) => sum + log.protein, 0),
-      targetCalories: getGoal('단백질'),
+      target: goals?.daily_protein_target ?? 0,
+      current: dailyDietLogs.reduce((sum, log) => sum + log.protein, 0),
+      unit: 'g',
+      percentage: goals?.daily_protein_target ? (dailyDietLogs.reduce((sum, log) => sum + log.protein, 0) / goals.daily_protein_target) * 100 : 0
     },
     {
       name: '지방',
-      value: (dailyDietLogs.reduce((sum, log) => sum + log.fat, 0) / getGoal('지방')) * 100,
-      goal: 100,
-      color: '#95A5A6',
-      calories: dailyDietLogs.reduce((sum, log) => sum + log.fat, 0),
-      targetCalories: getGoal('지방'),
-    },
-    {
-      name: '칼로리',
-      value: (dailyDietLogs.reduce((sum, log) => sum + log.calories, 0) / getGoal('칼로리')) * 100,
-      goal: 100,
-      color: '#8B5CF6',
-      calories: dailyDietLogs.reduce((sum, log) => sum + log.calories, 0),
-      targetCalories: getGoal('칼로리'),
-    },
+      target: goals?.daily_fat_target ?? 0,
+      current: dailyDietLogs.reduce((sum, log) => sum + log.fat, 0),
+      unit: 'g',
+      percentage: goals?.daily_fat_target ? (dailyDietLogs.reduce((sum, log) => sum + log.fat, 0) / goals.daily_fat_target) * 100 : 0
+    }
   ];
+
+  // hasNutritionGoals도 nutritionGoals에서 직접 계산
+  const hasNutritionGoals = React.useMemo(() => {
+    return (
+      nutritionGoals.length === 4 &&
+      nutritionGoals.every(goal => goal.target && goal.target > 0)
+    );
+  }, [nutritionGoals]);
+
+  // getGoal 함수도 nutritionGoals에서 직접 찾도록 변경
+  const getGoal = (name: string) => {
+    const found = nutritionGoals.find(dto => dto.name === name);
+    return found ? found.target : 0;
+  };
+
+  // uiNutritionData도 nutritionGoals를 활용해 생성
+  const uiNutritionData: NutritionData[] = nutritionGoals.map(nutrient => ({
+    name: nutrient.name,
+    value: nutrient.target > 0 ? (nutrient.current / nutrient.target) * 100 : 0,
+    goal: 100,
+    color:
+      nutrient.name === '탄수화물' ? '#3B4A9C' :
+      nutrient.name === '단백질' ? '#E67E22' :
+      nutrient.name === '지방' ? '#95A5A6' :
+      '#8B5CF6',
+    calories: nutrient.current,
+    targetCalories: nutrient.target,
+  }));
 
   // ✅ 오늘 운동 기록 불러오기
   const fetchExercise = async () => {
