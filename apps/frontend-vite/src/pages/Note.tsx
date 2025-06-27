@@ -21,7 +21,6 @@ import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
 import type { TooltipProps } from 'recharts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useUpdateExerciseSession } from '@/api/authApi';
 
 
 
@@ -165,21 +164,6 @@ const Note = () => {
       queryClient.refetchQueries({ queryKey: ['userGoals', userId.toString()] });
     }
   }, [userId, queryClient]);
-
-  // 운동부위 한글화
-  const getBodyPartLabel = (key: string) => {
-    const map: Record<string, string> = {
-      chest: '가슴',
-      back: '등',
-      legs: '하체',
-      shoulders: '어깨',
-      arms: '팔',
-      abs: '복부',
-      cardio: '유산소',
-      full_body: '전신',
-    };
-    return map[key] || key;
-  };
 
   // 3. Map backend fields to radar chart axes
   const bodyPartMap = [
@@ -550,7 +534,7 @@ const Note = () => {
         sets: record.sets,
         reps: record.reps,
         weight: record.weight,
-        duration_minutes: record.duration_minutes || undefined,
+        durationMinutes: record.durationMinutes || undefined,
         calories_burned: record.calories_burned || undefined
       }));
       setTodayExercise(cleanedData.sort((a, b) => b.exerciseSessionId - a.exerciseSessionId));
@@ -840,7 +824,6 @@ const Note = () => {
     sets: 1,
     reps: 10,
     weight: 0,
-    duration_minutes: 0,
   });
 
 
@@ -850,7 +833,6 @@ const Note = () => {
       sets: record.sets || 1,
       reps: record.reps || 10,
       weight: record.weight || 0,
-      duration_minutes: record.duration_minutes || 0,
     });
     setIsEditExerciseDialogOpen(true);
   };
@@ -879,45 +861,21 @@ const Note = () => {
     }
   };
 
-
-  // 운동 기록 수정 saveExerciseEdit
-  const { mutate: updateSession } = useUpdateExerciseSession();
-  const [isSaving, setIsSaving] = useState(false);
-
-  const saveExerciseEdit = () => {
-    if (!editingExercise || isSaving) return;
-    setIsSaving(true);
-
-    const dataToSend = {
-      sets: exerciseEditForm.sets ?? 0,
-      reps: exerciseEditForm.reps ?? 0,
-      weight: exerciseEditForm.weight ?? 0,
-      duration_minutes: exerciseEditForm.duration_minutes ?? 0,
-    };
-
-    console.log("📤 수정 요청 데이터:", dataToSend);
-
-    updateSession(
-      {
-        sessionId: editingExercise.exerciseSessionId,
-        data: dataToSend,
-      },
-      {
-        onSuccess: () => {
-          setIsSaving(false);
-          setIsEditExerciseDialogOpen(false);
-          setEditingExercise(null);
-          fetchExercise();
-        },
-        onError: (err) => {
-          setIsSaving(false);
-          console.error("❌ 운동 기록 수정 실패:", err);
-          alert("운동 기록 수정 중 오류가 발생했습니다.");
-        },
-      }
-    );
+  const saveExerciseEdit = async () => {
+    if (!editingExercise) return;
+    try {
+      await updateExerciseSession(editingExercise.exerciseSessionId, {
+        sets: exerciseEditForm.sets,
+        reps: exerciseEditForm.reps,
+        weight: exerciseEditForm.weight,
+      });
+      setIsEditExerciseDialogOpen(false);
+      setEditingExercise(null);
+      await fetchExercise();
+    } catch (err) {
+      console.error("운동 기록 수정 실패:", err);
+    }
   };
-
 
   // Custom tooltip for radar chart
   const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
@@ -1028,11 +986,9 @@ const Note = () => {
                     <CardTitle>운동 부위별 목표</CardTitle>
                     <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
                   </div>
-                  {/* 총 주간 운동 목표 - no box, just text on background */}
                   <div className="ml-auto text-right">
                     <div className="text-base font-bold text-blue-700">
                       {(() => {
-                        // Calculate total weekly workout target
                         const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
                         const cardio = exerciseGoals['유산소'] || 0;
                         const total = strength + cardio;
@@ -1070,12 +1026,6 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                {isToday(selectedDate) && todayExercise.length > 0 && (
-                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
-                  </Button>
-                )}
               </CardHeader>
               <CardContent>
                 {todayExercise.length > 0 ? (
@@ -1085,7 +1035,7 @@ const Note = () => {
                       const isCardio = record.bodyPart === 'cardio';
                       // 시간, 칼로리, 날짜 등 정보
                       const infoParts = [];
-                      if (record.duration_minutes !== undefined) infoParts.push(`${record.duration_minutes}분`);
+                      if (record.durationMinutes !== undefined) infoParts.push(`${record.durationMinutes}분`);
                       if (record.calories_burned !== undefined) infoParts.push(`${record.calories_burned}kcal`);
                       if (record.exerciseDate) infoParts.push(`${record.exerciseDate}`);
                       // 근력운동이면 세트, 무게, 횟수 추가
@@ -1095,12 +1045,12 @@ const Note = () => {
                         if (record.weight !== undefined) infoParts.push(`${record.weight}kg`);
                       }
                       return (
-                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div>
                             <p className="font-medium">
                               {record.exerciseName}
                               {record.bodyPart && (
-                                <span className="ml-2 text-xs font-bold italic px-1 rounded text-gray-700 dark:text-gray-100 bg-gray-100 dark:bg-white/10 opacity-90">({record.bodyPart})</span>
+                                <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                               )}
                             </p>
                             <p className="text-sm text-gray-600 flex items-center flex-wrap gap-x-2">
@@ -1112,34 +1062,12 @@ const Note = () => {
                               )}
                             </p>
                           </div>
-
-                          {/* 👉 삭제 + 수정 버튼 같이 */}
-                          <div className="flex gap-2 items-center">
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary" onClick={() => {
-                              setEditingExercise(record);
-                              setExerciseEditForm({
-                                sets: record.sets,
-                                reps: record.reps,
-                                weight: record.weight,
-                                duration_minutes: record.duration_minutes,
-                              });
-                              setIsEditExerciseDialogOpen(true);
-                            }}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedExerciseScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
@@ -1148,79 +1076,46 @@ const Note = () => {
             </Card>
           </TabsContent>
 
-          {/* ✅ 등록된 운동 수정 다이얼로그 */}
+          {/* ✅ 등록된 운동 수정정 */}
           <Dialog open={isEditExerciseDialogOpen} onOpenChange={setIsEditExerciseDialogOpen}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle>운동 기록 수정</DialogTitle>
+                <DialogTitle>운동 수정</DialogTitle>
               </DialogHeader>
-
-              {editingExercise && (
-                <div className="space-y-4">
-                  <div className="text-sm text-muted-foreground">
-                    운동 부위: {getBodyPartLabel(editingExercise.bodyPart)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    운동 종류: {editingExercise.exerciseName}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>세트 수</Label>
-                      <Input
-                        type="number"
-                        value={exerciseEditForm.sets}
-                        onChange={e => setExerciseEditForm(prev => ({ ...prev, sets: +e.target.value }))}
-                        min={0}
-                      />
-                    </div>
-                    <div>
-                      <Label>반복 횟수</Label>
-                      <Input
-                        type="number"
-                        value={exerciseEditForm.reps}
-                        onChange={e => setExerciseEditForm(prev => ({ ...prev, reps: +e.target.value }))}
-                        min={0}
-                      />
-                    </div>
-                  </div>
-
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label>무게 (kg)</Label>
+                    <Label>세트</Label>
                     <Input
                       type="number"
-                      value={exerciseEditForm.weight}
-                      onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
-                      min={0}
+                      value={exerciseEditForm.sets}
+                      onChange={e => setExerciseEditForm(prev => ({ ...prev, sets: +e.target.value }))}
                     />
                   </div>
-
                   <div>
-                    <Label>운동 시간 (분)</Label>
+                    <Label>횟수</Label>
                     <Input
                       type="number"
-                      value={exerciseEditForm.duration_minutes}
-                      onChange={e => setExerciseEditForm(prev => ({ ...prev, duration_minutes: +e.target.value }))}
-                      min={0}
+                      value={exerciseEditForm.reps}
+                      onChange={e => setExerciseEditForm(prev => ({ ...prev, reps: +e.target.value }))}
                     />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsEditExerciseDialogOpen(false)}
-                    >
-                      취소
-                    </Button>
-                    <Button onClick={saveExerciseEdit} disabled={isSaving}>
-                      {isSaving ? "저장 중..." : "저장"}
-                    </Button>
                   </div>
                 </div>
-              )}
+                <div>
+                  <Label>무게 (kg)</Label>
+                  <Input
+                    type="number"
+                    value={exerciseEditForm.weight}
+                    onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsEditExerciseDialogOpen(false)}>취소</Button>
+                  <Button onClick={saveExerciseEdit}>저장</Button>
+                </div>
+              </div>
             </DialogContent>
           </Dialog>
-
 
 
 
@@ -1424,7 +1319,7 @@ const Note = () => {
                                 </div>
                               </>
                             )}
-
+                            
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <Label>섭취량 (g)</Label>
@@ -1464,17 +1359,6 @@ const Note = () => {
                       </div>
                     </DialogContent>
                   </Dialog>
-                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
-                    <Button
-                      onClick={handleClaimDietScore}
-                      disabled={hasClaimedDietScore}
-                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
-                    </Button>
-                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -1534,13 +1418,6 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedDietScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">
-                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
-                        </p>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

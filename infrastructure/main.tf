@@ -18,9 +18,9 @@ terraform {
 }
 
 provider "aws" {
-  region     = var.aws_region
-  access_key = var.aws_access_key_id
-  secret_key = var.aws_secret_access_key
+  region = var.aws_region
+  # AWS 인증은 환경변수에서 자동으로 읽음
+  # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 }
 
 # SSH 키 페어 생성 (랜덤 이름)
@@ -156,23 +156,37 @@ resource "aws_instance" "web" {
     Environment = var.environment
   }
   
-  # 기본 시스템 설정만 포함 (SSH 키는 AWS가 자동 설정)
+  # 강화된 시스템 설정 (SSH 포함)
   user_data = <<-EOF
 #!/bin/bash
 # 로그 파일 설정
 exec > >(tee /var/log/user-data.log) 2>&1
 echo "User Data 스크립트 시작: $(date)"
 
+# SSH 서비스 확실히 활성화
+systemctl enable ssh
+systemctl start ssh
+systemctl status ssh
+
 # 시스템 업데이트
 apt-get update -y
 
 # 기본 패키지 설치
-apt-get install -y curl wget git unzip
+apt-get install -y curl wget git unzip openssh-server
+
+# SSH 설정 확인
+echo "SSH 설정 확인:"
+ss -tlnp | grep :22
+systemctl is-active ssh
 
 # Docker 설치를 위한 준비
 apt-get install -y apt-transport-https ca-certificates gnupg lsb-release
 
+# 방화벽 설정 (UFW 비활성화 - 보안그룹 사용)
+ufw --force disable
+
 echo "User Data 스크립트 완료: $(date)"
+echo "SSH 상태: $(systemctl is-active ssh)"
 EOF
 }
 

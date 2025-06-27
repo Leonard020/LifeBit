@@ -205,7 +205,11 @@ export const login = async (data: LoginData) => {
 
 // 회원가입 API
 export const signUp = async (data: SignUpData) => {
-    const response = await axios.post(API_ENDPOINTS.SIGNUP, data);
+    const response = await axios.post(API_ENDPOINTS.SIGNUP, data, {
+        headers: {
+            'Authorization': null 
+        }
+    });
     return response.data;
 };
 

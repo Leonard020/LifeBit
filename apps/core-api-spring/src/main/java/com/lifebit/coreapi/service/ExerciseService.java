@@ -5,7 +5,6 @@ import com.lifebit.coreapi.entity.ExerciseSession;
 import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.repository.ExerciseCatalogRepository;
 import com.lifebit.coreapi.repository.ExerciseSessionRepository;
-import com.lifebit.coreapi.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,20 +23,20 @@ import com.lifebit.coreapi.entity.TimePeriodType;
 public class ExerciseService {
     private final ExerciseSessionRepository exerciseSessionRepository;
     private final ExerciseCatalogRepository exerciseCatalogRepository;
-    private final UserRepository userRepository;
 
     @Transactional
     public ExerciseSession recordExercise(
-            Long userId, Long catalogId, Integer duration_minutes, Integer caloriesBurned, String notes,
-            Integer sets, Integer reps, Double weight, LocalDate exerciseDate, TimePeriodType timePeriod) {
+        Long userId, Long catalogId, Integer durationMinutes, Integer caloriesBurned, String notes,
+        Integer sets, Integer reps, Double weight, LocalDate exerciseDate, TimePeriodType timePeriod
+    ) {
         ExerciseCatalog catalog = exerciseCatalogRepository.findById(catalogId)
-                .orElseThrow(() -> new EntityNotFoundException("Exercise catalog not found"));
+            .orElseThrow(() -> new EntityNotFoundException("Exercise catalog not found"));
 
         ExerciseSession session = new ExerciseSession();
         session.setUuid(UUID.randomUUID());
-        session.setUser(userRepository.getReferenceById(userId));
+        session.setUser(new User(userId));
         session.setExerciseCatalog(catalog);
-        session.setDurationMinutes(duration_minutes);
+        session.setDurationMinutes(durationMinutes);
         session.setCaloriesBurned(caloriesBurned);
         session.setNotes(notes);
         session.setExerciseDate(exerciseDate != null ? exerciseDate : LocalDate.now());
@@ -53,7 +52,7 @@ public class ExerciseService {
 
     public List<ExerciseSession> getExerciseHistory(User user, LocalDate startDate, LocalDate endDate) {
         return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
-                user, startDate, endDate);
+            user, startDate, endDate);
     }
 
     public List<ExerciseCatalog> searchExercises(String keyword) {
@@ -63,8 +62,8 @@ public class ExerciseService {
     public List<ExerciseCatalog> getExercisesByBodyPart(String bodyPart) {
         // String을 BodyPartType으로 변환
         try {
-            com.lifebit.coreapi.entity.BodyPartType bodyPartType = com.lifebit.coreapi.entity.BodyPartType
-                    .valueOf(bodyPart.toUpperCase());
+            com.lifebit.coreapi.entity.BodyPartType bodyPartType = 
+                com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPart.toUpperCase());
             return exerciseCatalogRepository.findByBodyPart(bodyPartType);
         } catch (IllegalArgumentException e) {
             // 잘못된 bodyPart 값인 경우 빈 리스트 반환
@@ -78,7 +77,7 @@ public class ExerciseService {
     public List<ExerciseSession> getRecentExerciseSessions(Long userId, String period) {
         LocalDate endDate = LocalDate.now();
         LocalDate startDate;
-
+        
         // 기간에 따른 시작 날짜 계산
         switch (period.toLowerCase()) {
             case "day":
@@ -96,10 +95,10 @@ public class ExerciseService {
             default:
                 startDate = endDate.minusMonths(1); // 기본값: 1개월
         }
-
-        User user = userRepository.getReferenceById(userId);
+        
+        User user = new User(userId);
         return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
-                user, startDate, endDate);
+            user, startDate, endDate);
     }
 
     /**
@@ -108,9 +107,9 @@ public class ExerciseService {
     public List<ExerciseSession> getRecentExerciseSessions(Long userId, int days) {
         LocalDate startDate = LocalDate.now().minusDays(days);
         LocalDate endDate = LocalDate.now();
-        User user = userRepository.getReferenceById(userId);
+        User user = new User(userId);
         return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
-                user, startDate, endDate);
+            user, startDate, endDate);
     }
 
     /**
@@ -127,8 +126,8 @@ public class ExerciseService {
     public int getWeeklyCaloriesBurned(Long userId) {
         List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
         return sessions.stream()
-                .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
-                .sum();
+            .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
+            .sum();
     }
 
     /**
@@ -137,8 +136,8 @@ public class ExerciseService {
     public int getWeeklyExerciseMinutes(Long userId) {
         List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
         return sessions.stream()
-                .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
-                .sum();
+            .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
+            .sum();
     }
 
     /**
@@ -152,7 +151,7 @@ public class ExerciseService {
 
         int streak = 0;
         LocalDate currentDate = LocalDate.now();
-
+        
         // 오늘부터 역순으로 연속 운동 일수 계산
         for (ExerciseSession session : sessions) {
             if (session.getExerciseDate().equals(currentDate)) {
@@ -162,7 +161,7 @@ public class ExerciseService {
                 break; // 연속이 끊어짐
             }
         }
-
+        
         return streak;
     }
 
@@ -170,7 +169,7 @@ public class ExerciseService {
      * 총 운동 일수 조회
      */
     public int getTotalWorkoutDays(Long userId) {
-        User user = userRepository.getReferenceById(userId);
+        User user = new User(userId);
         return (int) exerciseSessionRepository.countDistinctExerciseDateByUser(user);
     }
 
@@ -181,7 +180,7 @@ public class ExerciseService {
     public ExerciseCatalog findOrCreateExercise(String name, String bodyPart, String description) {
         // 먼저 기존 운동 검색
         List<ExerciseCatalog> existingExercises = exerciseCatalogRepository.findByNameContainingIgnoreCase(name);
-
+        
         if (!existingExercises.isEmpty()) {
             // 정확히 일치하는 이름이 있는지 확인
             for (ExerciseCatalog exercise : existingExercises) {
@@ -190,25 +189,25 @@ public class ExerciseService {
                 }
             }
         }
-
+        
         // 새로운 운동 카탈로그 생성
         ExerciseCatalog newExercise = new ExerciseCatalog();
         newExercise.setUuid(java.util.UUID.randomUUID());
         newExercise.setName(name);
-
+        
         // bodyPart를 BodyPartType으로 변환
         try {
-            com.lifebit.coreapi.entity.BodyPartType bodyPartType = com.lifebit.coreapi.entity.BodyPartType
-                    .valueOf(bodyPart.toUpperCase());
+            com.lifebit.coreapi.entity.BodyPartType bodyPartType = 
+                com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPart.toUpperCase());
             newExercise.setBodyPart(bodyPartType);
         } catch (IllegalArgumentException e) {
             // 기본값 설정
             newExercise.setBodyPart(com.lifebit.coreapi.entity.BodyPartType.cardio);
         }
-
+        
         newExercise.setDescription(description);
         newExercise.setCreatedAt(LocalDateTime.now());
-
+        
         return exerciseCatalogRepository.save(newExercise);
     }
 
@@ -222,12 +221,8 @@ public class ExerciseService {
     /**
      * ID로 운동 카탈로그 조회
      */
-    @Transactional
-    public ExerciseSession setExerciseCatalog(ExerciseSession session, Long catalogId) {
-        ExerciseCatalog catalog = exerciseCatalogRepository.findById(catalogId)
-                .orElseThrow(() -> new RuntimeException("운동 종류를 찾을 수 없습니다."));
-        session.setExerciseCatalog(catalog);
-        return session;
+    public ExerciseCatalog getExerciseCatalogById(Long catalogId) {
+        return exerciseCatalogRepository.findById(catalogId).orElse(null);
     }
 
     /**
@@ -235,33 +230,7 @@ public class ExerciseService {
      */
     @Transactional
     public ExerciseSession updateExerciseSession(ExerciseSession exerciseSession) {
-        // 💥 기존 세션은 detached 상태일 수 있으므로, merge 전에 다시 참조 획득
-        ExerciseSession managedSession = exerciseSessionRepository.findById(exerciseSession.getExerciseSessionId())
-                .orElseThrow(() -> new RuntimeException("운동 세션을 찾을 수 없습니다."));
-
-        // 필드 복사
-        managedSession.setDurationMinutes(exerciseSession.getDurationMinutes());
-        managedSession.setCaloriesBurned(exerciseSession.getCaloriesBurned());
-        managedSession.setNotes(exerciseSession.getNotes());
-        managedSession.setExerciseDate(exerciseSession.getExerciseDate());
-        managedSession.setSets(exerciseSession.getSets());
-        managedSession.setReps(exerciseSession.getReps());
-        managedSession.setWeight(exerciseSession.getWeight());
-        managedSession.setTimePeriod(exerciseSession.getTimePeriod());
-
-        // ✅ 연관관계도 확인
-        if (exerciseSession.getExerciseCatalog() != null) {
-            ExerciseCatalog catalog = exerciseCatalogRepository.findById(
-                    exerciseSession.getExerciseCatalog().getExerciseCatalogId())
-                    .orElseThrow(() -> new RuntimeException("운동 카탈로그를 찾을 수 없습니다."));
-            managedSession.setExerciseCatalog(catalog);
-        }
-
-        // 이 시점에서는 Lazy 로딩 OK
-        managedSession.getExerciseCatalog().getName();
-        managedSession.getUser().getUserId();
-
-        return managedSession;
+        return exerciseSessionRepository.save(exerciseSession);
     }
 
     /**
@@ -296,8 +265,8 @@ public class ExerciseService {
     public int getExerciseMinutesByPeriod(Long userId, int days) {
         List<ExerciseSession> sessions = getRecentExerciseSessions(userId, days);
         return sessions.stream()
-                .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
-                .sum();
+            .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
+            .sum();
     }
 
     /**
@@ -306,13 +275,13 @@ public class ExerciseService {
     public int getCaloriesBurnedByPeriod(Long userId, int days) {
         List<ExerciseSession> sessions = getRecentExerciseSessions(userId, days);
         return sessions.stream()
-                .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
-                .sum();
+            .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
+            .sum();
     }
 
     public List<ExerciseSession> getExerciseSessions(Long userId, LocalDate startDate, LocalDate endDate) {
-        User user = userRepository.getReferenceById(userId);
+        User user = new User(userId);
         return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
-                user, startDate, endDate);
+            user, startDate, endDate);
     }
-}
+} 

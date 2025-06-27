@@ -26,4 +26,4 @@ ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8001
 
 # 애플리케이션 실행
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"] 
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"] 

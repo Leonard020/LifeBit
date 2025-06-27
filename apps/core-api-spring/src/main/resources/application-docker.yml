@@ -39,4 +39,7 @@ logging:
   level:
     com.lifebit: INFO
     org.hibernate.SQL: INFO
-    root: INFO 
+    root: INFO
+
+server:
+  forward-headers-strategy: framework 

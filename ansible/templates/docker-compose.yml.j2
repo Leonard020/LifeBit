@@ -184,8 +184,8 @@ services:
     container_name: lifebit-frontend
     restart: unless-stopped
     environment:
-      - VITE_CORE_API_URL=http://{{ ansible_default_ipv4.address }}:8082/api
-      - VITE_AI_API_URL=http://{{ ansible_default_ipv4.address }}:8082/ai
+      - VITE_CORE_API_URL=http://{{ server_public_ip }}:8082/api
+      - VITE_AI_API_URL=http://{{ server_public_ip }}:8082/ai
     ports:
       - "3000:80"
     networks:
@@ -208,7 +208,7 @@ services:
       start_period: 60s
 
   # ================================================
-  # 웹 프록시 (Nginx) - 단순화
+  # 웹 프록시 (Nginx) - 수정된 버전
   # ================================================
   nginx-proxy:
     build:
@@ -228,15 +228,21 @@ services:
         condition: service_healthy
       fastapi-app:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
 
   # ================================================
-  # 웹 프록시 (Nginx) - 단순화
+  # 워크플로우 (Airflow) - 경량화
   # ================================================
   airflow-webserver:
     image: apache/airflow:2.7.0-python3.10

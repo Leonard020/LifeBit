@@ -55,7 +55,7 @@ GRAFANA_ADMIN_USER: "admin"
 GRAFANA_ADMIN_PASSWORD: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') | default('grafana_secure_password') }}"
 
 # 환경 설정
-environment: "demo"
+deploy_env: "demo"
 
 # 모니터링 설정
 enable_monitoring: true
