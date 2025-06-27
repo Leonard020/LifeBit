@@ -31,9 +31,18 @@ log_cleanup() { echo -e "${PURPLE}[CLEANUP]${NC} $1"; }
 load_env() {
     local env_file="$SCRIPT_DIR/.env"
     if [[ -f "$env_file" ]]; then
-        log_info ".env 파일 로드 중..."
-        set -a  # .env 변수 자동 export
-        source "$env_file"
+        log_info ".env 파일 로드 중 (안전 모드)..."
+        # While 반복문을 사용하여 특수문자 등에도 안전하게 한 줄씩 읽어옵니다.
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # 주석이나 빈 줄은 건너뜁니다.
+            if [[ "$line" =~ ^\s*# ]] || [[ -z "$line" ]]; then
+                continue
+            fi
+            # 유효한 KEY=VALUE 형식의 변수만 export 합니다.
+            if [[ "$line" =~ ^[a-zA-Z0-9_]+= ]]; then
+                export "$line"
+            fi
+        done < "$env_file"
         log_success ".env 파일 로드 완료"
     else
         log_warning ".env 파일을 찾을 수 없습니다: $env_file"
@@ -616,84 +625,88 @@ cleanup_networking() {
             aws ec2 delete-internet-gateway --internet-gateway-id "$igw" 2>/dev/null || true
         done
         
-        # 8. 보안 그룹 정리 (콘솔과 동일한 방식)
-        log_info "보안 그룹 의존성 해결 중..."
+        # 8. 보안 그룹 정리 (강화된 순환 참조 해결)
+        log_info "보안 그룹 의존성 해결 중 (강화 모드)..."
         
         # 먼저 모든 보안 그룹을 가져오기 (기본 제외)
         local all_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName!=`default`]' --output json 2>/dev/null)
         
         if [[ "$all_sgs" != "[]" && "$all_sgs" != "null" && -n "$all_sgs" ]]; then
-            # 1단계: 모든 보안 그룹 간 참조 제거 (Self-referencing rules)
             local sg_ids=$(echo "$all_sgs" | jq -r '.[].GroupId' 2>/dev/null)
-            for sg in $sg_ids; do
-                [[ -z "$sg" ]] && continue
-                log_info "보안 그룹 자기 참조 규칙 제거: $sg"
-                
-                # 다른 보안 그룹을 참조하는 Ingress 규칙 제거
-                local cross_ref_ingress=$(aws ec2 describe-security-groups --group-ids "$sg" --query "SecurityGroups[0].IpPermissions[?UserIdGroupPairs[0].GroupId]" --output json 2>/dev/null)
-                if [[ "$cross_ref_ingress" != "[]" && "$cross_ref_ingress" != "null" ]]; then
-                    log_info "  - 교차 참조 Ingress 규칙 제거: $sg"
-                    aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$cross_ref_ingress" 2>/dev/null || true
-                fi
-                
-                # 다른 보안 그룹을 참조하는 Egress 규칙 제거
-                local cross_ref_egress=$(aws ec2 describe-security-groups --group-ids "$sg" --query "SecurityGroups[0].IpPermissionsEgress[?UserIdGroupPairs[0].GroupId]" --output json 2>/dev/null)
-                if [[ "$cross_ref_egress" != "[]" && "$cross_ref_egress" != "null" ]]; then
-                    log_info "  - 교차 참조 Egress 규칙 제거: $sg"
-                    aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$cross_ref_egress" 2>/dev/null || true
-                fi
-            done
             
-            sleep 3
+            # 강화된 보안 그룹 정리 (무한 루프 방지)
+            local max_sg_attempts=10
+            local sg_attempt=1
             
-            # 2단계: 모든 IP 기반 규칙 제거
-            for sg in $sg_ids; do
-                [[ -z "$sg" ]] && continue
-                log_info "보안 그룹 IP 규칙 제거: $sg"
-                
-                # 남은 모든 Ingress 규칙 제거
-                local remaining_ingress=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)
-                if [[ "$remaining_ingress" != "[]" && "$remaining_ingress" != "null" ]]; then
-                    aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$remaining_ingress" 2>/dev/null || true
-                fi
-                
-                # 남은 모든 Egress 규칙 제거 (기본 규칙 제외)
-                local remaining_egress=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null)
-                if [[ "$remaining_egress" != "[]" && "$remaining_egress" != "null" ]]; then
-                    aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$remaining_egress" 2>/dev/null || true
-                fi
-            done
-            
-            sleep 5
-            
-            # 3단계: 보안 그룹 삭제 (여러 번 시도)
-            local max_attempts=3
-            for attempt in $(seq 1 $max_attempts); do
-                log_info "보안 그룹 삭제 시도 $attempt/$max_attempts"
+            while [[ -n "$sg_ids" && $sg_attempt -le $max_sg_attempts ]]; do
+                log_info "보안 그룹 정리 시도 $sg_attempt/$max_sg_attempts"
                 local remaining_sgs=""
+                local progress_made=false
                 
                 for sg in $sg_ids; do
                     [[ -z "$sg" ]] && continue
                     
+                    log_info "보안 그룹 처리 중: $sg"
+                    
+                    # 1단계: 모든 Ingress 규칙 강제 제거
+                    local ingress_rules=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)
+                    if [[ "$ingress_rules" != "[]" && "$ingress_rules" != "null" && -n "$ingress_rules" ]]; then
+                        log_info "  - Ingress 규칙 제거 시도: $sg"
+                        if aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$ingress_rules" 2>/dev/null; then
+                            log_success "  - Ingress 규칙 제거 성공: $sg"
+                            progress_made=true
+                        else
+                            log_warning "  - Ingress 규칙 제거 실패: $sg"
+                        fi
+                    fi
+                    
+                    # 2단계: 모든 Egress 규칙 강제 제거 (기본 규칙 제외)
+                    local egress_rules=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null)
+                    if [[ "$egress_rules" != "[]" && "$egress_rules" != "null" && -n "$egress_rules" ]]; then
+                        log_info "  - Egress 규칙 제거 시도: $sg"
+                        if aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$egress_rules" 2>/dev/null; then
+                            log_success "  - Egress 규칙 제거 성공: $sg"
+                            progress_made=true
+                        else
+                            log_warning "  - Egress 규칙 제거 실패: $sg"
+                        fi
+                    fi
+                    
+                    # 3단계: 보안 그룹 삭제 시도
+                    log_info "  - 보안 그룹 삭제 시도: $sg"
                     if aws ec2 delete-security-group --group-id "$sg" 2>/dev/null; then
-                        log_success "보안 그룹 삭제 성공: $sg"
+                        log_success "  - 보안 그룹 삭제 성공: $sg"
+                        progress_made=true
                     else
+                        log_warning "  - 보안 그룹 삭제 실패: $sg (재시도 예정)"
                         remaining_sgs="$remaining_sgs $sg"
-                        log_warning "보안 그룹 삭제 실패: $sg (재시도 예정)"
                     fi
                 done
                 
                 sg_ids="$remaining_sgs"
-                [[ -z "$sg_ids" ]] && break
                 
-                if [[ $attempt -lt $max_attempts ]]; then
-                    log_info "5초 대기 후 재시도..."
-                    sleep 5
+                # 진행 상황이 없으면 강제 종료
+                if [[ "$progress_made" == "false" ]]; then
+                    log_warning "보안 그룹 정리에서 진행 상황이 없습니다. 강제 종료합니다."
+                    break
                 fi
+                
+                # 남은 보안 그룹이 있으면 잠시 대기 후 재시도
+                if [[ -n "$sg_ids" ]]; then
+                    log_info "남은 보안 그룹: $sg_ids"
+                    log_info "3초 대기 후 재시도..."
+                    sleep 3
+                fi
+                
+                ((sg_attempt++))
             done
             
+            # 최종 남은 보안 그룹들
             if [[ -n "$sg_ids" ]]; then
-                log_error "삭제되지 않은 보안 그룹: $sg_ids"
+                log_error "최종적으로 삭제되지 않은 보안 그룹: $sg_ids"
+                log_warning "이 보안 그룹들은 AWS 콘솔에서 수동으로 삭제해야 할 수 있습니다."
+            else
+                log_success "모든 보안 그룹 정리 완료"
             fi
         fi
         

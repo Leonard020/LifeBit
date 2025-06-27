@@ -325,6 +325,24 @@ CREATE INDEX idx_validation_history_record ON validation_history(record_type, re
 CREATE INDEX idx_validation_history_user ON validation_history(user_id);
 CREATE INDEX idx_validation_history_created ON validation_history(created_at);
 
+-- notification 테이블
+CREATE TABLE notification (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    ref_id BIGINT,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_notification_user_id ON notification(user_id);
+CREATE INDEX idx_notification_type ON notification(type);
+CREATE INDEX idx_notification_created_at ON notification(created_at);
+CREATE INDEX idx_notification_is_read ON notification(is_read);
+
 -- log 테이블 (파티셔닝)
 CREATE TABLE log (
     log_id BIGSERIAL,
@@ -439,6 +457,19 @@ WHERE rh.user_id = ur.user_id;
 -- (선택) 더미 데이터 삽입 예시
 -- INSERT INTO user_ranking (user_id, total_score, tier, rank_position, streak_days, is_active)
 -- VALUES (1, 1200, 'GOLD', 1, 10, TRUE), (2, 800, 'SILVER', 2, 5, TRUE);
+
+-- 더미 사용자 데이터 추가 (notification 외래 키 제약 조건 해결)
+INSERT INTO users (email, password_hash, nickname, height, weight, age, gender) VALUES
+('user001@example.com', crypt('password123', gen_salt('bf')), 'User001', 170.5, 65.0, 25, 'male'),
+('user002@example.com', crypt('password123', gen_salt('bf')), 'User002', 165.0, 55.0, 28, 'female'),
+('user003@example.com', crypt('password123', gen_salt('bf')), 'User003', 180.0, 75.0, 30, 'male'),
+('user004@example.com', crypt('password123', gen_salt('bf')), 'User004', 160.0, 50.0, 22, 'female'),
+('user005@example.com', crypt('password123', gen_salt('bf')), 'User005', 175.0, 70.0, 27, 'male'),
+('user006@example.com', crypt('password123', gen_salt('bf')), 'User006', 168.0, 58.0, 24, 'female'),
+('user007@example.com', crypt('password123', gen_salt('bf')), 'User007', 182.0, 80.0, 29, 'male'),
+('user008@example.com', crypt('password123', gen_salt('bf')), 'User008', 163.0, 52.0, 26, 'female'),
+('user009@example.com', crypt('password123', gen_salt('bf')), 'User009', 177.0, 72.0, 31, 'male'),
+('user010@example.com', crypt('password123', gen_salt('bf')), 'User010', 167.0, 56.0, 23, 'female');
 
 -- (선택) 기타 필요한 컬럼/인덱스 추가 (예: 시즌별 인덱스, created_at/last_updated_at 인덱스 등)
 

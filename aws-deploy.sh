@@ -16,7 +16,15 @@ set -e # 명령어 실패 시 즉시 스크립트 중단
 # --- 설정 ---
 # .env 파일에서 환경 변수 불러오기
 if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+  # While 반복문을 사용하여 안전하게 환경 변수를 export 합니다.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^\s*# ]] || [[ -z "$line" ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^[a-zA-Z0-9_]+= ]]; then
+      export "$line"
+    fi
+  done < .env
 else
   echo "오류: .env 파일을 찾을 수 없습니다. .env.example을 복사하여 생성해주세요."
   exit 1
