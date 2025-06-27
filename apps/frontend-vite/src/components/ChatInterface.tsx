@@ -14,7 +14,7 @@ interface ChatInterfaceProps {
   isProcessing: boolean;
   networkError: boolean;
   onVoiceToggle: () => void;
-  onSendMessage: () => void;
+  onSendMessage: (transcript?: string) => void;
   onRetry: () => void;
   aiFeedback: ChatResponse | null;
   onSaveRecord: () => void;
@@ -50,6 +50,16 @@ const ChatMessage: React.FC<{
     hour12: false
   });
 
+  // 다크모드 감지
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2`}>
       <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[70%]`}>
@@ -62,11 +72,21 @@ const ChatMessage: React.FC<{
           </div>
         )}
 
-        <div className={`relative px-4 py-3 rounded-2xl shadow-sm ${isUser
+        <div
+          className={`relative px-4 py-3 rounded-2xl shadow-sm ${isUser
             ? 'bg-purple-500 text-white rounded-br-md'
             : 'bg-white border border-gray-200 rounded-bl-md'
-          }`}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+          }`}
+          style={
+            !isUser && isDarkMode
+              ? { background: '#23272e' }
+              : undefined
+          }
+        >
+          <div
+            className="whitespace-pre-wrap text-sm leading-relaxed"
+            style={{ color: '#222', fontWeight: 600 }}
+          >
             {message.content}
           </div>
 
@@ -151,6 +171,22 @@ const formatStructuredDataDisplay = (data: ChatResponse['parsed_data'], recordTy
   );
 };
 
+// 타입 정의 (브라우저 호환)
+type WebSpeechRecognitionEvent = Event & {
+  results: {
+    [key: number]: {
+      [key: number]: {
+        transcript: string;
+        confidence: number;
+      };
+    };
+  };
+};
+
+type WebSpeechRecognitionErrorEvent = Event & {
+  error: string;
+};
+
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   recordType,
   inputText,
@@ -174,6 +210,37 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [localIsRecording, setLocalIsRecording] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // recognition 인스턴스 생성 함수 (컴포넌트 내부에 위치)
+  const createRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'ko-KR';
+    recognition.onresult = (event: WebSpeechRecognitionEvent) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('[STT] 인식 결과:', transcript);
+      setInputText(transcript);
+      setLocalIsRecording(false);
+      setTimeout(() => {
+        onSendMessage(transcript);
+      }, 2000);
+    };
+    recognition.onerror = (event: WebSpeechRecognitionErrorEvent) => {
+      console.error('[STT] onerror fired:', event.error, event);
+      setLocalIsRecording(false);
+      recognition.abort();
+      recognitionRef.current = null;
+    };
+    recognition.onend = () => {
+      setLocalIsRecording(false);
+      recognitionRef.current = null;
+    };
+    return recognition;
+  };
 
   useEffect(() => {
     // 💬 스크롤 항상 맨 아래로
@@ -189,6 +256,39 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [conversationHistory, aiFeedback, inputText, structuredData, onSaveRecord, hasSaved, setHasSaved]);
 
+  // 음성인식 로직 추가
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'ko-KR';
+      recognitionRef.current.onresult = (event: WebSpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('[STT] 인식 결과:', transcript);
+        setInputText(transcript);
+        setLocalIsRecording(false);
+        // 2초 후 자동 전송
+        setTimeout(() => {
+          onSendMessage(transcript);
+        }, 2000);
+      };
+      recognitionRef.current.onerror = (event: WebSpeechRecognitionErrorEvent) => {
+        console.error('[STT] 에러:', event.error);
+        setLocalIsRecording(false);
+      };
+      recognitionRef.current.onend = (event: Event) => {
+        setLocalIsRecording(false);
+      };
+    }
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [setInputText, onSendMessage]);
+
   if (!recordType) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -198,10 +298,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     );
   }
 
-  const handleSendMessageWithFocus = () => {
+  // 전송 버튼/엔터키/자동 전송 모두 transcript 파라미터를 받을 수 있도록 수정
+  const handleSendMessageWithFocus = (transcript?: string) => {
     console.log('🟢 [ChatInterface] 전송 버튼 눌림');
-
-    onSendMessage();
+    onSendMessage(transcript);
     setTimeout(() => {
       requestAnimationFrame(() => {
         if (inputRef.current) {
@@ -217,8 +317,39 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       console.log('⌨️ [ChatInterface] Enter 눌림');
-
       handleSendMessageWithFocus();
+    }
+  };
+
+  // 마이크 버튼 클릭 핸들러 (로컬)
+  const handleVoiceButtonClick = () => {
+    console.log('[마이크] ChatInterface 마이크 버튼 클릭됨');
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+      alert('이 브라우저는 음성 인식을 지원하지 않습니다.');
+      return;
+    }
+    if (!localIsRecording) {
+      setLocalIsRecording(true);
+      if (!recognitionRef.current) {
+        recognitionRef.current = createRecognition();
+      }
+      try {
+        recognitionRef.current.start();
+        console.log('[마이크] 음성 인식 시작');
+      } catch (err) {
+        console.error('[마이크] start() 에러:', err);
+        setLocalIsRecording(false);
+        recognitionRef.current = null;
+      }
+    } else {
+      try {
+        recognitionRef.current.stop();
+        setLocalIsRecording(false);
+        console.log('[마이크] 음성 인식 중지');
+      } catch (err) {
+        console.error('[마이크] stop() 에러:', err);
+        recognitionRef.current = null;
+      }
     }
   };
 
@@ -315,11 +446,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <Button
               variant="ghost"
               size="icon"
-              onClick={onVoiceToggle}
+              onClick={handleVoiceButtonClick}
               disabled={isProcessing}
               className="rounded-full w-10 h-10 hover:bg-purple-100"
             >
-              {isRecording ? (
+              {localIsRecording ? (
                 <Mic className="h-5 w-5 text-red-500 animate-pulse" />
               ) : (
                 <MicOff className="h-5 w-5 text-gray-500" />

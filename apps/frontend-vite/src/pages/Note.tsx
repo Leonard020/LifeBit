@@ -15,12 +15,13 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
 import type { TooltipProps } from 'recharts';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUpdateExerciseSession } from '@/api/authApi';
 
 // 백엔드 API 응답 타입 정의
 interface DietLogDTO {
@@ -63,6 +64,16 @@ interface FoodItem {
 }
 
 const Note = () => {
+  // 1. 다크모드 감지 state를 최상단에 위치
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [todayScore, setTodayScore] = useState(12);
@@ -76,12 +87,6 @@ const Note = () => {
   const [dietError, setDietError] = useState<string | null>(null);
 
   // 식단 추가 관련 상태
-  const [isAddDietDialogOpen, setIsAddDietDialogOpen] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
-  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [quantity, setQuantity] = useState('100');
-  const [isSearching, setIsSearching] = useState(false);
   const [mealTime, setMealTime] = useState('breakfast');
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
@@ -210,6 +215,21 @@ const Note = () => {
     }
   }, [userId, queryClient]);
 
+  // 운동부위 한글화
+  const getBodyPartLabel = (key: string) => {
+    const map: Record<string, string> = {
+      chest: '가슴',
+      back: '등',
+      legs: '하체',
+      shoulders: '어깨',
+      arms: '팔',
+      abs: '복부',
+      cardio: '유산소',
+      full_body: '전신',
+    };
+    return map[key] || key;
+  };
+
   // 3. Map backend fields to radar chart axes
   const bodyPartMap = [
     { key: 'weekly_chest', label: '가슴' },
@@ -236,9 +256,31 @@ const Note = () => {
   }, [userGoalsData]);
 
   const MAX_EDGE_VALUE = 7;
+  // 1. 운동명-부위 매핑에 벤치프레스 포함
+  const exerciseNameToBodyPart: Record<string, string> = {
+    '벤치프레스': '가슴',
+    '사이클링': '유산소',
+    '수영': '유산소',
+    '조깅': '유산소',
+    '러닝': '유산소',
+    // 필요시 추가
+  };
+
+  // 2. todayBodyPartCounts 집계
+  const todayBodyPartCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    todayExercise.forEach((ex) => {
+      // bodyPart가 있으면 한글화, 없으면 매핑
+      const part = ex.bodyPart ? getBodyPartLabel(ex.bodyPart) : (exerciseNameToBodyPart[ex.exerciseName] || ex.bodyPart || '기타');
+      counts[part] = (counts[part] || 0) + 1;
+    });
+    return counts;
+  }, [todayExercise]);
+
+  // 3. exerciseData value에 todayBodyPartCounts 반영
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: weeklySummary[label] || 0,
+    value: todayBodyPartCounts[label] || 0,
     goal: exerciseGoals[label] || 0,
   }));
 
@@ -355,98 +397,8 @@ const Note = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  // 음식 검색
-  const searchFood = async () => {
-    if (!searchKeyword.trim()) return;
-
-    setIsSearching(true);
-    try {
-      const results = await searchFoodItems(searchKeyword);
-      setSearchResults(results);
-    } catch (error) {
-      console.error("음식 검색 중 오류:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // 식단 추가
-  const addDietRecord = async () => {
-    if (!selectedFood || !quantity) {
-      alert('음식과 양을 입력해주세요.');
-      return;
-    }
-    try {
-      const userId = getUserIdFromToken();
-      if (!userId) {
-        toast({
-          title: "사용자 정보를 찾을 수 없습니다.",
-          description: "다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        navigate('/login');
-        return;
-      }
-
-      const request: any = {
-        quantity: parseFloat(quantity),
-        meal_time: mealTime,
-        unit: 'g',
-        log_date: selectedDate.toISOString().split('T')[0],
-        input_source: 'TYPING', // 항상 직접입력으로 고정
-      };
-
-      if (selectedFood.foodItemId) {
-        // DB에 있는 음식
-        request.food_item_id = selectedFood.foodItemId;
-      } else {
-        // 직접 입력 음식
-        request.food_name = selectedFood.name;
-        request.calories = selectedFood.calories;
-        request.carbs = selectedFood.carbs;
-        request.protein = selectedFood.protein;
-        request.fat = selectedFood.fat;
-      }
-
-      const newRecord = await createDietRecord(request);
-
-      setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
-      await fetchDietData();
-      await fetchCalendarRecords();
-
-      setIsAddDietDialogOpen(false);
-      setSearchKeyword('');
-      setSearchResults([]);
-      setSelectedFood(null);
-      setQuantity('100');
-      setMealTime('breakfast');
-      setInputSource('TYPING');
-
-      toast({
-        title: "식단 기록 추가 완료",
-        description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
-      });
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
-        toast({
-          title: "권한 오류",
-          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        removeToken();
-        navigate('/login');
-        return;
-      }
-      console.error('식단 기록 추가 중 오류:', error);
-      toast({
-        title: "식단 기록 추가 실패",
-        description: "기록 추가 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
-    }
-  };
-
+  
+  
   // 식단 기록 삭제
   const handleDeleteDietRecord = async (id: number) => {
     try {
@@ -549,73 +501,26 @@ const Note = () => {
 
   // ✅ 오늘 운동 기록 불러오기
   const fetchExercise = async () => {
-    if (!authToken) {
-      console.warn('인증 토큰이 없습니다.');
+    const userId = getUserIdFromToken();
+    if (!userId) {
       setTodayExercise([]);
       return;
     }
-
-    if (!isTokenValid()) {
-      console.error('토큰이 유효하지 않습니다. 로그인 페이지로 이동합니다.');
-      removeToken();
-      navigate('/login');
-      return;
-    }
-
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-    console.log('[운동기록 조회 호출]', formattedDate);
-
     try {
-      // exercise_sessions 테이블의 모든 필드를 포함하여 요청
-      const res = await fetch(`/api/note/exercise/daily?date=${formattedDate}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error(`API 요청 실패: ${res.status}`);
-      }
-
-      const data = await res.json();
-      console.log('[운동기록 원본 데이터]', JSON.stringify(data, null, 2));
-
+      const data = await getDailyExerciseRecords(formattedDate, userId);
       // 날짜 필터 적용 (exerciseDate 기준)
-      const filtered = data.filter((e: ExerciseRecordDTO) => {
-        const matches = e.exerciseDate && e.exerciseDate.startsWith(formattedDate);
-        // 각 레코드의 세부 정보 로깅
-        console.log('[운동 기록 상세]', {
-          id: e.exerciseSessionId,
-          name: e.exerciseName,
-          bodyPart: e.bodyPart,
-          sets: e.sets,
-          reps: e.reps,
-          weight: e.weight,
-          duration: e.durationMinutes,
-          calories: e.calories_burned
-        });
-        return matches;
-      });
-
-      console.log('[필터링된 운동기록]', filtered);
-
+      const filtered = data.filter((e: ExerciseRecordDTO) => e.exerciseDate && e.exerciseDate.startsWith(formattedDate));
       // 데이터 정제: undefined나 null이 아닌 값만 포함
       const cleanedData = filtered.map(record => ({
         ...record,
-        sets: record.sets ?? record.set ?? record.set_count ?? undefined,
-        reps: record.reps ?? record.rep ?? record.rep_count ?? undefined,
-        weight: record.weight ?? record.weight_kg ?? undefined,
-        durationMinutes: record.durationMinutes || undefined,
+        sets: record.sets,
+        reps: record.reps,
+        weight: record.weight,
+        duration_minutes: record.duration_minutes || undefined,
         calories_burned: record.calories_burned || undefined
       }));
-
       setTodayExercise(cleanedData.sort((a, b) => b.exerciseSessionId - a.exerciseSessionId));
-
-      if (!filtered || filtered.length === 0) {
-        console.warn('[진단] 운동 기록이 비어있음! (DB/백엔드/파라미터/날짜 필터 확인 필요)');
-      }
     } catch (err) {
       console.error("운동 기록 불러오기 실패:", err);
       setTodayExercise([]);
@@ -682,8 +587,8 @@ const Note = () => {
 
     // 점 스타일: 크게, 색상별
     const dotStyle = {
-      width: '14px',
-      height: '14px',
+      width: '7px',
+      height: '7px',
       borderRadius: '50%',
       marginTop: '6px',
       display: 'inline-block',
@@ -887,34 +792,16 @@ const Note = () => {
 
   const addExerciseRecord = async () => {
     try {
-      const token = getToken();
-      console.log('운동 추가 토큰:', token); // 토큰 값 확인
-      const userInfo = getUserInfo();
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-
-      const request = {
+      const request: any = {
         exerciseName: exerciseName.trim(),
         sets: sets || 1,
         reps: reps || 10,
         weight: weight || 0.0,
-        time: time || null,
         exerciseDate: formattedDate
       };
-      console.log('💪 운동 추가 요청:', request);
-
-      const res = await fetch('/api/note/exercise', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(request)
-      });
-
-      if (!res.ok) throw new Error("운동 기록 추가 실패");
-
-      await fetchExercise(); // 운동 추가 후 오늘의 운동 기록을 강제로 다시 불러옴
-
+      await createExerciseSession(request);
+      await fetchExercise();
       setIsAddExerciseDialogOpen(false);
       setExerciseName('');
       setSets(1);
@@ -938,6 +825,7 @@ const Note = () => {
     sets: 1,
     reps: 10,
     weight: 0,
+    duration_minutes: 0,
   });
 
 
@@ -947,6 +835,7 @@ const Note = () => {
       sets: record.sets || 1,
       reps: record.reps || 10,
       weight: record.weight || 0,
+      duration_minutes: record.duration_minutes || 0,
     });
     setIsEditExerciseDialogOpen(true);
   };
@@ -988,52 +877,73 @@ const Note = () => {
   }
 
   const deleteExerciseRecord = async (sessionId: number) => {
-    if (!authToken) {
-      console.warn('인증 토큰이 없습니다.');
-      return;
-    }
-
     try {
-      await axios.delete(`/api/note/exercise/${sessionId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      // 삭제 후 목록 새로고침
+      await deleteExerciseSession(sessionId);
       await fetchExercise();
     } catch (err) {
       console.error("운동 기록 삭제 실패:", err);
     }
   };
 
-  const saveExerciseEdit = async () => {
-    if (!editingExercise || !authToken) return;
 
-    try {
-      await axios.put(`/api/note/exercise/${editingExercise.exerciseSessionId}`, {
-        sets: exerciseEditForm.sets,
-        reps: exerciseEditForm.reps,
-        weight: exerciseEditForm.weight,
-      }, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+  // 운동 기록 수정 saveExerciseEdit
+  const { mutate: updateSession } = useUpdateExerciseSession();
+  const [isSaving, setIsSaving] = useState(false);
 
-      setIsEditExerciseDialogOpen(false);
-      setEditingExercise(null);
-      await fetchExercise();
-    } catch (err) {
-      console.error("운동 기록 수정 실패:", err);
-    }
+  const saveExerciseEdit = () => {
+    if (!editingExercise || isSaving) return;
+    setIsSaving(true);
+
+    const dataToSend = {
+      sets: exerciseEditForm.sets ?? 0,
+      reps: exerciseEditForm.reps ?? 0,
+      weight: exerciseEditForm.weight ?? 0,
+      duration_minutes: exerciseEditForm.duration_minutes ?? 0,
+    };
+
+    console.log("📤 수정 요청 데이터:", dataToSend);
+
+    updateSession(
+      {
+        sessionId: editingExercise.exerciseSessionId,
+        data: dataToSend,
+      },
+      {
+        onSuccess: () => {
+          setIsSaving(false);
+          setIsEditExerciseDialogOpen(false);
+          setEditingExercise(null);
+          fetchExercise();
+        },
+        onError: (err) => {
+          setIsSaving(false);
+          console.error("❌ 운동 기록 수정 실패:", err);
+          alert("운동 기록 수정 중 오류가 발생했습니다.");
+        },
+      }
+    );
   };
 
+
   // Custom tooltip for radar chart
-  const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
+  const RadarGoalTooltip: React.FC<TooltipProps<number, string> & { isDarkMode: boolean }> = ({ active, payload, isDarkMode }) => {
     if (active && payload && payload.length > 0) {
-      // Find the goal value
       const part = payload[0].payload.subject;
       const goal = payload[0].payload.goal;
+      const value = payload[0].payload.value;
       return (
-        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <strong>{part}</strong>: {goal}회
+        <div style={{
+          background: isDarkMode ? '#23272e' : 'white',
+          color: isDarkMode ? '#fff' : '#222',
+          border: '1px solid #ddd',
+          borderRadius: 6,
+          padding: '8px 12px',
+          fontSize: 14,
+          boxShadow: '0 2px 8px #0001'
+        }}>
+          <strong>{part}</strong><br />
+          목표: {goal}회<br />
+          달성: {value}회
         </div>
       );
     }
@@ -1060,6 +970,12 @@ const Note = () => {
 
   // Note.tsx 상단 state 부분에 추가
   const [inputSource, setInputSource] = useState('TYPING'); // 입력 방식(직접입력/음성입력)
+
+  // 오늘의 운동 기록만을 위한 레이더 차트 데이터
+  const todayRadarData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: todayBodyPartCounts[label] || 0,
+  }));
 
   return (
     <Layout>
@@ -1162,9 +1078,15 @@ const Note = () => {
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
-                        <Tooltip content={<RadarGoalTooltip />} />
+                        <Tooltip content={<RadarGoalTooltip isDarkMode={isDarkMode} />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+                        <defs>
+                          <linearGradient id="todayGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="#8B5CF6" />
+                            <stop offset="100%" stopColor="#EC4899" />
+                          </linearGradient>
+                        </defs>
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
@@ -1175,12 +1097,6 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                {isToday(selectedDate) && todayExercise.length > 0 && (
-                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
-                  </Button>
-                )}
                 <Dialog open={isAddExerciseDialogOpen} onOpenChange={setIsAddExerciseDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
@@ -1268,7 +1184,7 @@ const Note = () => {
                       const isCardio = record.bodyPart === 'cardio';
                       // 시간, 칼로리, 날짜 등 정보
                       const infoParts = [];
-                      if (record.durationMinutes !== undefined) infoParts.push(`${record.durationMinutes}분`);
+                      if (record.duration_minutes !== undefined) infoParts.push(`${record.duration_minutes}분`);
                       if (record.calories_burned !== undefined) infoParts.push(`${record.calories_burned}kcal`);
                       if (record.exerciseDate) infoParts.push(`${record.exerciseDate}`);
                       // 근력운동이면 세트, 무게, 횟수 추가
@@ -1278,10 +1194,17 @@ const Note = () => {
                         if (record.weight !== undefined) infoParts.push(`${record.weight}kg`);
                       }
                       return (
-                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div
+                          key={record.exerciseSessionId}
+                          className="flex items-center justify-between p-3 rounded-lg"
+                          style={{
+                            background: isDarkMode ? '#23272e' : '#fff',
+                            border: isDarkMode ? '2px solid #8B5CF6' : '1px solid #eee',
+                            color: isDarkMode ? '#fff' : '#222',
+                          }}
+                        >
                           <div>
-                            <p className="font-medium">
-                              {record.exerciseName}
+                            <p className="font-medium" style={{ color: isDarkMode ? '#fff' : undefined }}>{record.exerciseName}
                               {record.bodyPart && (
                                 <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                               )}
@@ -1295,17 +1218,30 @@ const Note = () => {
                               )}
                             </p>
                           </div>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+
+                          {/* 👉 삭제 + 수정 버튼 같이 */}
+                          <div className="flex gap-2 items-center">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-primary" onClick={() => {
+                              setEditingExercise(record);
+                              setExerciseEditForm({
+                                sets: record.sets,
+                                reps: record.reps,
+                                weight: record.weight,
+                                duration_minutes: record.duration_minutes,
+                              });
+                              setIsEditExerciseDialogOpen(true);
+                            }}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteExerciseRecord(record.exerciseSessionId)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedExerciseScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
-                      </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
@@ -1314,46 +1250,79 @@ const Note = () => {
             </Card>
           </TabsContent>
 
-          {/* ✅ 등록된 운동 수정정 */}
+          {/* ✅ 등록된 운동 수정 다이얼로그 */}
           <Dialog open={isEditExerciseDialogOpen} onOpenChange={setIsEditExerciseDialogOpen}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle>운동 수정</DialogTitle>
+                <DialogTitle>운동 기록 수정</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
+
+              {editingExercise && (
+                <div className="space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    운동 부위: {getBodyPartLabel(editingExercise.bodyPart)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    운동 종류: {editingExercise.exerciseName}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>세트 수</Label>
+                      <Input
+                        type="number"
+                        value={exerciseEditForm.sets}
+                        onChange={e => setExerciseEditForm(prev => ({ ...prev, sets: +e.target.value }))}
+                        min={0}
+                      />
+                    </div>
+                    <div>
+                      <Label>반복 횟수</Label>
+                      <Input
+                        type="number"
+                        value={exerciseEditForm.reps}
+                        onChange={e => setExerciseEditForm(prev => ({ ...prev, reps: +e.target.value }))}
+                        min={0}
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <Label>세트</Label>
+                    <Label>무게 (kg)</Label>
                     <Input
                       type="number"
-                      value={exerciseEditForm.sets}
-                      onChange={e => setExerciseEditForm(prev => ({ ...prev, sets: +e.target.value }))}
+                      value={exerciseEditForm.weight}
+                      onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
+                      min={0}
                     />
                   </div>
+
                   <div>
-                    <Label>횟수</Label>
+                    <Label>운동 시간 (분)</Label>
                     <Input
                       type="number"
-                      value={exerciseEditForm.reps}
-                      onChange={e => setExerciseEditForm(prev => ({ ...prev, reps: +e.target.value }))}
+                      value={exerciseEditForm.duration_minutes}
+                      onChange={e => setExerciseEditForm(prev => ({ ...prev, duration_minutes: +e.target.value }))}
+                      min={0}
                     />
                   </div>
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditExerciseDialogOpen(false)}
+                    >
+                      취소
+                    </Button>
+                    <Button onClick={saveExerciseEdit} disabled={isSaving}>
+                      {isSaving ? "저장 중..." : "저장"}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label>무게 (kg)</Label>
-                  <Input
-                    type="number"
-                    value={exerciseEditForm.weight}
-                    onChange={e => setExerciseEditForm(prev => ({ ...prev, weight: +e.target.value }))}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsEditExerciseDialogOpen(false)}>취소</Button>
-                  <Button onClick={saveExerciseEdit}>저장</Button>
-                </div>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
+
 
 
 
@@ -1424,181 +1393,7 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 식단 기록</CardTitle>
-                <div className="flex space-x-2">
-                  <Dialog open={isAddDietDialogOpen} onOpenChange={setIsAddDietDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        식단 추가
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>식단 기록 추가</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="search">음식 검색</Label>
-                          <div className="flex space-x-2 mt-1">
-                            <Input
-                              id="search"
-                              value={searchKeyword}
-                              onChange={(e) => setSearchKeyword(e.target.value)}
-                              placeholder="음식명을 입력하세요"
-                              onKeyPress={(e) => e.key === 'Enter' && searchFood()}
-                            />
-                            <Button onClick={searchFood} disabled={isSearching}>
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="h-4 w-4"
-                              >
-                                <circle cx="11" cy="11" r="8" />
-                                <path d="m21 21-4.3-4.3" />
-                              </svg>
-                            </Button>
-                          </div>
-                        </div>
-
-                        {searchResults.length > 0 ? (
-                          <div>
-                            <Label>검색 결과</Label>
-                            <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
-                              {searchResults.map((food) => (
-                                <div
-                                  key={food.foodItemId}
-                                  className={`p-2 border rounded cursor-pointer hover:bg-accent ${selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
-                                    }`}
-                                  onClick={() => setSelectedFood(food)}
-                                >
-                                  <div className="font-medium">{food.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {Math.round(food.calories)}kcal / 100g
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          searchKeyword.trim() && (
-                            <div className="text-center text-muted-foreground mt-4">
-                              <div>검색 결과가 없습니다.</div>
-                              <Button
-                                className="mt-2"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedFood({
-                                    foodItemId: undefined,
-                                    name: searchKeyword,
-                                    calories: 0,
-                                    carbs: 0,
-                                    protein: 0,
-                                    fat: 0,
-                                    servingSize: 100
-                                  });
-                                }}
-                              >
-                                직접 입력하기
-                              </Button>
-                            </div>
-                          )
-                        )}
-
-                        {selectedFood && selectedFood.foodItemId === undefined && (
-                          <div className="mt-4 space-y-2">
-                            <Label>음식명</Label>
-                            <Input
-                              value={selectedFood.name}
-                              onChange={e => setSelectedFood({ ...selectedFood, name: e.target.value })}
-                              placeholder="음식명을 입력하세요"
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <Label>칼로리 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.calories}
-                                  onChange={e => setSelectedFood({ ...selectedFood, calories: Number(e.target.value) })}
-                                />
-                              </div>
-                              <div>
-                                <Label>탄수화물 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.carbs}
-                                  onChange={e => setSelectedFood({ ...selectedFood, carbs: Number(e.target.value) })}
-                                />
-                              </div>
-                              <div>
-                                <Label>단백질 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.protein}
-                                  onChange={e => setSelectedFood({ ...selectedFood, protein: Number(e.target.value) })}
-                                />
-                              </div>
-                              <div>
-                                <Label>지방 (100g당)</Label>
-                                <Input
-                                  type="number"
-                                  value={selectedFood.fat}
-                                  onChange={e => setSelectedFood({ ...selectedFood, fat: Number(e.target.value) })}
-                                />
-                              </div>
-                            </div>
-                            <Label>섭취량 (g)</Label>
-                            <Input
-                              type="number"
-                              value={quantity}
-                              onChange={e => setQuantity(e.target.value)}
-                              min="1"
-                            />
-                            <Label>식사 시간</Label>
-                            <select
-                              value={mealTime}
-                              onChange={e => setMealTime(e.target.value)}
-                              className="block w-full border rounded px-2 py-1"
-                            >
-                              <option value="breakfast">아침</option>
-                              <option value="lunch">점심</option>
-                              <option value="dinner">저녁</option>
-                              <option value="snack">간식</option>
-                              <option value="midnight">야식</option>
-                            </select>
-                          </div>
-                        )}
-
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
-                            취소
-                          </Button>
-                          <Button onClick={addDietRecord} disabled={!selectedFood}>
-                            추가
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
-                    <Button
-                      onClick={handleClaimDietScore}
-                      disabled={hasClaimedDietScore}
-                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
+                </CardHeader>
               <CardContent>
                 {isLoadingDietData ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -1656,13 +1451,7 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedDietScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">
-                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
-                        </p>
-                      </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

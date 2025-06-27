@@ -1,28 +1,44 @@
+version: '3.8'
+
 services:
   # PostgreSQL 데이터베이스
   postgres-db:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: lifebit_postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data/
+      - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
     environment:
       - POSTGRES_DB=lifebit_db
       - POSTGRES_USER=lifebit_user
       - POSTGRES_PASSWORD=lifebit_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+      - TZ=Asia/Seoul
     ports:
       - "5432:5432"
-    restart: always
+    restart: unless-stopped
     networks:
       - lifebit-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lifebit_user -d lifebit_db"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
 networks:
   lifebit-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres_data:
+    driver: local

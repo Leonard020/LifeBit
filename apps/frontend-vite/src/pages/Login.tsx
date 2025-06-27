@@ -107,14 +107,19 @@ export default function Login() {
 
   const handleSocialLogin = (provider: string) => {
     const normalizedProvider = provider.toLowerCase();
+    const redirectUri = `${window.location.origin}/auth/social-redirect?provider=${normalizedProvider}`;
   
     if (normalizedProvider === 'google') {
       const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!googleClientId) {
         console.error('❗ 구글 클라이언트 ID가 설정되지 않았습니다.');
+        toast({
+          variant: 'destructive',
+          title: '설정 오류',
+          description: '구글 로그인이 현재 비활성화 상태입니다.',
+        });
         return;
       }
-      const redirectUri = 'http://localhost:5173/auth/social-redirect?provider=google';
   
       const googleAuthUrl =
         'https://accounts.google.com/o/oauth2/v2/auth' +
@@ -132,9 +137,13 @@ export default function Login() {
       const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
       if (!kakaoClientId) {
         console.error('❗ 카카오 클라이언트 ID가 설정되지 않았습니다.');
+        toast({
+          variant: 'destructive',
+          title: '설정 오류',
+          description: '카카오 로그인이 현재 비활성화 상태입니다.',
+        });
         return;
       }
-      const redirectUri = 'http://localhost:5173/auth/social-redirect?provider=kakao';
   
       const kakaoAuthUrl =
         'https://kauth.kakao.com/oauth/authorize' +

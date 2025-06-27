@@ -9,14 +9,52 @@
   become: yes
   vars:
     project_name: "lifebit"
-    environment: "{{ env | default('demo') }}"
-    git_repo: "{{ git_repository_url | default('https://github.com/your-repo/LifeBit.git') }}"
-    git_branch: "{{ git_branch | default('main') }}"
+    git_repo: "{{ git_repository_url | default('https://github.com/Hyeon6492/LifeBit.git') }}"
+    
+  pre_tasks:
+    - name: 프로젝트 소스 코드를 서버로 복사 (전체)
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "/srv/{{ project_name }}"
+        delete: yes
+        recursive: yes
+        archive: no
+        checksum: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.idea"
+          - "--exclude=*.log"
+          - "--exclude=logs/"
+          - "--exclude=node_modules/"
+          - "--exclude=venv/"
+          - "--exclude=.DS_Store"
+          - "--exclude=__pycache__/"
+          - "--exclude=*.tmp"
+          - "--exclude=ansible/"
+          - "--exclude=.env"
+      tags: [always]
     
   tasks:
     # ================================================
+    # 0. 방화벽 설정 (AWS 보안그룹 사용으로 UFW 비활성화)
+    # ================================================
+    - name: UFW 비활성화 (AWS 보안그룹으로 보안 관리)
+      ufw:
+        state: disabled
+      tags: [security]
+
+    # ================================================
     # 1. 시스템 기본 설정
     # ================================================
+    - name: apt 잠금이 해제될 때까지 대기
+      ansible.builtin.shell: |
+        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo 'apt 잠금 대기 중...'
+          sleep 10
+        done
+      changed_when: false
+      tags: [system]
+
     - name: 시스템 패키지 업데이트
       apt:
         update_cache: yes
@@ -48,8 +86,59 @@
           - lsb-release
           - bc
           - netcat
+          - python3
+          - python3-pip
+          - python3-dev
+          - python3-setuptools
+          - python3-venv
+          - build-essential
         state: present
       tags: [system]
+
+    # ================================================
+    # Python 3.11 설치 (프로젝트 요구사항)
+    # ================================================
+    - name: Python 3.11 저장소 추가
+      apt_repository:
+        repo: "ppa:deadsnakes/ppa"
+        state: present
+      tags: [python]
+
+    - name: Python 3.11 설치
+      apt:
+        name:
+          - python3.11
+          - python3.11-dev
+          - python3.11-venv
+          - python3.11-pip
+        state: present
+        update_cache: yes
+      tags: [python]
+
+    - name: Python 3.11을 기본 Python3로 설정
+      alternatives:
+        name: python3
+        path: /usr/bin/python3.11
+        priority: 100
+      tags: [python]
+
+    - name: pip3를 Python 3.11용으로 업데이트
+      pip:
+        name: pip
+        state: latest
+        executable: pip3
+      tags: [python]
+
+    - name: Python 3.11 설치 확인
+      command: python3 --version
+      register: python_version
+      changed_when: false
+      tags: [python]
+
+    - name: Python 3.11 버전 출력
+      debug:
+        msg: "설치된 Python 버전: {{ python_version.stdout }}"
+      tags: [python]
 
     # ================================================
     # 2. Docker 설치
@@ -104,52 +193,10 @@
     - name: Docker SDK(Python) 및 Compose 라이브러리 설치
       pip:
         name:
-          - docker
-          - docker-compose
+          - docker  # docker SDK만 설치하여 docker-compose v1이 설치되지 않도록 함
         state: present
+        executable: pip3
       tags: [docker]
-
-    # ================================================
-    # 3. 방화벽 설정
-    # ================================================
-    - name: UFW 초기화
-      ufw:
-        state: reset
-      tags: [security]
-
-    - name: UFW 기본 정책 설정
-      ufw:
-        direction: "{{ item.direction }}"
-        policy: "{{ item.policy }}"
-      loop:
-        - { direction: 'incoming', policy: 'deny' }
-        - { direction: 'outgoing', policy: 'allow' }
-      tags: [security]
-
-    - name: UFW 포트 허용
-      ufw:
-        rule: allow
-        port: "{{ item.port }}"
-        proto: "{{ item.proto | default('tcp') }}"
-        comment: "{{ item.comment }}"
-      loop:
-        - { port: '22', comment: 'SSH' }
-        - { port: '80', comment: 'HTTP' }
-        - { port: '443', comment: 'HTTPS' }
-        - { port: '3000', comment: 'Frontend' }
-        - { port: '8080', comment: 'Spring Boot API' }
-        - { port: '8001', comment: 'FastAPI' }
-        - { port: '8081', comment: 'Airflow' }
-        - { port: '8082', comment: 'Nginx Proxy' }
-        - { port: '3001', comment: 'Grafana' }
-        - { port: '9090', comment: 'Prometheus' }
-        - { port: '9100', comment: 'Node Exporter' }
-      tags: [security]
-
-    - name: UFW 활성화
-      ufw:
-        state: enabled
-      tags: [security]
 
     # ================================================
     # 4. SSH 키 인증 설정 (Ubuntu 24.04 cloud-init 대응)
@@ -236,273 +283,139 @@
       tags: [security]
 
     # ================================================
-    # 5. 프로젝트 디렉토리 설정
+    # 6. 애플리케이션 소스 코드 배포
     # ================================================
-    - name: 프로젝트 디렉토리 생성
+    - name: 원격 서버에 프로젝트 디렉토리 생성
       file:
-        path: "/opt/{{ project_name }}/{{ item }}"
+        path: "/srv/{{ project_name }}"
         state: directory
-        owner: root
-        group: root
+        owner: ubuntu
+        group: ubuntu
         mode: '0755'
-      loop:
-        - ""
-        - "logs"
-        - "backups"
-        - "ssl"
-        - "data"
-      tags: [project]
-
-    # ================================================
-    # 6. Git 저장소 클론
-    # ================================================
-    - name: 기존 프로젝트 디렉토리 정리
-      file:
-        path: "/opt/{{ project_name }}/app"
-        state: absent
       tags: [deploy]
 
-    - name: Git 저장소 클론
-      git:
-        repo: "{{ git_repo }}"
-        dest: "/opt/{{ project_name }}/app"
-        version: "{{ git_branch }}"
-        force: yes
+    - name: 로컬 프로젝트 파일을 원격 서버로 동기화 (rsync)
+      synchronize:
+        src: ../../
+        dest: "/srv/{{ project_name }}"
+        archive: yes
+        checksum: yes
+        delete: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.idea"
+          - "--exclude=.vscode"
+          - "--exclude=.deploy_checkpoints"
+          - "--exclude=logs/"
+          - "--exclude=*.log"
+          - "--exclude='*~'"
+          - "--exclude='*.swp'"
+          - "--exclude=target/"
+          - "--exclude=apps/ai-api-fastapi/venv/"
+          - "--exclude=apps/frontend-vite/node_modules/"
+          - "--exclude=apps/frontend-vite/dist/"
       tags: [deploy]
 
     # ================================================
-    # 7. 환경 설정 파일 생성
+    # 7. 설정 파일 템플릿 적용
     # ================================================
-    - name: 환경 설정 파일 생성
+    - name: .env 파일 생성
       template:
-        src: "{{ item.src }}"
-        dest: "/opt/{{ project_name }}/app/{{ item.dest }}"
+        src: templates/env.j2
+        dest: "/srv/{{ project_name }}/.env"
+      tags: [deploy]
+
+    - name: Create docker-compose.yml from template
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: "/srv/{{ project_name }}/docker-compose.yml"
+      tags: [deploy]
+
+    - name: Deploy services from generated compose file
+      community.docker.docker_compose_v2:
+        project_src: "/srv/{{ project_name }}"
+        files:
+          - docker-compose.yml
+        state: present
+        build: "always"
+        pull: "always"
+      tags: [deploy]
+
+    # ================================================
+    # 9-1. PostgreSQL DB 초기화 (LifeBit.sql 적용)
+    # ================================================
+    - name: PostgreSQL 컨테이너가 준비될 때까지 대기
+      wait_for:
+        host: "127.0.0.1"
+        port: 5432
+        timeout: 180
+        delay: 15
+      tags: [database]
+
+    - name: PostgreSQL 연결 테스트
+      shell: |
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db pg_isready -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }}
+      register: db_connection_test
+      retries: 10
+      delay: 10
+      until: db_connection_test.rc == 0
+      tags: [database]
+
+    - name: LifeBit.sql 파일을 서버로 복사
+      copy:
+        src: "{{ playbook_dir }}/../LifeBit.sql"
+        dest: "/srv/{{ project_name }}/LifeBit.sql"
         mode: '0644'
-      loop:
-        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
-        - { src: 'env.j2', dest: '.env' }
-      tags: [config]
+      tags: [database]
 
-    # ================================================
-    # 8. 모니터링 도구 설치
-    # ================================================
-    - name: Node Exporter 다운로드 및 설치
-      unarchive:
-        src: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/node_exporter-1.7.0.linux-amd64
-      tags: [monitoring]
-
-    - name: Node Exporter 바이너리 복사
-      copy:
-        src: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
-        dest: /usr/local/bin/node_exporter
-        mode: '0755'
-        remote_src: yes
-      tags: [monitoring]
-
-    - name: Node Exporter 서비스 파일 생성
-      copy:
-        content: |
-          [Unit]
-          Description=Node Exporter
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          User=nobody
-          Group=nogroup
-          Type=simple
-          ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100
-          Restart=always
-
-          [Install]
-          WantedBy=multi-user.target
-        dest: /etc/systemd/system/node_exporter.service
-      tags: [monitoring]
-
-    - name: Node Exporter 서비스 시작
-      systemd:
-        name: node_exporter
-        state: started
-        enabled: yes
-        daemon_reload: yes
-      tags: [monitoring]
-
-    # ================================================
-    # 9. 애플리케이션 배포 (개선된 방식)
-    # ================================================
-    - name: Docker Compose로 애플리케이션 시작 (안정적인 방식)
+    - name: 기존 데이터베이스 스키마 확인
       shell: |
-        cd /opt/{{ project_name }}/app
-        docker-compose down || true
-        docker-compose pull
-        docker-compose build --no-cache
-        docker-compose up -d
-      args:
-        chdir: "/opt/{{ project_name }}/app"
-      register: docker_compose_result
-      failed_when: docker_compose_result.rc != 0
-      tags: [deploy]
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db psql -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }} -c "\dt" | grep -q "users"
+      register: schema_check
+      ignore_errors: yes
+      tags: [database]
 
-    - name: Docker Compose 상태 확인
+    - name: PostgreSQL DB 초기화 (LifeBit.sql 실행)
       shell: |
-        cd /opt/{{ project_name }}/app
-        docker-compose ps
+        cd /srv/{{ project_name }}
+        if [ "{{ schema_check.rc }}" != "0" ]; then
+          echo "데이터베이스 스키마가 없습니다. LifeBit.sql을 실행합니다..."
+          docker compose exec -T postgres-db psql -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }} < /srv/{{ project_name }}/LifeBit.sql
+          echo "LifeBit.sql 실행 완료"
+        else
+          echo "데이터베이스 스키마가 이미 존재합니다. 초기화를 건너뜁니다."
+        fi
       args:
-        chdir: "/opt/{{ project_name }}/app"
-      register: docker_status
-      tags: [deploy]
+        chdir: "/srv/{{ project_name }}"
+      register: db_init_result
+      tags: [database]
 
-    - name: Docker Compose 상태 출력
+    - name: DB 초기화 결과 출력
       debug:
-        var: docker_status.stdout_lines
-      tags: [deploy]
+        var: db_init_result.stdout_lines
+      tags: [database]
 
-    # ================================================
-    # 10. 메모리 모니터링 및 최적화
-    # ================================================
-    - name: 메모리 모니터링 스크립트 생성
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 메모리 모니터링 스크립트
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          SWAP_USAGE=$(free | awk 'NR==3{printf "%.1f", $3*100/$2}')
-          
-          # Docker 메모리 사용량
-          DOCKER_MEMORY=$(docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}" | tail -n +2)
-          
-          # 로그 파일에 기록
-          echo "$(date): Memory Usage: ${MEMORY_USAGE}%, Swap Usage: ${SWAP_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-          
-          # 메모리 사용량이 80% 이상이면 경고
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              echo "WARNING: High memory usage detected: ${MEMORY_USAGE}%" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # Docker 컨테이너 메모리 사용량 출력
-              echo "Docker Memory Usage:" >> /opt/{{ project_name }}/logs/memory.log
-              echo "$DOCKER_MEMORY" >> /opt/{{ project_name }}/logs/memory.log
-              
-              # 메모리 사용량이 높은 컨테이너 재시작
-              docker stats --no-stream --format "table {{.Container}}\t{{.MemPerc}}" | awk '$2 > 50 {print $1}' | while read container; do
-                  echo "Restarting high memory usage container: $container" >> /opt/{{ project_name }}/logs/memory.log
-                  docker restart "$container" || true
-              done
-          fi
-        dest: "/opt/{{ project_name }}/memory-monitor.sh"
-        mode: '0755'
-      tags: [monitoring]
+    - name: 데이터베이스 테이블 확인
+      shell: |
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db psql -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }} -c "\dt"
+      register: db_tables_check
+      tags: [database]
 
-    - name: 메모리 최적화 설정
-      copy:
-        content: |
-          # Docker 메모리 제한 설정
-          # /etc/docker/daemon.json
-          {
-            "default-ulimits": {
-              "nofile": {
-                "Hard": 64000,
-                "Name": "nofile",
-                "Soft": 64000
-              }
-            },
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "10m",
-              "max-file": "3"
-            },
-            "storage-driver": "overlay2"
-          }
-        dest: /etc/docker/daemon.json
-      tags: [docker]
-
-    - name: Docker 서비스 재시작 (설정 적용)
-      systemd:
-        name: docker
-        state: restarted
-      tags: [docker]
+    - name: 데이터베이스 테이블 목록 출력
+      debug:
+        var: db_tables_check.stdout_lines
+      tags: [database]
 
     # ================================================
     # 11. 헬스체크 스크립트 생성 (개선된 버전)
     # ================================================
-    - name: 헬스체크 스크립트 생성 (개선된 버전)
-      copy:
-        content: |
-          #!/bin/bash
-          # LifeBit 헬스체크 스크립트 (개선된 버전)
-          
-          LOG_FILE="/opt/{{ project_name }}/logs/health-check.log"
-          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-          
-          # 로그 함수
-          log_message() {
-              echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
-          }
-          
-          # 시스템 서비스 확인
-          SERVICES=("docker" "nginx" "fail2ban" "node_exporter")
-          FAILED_SERVICES=()
-          
-          log_message "=== 헬스체크 시작 ==="
-          
-          for service in "${SERVICES[@]}"; do
-              if systemctl is-active --quiet "$service"; then
-                  log_message "✓ $service: 정상"
-              else
-                  log_message "✗ $service: 실패"
-                  FAILED_SERVICES+=("$service")
-              fi
-          done
-          
-          # Docker 컨테이너 상태 확인
-          log_message "=== Docker 컨테이너 상태 ==="
-          CONTAINERS=$(docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v NAMES)
-          if [ -n "$CONTAINERS" ]; then
-              echo "$CONTAINERS" | while read line; do
-                  log_message "  $line"
-              done
-          else
-              log_message "  경고: 실행 중인 컨테이너가 없습니다"
-          fi
-          
-          # 디스크 사용량 확인
-          DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
-          log_message "=== 디스크 사용량: ${DISK_USAGE}% ==="
-          if [ "$DISK_USAGE" -gt 80 ]; then
-              log_message "  경고: 디스크 사용량이 80%를 초과했습니다"
-          fi
-          
-          # 메모리 사용량 확인
-          MEMORY_USAGE=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
-          log_message "=== 메모리 사용량: ${MEMORY_USAGE}% ==="
-          if (( $(echo "$MEMORY_USAGE > 80" | bc -l) )); then
-              log_message "  경고: 메모리 사용량이 80%를 초과했습니다"
-          fi
-          
-          # 네트워크 연결 확인
-          log_message "=== 네트워크 연결 확인 ==="
-          PORTS=(3000 8080 8001 8081 8082 3001 9090 9100)
-          for port in "${PORTS[@]}"; do
-              if netstat -tlnp | grep ":$port " > /dev/null; then
-                  log_message "  ✓ 포트 $port: 열림"
-              else
-                  log_message "  ✗ 포트 $port: 닫힘"
-              fi
-          done
-          
-          # 결과 요약
-          if [ ${#FAILED_SERVICES[@]} -eq 0 ]; then
-              log_message "=== 결과: 모든 서비스가 정상입니다 ==="
-              exit 0
-          else
-              log_message "=== 결과: 실패한 서비스: ${FAILED_SERVICES[*]} ==="
-              exit 2
-          fi
-        dest: "/opt/{{ project_name }}/health-check.sh"
+    - name: "헬스체크 스크립트 배포 (템플릿)"
+      template:
+        src: "healthcheck.sh.j2"
+        dest: "/srv/{{ project_name }}/health-check.sh"
         mode: '0755'
       tags: [monitoring]
 
@@ -518,14 +431,11 @@
       loop:
         - name: "LifeBit 헬스체크"
           minute: "*/5"
-          job: "/opt/{{ project_name }}/health-check.sh > /dev/null 2>&1"
-        - name: "메모리 모니터링"
-          minute: "*/10"
-          job: "/opt/{{ project_name }}/memory-monitor.sh > /dev/null 2>&1"
+          job: "/srv/{{ project_name }}/health-check.sh > /dev/null 2>&1"
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"
-          job: "cd /opt/{{ project_name }}/app && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_\$(date +%Y%m%d_%H%M%S).sql"
+          job: "cd /srv/{{ project_name }} && docker compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /srv/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
         - name: "Docker 정리"
           minute: "0"
           hour: "2"
@@ -533,7 +443,7 @@
         - name: "로그 정리"
           minute: "0"
           hour: "4"
-          job: "find /opt/{{ project_name }}/logs -name '*.log' -mtime +7 -delete > /dev/null 2>&1"
+          job: "find /srv/{{ project_name }}/logs -name '*.log' -mtime +7 -delete > /dev/null 2>&1"
       tags: [monitoring]
 
     # ================================================
@@ -542,7 +452,7 @@
     - name: 로그 로테이션 설정
       copy:
         content: |
-          /opt/{{ project_name }}/logs/*.log {
+          /srv/{{ project_name }}/logs/*.log {
               daily
               missingok
               rotate 30
@@ -565,7 +475,7 @@
         content: |
           === LifeBit 서버 정보 ===
           배포 완료 시간: {{ ansible_date_time.iso8601 }}
-          환경: {{ environment }}
+          환경: {{ deploy_env }}
           프로젝트: {{ project_name }}
           
           === 시스템 정보 ===
@@ -586,7 +496,7 @@
           - Grafana: 3001
           - Prometheus: 9090
           - Node Exporter: 9100
-        dest: "/opt/{{ project_name }}/system-info.txt"
+        dest: "/srv/{{ project_name }}/system-info.txt"
       tags: [info]
 
     # ================================================
@@ -594,7 +504,7 @@
     # ================================================
     - name: 배포 완료 표시
       file:
-        path: "/opt/{{ project_name }}/deployment-complete"
+        path: "/srv/{{ project_name }}/deployment-complete"
         state: touch
         mode: '0644'
       tags: [deploy]
@@ -613,7 +523,7 @@
           - Prometheus: http://{{ ansible_default_ipv4.address }}:9090
           
           🔑 SSH 접속:
-          ssh -i ~/.ssh/lifebit-{{ environment }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
+          ssh -i ~/.ssh/lifebit-{{ deploy_env }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
       tags: [info]
 
   handlers:

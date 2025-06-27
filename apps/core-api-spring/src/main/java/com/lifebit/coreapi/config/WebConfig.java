@@ -26,30 +26,6 @@ public class WebConfig implements WebMvcConfigurer {
                 .addResourceLocations(resourcePath);
     }
 
-    @Override
-    public void addCorsMappings(@NonNull CorsRegistry registry) {
-        // 모든 API 엔드포인트에 대한 CORS 설정
-        registry.addMapping("/api/**")
-                .allowedOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true);
-                
-        // Actuator 엔드포인트에 대한 명시적 CORS 설정
-        registry.addMapping("/actuator/**")
-                .allowedOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true);
-                
-        // 루트 경로에 대한 CORS 설정
-        registry.addMapping("/")
-                .allowedOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true);
-    }
-
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();

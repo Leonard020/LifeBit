@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 의존성 파일 복사 및 설치
@@ -25,4 +26,4 @@ ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8001
 
 # 애플리케이션 실행
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"] 
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"] 

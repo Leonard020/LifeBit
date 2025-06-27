@@ -11,9 +11,10 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
-from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, ExerciseRecord
+from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, ExerciseRecord, MealInput
 import models
 from note_routes import router as note_router  # ✅ 상단에 추가
+import requests
 
 # 🔧 Docker 환경 감지 및 데이터베이스 설정 오버라이드
 def setup_database():
@@ -76,30 +77,46 @@ print(f"[ENV] GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
 print(f"[ENV] KAKAO_REDIRECT_URI: {os.getenv('KAKAO_REDIRECT_URI')}")
 print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
 
+# Food Data API constants
+# (Remove all FOOD_STD_API_* and FOOD_PROC_API_* variables and related prints)
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 
-# CORS 설정
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173", 
-    "http://localhost:8082",  # Nginx 프록시
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8082",
-]
+# =======================
+# CORS 설정 (동적/배포 대응)
+# =======================
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,  # 수정: origins 배열 사용
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
-)
+# 1) 환경 변수 CORS_ALLOWED_ORIGINS 에 콤마로 구분된 도메인/IP 목록이 있으면 우선 사용
+# 2) 없으면 정규식(https?://.*) 으로 모든 Origin 허용
+#    - allow_credentials=True 와 함께 쓰려면 와일드카드(*) 대신 정규식을 사용해야 함
+
+cors_env = os.getenv("CORS_ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS")
+
+if cors_env:
+    allow_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=3600,
+    )
+else:
+    # 정규식으로 http/https 모든 출처 허용
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex="https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=3600,
+    )
 
 # 라우터 등록
 app.include_router(auth_router, prefix="/api/py/auth")
@@ -165,6 +182,7 @@ EXERCISE_EXTRACTION_PROMPT = """
 [유산소 운동]
 - 운동명 (exercise) ✅ 필수
 - 분류 (category): "유산소운동" ✅ 자체 판단
+- 중분류 (subcategory): "유산소운동" ✅ 자체 판단
 - 운동시간 (duration_min) ✅ 필수
 
 🔍 **운동 분류 자동 판단 규칙:**
@@ -184,7 +202,7 @@ EXERCISE_EXTRACTION_PROMPT = """
     "data": {
       "exercise": "운동명",
       "category": "근력운동|유산소운동",
-      "subcategory": "가슴|등|하체|복근|팔|어깨|null",
+      "subcategory": "가슴|등|하체|복근|팔|어깨|유산소운동|null",
       "weight": 무게|null,
       "sets": 세트수|null,
       "reps": 횟수|null,
@@ -213,7 +231,7 @@ AI: "벤치프레스 운동 기록이 완료되었습니다! 💪
 🔢 세트: 3세트
 🔄 횟수: 10회
 
-이 정보가 맞나요? 맞으면 '네', 수정이 필요하면 '아니오'라고 해주세요!"
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
 """
 
 # 🚩 [운동 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -224,7 +242,7 @@ EXERCISE_VALIDATION_PROMPT = """
 📋 **필수 정보 검증 규칙:**
 [기구 근력운동] 운동명, 무게, 세트, 횟수
 [맨몸 근력운동] 운동명, 세트, 횟수
-[유산소 운동] 운동명, 운동시간
+[유산소 운동] 운동명, 운동시간 (2가지 만)
 
 💬 **응답 형식:**
 {
@@ -248,6 +266,7 @@ EXERCISE_VALIDATION_PROMPT = """
 ⚠️ **중요 규칙:**
 - 한 번에 하나의 필드만 질문
 - 모든 필수 정보 수집 완료 시 confirmation 단계로 이동
+- 유산소 운동에서는 무게/세트/횟수/ 중분류를 묻지 않음
 """
 
 # 🚩 [운동 기록 확인 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -284,14 +303,14 @@ EXERCISE_CONFIRMATION_PROMPT = """
 🔢 세트: 3세트
 🔄 횟수: 10회
 
-이 정보가 맞나요? 맞으면 '네', 수정이 필요하면 '아니오'라고 해주세요!"
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
 
 [유산소 운동]
 "✅ 운동명: 달리기
 🏃 분류: 유산소운동
 ⏱️ 운동시간: 30분
 
-이 정보가 맞나요? 맞으면 '네', 수정이 필요하면 '아니오'라고 해주세요!"
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
 
 [맨몸 운동]
 "✅ 운동명: 푸시업
@@ -299,10 +318,10 @@ EXERCISE_CONFIRMATION_PROMPT = """
 🔢 세트: 3세트
 🔄 횟수: 15회
 
-이 정보가 맞나요? 맞으면 '네', 수정이 필요하면 '아니오'라고 해주세요!"
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
 """
 
-# 🚩 [식단 기록 추출 프롬프트] - 사용자 요구사항에 맞게 수정 (영양성분 계산 제거)
+# 🚩 [식단 기록 추출 프롬프트] - 사용자 요구사항에 맞게 수정 (영양성분 계산 포함)
 DIET_EXTRACTION_PROMPT = """
 당신은 LifeBit의 식단 기록 AI 어시스턴트입니다.
 사용자와 친근하고 자연스러운 대화를 통해 식단 정보를 정확히 수집합니다.
@@ -356,9 +375,9 @@ DIET_EXTRACTION_PROMPT = """
 }
 
 ⚠️ **중요사항:**
-- 영양성분(칼로리, 탄수화물, 단백질, 지방) 계산은 하지 않습니다
+- 영양성분(칼로리, 탄수화물, 단백질, 지방)은 자동으로 계산됩니다
 - 기본 3가지 정보(음식명, 섭취량, 식사시간)만 수집합니다
-- Spring Boot CRUD API를 통해 DB에 저장됩니다
+- 데이터베이스에 없는 음식은 인터넷에서 영양정보를 검색하여 자동 생성됩니다
 
 🔄 **진행 조건:**
 - 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
@@ -372,7 +391,42 @@ AI: "아침 식사 기록이 완료되었습니다! 🥚
 📏 섭취량: 2개
 ⏰ 식사시간: 아침
 
-이 정보가 맞나요? 맞으면 '네', 수정이 필요하면 '아니오'라고 해주세요!"
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+"""
+
+# 🚩 [식단 기록 확인 프롬프트] - 사용자 요구사항에 맞게 수정 (영양성분 표시 포함)
+DIET_CONFIRMATION_PROMPT = """
+당신은 LifeBit의 식단 기록 확인 도우미입니다.
+수집된 정보를 사용자에게 최종 확인받습니다.
+
+💬 **응답 형식:**
+{
+  "response_type": "confirmation",
+  "system_message": {
+    "data": {
+      "food_name": "음식명",
+      "amount": "섭취량",
+      "meal_time": "아침|점심|저녁|야식|간식"
+    },
+    "next_step": "complete"
+  },
+  "user_message": {
+    "text": "식단 기록 확인 메시지와 정보 표시"
+  }
+}
+
+📝 **표시 형식:**
+"✅ 음식명: 계란
+📏 섭취량: 2개
+⏰ 식사시간: 아침
+
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '수정'라고 해주세요!"
+
+⚠️ **중요 사항:**
+- 섭취량은 반드시 g 또는 ml 단위로 표시
+- 영양 정보는 GPT 기반으로 자동 계산됩니다
+- 데이터베이스에 없는 음식은 인터넷에서 검색하여 자동 생성됩니다
+- 확인 후 저장 진행
 """
 
 # 🚩 [식단 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -407,40 +461,7 @@ DIET_VALIDATION_PROMPT = """
 - 한 번에 하나의 필드만 질문
 - 모든 필수 정보 수집 완료 시 confirmation 단계로 이동
 - 3가지 정보가 모두 충족될 때까지 반복 질문
-"""
-
-# 🚩 [식단 기록 확인 프롬프트] - 사용자 요구사항에 맞게 수정 (영양성분 표시 제거)
-DIET_CONFIRMATION_PROMPT = """
-당신은 LifeBit의 식단 기록 확인 도우미입니다.
-수집된 정보를 사용자에게 최종 확인받습니다.
-
-💬 **응답 형식:**
-{
-  "response_type": "confirmation",
-  "system_message": {
-    "data": {
-      "food_name": "음식명",
-      "amount": "섭취량",
-      "meal_time": "아침|점심|저녁|야식|간식"
-    },
-    "next_step": "complete"
-  },
-  "user_message": {
-    "text": "식단 기록 확인 메시지와 정보 표시"
-  }
-}
-
-📝 **표시 형식:**
-"✅ 음식명: 계란
-📏 섭취량: 2개
-⏰ 식사시간: 아침
-
-이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '수정'라고 해주세요!"
-
-⚠️ **중요 사항:**
-- 섭취량은 반드시 g 또는 ml 단위로 표시
-- 영양 정보는 GPT 기반으로 계산
-- 확인 후 저장 진행
+- 영양 정보는 자동으로 계산되므로 사용자에게 묻지 않습니다
 """
 
 # 채팅 요청을 위한 스키마
@@ -461,6 +482,11 @@ class AnalyticsRequest(BaseModel):
 # 헬스 체크 엔드포인트
 @app.get("/api/py/health")
 def health_check():
+    return {"status": "OK", "service": "LifeBit AI-API"}
+
+# 간단한 헬스 체크 엔드포인트 (Docker healthcheck용)
+@app.get("/health")
+def simple_health_check():
     return {"status": "OK", "service": "LifeBit AI-API"}
 
 # 🚀 새로 추가: 건강 데이터 종합 분석 엔드포인트
@@ -639,64 +665,144 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
 
                 confirmation_text = confirmation_response.choices[0].message["content"]
 
-                # ✅ DB 저장로직
-                if record_type == "exercise":
-                    for exercise in parsed_data:
-                        new_record = models.ExerciseSession(
-                            user_id=1,  # (임시 사용자)
-                            exercise_catalog_id=None,
-                            duration_minutes=exercise.get("duration_min", 30),
-                            calories_burned=exercise.get("calories_burned", 200),
-                            weight=exercise.get("weight"),
-                            reps=exercise.get("reps"),
-                            sets=exercise.get("sets"),
-                            notes=exercise["exercise"],
-                            exercise_date=date.today()
-                        )
-                        db.add(new_record)
-                       
-
-                elif record_type == "diet":
-                    for food in parsed_data:
-                        new_record = models.MealLog(
-                            user_id=1,
-                            food_item_id=None,
-                            quantity=food["amount"],
-                            calories=food.get("calories", 0),
-                            carbs=food.get("carbs", 0),
-                            protein=food.get("protein", 0),
-                            fat=food.get("fat", 0),
-                            meal_time=food["time_period"],
-                            log_date=date.today()
-                        )
-                        db.add(new_record)
-
-                db.commit()
-
+                # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
+                response_type = parsed_response.get("response_type", "success")
+                
                 # Always ensure parsed_data is an array for diet records
-                parsed_data = parsed_data if isinstance(parsed_data, list) else [parsed_data]
+                parsed_data = parsed_response.get("system_message", {}).get("data")
+                if record_type == "diet":
+                    if parsed_data:
+                        if isinstance(parsed_data, dict):
+                            parsed_data = [parsed_data]
+                        elif not isinstance(parsed_data, list):
+                            parsed_data = [parsed_data]
+                    else:
+                        parsed_data = []
+                
+                if (response_type == "confirmation" and 
+                    request.message.strip().lower() in ["네", "yes", "y", "저장", "기록해줘", "완료", "끝"] and 
+                    request.current_data and 
+                    request.record_type):
+                    
+                    print(f"[🚀 AUTO-SAVE] 확인 응답 받음 → 실제 DB 저장 시작")
+                    print(f"  기록 타입: {request.record_type}")
+                    print(f"  수집된 데이터: {request.current_data}")
+                    
+                    try:
+                        if request.record_type == "diet":
+                            # 🍽️ 식단 자동 저장
+                            # user_id 우선순위: request.user_id > current_data.user_id > 기본값 3
+                            user_id = (request.user_id or 
+                                      request.current_data.get("user_id") or 
+                                      3)
+                            user_id = int(user_id)
+                            
+                            # 여러 음식이 있는 경우 각각 저장
+                            foods_to_save = parsed_data if isinstance(parsed_data, list) else [parsed_data]
+                            saved_results = []
+                            
+                            for food_data in foods_to_save:
+                                if not food_data or not food_data.get("food_name"):
+                                    continue
+                                    
+                                # GPT를 사용하여 그램 수 추정
+                                amount_str = food_data.get("amount", "1개")
+                                estimated_grams = estimate_grams_with_gpt(food_data["food_name"], amount_str)
+                                
+                                # 식사시간 변환
+                                meal_time_mapping = {
+                                    "아침": "breakfast",
+                                    "점심": "lunch", 
+                                    "저녁": "dinner",
+                                    "야식": "snack",
+                                    "간식": "snack"
+                                }
+                                meal_time_eng = meal_time_mapping.get(food_data.get("meal_time", "간식"), "snack")
+                                
+                                # note_routes.py의 save_diet_record 사용
+                                from note_routes import save_diet_record
+                                from schemas import MealInput
+                                
+                                meal_input = MealInput(
+                                    user_id=user_id,
+                                    food_name=food_data["food_name"],
+                                    quantity=estimated_grams,
+                                    meal_time=meal_time_eng,
+                                    log_date=date.today()
+                                )
+                                
+                                # DB 객체 생성 (FastAPI의 Depends와 동일한 방식)
+                                from database import SessionLocal
+                                db = SessionLocal()
+                                
+                                try:
+                                    save_result = save_diet_record(meal_input, db)
+                                    saved_results.append(save_result)
+                                    print(f"[✅ SUCCESS] 음식 저장 완료: {food_data['food_name']}")
+                                finally:
+                                    db.close()
+                                
+                            # 저장 결과 요약 메시지 생성
+                            if saved_results:
+                                food_names = [food.get("food_name", "알 수 없는 음식") for food in foods_to_save if food]
+                                food_list = ", ".join(food_names)
+                                
+                                return {
+                                    "type": "saved",
+                                    "message": f"✅ 식단 기록이 성공적으로 저장되었습니다!\n\n📋 저장된 음식:\n• {food_list}\n\n영양정보는 자동으로 계산되어 데이터베이스에 저장되었습니다.",
+                                    "parsed_data": request.current_data,
+                                    "save_results": saved_results,
+                                    "missing_fields": [],
+                                    "suggestions": []
+                                }
+                            else:
+                                return {
+                                    "type": "save_error",
+                                    "message": "저장할 음식 정보가 없습니다.",
+                                    "parsed_data": request.current_data,
+                                    "missing_fields": [],
+                                    "suggestions": []
+                                }
+                                
+                        elif request.record_type == "exercise":
+                            # 🏋️ 운동 자동 저장 (향후 구현)
+                            print(f"[INFO] 운동 자동 저장은 향후 구현 예정")
+                            
+                    except Exception as save_error:
+                        print(f"[❌ ERROR] 자동 저장 실패: {save_error}")
+                        return {
+                            "type": "save_error",
+                            "message": f"저장 중 오류가 발생했습니다: {str(save_error)}\n다시 시도해 주세요.",
+                            "parsed_data": request.current_data,
+                            "missing_fields": [],
+                            "suggestions": []
+                        }
 
+                # 일반적인 응답 (저장하지 않는 경우)
                 return {
-                    "status": "success",
-                    "type": record_type,
+                    "type": parsed_response.get("response_type", "success"),
+                    "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
                     "parsed_data": parsed_data,
-                    "validation": validation_result,
-                    "confirmation": confirmation_text
+                    "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
+                    "suggestions": []
                 }
             else:
+                # 일반 텍스트 응답
                 return {
-                    "status": "incomplete",
-                    "type": record_type,
-                    "validation": validation_result
+                    "type": "incomplete",
+                    "message": raw,
+                    "suggestions": []
                 }
-
         else:
-            return {"status": "error", "message": "GPT 기능 비활성화됨"}
+            # GPT 비활성화 상태
+            return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
 
     except Exception as e:
-        print("[ERROR]", str(e))
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
+        print(f"[ERROR] Chat error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
+        )
 
 def determine_chat_step_automatically(message: str, current_data: dict, record_type: str) -> str:
     """
@@ -779,13 +885,6 @@ async def chat(request: ChatRequest):
             )
             
             # 자동 판단된 단계로 프롬프트 선택
-				
-		 
-		   
-		   
-	
-   
-			   
             if request.record_type == "exercise":
                 if auto_step == "validation":
                     system_prompt = EXERCISE_VALIDATION_PROMPT
@@ -833,18 +932,6 @@ async def chat(request: ChatRequest):
                 if raw.strip().startswith('{') and raw.strip().endswith('}'):
                     parsed_response = json.loads(raw)
                     
-                    # 식단 기록인 경우 영양소 계산 제거 (Spring Boot CRUD API 사용)
-                    # if request.record_type == "diet" and parsed_response.get("system_message", {}).get("data"):
-                    #     data = parsed_response["system_message"]["data"]
-                    #     
-                    #     # 음식명과 섭취량이 있으면 영양소 자동 계산 (GPT 기반)
-                    #     if data.get("food_name") and data.get("amount"):
-                    #         nutrition = calculate_nutrition_from_gpt(
-                    #             data["food_name"], 
-                    #             data["amount"]
-                    #         )
-                    #         data["nutrition"] = nutrition
-                    
                     # 운동 기록인 경우 칼로리 소모량 자동 계산 적용
                     if request.record_type == "exercise" and parsed_response.get("system_message", {}).get("data"):
                         data = parsed_response["system_message"]["data"]
@@ -867,9 +954,9 @@ async def chat(request: ChatRequest):
                                 parsed_data = [parsed_data]
                         else:
                             parsed_data = []
-
+                    
                     if (response_type == "confirmation" and 
-                        request.message.strip().lower() in ["네", "yes", "y"] and 
+                        request.message.strip().lower() in ["네", "yes", "y", "저장", "기록해줘", "완료", "끝"] and 
                         request.current_data and 
                         request.record_type):
                         
@@ -885,31 +972,73 @@ async def chat(request: ChatRequest):
                                           request.current_data.get("user_id") or 
                                           3)
                                 user_id = int(user_id)
-                                diet_data = DietRecord(
-                                    user_id=user_id,
-                                    food_name=request.current_data.get("food_name", ""),
-                                    amount=request.current_data.get("amount", "1개"),
-                                    meal_time=request.current_data.get("meal_time", "간식")
-                                )
                                 
-                                # DB 객체 생성 (FastAPI의 Depends와 동일한 방식)
-                                from database import SessionLocal
-                                db = SessionLocal()
+                                # 여러 음식이 있는 경우 각각 저장
+                                foods_to_save = parsed_data if isinstance(parsed_data, list) else [parsed_data]
+                                saved_results = []
                                 
-                                try:
-                                    save_result = save_diet_record(diet_data, db)
-                                    print(f"[✅ SUCCESS] 식단 자동 저장 완료: {save_result}")
+                                for food_data in foods_to_save:
+                                    if not food_data or not food_data.get("food_name"):
+                                        continue
+                                        
+                                    # GPT를 사용하여 그램 수 추정
+                                    amount_str = food_data.get("amount", "1개")
+                                    estimated_grams = estimate_grams_with_gpt(food_data["food_name"], amount_str)
+                                    
+                                    # 식사시간 변환
+                                    meal_time_mapping = {
+                                        "아침": "breakfast",
+                                        "점심": "lunch", 
+                                        "저녁": "dinner",
+                                        "야식": "snack",
+                                        "간식": "snack"
+                                    }
+                                    meal_time_eng = meal_time_mapping.get(food_data.get("meal_time", "간식"), "snack")
+                                    
+                                    # note_routes.py의 save_diet_record 사용
+                                    from note_routes import save_diet_record
+                                    from schemas import MealInput
+                                    
+                                    meal_input = MealInput(
+                                        user_id=user_id,
+                                        food_name=food_data["food_name"],
+                                        quantity=estimated_grams,
+                                        meal_time=meal_time_eng,
+                                        log_date=date.today()
+                                    )
+                                    
+                                    # DB 객체 생성 (FastAPI의 Depends와 동일한 방식)
+                                    from database import SessionLocal
+                                    db = SessionLocal()
+                                    
+                                    try:
+                                        save_result = save_diet_record(meal_input, db)
+                                        saved_results.append(save_result)
+                                        print(f"[✅ SUCCESS] 음식 저장 완료: {food_data['food_name']}")
+                                    finally:
+                                        db.close()
+                                
+                                # 저장 결과 요약 메시지 생성
+                                if saved_results:
+                                    food_names = [food.get("food_name", "알 수 없는 음식") for food in foods_to_save if food]
+                                    food_list = ", ".join(food_names)
                                     
                                     return {
                                         "type": "saved",
-                                        "message": f"✅ 식단 기록이 성공적으로 저장되었습니다!\n\n📋 저장된 정보:\n• 음식명: {diet_data.food_name}\n• 섭취량: {diet_data.amount}\n• 식사시간: {diet_data.meal_time}",
+                                        "message": f"✅ 식단 기록이 성공적으로 저장되었습니다!\n\n📋 저장된 음식:\n• {food_list}\n\n영양정보는 자동으로 계산되어 데이터베이스에 저장되었습니다.",
                                         "parsed_data": request.current_data,
-                                        "save_result": save_result,
+                                        "save_results": saved_results,
                                         "missing_fields": [],
                                         "suggestions": []
                                     }
-                                finally:
-                                    db.close()
+                                else:
+                                    return {
+                                        "type": "save_error",
+                                        "message": "저장할 음식 정보가 없습니다.",
+                                        "parsed_data": request.current_data,
+                                        "missing_fields": [],
+                                        "suggestions": []
+                                    }
                                     
                             elif request.record_type == "exercise":
                                 # 🏋️ 운동 자동 저장 (향후 구현)
@@ -947,9 +1076,9 @@ async def chat(request: ChatRequest):
                     "message": raw,
                     "suggestions": []
                 }
-
-        # GPT 비활성화 상태
-        return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
+        else:
+            # GPT 비활성화 상태
+            return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
 
     except Exception as e:
         print(f"[ERROR] Chat error: {e}")
@@ -957,6 +1086,7 @@ async def chat(request: ChatRequest):
             status_code=500,
             detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
         )
+
 # 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
 @app.post("/api/py/note/exercise")
 def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
@@ -975,124 +1105,37 @@ def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
     db.refresh(exercise)
     return {"message": "운동 기록 저장 성공", "id": exercise.exercise_session_id}
 
-# 🍽️ 식단 기록 저장 (Chat 기반)
-class DietRecord(BaseModel):
-    user_id: int
-    food_name: str
-    amount: str  # 섭취량 (예: "5개", "100g", "1그릇")
-    meal_time: str  # "아침|점심|저녁|야식|간식"
+# 🍽️ 식단 기록 저장 (Chat 기반) - COMMENTED OUT: Use note_routes.py instead
+# class DietRecord(BaseModel):
+#     user_id: int
+#     food_name: str
+#     amount: str  # 섭취량 (예: "5개", "100g", "1그릇")
+#     meal_time: str  # "아침|점심|저녁|야식|간식"
 
-@app.post("/api/py/note/diet")
-def save_diet_record(data: DietRecord, db: Session = Depends(get_db)):
-    """
-    사용자 요구사항에 맞는 식단 기록 저장:
-    1. food_name이 food_items에 없으면 GPT로 자동 생성
-    2. food_item에 저장 후 다시 검색하여 food_item_id 획득
-    3. meal_logs에 저장 (amount → quantity, meal_time 매핑)
-    """
+def estimate_grams_with_gpt(food_name: str, amount: str) -> float:
     try:
-        print(f"[DEBUG] 식단 기록 저장 시작:")
-        print(f"  사용자 ID: {data.user_id}")
-        print(f"  음식명: {data.food_name}")
-        print(f"  섭취량: {data.amount}")
-        print(f"  식사시간: {data.meal_time}")
-        
-        # 🔍 1단계: food_items 테이블에서 음식 검색
-        food_item = db.query(models.FoodItem).filter(
-            models.FoodItem.name == data.food_name
-        ).first()
-        
-        if not food_item:
-            print(f"[INFO] '{data.food_name}' 음식이 DB에 없음 → GPT로 자동 생성")
-            
-            # 🤖 2단계: GPT로 100g 기준 영양정보 계산
-            nutrition_data = calculate_nutrition_from_gpt_for_100g(data.food_name)
-            
-            # 💾 3단계: 새로운 food_item 생성
-            food_item = models.FoodItem(
-                name=data.food_name,
-                serving_size=100.0,  # 기본 100g
-                calories=nutrition_data['calories'],
-                carbs=nutrition_data['carbs'], 
-                protein=nutrition_data['protein'],
-                fat=nutrition_data['fat']
-            )
-            db.add(food_item)
-            db.commit()
-            db.refresh(food_item)
-            print(f"[SUCCESS] 새로운 음식 생성 완료 - food_item_id: {food_item.food_item_id}")
-        else:
-            print(f"[INFO] 기존 음식 발견 - food_item_id: {food_item.food_item_id}")
-        
-        # 🔄 4단계: food_item에서 다시 검색하여 확실한 food_item_id 획득
-        confirmed_food_item = db.query(models.FoodItem).filter(
-            models.FoodItem.name == data.food_name
-        ).first()
-        
-        if not confirmed_food_item:
-            raise HTTPException(status_code=500, detail="음식 아이템 생성/검색 실패")
-        
-        # 📊 5단계: 사용자 섭취량 기준 영양정보 계산 (GPT 활용)
-        user_nutrition = calculate_nutrition_from_gpt(data.food_name, data.amount)
-        
-        # 🗃️ 6단계: meal_logs에 최종 저장
-        # amount → quantity 변환 (숫자 추출)
-        import re
-        quantity_match = re.findall(r'[\d.]+', data.amount)
-        quantity = float(quantity_match[0]) if quantity_match else 1.0
-        
-        # meal_time 매핑 (한글 → 영어)
-        meal_time_mapping = {
-            "아침": "breakfast",
-            "점심": "lunch", 
-            "저녁": "dinner",
-            "야식": "midnight",
-            "간식": "snack"
-        }
-        meal_time_eng = meal_time_mapping.get(data.meal_time, data.meal_time)
-        
-        meal_log = models.MealLog(
-            user_id=data.user_id,
-            food_item_id=confirmed_food_item.food_item_id,  # 확실한 food_item_id 사용
-            quantity=quantity,  # amount → quantity 변환
-            meal_time=meal_time_eng,  # 한글 → 영어 변환
-            log_date=date.today(),
-            calories=user_nutrition.get('calories'),
-            carbs=user_nutrition.get('carbs'),
-            protein=user_nutrition.get('protein'),
-            fat=user_nutrition.get('fat')
+        prompt = (
+            f"{food_name} {amount}는(은) 몇 g입니까? "
+            f"예시: 1개=30g이면 2개=60g. 숫자만 답변하세요."
         )
-        
-        db.add(meal_log)
-        db.commit() 
-        db.refresh(meal_log)
-        
-        print(f"[SUCCESS] 식단 기록 저장 완료:")
-        print(f"  meal_log_id: {meal_log.meal_log_id}")
-        print(f"  food_item_id: {meal_log.food_item_id}")
-        print(f"  quantity: {meal_log.quantity}")
-        print(f"  meal_time: {meal_log.meal_time}")
-        print(f"  영양정보 - 칼로리: {meal_log.calories}kcal")
-        
-        return {
-            "message": "식단 기록 저장 성공",
-            "meal_log_id": meal_log.meal_log_id,
-            "food_item_id": meal_log.food_item_id,
-            "food_name": data.food_name,
-            "quantity": float(meal_log.quantity),
-            "meal_time": meal_log.meal_time,
-            "nutrition": {
-                "calories": float(meal_log.calories) if meal_log.calories else None,
-                "carbs": float(meal_log.carbs) if meal_log.carbs else None,
-                "protein": float(meal_log.protein) if meal_log.protein else None,
-                "fat": float(meal_log.fat) if meal_log.fat else None
-            }
-        }
-        
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=20
+        )
+        result = response.choices[0].message["content"].strip()
+        print(f"[DEBUG] GPT raw response for grams: {result}")
+        grams = float(''.join(filter(lambda c: c.isdigit() or c == '.', result)))
+        print(f"[DEBUG] GPT grams estimate for {food_name} {amount}: {grams}")
+        return grams if grams > 0 else 100
     except Exception as e:
-        print(f"[ERROR] 식단 기록 저장 실패: {e}")
-        raise HTTPException(status_code=500, detail=f"식단 기록 저장 실패: {e}")
+        print(f"[ERROR] GPT grams estimate failed: {e}")
+        return 100
 
+# COMMENTED OUT: Use /api/py/note/diet from note_routes.py instead
+# @app.post("/api/py/note/diet")
+# def save_diet_record(data: DietRecord, db: Session = Depends(get_db)):
 
 # ✅ 오늘 날짜 운동 기록 조회
 @app.get("/api/py/note/exercise/daily", response_model=list[DailyExerciseRecord])
@@ -1105,7 +1148,6 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
     results = []
     for record in records:
         results.append(DailyExerciseRecord(
-														   
             name=record.notes,
             weight=f"{record.weight}kg" if record.weight else "체중",
             sets=record.sets or 1,
@@ -1119,14 +1161,18 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
 @app.post("/api/py/test/diet-save")
 def test_diet_save(db: Session = Depends(get_db)):
     """새로운 식단 저장 로직을 테스트합니다."""
-    test_data = DietRecord(
+    from schemas import MealInput
+    
+    test_data = MealInput(
         user_id=2,  # 테스트 사용자
         food_name="말린 살구",  # DB에 없는 음식으로 테스트
-        amount="5개",
-        meal_time="간식"
+        quantity=50.0,  # 50g
+        meal_time="snack",
+        log_date=date.today()
     )
     
     try:
+        from note_routes import save_diet_record
         result = save_diet_record(test_data, db)
         return {
             "test_status": "SUCCESS",
@@ -1203,8 +1249,9 @@ def create_food_item_from_gpt(food_name: str, db: Session = Depends(get_db)):
                 "food_name": existing_food.name
             }
         
-        # GPT로 100g 기준 영양정보 계산
-        nutrition_data = calculate_nutrition_from_gpt_for_100g(food_name)
+        # note_routes.py의 enhanced nutrition calculation 사용
+        from note_routes import calculate_nutrition_from_gpt_for_100g
+        nutrition_data = calculate_nutrition_from_gpt_for_100g(food_name, db)
         
         # 새로운 food_item 생성
         new_food_item = models.FoodItem(
@@ -1223,6 +1270,7 @@ def create_food_item_from_gpt(food_name: str, db: Session = Depends(get_db)):
         print(f"[SUCCESS] 새로운 음식 아이템 생성: {food_name}")
         print(f"  Food Item ID: {new_food_item.food_item_id}")
         print(f"  칼로리: {nutrition_data['calories']}kcal/100g")
+        print(f"  영양정보 출처: {nutrition_data.get('source', 'unknown')}")
         
         return {
             "message": "새로운 음식 아이템 생성 성공",
@@ -1235,12 +1283,31 @@ def create_food_item_from_gpt(food_name: str, db: Session = Depends(get_db)):
         print(f"[ERROR] 음식 아이템 생성 실패: {e}")
         raise HTTPException(status_code=500, detail=f"음식 아이템 생성 실패: {e}")
 
-# GPT 기반 100g 기준 영양소 계산 함수 (새로운 food_item 생성용)
+# Food name normalization helper
+FOOD_NAME_SYNONYMS = {
+    '토스트': '식빵',
+    '계란후라이': '계란',
+    '프렌치프라이': '감자튀김',
+    '후라이드치킨': '치킨',
+    '오렌지주스': '오렌지',
+    '햄버거': '햄버거',  # can add more mappings as needed
+    '삶은 계란': '계란',
+    '계란찜': '계란',
+    '계란말이': '계란',
+    '감자튀김': '감자튀김',
+    '식빵': '식빵',
+}
+
+def normalize_food_name(food_name: str) -> str:
+    for key, value in FOOD_NAME_SYNONYMS.items():
+        if key in food_name:
+            return value
+    return food_name
+
+# Remove get_best_food_api_search_term and fetch_nutrition_from_public_api
+
 def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
-    """
-    GPT를 사용하여 100g 기준 영양정보를 계산합니다.
-    food_items 테이블에 저장하기 위한 표준화된 영양정보를 제공합니다.
-    """
+    # Only use GPT to generate nutrition info
     try:
         prompt = f"""
 다음 음식의 100g 기준 영양 정보를 정확히 계산해주세요.
@@ -1248,7 +1315,7 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
 음식명: {food_name}
 기준량: 100g
 
-일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
+일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 답변해주세요:
 {{
   "calories": 100g당_칼로리(kcal),
   "carbs": 100g당_탄수화물(g),
@@ -1258,29 +1325,18 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
 
 값은 소수점 첫째자리까지 반올림하여 제공해주세요.
 """
-
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200
         )
-        
         result = response.choices[0].message["content"].strip()
         nutrition_data = json.loads(result)
-        
-        print(f"[DEBUG] 100g 기준 영양소 계산 완료:")
-        print(f"  음식명: {food_name}")
-        print(f"  칼로리: {nutrition_data['calories']}kcal/100g")
-        print(f"  탄수화물: {nutrition_data['carbs']}g/100g")
-        print(f"  단백질: {nutrition_data['protein']}g/100g")
-        print(f"  지방: {nutrition_data['fat']}g/100g")
-        
+        print(f"[GPT] '{food_name}' 100g 기준 영양소: {nutrition_data}")
         return nutrition_data
-        
     except Exception as e:
         print(f"[ERROR] GPT 100g 영양소 계산 실패: {e}")
-        # 기본값 반환 (일반적인 건과일 기준)
         return {
             "calories": 250.0,
             "carbs": 60.0,
@@ -1288,12 +1344,8 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
             "fat": 1.0
         }
 
-# GPT 기반 영양소 계산 함수
 def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
-    """
-    GPT를 사용하여 음식명과 섭취량을 기반으로 영양소를 계산합니다.
-    하드코딩된 DB 대신 GPT의 영양학 지식을 활용합니다.
-    """
+    # Only use GPT to generate nutrition info
     try:
         prompt = f"""
 다음 음식의 영양 정보를 정확히 계산해주세요.
@@ -1301,7 +1353,7 @@ def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
 음식명: {food_name}
 섭취량: {amount}
 
-일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 응답해주세요:
+일반적인 영양 정보를 바탕으로 다음 형식의 JSON으로만 답변해주세요:
 {{
   "calories": 칼로리(kcal),
   "carbs": 탄수화물(g),
@@ -1311,31 +1363,18 @@ def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
 
 값은 소수점 첫째자리까지 반올림하여 제공해주세요.
 """
-
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200
         )
-        
         result = response.choices[0].message["content"].strip()
+        print(f"[GPT] '{food_name}' 섭취량 '{amount}' 기준 영양소: {result}")
         nutrition_data = json.loads(result)
-        
-        # 디버그 콘솔 출력 (식단 기록용)
-        print(f"[DEBUG] 영양소 계산 완료:")
-        print(f"  음식명: {food_name}")
-        print(f"  섭취량: {amount}")
-        print(f"  칼로리: {nutrition_data['calories']}kcal")
-        print(f"  탄수화물: {nutrition_data['carbs']}g")
-        print(f"  단백질: {nutrition_data['protein']}g")
-        print(f"  지방: {nutrition_data['fat']}g")
-        
         return nutrition_data
-        
     except Exception as e:
         print(f"[ERROR] GPT 영양소 계산 실패: {e}")
-        # 기본값 반환
         return {
             "calories": 100.0,
             "carbs": 20.0,
@@ -1396,8 +1435,6 @@ def calculate_exercise_calories_from_gpt(exercise_data: dict) -> float:
     except Exception as e:
         print(f"[ERROR] 칼로리 계산 실패: {e}")
         return 100.0  # 기본값
-
-												 
 
 # 서버 실행
 if __name__ == "__main__":

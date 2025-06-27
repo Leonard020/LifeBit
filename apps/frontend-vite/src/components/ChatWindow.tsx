@@ -185,6 +185,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 다크모드 감지 (컴포넌트 내부로 이동)
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // 마이크 권한 요청 함수
   const requestMicrophonePermission = useCallback(async () => {
     try {
@@ -372,6 +382,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   };
 
   const handleVoiceToggle = async () => {
+    console.log('[마이크] 마이크 버튼 클릭됨');
     if (!recognitionRef.current) {
       toast({
         title: "음성 인식 지원 안됨",
@@ -1165,12 +1176,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
                       )}
                     </Avatar>
                     <div className={`space-y-1 ${message.type === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-                      <div className={`rounded-lg px-3 py-2 ${
-                        message.type === 'user' 
-                          ? 'bg-primary text-primary-foreground' 
-                          : 'bg-muted'
-                      }`}>
-                        <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
+                      <div
+                        className="rounded-lg px-3 py-2"
+                        style={{
+                          background: '#f7f7fa',
+                          border: '1px solid #eee',
+                        }}
+                      >
+                        <p style={{ color: '#222', fontWeight: 600 }}>
+                          테스트용 텍스트입니다. 이 문장이 보이면 message.content에 문제가 있습니다.
+                        </p>
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {formatTime(message.timestamp)}
@@ -1200,18 +1215,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
             {/* 동적 버튼 전환 */}
             {!hasInputText ? (
               // 텍스트가 없을 때: 마이크 버튼
+              <>
+                <span style={{ color: 'red', fontWeight: 'bold' }}>마이크버튼</span>
               <Button
                 size="icon"
                 variant={isRecording ? 'default' : 'ghost'}
-                className={`${
+                  className={`$
                   isRecording 
                     ? 'gradient-bg text-white animate-pulse' 
                     : 'hover:bg-gradient-to-br hover:from-teal-400 hover:to-blue-500 hover:text-white'
                 }`}
-                onClick={handleVoiceToggle}
+                  onClick={() => {
+                    console.log('[마이크] 버튼 onClick 직접 호출됨');
+                    handleVoiceToggle();
+                  }}
               >
                 {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
+              </>
             ) : (
               // 텍스트가 있을 때: 전송 버튼
               <Button 

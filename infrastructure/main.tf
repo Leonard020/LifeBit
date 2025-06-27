@@ -1,212 +1,238 @@
 # ================================================
-# LifeBit 학원용 단일 서버 Terraform 구성
+# LifeBit AWS 단일 서버 Terraform 구성
 # ================================================
-# 모든 서비스를 하나의 VM에서 Docker Compose로 실행
+# 모든 서비스를 하나의 EC2에서 Docker Compose로 실행
 
 terraform {
   required_version = ">= 1.0"
   required_providers {
-    ncloud = {
-      source  = "NaverCloudPlatform/ncloud"
-      version = "~> 3.1.1"
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 4.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = ">= 4.0"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = ">= 2.0"
     }
   }
 }
 
-# NCP Provider 설정
-provider "ncloud" {
-  access_key  = var.ncp_access_key
-  secret_key  = var.ncp_secret_key
-  region      = var.ncp_region
-  site        = var.ncp_site
-  support_vpc = true
+provider "aws" {
+  region = var.aws_region
+  # AWS 인증은 환경변수에서 자동으로 읽음
+  # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 }
 
-# 현재 리전 정보 조회 (ncloud_user 대신 사용)
-data "ncloud_regions" "available" {}
-
-# 데이터 소스 - 사용 가능한 존 조회
-data "ncloud_zones" "available" {
-  filter {
-    name   = "zone_code"
-    values = ["KR-1", "KR-2"]
-  }
+# SSH 키 페어 생성 (랜덤 이름)
+resource "tls_private_key" "lifebit" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
-# Local values
-locals {
-  suffix = var.name_suffix != "" ? "-${substr(var.name_suffix,0,8)}" : ""
-}
-
-# 이미 생성된 로그인 키 사용 (변수로 직접 참조)
-# NCP 기본 SSH 키 주입 방식만 사용
-
-# VPC 생성
-resource "ncloud_vpc" "main" {
-  name            = "${var.project_name}-${var.environment}-vpc${local.suffix}"
-  ipv4_cidr_block = var.vpc_cidr
-
-  # NCP VPC는 tags를 지원하지 않음
-}
-
-# 퍼블릭 서브넷 생성 (단일 서브넷)
-resource "ncloud_subnet" "public" {
-  name           = "${var.project_name}-${var.environment}-public-subnet"
-  vpc_no         = ncloud_vpc.main.id
-  subnet         = var.public_subnet_cidrs[0]
-  zone           = data.ncloud_zones.available.zones[0].zone_code
-  network_acl_no = ncloud_vpc.main.default_network_acl_no
-  subnet_type    = "PUBLIC"
-  usage_type     = "GEN"
-
-  # NCP Subnet은 tags를 지원하지 않음
-}
-
-# ACG (Access Control Group) - 웹 서버용
-resource "ncloud_access_control_group" "web" {
-  name        = "${var.project_name}-${var.environment}-web-acg"
-  description = "ACG for LifeBit web server (Academy Project)"
-  vpc_no      = ncloud_vpc.main.id
-
-  # NCP ACG는 tags를 지원하지 않음
-}
-
-# ACG 규칙 - 모든 포트를 하나의 리소스로 통합 (NCP Provider 호환성)
-resource "ncloud_access_control_group_rule" "all_ports" {
-  access_control_group_no = ncloud_access_control_group.web.id
-
-  # SSH 접근
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "22"
-    description = "SSH access"
-  }
-
-  # HTTP 접근
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "80"
-    description = "HTTP access"
-  }
-
-  # HTTPS 접근
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "443"
-    description = "HTTPS access"
-  }
-
-  # Frontend (React)
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "3000"
-    description = "Frontend (React)"
-  }
-
-  # Spring Boot API
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "8080"
-    description = "Spring Boot API"
-  }
-
-  # FastAPI
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "8001"
-    description = "FastAPI"
-  }
-
-  # Airflow
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "8081"
-    description = "Airflow"
-  }
-
-  # Grafana
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "3001"
-    description = "Grafana"
-  }
-
-  # Prometheus
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "9090"
-    description = "Prometheus"
-  }
-
-  # Nginx Proxy
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "8082"
-    description = "Nginx Proxy"
-  }
-
-  # Node Exporter
-  inbound {
-    protocol    = "TCP"
-    ip_block    = "0.0.0.0/0"
-    port_range  = "9100"
-    description = "Node Exporter"
+resource "aws_key_pair" "lifebit" {
+  key_name   = "lifebit-${substr(uuid(),0,8)}"
+  public_key = tls_private_key.lifebit.public_key_openssh
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
-# 네트워크 인터페이스 생성
-resource "ncloud_network_interface" "web" {
-  name                  = "${var.project_name}-${var.environment}-web-nic"
-  subnet_no             = ncloud_subnet.public.id
-  access_control_groups = [ncloud_access_control_group.web.id]
-
-  # NCP Network Interface는 tags를 지원하지 않음
-}
-
-# 웹 서버 인스턴스 생성 (단일 서버)
-resource "ncloud_server" "web" {
-  name                      = "${var.project_name}-${var.environment}-web-server"
-  server_image_product_code = var.server_image_product_code
-  server_product_code       = var.server_instance_type
-  login_key_name            = var.login_key_name
-  subnet_no                 = ncloud_subnet.public.id
-
-  network_interface {
-    network_interface_no = ncloud_network_interface.web.id
-    order                = 0
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-vpc"
+    Project     = var.project_name
+    Environment = var.environment
   }
-
-  # NCP Server는 tags를 지원하지 않음
 }
 
-# 공인 IP 할당
-resource "ncloud_public_ip" "web" {
-  server_instance_no = ncloud_server.web.id
-  description        = "Public IP for ${var.project_name} web server"
-
-  # NCP Public IP는 tags를 지원하지 않음
+# 퍼블릭 서브넷
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidrs[0]
+  map_public_ip_on_launch = true
+  availability_zone       = var.aws_az
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-public-subnet"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
-# 블록 스토리지 추가 (선택적)
-resource "ncloud_block_storage" "web_data" {
-  count = var.enable_additional_storage ? 1 : 0
-
-  name               = "${var.project_name}-${var.environment}-data-storage"
-  size               = var.additional_storage_size
-  description        = "Additional storage for LifeBit data"
-  server_instance_no = ncloud_server.web.id
-
-  # NCP Block Storage는 tags를 지원하지 않음
+# 인터넷 게이트웨이
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-igw"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
- 
+# 라우트 테이블
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-public-rt"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+# 보안 그룹 (모든 포트 오픈, 데모용)
+resource "aws_security_group" "web" {
+  name        = "${var.project_name}-${var.environment}-web-sg"
+  description = "Allow all for LifeBit demo"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "All TCP"
+  }
+  
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "ICMP (ping)"
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "All"
+  }
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-web-sg"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+# EC2 인스턴스 (t3.small, Ubuntu 22.04)
+resource "aws_instance" "web" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.web.id]
+  key_name                    = aws_key_pair.lifebit.key_name
+  associate_public_ip_address = true
+  
+  # EBS 루트 볼륨 크기 증가 (Docker 빌드 공간 확보)
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = var.root_volume_size
+    encrypted   = true
+    tags = {
+      Name        = "${var.project_name}-${var.environment}-root-volume"
+      Project     = var.project_name
+      Environment = var.environment
+    }
+  }
+  
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-web-server"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+  
+  # 강화된 시스템 설정 (SSH 포함)
+  user_data = <<-EOF
+#!/bin/bash
+# 로그 파일 설정
+exec > >(tee /var/log/user-data.log) 2>&1
+echo "User Data 스크립트 시작: $(date)"
+
+# SSH 서비스 확실히 활성화
+systemctl enable ssh
+systemctl start ssh
+systemctl status ssh
+
+# 시스템 업데이트
+apt-get update -y
+
+# 기본 패키지 설치
+apt-get install -y curl wget git unzip openssh-server
+
+# SSH 설정 확인
+echo "SSH 설정 확인:"
+ss -tlnp | grep :22
+systemctl is-active ssh
+
+# Docker 설치를 위한 준비
+apt-get install -y apt-transport-https ca-certificates gnupg lsb-release
+
+# 방화벽 설정 (UFW 비활성화 - 보안그룹 사용)
+ufw --force disable
+
+echo "User Data 스크립트 완료: $(date)"
+echo "SSH 상태: $(systemctl is-active ssh)"
+EOF
+}
+
+# EIP 할당 (최신 방식)
+resource "aws_eip" "web" {
+  domain = "vpc"
+  
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-eip"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+  
+  depends_on = [aws_internet_gateway.gw]
+}
+
+# EIP와 인스턴스 연결
+resource "aws_eip_association" "web" {
+  instance_id   = aws_instance.web.id
+  allocation_id = aws_eip.web.id
+}
+
+# ================================================
+# 자동화: SSH 키와 Ansible Inventory 자동 생성
+# ================================================
+
+# SSH 키 파일을 AWS 키페어 이름과 동일하게 자동 생성
+resource "local_file" "ssh_private_key" {
+  content         = tls_private_key.lifebit.private_key_pem
+  filename        = pathexpand("~/.ssh/${aws_key_pair.lifebit.key_name}.pem")
+  file_permission = "0600"
+  
+  depends_on = [aws_key_pair.lifebit]
+}
+
+# Ansible Inventory 자동 생성 (AWS 키페어 이름 사용)
+resource "local_file" "ansible_inventory" {
+  content = templatefile("${path.module}/../ansible/templates/inventory.ini.tpl", {
+    server_ip = aws_eip.web.public_ip
+    key_name  = aws_key_pair.lifebit.key_name
+  })
+  filename = "${path.module}/../ansible/inventory.ini"
+  
+  depends_on = [aws_eip_association.web, local_file.ssh_private_key]
+}

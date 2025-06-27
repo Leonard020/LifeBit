@@ -1,21 +1,80 @@
+# --------------------------------------------------
+# Global ignores / OS
+# --------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --------------------------------------------------
+# Python
+# --------------------------------------------------
 venv/
 __pycache__/
-*.pyc
-.env
-node_modules
-.DS_Store
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.Python
 
+# --------------------------------------------------
+# Node / JavaScript / TypeScript
+# --------------------------------------------------
+node_modules/
+# lock files (keep only the one you actually use)
+*.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --------------------------------------------------
+# Java / Maven / Gradle (Spring)
+# --------------------------------------------------
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# --------------------------------------------------
+# Build / Dist artifacts
+# --------------------------------------------------
+dist/
+build/
+
+# --------------------------------------------------
+# Environment & configuration
+# --------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --------------------------------------------------
 # Terraform
-*.tfstate
-*.tfstate.*
+# --------------------------------------------------
+*.tfstate*
 *.tfvars
 .terraform/
 .terraform.lock.hcl
 terraform-outputs.json
-tfplan-*
+tfplan*
+terraform.tfstate.d/
 *.backup
 
-# SSH Keys and Certificates
+# --------------------------------------------------
+# Logs & runtime files
+# --------------------------------------------------
+logs/
+*.log
+deploy-*.log
+*-deploy.log
+
+# --------------------------------------------------
+# Docker / Compose
+# --------------------------------------------------
+*.bak
+
+# --------------------------------------------------
+# SSH keys & certificates
+# --------------------------------------------------
 *.pem
 *.key
 *.crt
@@ -23,30 +82,22 @@ tfplan-*
 id_rsa*
 id_ed25519*
 
-# Logs
-logs/
-*.log
-deploy-*.log
-*-deploy.log
-
-# Deployment artifacts
-ansible/inventory.ini.backup*
+# --------------------------------------------------
+# Ansible
+# --------------------------------------------------
 *.retry
+ansible/inventory.ini.backup*
 
-# Build artifacts
-target/
-dist/
-build/
-
-# IDE
+# --------------------------------------------------
+# IDE & Editor settings
+# --------------------------------------------------
 .idea/
 .vscode/
 *.iml
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Local env files
-.env.local
-.env.*.local
+# --------------------------------------------------
+# Temp / swap / backup files
+# --------------------------------------------------
+*~
+*.swp
+*.done

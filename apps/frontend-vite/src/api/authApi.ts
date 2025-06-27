@@ -168,13 +168,13 @@ export interface ExerciseSessionCreateRequest {
 // 운동 세션 수정 요청 타입
 export interface ExerciseSessionUpdateRequest {
   exercise_catalog_id?: number;
-  duration_minutes?: number;
   calories_burned?: number;
   notes?: string;
   exercise_date?: string; // YYYY-MM-DD 형식
   sets?: number;
   reps?: number;
   weight?: number;
+  duration_minutes?: number;
 }
 
 // 운동 카탈로그 타입
@@ -197,7 +197,7 @@ export interface ExerciseRecordDTO {
   reps?: number;
   weight?: number;
   exerciseDate: string;
-  durationMinutes?: number;
+  duration_minutes?: number;
   calories_burned?: number;
   time_period?: string; // 시간대(아침/점심/저녁 등) 추가
 }
@@ -1206,8 +1206,8 @@ export const useExerciseCalendarHeatmap = (userId: string) => {
     queryKey: ['exercise-calendar-heatmap', userId],
     queryFn: () => getExerciseCalendarHeatmapData(userId),
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
-    gcTime: 1000 * 60 * 10, // 10분간 가비지 컬렉션 지연
+    staleTime: 0, // 캐시 시간을 0으로 설정하여 항상 최신 데이터 조회
+    gcTime: 1000 * 60 * 5, // 5분으로 줄임
   });
 };
 

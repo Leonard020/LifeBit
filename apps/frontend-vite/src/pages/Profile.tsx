@@ -584,6 +584,7 @@ const Profile = () => {
                       value={goals.dailyCalories}
                       onChange={(e) => setGoals({...goals, dailyCalories: e.target.value})}
                       placeholder="2000"
+                      onWheel={e => e.currentTarget.blur()}
                     />
                   </div>
 
@@ -595,6 +596,7 @@ const Profile = () => {
                       value={goals.dailyCarbs}
                       onChange={(e) => setGoals({...goals, dailyCarbs: e.target.value})}
                       placeholder="200"
+                      onWheel={e => e.currentTarget.blur()}
                     />
                   </div>
 
@@ -606,6 +608,7 @@ const Profile = () => {
                       value={goals.dailyProtein}
                       onChange={(e) => setGoals({...goals, dailyProtein: e.target.value})}
                       placeholder="120"
+                      onWheel={e => e.currentTarget.blur()}
                     />
                   </div>
 
@@ -617,6 +620,7 @@ const Profile = () => {
                       value={goals.dailyFat}
                       onChange={(e) => setGoals({...goals, dailyFat: e.target.value})}
                       placeholder="60"
+                      onWheel={e => e.currentTarget.blur()}
                     />
                   </div>
                 </div>

@@ -32,7 +32,7 @@ const NotificationBell = () => {
     },
     GOAL_SET: {
       icon: <Target className="w-4 h-4" />, color: 'text-blue-500', label: '목표',
-      link: () => '/goals',
+      link: () => '/note',
     },
     RANKING: {
       icon: <Medal className="w-4 h-4" />, color: 'text-purple-500', label: '랭킹',

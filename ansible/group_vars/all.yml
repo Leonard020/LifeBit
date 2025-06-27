@@ -1,25 +1,61 @@
 ---
 # 프로젝트 기본 설정
 project_name: "lifebit"
-project_path: "/opt/lifebit"
+project_path: "/srv/lifebit"
+remote_app_dir: "/srv/lifebit"
+
+# 클라우드 프로바이더 설정
+cloud_provider: "aws"
+aws_region: "ap-northeast-2"
+instance_type: "t3.small"
 
 # Git 저장소 설정
-git_repository_url: "https://github.com/Hyeon6492/LifeBit.git"  # 실제 저장소 URL로 변경
+git_repository_url: "https://github.com/Hyeon6492/LifeBit.git"
 git_branch: "main"
 
-# 애플리케이션 설정
-openai_api_key: "{{ vault_openai_api_key | default('your-api-key-here') }}"
-use_gpt: "False"
+# OpenAI API 설정 (환경변수에서 가져옴)
+OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') | default('your-api-key-here') }}"
+USE_GPT: "{{ lookup('env', 'USE_GPT') | default('True') }}"
 
-# OAuth 설정 (선택사항)
-kakao_redirect_uri: ""
-google_client_secret: ""
-google_redirect_uri: ""
+# OAuth 설정 (환경변수에서 가져옴)
+KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') | default('YOUR_KAKAO_CLIENT_ID') }}"
+GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') | default('YOUR_GOOGLE_CLIENT_ID') }}"
+GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') | default('YOUR_GOOGLE_CLIENT_SECRET') }}"
 
-# 데이터베이스 설정
-db_name: "lifebit_db"
-db_user: "lifebit_user"
-db_password: "{{ vault_db_password | default('lifebit_password') }}"
+# PostgreSQL 데이터베이스 설정 (환경변수에서 가져옴)
+POSTGRES_DB: "{{ lookup('env', 'POSTGRES_DB') | default('lifebit_db') }}"
+POSTGRES_USER: "{{ lookup('env', 'POSTGRES_USER') | default('lifebit_user') }}"
+POSTGRES_PASSWORD: "{{ lookup('env', 'POSTGRES_PASSWORD') | default('lifebit_password') }}"
+POSTGRES_HOST: "postgres-db"
+POSTGRES_PORT: "5432"
+
+# Redis 설정 (환경변수에서 가져옴)
+REDIS_PASSWORD: "{{ lookup('env', 'REDIS_PASSWORD') | default('lifebit_redis_secure_pass') }}"
+REDIS_HOST: "redis-cache"
+REDIS_PORT: "6379"
+
+# JWT 설정 (환경변수에서 가져옴)
+JWT_SECRET: "{{ lookup('env', 'JWT_SECRET') | default('defaultSecretKey12345678901234567890') }}"
+JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') | default('defaultSecretKey12345678901234567890') }}"
+JWT_ALGORITHM: "HS256"
+
+# CORS 설정
+CORS_ORIGINS: "http://localhost:3000,http://localhost:5173,http://localhost:8082,http://127.0.0.1:5173"
+
+# 로그 레벨
+LOG_LEVEL: "info"
+
+# Airflow 설정 (환경변수에서 가져옴)
+AIRFLOW_ADMIN_USER: "admin"
+AIRFLOW_ADMIN_PASSWORD: "{{ lookup('env', 'AIRFLOW_ADMIN_PASSWORD') | default('admin123') }}"
+AIRFLOW_FERNET_KEY: "{{ lookup('env', 'AIRFLOW_FERNET_KEY') | default('lifebit_airflow_fernet_key_32_chars_minimum_required') }}"
+
+# Grafana 설정 (환경변수에서 가져옴)
+GRAFANA_ADMIN_USER: "admin"
+GRAFANA_ADMIN_PASSWORD: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') | default('grafana_secure_password') }}"
+
+# 환경 설정
+deploy_env: "demo"
 
 # 모니터링 설정
 enable_monitoring: true
@@ -27,12 +63,15 @@ backup_retention_days: 7
 
 # 보안 설정
 allowed_ssh_sources:
-  - "0.0.0.0/0"  # 프로덕션에서는 제한적으로 설정
+  - "0.0.0.0/0"
 
 # 성능 설정
 max_upload_size: "100M"
 worker_processes: "auto"
 
 # 로깅 설정
-log_level: "info"
-log_retention_days: 30 
+log_retention_days: 30
+
+# AWS 특화 설정
+aws_ebs_optimized: false
+aws_monitoring: false 

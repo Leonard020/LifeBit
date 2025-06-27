@@ -153,6 +153,7 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
               value={profileData.height}
               onChange={(e) => setProfileData({ ...profileData, height: e.target.value })}
               className="pl-10"
+              onWheel={e => e.currentTarget.blur()}
             />
           </div>
         </div>
@@ -166,6 +167,7 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
               value={profileData.weight}
               onChange={(e) => setProfileData({ ...profileData, weight: e.target.value })}
               className="pl-10"
+              onWheel={e => e.currentTarget.blur()}
             />
           </div>
         </div>
@@ -179,6 +181,7 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
               value={profileData.age}
               onChange={(e) => setProfileData({ ...profileData, age: e.target.value })}
               className="pl-10"
+              onWheel={e => e.currentTarget.blur()}
             />
           </div>
         </div>
