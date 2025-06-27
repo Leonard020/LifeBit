@@ -23,28 +23,17 @@ import type { TooltipProps } from 'recharts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUpdateExerciseSession } from '@/api/authApi';
 
-// 백엔드 API 응답 타입 정의
-interface DietLogDTO {
-  id: number;
-  userId: number;
-  foodItemId: number;
-  foodName: string;
-  quantity: number;
+// 영양소 데이터 타입 정의
+interface NutritionData {
+  name: string;
+  value: number;
+  goal: number;
+  color: string;
   calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  logDate: string;
-  unit: string;
-  mealTime?: string; // ENUM: breakfast, lunch, dinner, snack
-  inputSource?: string; // ENUM: VOICE, TYPING
-  confidenceScore?: number;
-  originalAudioPath?: string;
-  validationStatus?: string; // ENUM: PENDING, VALIDATED, REJECTED
-  validationNotes?: string;
-  createdAt?: string;
+  targetCalories: number;
 }
 
+// Note.tsx에서만 사용하는 UI용 타입 정의
 interface DietNutritionDTO {
   name: string;
   target: number;
@@ -61,16 +50,6 @@ interface FoodItem {
   protein: number;
   fat: number;
   servingSize: number;
-}
-
-// 영양소 데이터 타입 정의
-interface NutritionData {
-  name: string;
-  value: number;
-  goal: number;
-  color: string;
-  calories: number;
-  targetCalories: number;
 }
 
 const Note = () => {
@@ -91,7 +70,7 @@ const Note = () => {
   const [hasClaimedDietScore, setHasClaimedDietScore] = useState(false);
 
   // 식단 관련 상태
-  const [dailyDietLogs, setDailyDietLogs] = useState<DietLogDTO[]>([]);
+  const [dailyDietLogs, setDailyDietLogs] = useState<DietRecord[]>([]);
   const [isLoadingDietData, setIsLoadingDietData] = useState(true);
   const [dietError, setDietError] = useState<string | null>(null);
 
@@ -161,7 +140,7 @@ const Note = () => {
     }
     acc[meal].push(log);
     return acc;
-  }, {} as Record<string, DietLogDTO[]>);
+  }, {} as Record<string, DietRecord[]>);
 
   // ✅ 인증 토큰을 맨 처음에 가져오기
   useEffect(() => {
@@ -336,7 +315,7 @@ const Note = () => {
       const dietRecords = await getDailyDietRecords(formattedDate, userId);
 
       // DietRecord → DietLogDTO 변환
-      const convertedRecords: DietLogDTO[] = dietRecords.map(record => ({
+      const convertedRecords: DietRecord[] = dietRecords.map(record => ({
         id: record.id,
         userId: record.userId,
         foodItemId: record.foodItemId,
@@ -705,7 +684,7 @@ const Note = () => {
 
   // 식단 수정 관련 상태
   const [isEditDietDialogOpen, setIsEditDietDialogOpen] = useState(false);
-  const [editingDietLog, setEditingDietLog] = useState<DietLogDTO | null>(null);
+  const [editingDietLog, setEditingDietLog] = useState<DietRecord | null>(null);
   const [editFormData, setEditFormData] = useState({
     foodItemId: null as number | null,
     foodName: '',
@@ -769,7 +748,7 @@ const Note = () => {
   };
 
   // 식단 수정 시작
-  const startEditDiet = (dietLog: DietLogDTO) => {
+  const startEditDiet = (dietLog: DietRecord) => {
     setEditingDietLog(dietLog);
 
     // API에서 받은 값(총 섭취량)을 100g 기준으로 변환
