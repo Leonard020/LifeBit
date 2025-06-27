@@ -211,7 +211,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const [localIsRecording, setLocalIsRecording] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // recognition 인스턴스 생성 함수 (컴포넌트 내부에 위치)
   const createRecognition = () => {
@@ -245,16 +245,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   useEffect(() => {
     // 💬 스크롤 항상 맨 아래로
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-
-    // ✅ 자동 저장 키워드 감지
-    const lowered = inputText.toLowerCase();
-    const saveKeywords = /저장|기록|완료|끝|등록|저장해줘|기록해줘|등록해줘/;
-
-    if (saveKeywords.test(lowered) && structuredData && !hasSaved) {
-      setHasSaved(true);
-      onSaveRecord();
-    }
-  }, [conversationHistory, aiFeedback, inputText, structuredData, onSaveRecord, hasSaved, setHasSaved]);
+  }, [conversationHistory, aiFeedback]);
 
   // 음성인식 로직 추가
   useEffect(() => {
@@ -458,7 +449,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </Button>
           ) : (
             <Button
-              onClick={handleSendMessageWithFocus}
+              onClick={() => handleSendMessageWithFocus()}
               disabled={isProcessing}
               size="icon"
               className="rrounded-full w-10 h-10 text-white bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"

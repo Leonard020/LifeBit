@@ -851,16 +851,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
           console.log('🔍 Validation step:', validationStep);
           await handleValidationResponse(userMessage);
   
-        } else if (currentStep === 'confirmation') {
+                } else if (currentStep === 'confirmation') {
           console.log('✅ Confirmation step');
-  
+
           const lowered = userMessage.toLowerCase();
-          const isConfirmed = /^(네|예|yes|저장|저장해|저장해줘|기록|기록해줘|기록해|등록|등록해줘|등록해|완료|끝)/.test(lowered); // 확장된 확인 조건
-  
+          const isConfirmed = /^(네|예|yes|저장|저장해|저장해줘)$/i.test(lowered);
+
           if (isConfirmed && pendingRecord?.type === 'exercise') {
             try {
               const exerciseData = JSON.parse(pendingRecord.content);
-              await saveExerciseRecord(exerciseData);
+              
+              // Index.tsx의 handleRecordSubmit 콜백 호출
+              if (onRecordSubmit) {
+                onRecordSubmit('exercise', JSON.stringify(exerciseData));
+              }
   
               addMessage('ai', '운동 기록을 저장했어요! 수고하셨습니다 💪');
               updateConversationHistory('assistant', '운동 기록을 저장했어요!');

@@ -610,20 +610,39 @@ public class HealthStatisticsService {
                 return bodyPartData;
             }
             
-            // 운동 부위별 빈도 계산
+            // 운동 부위별 빈도 계산 (날짜별로 그룹핑하여 하루에 한 부위는 1번만 카운트)
             Map<String, Integer> bodyPartCounts = new HashMap<>();
             Map<String, Integer> bodyPartDuration = new HashMap<>();
             
-            for (ExerciseSession session : sessions) {
-                if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                    String bodyPart = session.getExerciseCatalog().getBodyPart().name();
-                    
-                    // 운동 횟수 카운트
+            // 날짜별로 운동 세션 그룹핑
+            Map<String, List<ExerciseSession>> sessionsByDate = sessions.stream()
+                .filter(session -> session.getExerciseDate() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                    session -> session.getExerciseDate().toString()
+                ));
+            
+            // 날짜별로 운동 부위 집계 (하루에 한 부위는 1번만 카운트)
+            for (Map.Entry<String, List<ExerciseSession>> dateEntry : sessionsByDate.entrySet()) {
+                List<ExerciseSession> daySessions = dateEntry.getValue();
+                Set<String> dayBodyParts = new HashSet<>(); // 중복 제거를 위한 Set
+                
+                // 해당 날짜의 모든 세션을 확인하여 운동 부위와 시간 집계
+                for (ExerciseSession session : daySessions) {
+                    if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                        String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                        
+                        // 하루에 한 부위는 1번만 카운트 (Set으로 중복 제거)
+                        dayBodyParts.add(bodyPart);
+                        
+                        // 운동 시간은 모든 세션의 합계 (분)
+                        int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
+                        bodyPartDuration.put(bodyPart, bodyPartDuration.getOrDefault(bodyPart, 0) + duration);
+                    }
+                }
+                
+                // 해당 날짜에 운동한 부위들을 카운트 (하루에 1번씩만)
+                for (String bodyPart : dayBodyParts) {
                     bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1);
-                    
-                    // 운동 시간 합계 (분)
-                    int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
-                    bodyPartDuration.put(bodyPart, bodyPartDuration.getOrDefault(bodyPart, 0) + duration);
                 }
             }
             
