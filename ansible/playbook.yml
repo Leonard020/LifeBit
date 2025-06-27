@@ -9,13 +9,86 @@
   become: yes
   vars:
     project_name: "lifebit"
-    environment: "{{ env | default('demo') }}"
-    git_repo: "{{ git_repository_url | default('https://github.com/your-repo/LifeBit.git') }}"
+    git_repo: "{{ git_repository_url | default('https://github.com/Hyeon6492/LifeBit.git') }}"
+    
+  pre_tasks:
+    - name: 프로젝트 소스 코드를 서버로 복사 (전체)
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "/srv/{{ project_name }}"
+        delete: yes
+        recursive: yes
+        archive: no
+        checksum: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.idea"
+          - "--exclude=*.log"
+          - "--exclude=logs/"
+          - "--exclude=node_modules/"
+          - "--exclude=venv/"
+          - "--exclude=.DS_Store"
+          - "--exclude=__pycache__/"
+          - "--exclude=*.tmp"
+          - "--exclude=ansible/"
+          - "--exclude=.env"
+      tags: [always]
     
   tasks:
     # ================================================
+    # 0. 방화벽 설정 (최우선 실행)
+    # ================================================
+    - name: UFW 초기화
+      ufw:
+        state: reset
+      tags: [security]
+
+    - name: UFW 기본 정책 설정
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+      tags: [security]
+
+    - name: UFW 포트 허용
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto | default('tcp') }}"
+        comment: "{{ item.comment }}"
+      loop:
+        - { port: '22', comment: 'SSH' }
+        - { port: '80', comment: 'HTTP' }
+        - { port: '443', comment: 'HTTPS' }
+        - { port: '3000', comment: 'Frontend' }
+        - { port: '8080', comment: 'Spring Boot API' }
+        - { port: '8001', comment: 'FastAPI' }
+        - { port: '8081', comment: 'Airflow' }
+        - { port: '8082', comment: 'Nginx Proxy' }
+        - { port: '3001', comment: 'Grafana' }
+        - { port: '9090', comment: 'Prometheus' }
+        - { port: '9100', comment: 'Node Exporter' }
+      tags: [security]
+
+    - name: UFW 활성화
+      ufw:
+        state: enabled
+      tags: [security]
+
+    # ================================================
     # 1. 시스템 기본 설정
     # ================================================
+    - name: apt 잠금이 해제될 때까지 대기
+      ansible.builtin.shell: |
+        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo 'apt 잠금 대기 중...'
+          sleep 10
+        done
+      changed_when: false
+      tags: [system]
+
     - name: 시스템 패키지 업데이트
       apt:
         update_cache: yes
@@ -113,48 +186,6 @@
       tags: [docker]
 
     # ================================================
-    # 3. 방화벽 설정
-    # ================================================
-    - name: UFW 초기화
-      ufw:
-        state: reset
-      tags: [security]
-
-    - name: UFW 기본 정책 설정
-      ufw:
-        direction: "{{ item.direction }}"
-        policy: "{{ item.policy }}"
-      loop:
-        - { direction: 'incoming', policy: 'deny' }
-        - { direction: 'outgoing', policy: 'allow' }
-      tags: [security]
-
-    - name: UFW 포트 허용
-      ufw:
-        rule: allow
-        port: "{{ item.port }}"
-        proto: "{{ item.proto | default('tcp') }}"
-        comment: "{{ item.comment }}"
-      loop:
-        - { port: '22', comment: 'SSH' }
-        - { port: '80', comment: 'HTTP' }
-        - { port: '443', comment: 'HTTPS' }
-        - { port: '3000', comment: 'Frontend' }
-        - { port: '8080', comment: 'Spring Boot API' }
-        - { port: '8001', comment: 'FastAPI' }
-        - { port: '8081', comment: 'Airflow' }
-        - { port: '8082', comment: 'Nginx Proxy' }
-        - { port: '3001', comment: 'Grafana' }
-        - { port: '9090', comment: 'Prometheus' }
-        - { port: '9100', comment: 'Node Exporter' }
-      tags: [security]
-
-    - name: UFW 활성화
-      ufw:
-        state: enabled
-      tags: [security]
-
-    # ================================================
     # 4. SSH 키 인증 설정 (Ubuntu 24.04 cloud-init 대응)
     # ================================================
     - name: SSH 키 인증 활성화 (cloud-init 무시)
@@ -239,121 +270,62 @@
       tags: [security]
 
     # ================================================
-    # 6. Git 소스 클론
+    # 6. 애플리케이션 소스 코드 배포
     # ================================================
-    - name: 기존 프로젝트 디렉토리 삭제 (초기화)
+    - name: 원격 서버에 프로젝트 디렉토리 생성
       file:
-        path: "/opt/{{ project_name }}"
-        state: absent
+        path: "/srv/{{ project_name }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
       tags: [deploy]
 
-    - name: Git 저장소 클론
-      git:
-        repo: "{{ git_repo }}"
-        dest: "/opt/{{ project_name }}"
-        version: "{{ git_branch }}"
-        force: yes
+    - name: 로컬 프로젝트 파일을 원격 서버로 동기화 (rsync)
+      synchronize:
+        src: ../../
+        dest: "/srv/{{ project_name }}"
+        archive: yes
+        checksum: yes
+        delete: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.idea"
+          - "--exclude=.vscode"
+          - "--exclude=.deploy_checkpoints"
+          - "--exclude=logs/"
+          - "--exclude=*.log"
+          - "--exclude='*~'"
+          - "--exclude='*.swp'"
+          - "--exclude=target/"
+          - "--exclude=apps/ai-api-fastapi/venv/"
+          - "--exclude=apps/frontend-vite/node_modules/"
+          - "--exclude=apps/frontend-vite/dist/"
       tags: [deploy]
 
     # ================================================
-    # 7. 환경 설정 파일 생성
+    # 7. 설정 파일 템플릿 적용
     # ================================================
-    - name: .env 및 docker-compose.yml 파일 템플릿으로 생성
+    - name: .env 파일 생성
       template:
-        src: "templates/{{ item.src }}"
-        dest: "/opt/{{ project_name }}/{{ item.dest }}"
-      loop:
-        - { src: 'env.j2', dest: '.env' }
-        - { src: 'docker-compose.yml.j2', dest: 'docker-compose.yml' }
+        src: templates/env.j2
+        dest: "/srv/{{ project_name }}/.env"
       tags: [deploy]
 
-    # ================================================
-    # 8. Docker 이미지 순차 빌드 및 실행 (메모리 최적화)
-    # ================================================
-
-    - name: Docker 베이스 이미지 다운로드 (pull)
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- 베이스 이미지를 다운로드합니다(pull) ---"
-        docker-compose pull
-      args:
-        chdir: "/opt/{{ project_name }}"
+    - name: Create docker-compose.yml from template
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: "/srv/{{ project_name }}/docker-compose.yml"
       tags: [deploy]
 
-    - name: "1단계: Spring Boot 이미지 빌드"
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- Spring 이미지 빌드 ---"
-        docker-compose build --no-cache spring-app
-      args:
-        chdir: "/opt/{{ project_name }}"
-      tags: [deploy]
-
-    - name: Docker 캐시 정리 (Spring 빌드 후)
-      shell: "docker system prune -f"
-      tags: [deploy]
-
-    - name: "2단계: FastAPI 이미지 빌드"
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- FastAPI 이미지 빌드 ---"
-        docker-compose build --no-cache fastapi-app
-      args:
-        chdir: "/opt/{{ project_name }}"
-      tags: [deploy]
-
-    - name: Docker 캐시 정리 (FastAPI 빌드 후)
-      shell: "docker system prune -f"
-      tags: [deploy]
-
-    - name: "3단계: Frontend 이미지 빌드 (옵션)"
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- Frontend 이미지 빌드 ---"
-        docker-compose build --no-cache frontend-app || true  # 메모리 부족 시 무시
-      args:
-        chdir: "/opt/{{ project_name }}"
-      tags: [deploy]
-
-    - name: Docker 캐시 정리 (Frontend 빌드 후)
-      shell: "docker system prune -f"
-      tags: [deploy]
-
-    - name: "4단계: Nginx Proxy 이미지 빌드 (옵션)"
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- Nginx 이미지 빌드 ---"
-        docker-compose build --no-cache nginx-proxy || true
-      args:
-        chdir: "/opt/{{ project_name }}"
-      tags: [deploy]
-
-    - name: Docker 캐시 최종 정리
-      shell: "docker system prune -f"
-      tags: [deploy]
-
-    - name: Docker Compose로 컨테이너 실행 (이미지 빌드 없이)
-      shell: |
-        set -e
-        cd /opt/{{ project_name }}
-        echo "--- 컨테이너 실행 ---"
-        docker-compose up -d --remove-orphans
-        echo "--- 컨테이너 상태 ---"
-        docker-compose ps
-      args:
-        chdir: "/opt/{{ project_name }}"
-      register: docker_compose_result
-      failed_when: docker_compose_result.rc != 0
-      tags: [deploy]
-
-    - name: Docker Compose 상태 출력
-      debug:
-        var: docker_compose_result.stdout_lines
+    - name: Deploy services from generated compose file
+      community.docker.docker_compose_v2:
+        project_src: "/srv/{{ project_name }}"
+        files:
+          - docker-compose.yml
+        state: present
+        build: "always"
+        pull: "always"
       tags: [deploy]
 
     # ================================================
@@ -361,24 +333,25 @@
     # ================================================
     - name: PostgreSQL 컨테이너가 준비될 때까지 대기
       wait_for:
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "127.0.0.1"
         port: 5432
-        timeout: 60
+        timeout: 120
+        delay: 10
       tags: [database]
 
     - name: LifeBit.sql 파일을 서버로 복사
       copy:
         src: "{{ playbook_dir }}/../LifeBit.sql"
-        dest: "/opt/{{ project_name }}/LifeBit.sql"
+        dest: "/srv/{{ project_name }}/LifeBit.sql"
         mode: '0644'
       tags: [database]
 
     - name: PostgreSQL DB 초기화 (LifeBit.sql 실행)
       shell: |
-        cd /opt/{{ project_name }}
-        docker-compose exec -T postgres-db psql -U {{ postgres_user | default('lifebit_user') }} -d {{ postgres_db | default('lifebit_db') }} < /opt/{{ project_name }}/LifeBit.sql
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db psql -U {{ postgres_user | default('lifebit_user') }} -d {{ postgres_db | default('lifebit_db') }} < /srv/{{ project_name }}/LifeBit.sql
       args:
-        chdir: "/opt/{{ project_name }}"
+        chdir: "/srv/{{ project_name }}"
       register: db_init_result
       failed_when: db_init_result.rc != 0
       tags: [database]
@@ -394,7 +367,7 @@
     - name: "헬스체크 스크립트 배포 (템플릿)"
       template:
         src: "healthcheck.sh.j2"
-        dest: "/opt/{{ project_name }}/health-check.sh"
+        dest: "/srv/{{ project_name }}/health-check.sh"
         mode: '0755'
       tags: [monitoring]
 
@@ -410,11 +383,11 @@
       loop:
         - name: "LifeBit 헬스체크"
           minute: "*/5"
-          job: "/opt/{{ project_name }}/health-check.sh > /dev/null 2>&1"
+          job: "/srv/{{ project_name }}/health-check.sh > /dev/null 2>&1"
         - name: "데이터베이스 백업"
           minute: "0"
           hour: "3"
-          job: "cd /opt/{{ project_name }} && docker-compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /opt/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
+          job: "cd /srv/{{ project_name }} && docker compose exec -T postgres-db pg_dump -U {{ postgres_user | default('lifebit_user') }} {{ postgres_db | default('lifebit_db') }} > /srv/{{ project_name }}/backups/db_backup_$(date +%Y%m%d_%H%M%S).sql"
         - name: "Docker 정리"
           minute: "0"
           hour: "2"
@@ -422,7 +395,7 @@
         - name: "로그 정리"
           minute: "0"
           hour: "4"
-          job: "find /opt/{{ project_name }}/logs -name '*.log' -mtime +7 -delete > /dev/null 2>&1"
+          job: "find /srv/{{ project_name }}/logs -name '*.log' -mtime +7 -delete > /dev/null 2>&1"
       tags: [monitoring]
 
     # ================================================
@@ -431,7 +404,7 @@
     - name: 로그 로테이션 설정
       copy:
         content: |
-          /opt/{{ project_name }}/logs/*.log {
+          /srv/{{ project_name }}/logs/*.log {
               daily
               missingok
               rotate 30
@@ -454,7 +427,7 @@
         content: |
           === LifeBit 서버 정보 ===
           배포 완료 시간: {{ ansible_date_time.iso8601 }}
-          환경: {{ environment }}
+          환경: {{ deploy_env }}
           프로젝트: {{ project_name }}
           
           === 시스템 정보 ===
@@ -475,7 +448,7 @@
           - Grafana: 3001
           - Prometheus: 9090
           - Node Exporter: 9100
-        dest: "/opt/{{ project_name }}/system-info.txt"
+        dest: "/srv/{{ project_name }}/system-info.txt"
       tags: [info]
 
     # ================================================
@@ -483,7 +456,7 @@
     # ================================================
     - name: 배포 완료 표시
       file:
-        path: "/opt/{{ project_name }}/deployment-complete"
+        path: "/srv/{{ project_name }}/deployment-complete"
         state: touch
         mode: '0644'
       tags: [deploy]
@@ -502,7 +475,7 @@
           - Prometheus: http://{{ ansible_default_ipv4.address }}:9090
           
           🔑 SSH 접속:
-          ssh -i ~/.ssh/lifebit-{{ environment }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
+          ssh -i ~/.ssh/lifebit-{{ deploy_env }}-key.pem ubuntu@{{ ansible_default_ipv4.address }}
       tags: [info]
 
   handlers:

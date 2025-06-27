@@ -180,8 +180,8 @@ check_environment() {
     log_success "AWS 인증 정보 확인 완료"
     log_info "리전: $AWS_DEFAULT_REGION"
     
-    # 네트워크 연결 테스트
-    test_network_connectivity
+    # 네트워크 연결 테스트 (일시적으로 비활성화)
+    # test_network_connectivity
     
     create_checkpoint "check_env"
 }
@@ -324,15 +324,12 @@ update_inventory() {
     
     cd "$SCRIPT_DIR"
     
-    # inventory.ini 업데이트 (실제 패턴으로 수정)
-    if grep -q "ansible_host=" ansible/inventory.ini; then
-        # 기존 IP 교체
-        sed -i "s/ansible_host=[0-9.]\+/ansible_host=$PUBLIC_IP/g" ansible/inventory.ini
-        log_success "기존 IP를 $PUBLIC_IP로 업데이트 완료"
-    else
-        log_error "inventory.ini에서 ansible_host 패턴을 찾을 수 없습니다."
-        cleanup_on_failure "inventory_update"
-    fi
+    # inventory.ini를 항상 최신 PUBLIC_IP로 덮어쓰기
+    cat > ansible/inventory.ini << EOF
+[lifebit_servers]
+$PUBLIC_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/lifebit.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+EOF
+    log_success "inventory.ini 덮어쓰기 완료: $PUBLIC_IP"
     
     log_success "Ansible inventory 업데이트 완료"
     create_checkpoint "inventory_update"
@@ -360,8 +357,18 @@ wait_for_ssh_ready() {
             -o UserKnownHostsFile=/dev/null \
             ubuntu@"$PUBLIC_IP" 'echo "SSH OK"' 2>/dev/null | grep -q "SSH OK"; then
             log_success "SSH 연결 성공 (시도: $attempt)"
-            create_checkpoint "ssh_ready"
-            return 0
+            
+            log_info "서버 초기화(cloud-init) 완료 대기 중... (최대 5분)"
+            if timeout 300 ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" 'cloud-init status --wait' 2>/dev/null; then
+                log_success "서버 초기화 완료."
+                create_checkpoint "ssh_ready"
+                return 0
+            else
+                log_warning "서버 초기화(cloud-init) 대기 시간 초과. 계속 진행하지만 문제가 발생할 수 있습니다."
+                # 실패하더라도 일단 진행하도록 return 0 처리. Ansible에서 재시도 로직이 있으므로.
+                create_checkpoint "ssh_ready"
+                return 0
+            fi
         else
             log_warning "SSH 연결 대기 중... ($attempt/$max_attempts)"
             sleep 15
@@ -497,7 +504,7 @@ deploy_application() {
             --timeout 3600 \
             -v \
             --ssh-extra-args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=60 -o ServerAliveCountMax=10' \
-            --extra-vars "ansible_ssh_common_args='-o ServerAliveInterval=60 -o ServerAliveCountMax=10'"; then
+            --extra-vars "server_public_ip=$PUBLIC_IP ansible_ssh_common_args='-o ServerAliveInterval=60 -o ServerAliveCountMax=10'"; then
             log_success "Ansible 배포 완료"
             create_checkpoint "ansible_deploy"
             return 0
@@ -783,55 +790,6 @@ show_deployment_info() {
     create_checkpoint "show_info"
 }
 
-# 배포 전 AWS 리소스 정리 (개선된 버전)
-cleanup_previous_deployment() {
-    if is_step_completed "cleanup"; then
-        log_info "⏭️  리소스 정리 단계 건너뛰기 (이미 완료됨)"
-        return 0
-    fi
-    
-    log_info "이전 배포 리소스 정리 중..."
-    
-    # 선택적 정리 (사용자 확인)
-    if [[ -x "./aws-cleanup.sh" ]] && [[ "${FORCE_CLEANUP:-}" == "true" ]]; then
-        log_info "전체 리소스 정리를 자동 모드로 실행합니다..."
-        if echo "yes" | timeout 600 ./aws-cleanup.sh 2>/dev/null || log_warning "리소스 정리 중 일부 오류 발생 (계속 진행)"; then
-            log_success "전체 리소스 정리 완료"
-        fi
-    else
-        # 기본적인 정리만 수행
-        log_info "기본 정리 작업 수행 중..."
-        
-        # Terraform 상태 정리
-        if [[ -d "$SCRIPT_DIR/infrastructure" ]]; then
-            cd "$SCRIPT_DIR/infrastructure"
-            if [[ -f "terraform.tfstate" ]] && terraform show > /dev/null 2>&1; then
-                log_info "기존 Terraform 상태 발견 - 정리 중..."
-                terraform destroy \
-                    -var="aws_access_key_id=$AWS_ACCESS_KEY_ID" \
-                    -var="aws_secret_access_key=$AWS_SECRET_ACCESS_KEY" \
-                    -var="aws_region=$AWS_DEFAULT_REGION" \
-                    -auto-approve 2>/dev/null || log_warning "Terraform 정리 중 일부 오류 발생"
-            fi
-            cd "$SCRIPT_DIR"
-        fi
-        
-        # 체크포인트 정리
-        if [[ -d "$CHECKPOINT_DIR" ]]; then
-            rm -rf "$CHECKPOINT_DIR"
-            log_info "이전 체크포인트 정리 완료"
-        fi
-    fi
-    
-    # SSH known_hosts 정리
-    if [[ -f ~/.ssh/known_hosts ]]; then
-        log_info "SSH known_hosts 정리 중..."
-        sed -i.bak '/13\.124\./d; /3\.34\./d; /52\.78\./d; /54\.180\./d; /15\.164\./d; /52\.79\./d; /3\.35\./d' ~/.ssh/known_hosts 2>/dev/null || true
-    fi
-    
-    create_checkpoint "cleanup"
-}
-
 # 명령행 인수 처리
 handle_command_line_args() {
     case "${1:-}" in
@@ -839,24 +797,9 @@ handle_command_line_args() {
             log_warning "강제 모드: 모든 체크포인트를 무시하고 처음부터 시작합니다"
             clear_checkpoints
             ;;
-        --force-cleanup)
-            log_warning "강제 정리 모드: 배포 전 모든 리소스를 정리합니다"
-            export FORCE_CLEANUP=true
-            clear_checkpoints
-            ;;
         --reset)
             log_info "체크포인트를 리셋합니다"
             clear_checkpoints
-            exit 0
-            ;;
-        --cleanup-and-exit)
-            log_info "전체 정리를 실행하고 종료합니다"
-            if [[ -x "./aws-cleanup.sh" ]]; then
-                ./aws-cleanup.sh
-            else
-                log_error "aws-cleanup.sh를 찾을 수 없습니다"
-                exit 1
-            fi
             exit 0
             ;;
         --from-step)
@@ -891,9 +834,7 @@ handle_command_line_args() {
             echo ""
             echo "옵션:"
             echo "  --force                모든 체크포인트를 무시하고 처음부터 시작"
-            echo "  --force-cleanup        배포 전 모든 AWS 리소스를 강제로 정리"
             echo "  --reset                체크포인트만 리셋하고 종료"
-            echo "  --cleanup-and-exit     전체 리소스 정리 후 종료"
             echo "  --from-step STEP       지정된 단계부터 시작"
             echo "  --help, -h             이 도움말 표시"
             echo ""
@@ -911,7 +852,6 @@ handle_command_line_args() {
             echo "예시:"
             echo "  $0                     정상 배포"
             echo "  $0 --force             처음부터 강제 재배포"
-            echo "  $0 --force-cleanup     모든 리소스 정리 후 배포"
             echo "  $0 --cleanup-and-exit  리소스만 정리하고 종료"
             exit 0
             ;;
@@ -931,12 +871,14 @@ main() {
 
     # 단계별 실행
     check_environment
-    cleanup_previous_deployment
     initialize_terraform
     deploy_infrastructure
     save_ssh_key
     update_inventory
     wait_for_ssh_ready
+    
+    log_info "서버 초기화 안정화를 위해 30초 대기합니다..."
+    sleep 30
     
     # 애플리케이션 배포 (Ansible 실패 시 단계별 배포로 대체)
     if ! deploy_application; then

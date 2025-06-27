@@ -21,10 +21,24 @@ interface StatisticsChartsProps {
   period: 'day' | 'week' | 'month' | 'year';
 }
 
-interface ChartDataPoint {
+interface ChartDataItem {
   date: string;
   value: number;
   displayDate: string;
+  calories?: number;
+}
+
+interface BackendHealthDataItem {
+  date: string;
+  weight: number | null;
+  bmi: number | null;
+  height: number | null;
+}
+
+interface BackendExerciseDataItem {
+  date: string;
+  duration_minutes: number | null;
+  calories_burned: number | null;
 }
 
 // 메모이제이션된 커스텀 툴팁 컴포넌트
@@ -59,153 +73,124 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
   // 디버그 로그 추가
   console.log('📊 StatisticsCharts - period:', period, 'userId:', userId);
 
-  // Period에 따라 API 요청할 실제 기간 결정
-  const getApiPeriod = useCallback((chartPeriod: 'day' | 'week' | 'month' | 'year'): 'day' | 'week' | 'month' | 'year' => {
-    switch (chartPeriod) {
-      case 'day':
-        return 'month'; // 일별 차트를 위해 1개월 데이터 요청
-      case 'week':
-        return 'year';  // 주별 차트를 위해 1년 데이터 요청
-      case 'month':
-        return 'year';  // 월별 차트를 위해 1년 데이터 요청
-      case 'year':
-        return 'year';  // 연별 차트는 그대로 1년
-      default:
-        return 'month';
-    }
-  }, []);
+  // API 호출 시 사용할 period 매핑
+  const apiPeriod = useMemo(() => {
+    console.log('🔄 API Period mapping:', period, '→', period === 'week' ? 'month' : period);
+    // 주간 데이터의 경우 한 달치 데이터를 가져와서 필터링
+    return period === 'week' ? 'month' : period;
+  }, [period]);
 
-  const apiPeriod = getApiPeriod(period);
-  console.log('🔄 API Period mapping:', period, '→', apiPeriod);
+  // API 호출 상태 관리
+  const {
+    data: healthRecords,
+    isLoading: healthLoading,
+    error: healthError
+  } = useHealthRecords(userId, apiPeriod);
 
-  // React Query로 데이터 가져오기 (Hook은 항상 최상단에)
-  const { data: healthRecords, isLoading: healthLoading, error: healthError } = useHealthRecords(userId.toString(), apiPeriod);
-  const { data: exerciseData, isLoading: exerciseLoading, error: exerciseError } = useExerciseSessions(userId.toString(), apiPeriod);
-  const { data: userGoals, isLoading: goalsLoading, error: goalsError } = useUserGoals(userId.toString());
-  
-  // ✨ 새로운 건강 통계 API 호출 (차트 데이터 포함)
-  const { data: healthStatistics, isLoading: statisticsLoading, error: statisticsError } = useHealthStatistics(userId.toString(), apiPeriod);
+  const {
+    data: exerciseData,
+    isLoading: exerciseLoading,
+    error: exerciseError
+  } = useExerciseSessions(userId, apiPeriod);
 
-  // 🔧 API 호출 상태 디버깅 로그 추가
+  const {
+    data: userGoals,
+    isLoading: goalsLoading,
+    error: goalsError
+  } = useUserGoals(userId);
+
+  const {
+    data: healthStatistics,
+    isLoading: statsLoading,
+    error: statsError
+  } = useHealthStatistics(userId, apiPeriod);
+
   console.log('🔍 [StatisticsCharts] API 호출 상태:', {
     userId,
     apiPeriod,
-    healthRecords: {
-      data: healthRecords,
-      loading: healthLoading,
-      error: healthError,
-      hasData: !!healthRecords,
-      dataLength: Array.isArray(healthRecords) ? healthRecords.length : 'not array'
-    },
-    exerciseData: {
-      data: exerciseData,
-      loading: exerciseLoading,
-      error: exerciseError,
-      hasData: !!exerciseData,
-      dataLength: Array.isArray(exerciseData) ? exerciseData.length : 'not array'
-    },
-    userGoals: {
-      data: userGoals,
-      loading: goalsLoading,
-      error: goalsError,
-      hasData: !!userGoals
-    },
-    healthStatistics: {
-      data: healthStatistics,
-      loading: statisticsLoading,
-      error: statisticsError,
-      hasData: !!healthStatistics,
-      hasChartData: !!(healthStatistics?.healthChartData || healthStatistics?.exerciseChartData)
-    }
+    healthRecords,
+    exerciseData,
+    userGoals,
+    healthStatistics
   });
 
-  // 🔧 에러 상태 확인
-  if (healthError) {
-    console.error('❌ [StatisticsCharts] 건강 기록 API 오류:', healthError);
-  }
-  if (exerciseError) {
-    console.error('❌ [StatisticsCharts] 운동 세션 API 오류:', exerciseError);
-  }
-  if (goalsError) {
-    console.error('❌ [StatisticsCharts] 사용자 목표 API 오류:', goalsError);
-  }
-
-  // 날짜 포맷팅 함수 메모이제이션 - period별 처리
-  const formatDateForChart = useCallback((dateString: string, period: 'day' | 'week' | 'month' | 'year'): string => {
-    try {
-      const date = new Date(dateString);
-      
-      switch (period) {
-        case 'day':
-          return date.toLocaleDateString('ko-KR', { 
-            month: 'short', 
-            day: 'numeric',
-            weekday: 'short'
-          });
-        case 'week': {
-          // 주차 표시 (예: 1월 1주)
-          const weekNumber = Math.ceil(date.getDate() / 7);
-          return `${date.getMonth() + 1}월 ${weekNumber}주`;
-        }
-        case 'month':
-          return date.toLocaleDateString('ko-KR', { 
-            year: 'numeric',
-            month: 'short'
-          });
-        case 'year':
-          return date.getFullYear().toString();
-        default:
-          return date.toLocaleDateString('ko-KR', { 
-            month: 'short', 
-            day: 'numeric' 
-          });
-      }
-    } catch (error) {
-      console.error('날짜 포맷팅 오류:', error);
-      return dateString;
+  // 날짜 포맷팅 함수
+  const formatDateForChart = useCallback((dateStr: string, period: 'day' | 'week' | 'month' | 'year'): string => {
+    const date = new Date(dateStr);
+    switch (period) {
+      case 'day':
+        return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+      case 'week':
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+      case 'month':
+        return date.toLocaleDateString('ko-KR', { month: 'short' });
+      case 'year':
+        return date.getFullYear().toString();
+      default:
+        return dateStr;
     }
   }, []);
 
-  // Period별 데이터 그룹핑 함수
+  // 데이터 그룹핑 함수
   const groupDataByPeriod = useCallback((data: Record<string, unknown>[], period: 'day' | 'week' | 'month' | 'year', dateField: string, valueField: string) => {
-    if (!Array.isArray(data) || data.length === 0) return [];
+    if (!Array.isArray(data)) return [];
 
-    const grouped: { [key: string]: { values: number[], dates: string[] } } = {};
+    // 현재 날짜 기준으로 기간별 시작일/종료일 계산
+    const today = new Date();
+    const startDate = new Date();
+    switch (period) {
+      case 'day':
+        startDate.setDate(today.getDate() - 7); // 최근 7일
+        break;
+      case 'week':
+        startDate.setDate(today.getDate() - 28); // 최근 4주
+        break;
+      case 'month':
+        startDate.setMonth(today.getMonth() - 6); // 최근 6개월
+        break;
+      case 'year':
+        startDate.setFullYear(today.getFullYear() - 1); // 최근 1년
+        break;
+    }
+
+    // 데이터 필터링 및 그룹핑
+    const filteredData = data
+      .sort((a, b) => new Date(b[dateField] as string).getTime() - new Date(a[dateField] as string).getTime()) // 최신 데이터부터 정렬
+      .slice(0, period === 'day' ? 7 : period === 'week' ? 6 : 6) // 일별 7일, 주별 6주, 월별 6개월
+      .reverse() // 다시 오름차순으로
+      .filter(item => {
+        const itemDate = new Date(item[dateField] as string);
+        return itemDate >= startDate && itemDate <= today;
+      });
+
+    // 날짜별 그룹핑
+    const grouped: Record<string, { dates: string[]; values: number[] }> = {};
     
-    data.forEach(item => {
+    filteredData.forEach(item => {
       const date = new Date(item[dateField] as string);
       let groupKey: string;
       
-      switch (period) {
-        case 'day':
-          // 일별: 날짜 그대로
-          groupKey = date.toISOString().split('T')[0];
-          break;
-        case 'week': {
-          // 주별: 해당 주의 월요일 날짜
-          const mondayDate = new Date(date);
-          mondayDate.setDate(date.getDate() - date.getDay() + 1);
-          groupKey = mondayDate.toISOString().split('T')[0];
-          break;
-        }
-        case 'month':
-          // 월별: 년-월
-          groupKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          break;
-        case 'year':
-          // 연별: 년도
-          groupKey = date.getFullYear().toString();
-          break;
-        default:
-          groupKey = date.toISOString().split('T')[0];
+      if (period === 'week') {
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        groupKey = weekStart.toISOString().split('T')[0];
+      } else if (period === 'month') {
+        groupKey = date.toISOString().slice(0, 7); // YYYY-MM
+      } else if (period === 'year') {
+        groupKey = date.getFullYear().toString();
+      } else {
+        groupKey = date.toISOString().split('T')[0];
       }
-      
+
       if (!grouped[groupKey]) {
-        grouped[groupKey] = { values: [], dates: [] };
+        grouped[groupKey] = {
+          dates: [],
+          values: []
+        };
       }
-      
-      grouped[groupKey].values.push((item[valueField] as number) || 0);
+
       grouped[groupKey].dates.push(item[dateField] as string);
+      grouped[groupKey].values.push(Number(item[valueField]) || 0);
     });
 
     // 그룹별 합계 또는 평균값 계산하여 차트 데이터 생성
@@ -226,9 +211,8 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // 주별/월별 차트의 경우 최근 데이터만 표시 (너무 많으면 차트가 복잡해짐)
-    const maxDataPoints = period === 'day' ? 30 : period === 'week' ? 12 : period === 'month' ? 12 : 5;
-    return result.slice(-maxDataPoints);
+    console.log(`📊 [${period}] 데이터 처리 결과:`, result);
+    return result;
   }, [formatDateForChart]);
 
   // ✨ 백엔드 차트 데이터 우선 사용, 없으면 기존 로직으로 폴백
@@ -239,63 +223,106 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     if (healthStatistics?.healthChartData || healthStatistics?.exerciseChartData) {
       console.log('✨ Using backend chart data from HealthStatistics API');
       
-      const backendHealthData = healthStatistics.healthChartData || [];
-      const backendExerciseData = healthStatistics.exerciseChartData || [];
+      const backendHealthData = (healthStatistics.healthChartData || []) as BackendHealthDataItem[];
+      const backendExerciseData = (healthStatistics.exerciseChartData || []) as BackendExerciseDataItem[];
       
-      // 백엔드 데이터를 프론트엔드 차트 형식으로 변환
-      const weightData = backendHealthData
-        .filter((item: any) => item.weight !== null)
-        .map((item: any) => ({
-          date: item.date,
-          value: item.weight,
-          displayDate: formatDateForChart(item.date, period)
-        }));
+      // 기간별 최대 데이터 포인트 수를 반환하는 함수
+      function getMaxDataPoints(chartPeriod: string) {
+        switch (chartPeriod) {
+          case 'day':
+            return 7;  // 일별 7일
+          case 'week':
+            return 6;  // 주별 6주
+          case 'month':
+            return 6;  // 월별 6개월
+          default:
+            return 7;
+        }
+      }
+
+      // 데이터 정렬 및 필터링 함수
+      function processDataPoints<T extends { date: string }>(
+        data: T[],
+        valueField: keyof T,
+        maxPoints: number
+      ) {
+        const now = new Date();
+        let startDate: Date;
         
-      const bmiData = backendHealthData
-        .filter((item: any) => item.bmi !== null)
-        .map((item: any) => ({
-          date: item.date,
-          value: item.bmi,
-          displayDate: formatDateForChart(item.date, period)
-        }));
-        
-      const exerciseChartData = backendExerciseData.map((item: any) => ({
-        date: item.date,
-        value: item.duration_minutes || 0,
-        displayDate: formatDateForChart(item.date, period),
-        calories: item.calories_burned || 0
-      }));
-      
-      // 통계 계산
-      const avgWeight = weightData.length > 0 
-        ? weightData.reduce((sum, item) => sum + item.value, 0) / weightData.length 
-        : healthStatistics.currentWeight || 0;
-      
-      const avgBMI = bmiData.length > 0 
-        ? bmiData.reduce((sum, item) => sum + item.value, 0) / bmiData.length 
-        : healthStatistics.currentBMI || 0;
-      
-      const totalExerciseTime = exerciseChartData.reduce((sum, item) => sum + item.value, 0);
-      
-      console.log('📊 Backend chart data processed:', {
+        // 기간별 시작 날짜 계산
+        switch (period) {
+          case 'day':
+            startDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); // 7일 전
+            break;
+          case 'week':
+            startDate = new Date(now.getTime() - 5 * 7 * 24 * 60 * 60 * 1000); // 6주 전
+            break;
+          case 'month':
+            startDate = new Date(now.getTime() - 5 * 30 * 24 * 60 * 60 * 1000); // 6개월 전
+            break;
+          default:
+            startDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+        }
+
+        return data
+          .filter(item => new Date(item.date) >= startDate) // 시작 날짜 이후 데이터만 필터링
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // 과거에서 최신 순으로 정렬
+          .slice(-maxPoints) // 최대 포인트 수만큼 최신 데이터 선택
+          .map(item => ({
+            date: item.date,
+            value: Number(item[valueField]),
+            displayDate: formatDateForChart(item.date, period)
+          }));
+      }
+
+      const maxPoints = getMaxDataPoints(period);
+
+      // 체중 데이터 처리
+      const weightData = processDataPoints(
+        backendHealthData.filter(item => item.weight !== null),
+        'weight',
+        maxPoints
+      );
+
+      // BMI 데이터 처리
+      const bmiData = processDataPoints(
+        backendHealthData.filter(item => item.bmi !== null),
+        'bmi',
+        maxPoints
+      );
+
+      // 운동 데이터 처리
+      const exerciseData = processDataPoints(
+        backendExerciseData.filter(item => item.duration_minutes !== null),
+        'duration_minutes',
+        maxPoints
+      );
+
+      const avgWeight = weightData.length > 0
+        ? weightData.reduce((sum, item) => sum + item.value, 0) / weightData.length
+        : 0;
+
+      const avgBMI = bmiData.length > 0
+        ? bmiData.reduce((sum, item) => sum + item.value, 0) / bmiData.length
+        : 0;
+
+      console.log(`📊 Backend chart data processed for ${period}:`, {
         weightData: weightData.length,
         bmiData: bmiData.length,
-        exerciseData: exerciseChartData.length,
+        exerciseData: exerciseData.length,
+        maxPoints,
         avgWeight,
         avgBMI,
-        totalExerciseTime
       });
-      
+
       return {
         weight: weightData,
         bmi: bmiData,
-        exercise: exerciseChartData,
+        exercise: exerciseData,
         stats: {
-          avgWeight: Number(avgWeight.toFixed(1)),
-          avgBMI: Number(avgBMI.toFixed(1)),
-          totalExerciseTime: Number(totalExerciseTime.toFixed(0)),
-          weightTrend: healthStatistics.weightChange || 0,
-          bmiTrend: healthStatistics.bmiChange || 0
+          avgWeight: Number(avgWeight.toFixed(2)),
+          avgBMI: Number(avgBMI.toFixed(2)),
+          totalExerciseTime: exerciseData.reduce((sum, item) => sum + item.value, 0)
         }
       };
     }
@@ -324,7 +351,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     // Period별 데이터 그룹핑 사용 (기존 로직)
     const weightData = groupDataByPeriod(safeHealthRecords, period, 'record_date', 'weight');
     const bmiData = groupDataByPeriod(safeHealthRecords, period, 'record_date', 'bmi');
-    const exerciseChartData = groupDataByPeriod(safeExerciseData, period, 'exercise_date', 'duration_minutes');
+    const fallbackExerciseData = groupDataByPeriod(safeExerciseData, period, 'exercise_date', 'duration_minutes');
 
     const avgWeight = weightData.length > 0 
       ? weightData.reduce((sum, item) => sum + item.value, 0) / weightData.length 
@@ -334,12 +361,12 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
       ? bmiData.reduce((sum, item) => sum + item.value, 0) / bmiData.length 
       : 0;
     
-    const totalExerciseTime = exerciseChartData.reduce((sum, item) => sum + item.value, 0);
+    const totalExerciseTime = fallbackExerciseData.reduce((sum, item) => sum + item.value, 0);
 
     return {
       weight: weightData,
       bmi: bmiData,
-      exercise: exerciseChartData,
+      exercise: fallbackExerciseData,
       stats: {
         avgWeight: Number(avgWeight.toFixed(1)),
         avgBMI: Number(avgBMI.toFixed(1)),
@@ -622,7 +649,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-purple-600" />
               <h3 className="text-lg font-semibold text-gray-900">
-                {getChartTitle('일일 운동 시간', period)}
+                {getChartTitle('운동 시간', period)}
               </h3>
             </div>
             <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -633,7 +660,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
           
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData.exercise}>
+              <LineChart data={chartData.exercise}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis 
                   dataKey="displayDate" 
@@ -643,22 +670,34 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
                 <YAxis 
                   stroke="#6b7280"
                   fontSize={12}
+                  domain={[0, 'dataMax + 30']}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <ReferenceLine 
                   y={30} 
                   stroke="#8b5cf6" 
                   strokeDasharray="5 5"
-                  label={{ value: "권장 시간", position: "insideTopRight" }}
+                  label={{ value: "일일 권장 시간", position: "insideTopRight" }}
                 />
-                <Bar
+                {period === 'week' && (
+                  <ReferenceLine 
+                    y={720 / 7} // 주간 목표를 일평균으로 변환
+                    stroke="#4c1d95" 
+                    strokeDasharray="5 5"
+                    label={{ value: "주간 목표 (일평균)", position: "insideTopLeft" }}
+                  />
+                )}
+                <Line
+                  type="monotone"
                   dataKey="value"
-                  fill="url(#exerciseGradient)"
-                  radius={[4, 4, 0, 0]}
+                  stroke="#8b5cf6"
+                  strokeWidth={3}
+                  dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                  activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2 }}
                   name="운동 시간"
                   unit="분"
                 />
-              </BarChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
           

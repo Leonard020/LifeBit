@@ -54,14 +54,14 @@ output "ssh_connection" {
 
 # 애플리케이션 접속 URLs
 output "application_urls" {
-  description = "애플리케이션 접속 URLs"
+  description = "애플리케이션 접속 URL 모음"
   value = {
     frontend    = "http://${aws_eip.web.public_ip}:3000"
     spring_api  = "http://${aws_eip.web.public_ip}:8080"
     fastapi     = "http://${aws_eip.web.public_ip}:8001"
     nginx_proxy = "http://${aws_eip.web.public_ip}:8082"
-    grafana     = "http://${aws_eip.web.public_ip}:3001"
-    prometheus  = "http://${aws_eip.web.public_ip}:9090"
+    grafana     = "http://localhost:3001"
+    prometheus  = "http://localhost:9090"
     airflow     = "http://${aws_eip.web.public_ip}:8081"
   }
 }
@@ -90,8 +90,8 @@ output "deployment_guide" {
 - Spring API:   http://${aws_eip.web.public_ip}:8080
 - FastAPI:      http://${aws_eip.web.public_ip}:8001
 - Nginx Proxy:  http://${aws_eip.web.public_ip}:8082
-- Grafana:      http://${aws_eip.web.public_ip}:3001
-- Prometheus:   http://${aws_eip.web.public_ip}:9090
+- Grafana:      http://localhost:3001
+- Prometheus:   http://localhost:9090
 - Airflow:      http://${aws_eip.web.public_ip}:8081
 
 🔧 다음 단계:
