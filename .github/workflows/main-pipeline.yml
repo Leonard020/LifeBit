@@ -1,12 +1,22 @@
-name: Deploy to AWS EC2
+name: Main Pipeline (Deploy / Destroy)
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform: "deploy" to start/update, "destroy" to stop.'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - destroy
+        default: 'deploy'
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     
     steps:
@@ -16,7 +26,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.5.0 # 최신 버전 사용 가능
+          terraform_version: 1.5.0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -26,30 +36,33 @@ jobs:
           aws-region: ap-northeast-2
 
       - name: Terraform Init
-        id: init
         run: terraform init
         working-directory: ./infrastructure/terraform
 
-      - name: Terraform Apply
-        id: apply
+      # --- DEPLOY STEPS (Start/Update Server) ---
+      - name: Terraform Apply (Start Server)
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: terraform apply -auto-approve
         working-directory: ./infrastructure/terraform
 
       - name: Get instance public IP
-        id: get_ip
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
         working-directory: ./infrastructure/terraform
 
       - name: Set up SSH key
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/lifebit-key.pem
           chmod 600 ~/.ssh/lifebit-key.pem
 
       - name: Update Ansible inventory
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: echo "[servers]\n${{ env.INSTANCE_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/lifebit-key.pem" > infrastructure/ansible/inventory
         
       - name: Wait for SSH to be available
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: |
           for i in {1..30}; do
             if ssh -o StrictHostKeyChecking=no -i ~/.ssh/lifebit-key.pem ubuntu@${{ env.INSTANCE_IP }} 'echo "SSH is ready"'; then
@@ -60,17 +73,24 @@ jobs:
           done
 
       - name: Install Ansible
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: |
           python -m pip install --upgrade pip
           pip install ansible
 
       - name: Run Ansible Playbook
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
         run: ansible-playbook playbook.yml
         working-directory: ./infrastructure/ansible
         env:
-          # Pass secrets from GitHub to the Ansible environment
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }} 
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+
+      # --- DESTROY STEP (Stop Server) ---
+      - name: Terraform Destroy (Stop Server)
+        if: github.event.inputs.action == 'destroy'
+        run: terraform destroy -auto-approve
+        working-directory: ./infrastructure/terraform 
