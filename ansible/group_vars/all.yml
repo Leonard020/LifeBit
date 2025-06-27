@@ -1,8 +1,8 @@
 ---
 # 프로젝트 기본 설정
 project_name: "lifebit"
-project_path: "/opt/lifebit"
-remote_app_dir: "/opt/lifebit"
+project_path: "/srv/lifebit"
+remote_app_dir: "/srv/lifebit"
 
 # 클라우드 프로바이더 설정
 cloud_provider: "aws"

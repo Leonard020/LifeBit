@@ -90,8 +90,55 @@
           - python3-pip
           - python3-dev
           - python3-setuptools
+          - python3-venv
+          - build-essential
         state: present
       tags: [system]
+
+    # ================================================
+    # Python 3.11 설치 (프로젝트 요구사항)
+    # ================================================
+    - name: Python 3.11 저장소 추가
+      apt_repository:
+        repo: "ppa:deadsnakes/ppa"
+        state: present
+      tags: [python]
+
+    - name: Python 3.11 설치
+      apt:
+        name:
+          - python3.11
+          - python3.11-dev
+          - python3.11-venv
+          - python3.11-pip
+        state: present
+        update_cache: yes
+      tags: [python]
+
+    - name: Python 3.11을 기본 Python3로 설정
+      alternatives:
+        name: python3
+        path: /usr/bin/python3.11
+        priority: 100
+      tags: [python]
+
+    - name: pip3를 Python 3.11용으로 업데이트
+      pip:
+        name: pip
+        state: latest
+        executable: pip3
+      tags: [python]
+
+    - name: Python 3.11 설치 확인
+      command: python3 --version
+      register: python_version
+      changed_when: false
+      tags: [python]
+
+    - name: Python 3.11 버전 출력
+      debug:
+        msg: "설치된 Python 버전: {{ python_version.stdout }}"
+      tags: [python]
 
     # ================================================
     # 2. Docker 설치
@@ -301,8 +348,18 @@
       wait_for:
         host: "127.0.0.1"
         port: 5432
-        timeout: 120
-        delay: 10
+        timeout: 180
+        delay: 15
+      tags: [database]
+
+    - name: PostgreSQL 연결 테스트
+      shell: |
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db pg_isready -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }}
+      register: db_connection_test
+      retries: 10
+      delay: 10
+      until: db_connection_test.rc == 0
       tags: [database]
 
     - name: LifeBit.sql 파일을 서버로 복사
@@ -312,19 +369,44 @@
         mode: '0644'
       tags: [database]
 
+    - name: 기존 데이터베이스 스키마 확인
+      shell: |
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db psql -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }} -c "\dt" | grep -q "users"
+      register: schema_check
+      ignore_errors: yes
+      tags: [database]
+
     - name: PostgreSQL DB 초기화 (LifeBit.sql 실행)
       shell: |
         cd /srv/{{ project_name }}
-        docker compose exec -T postgres-db psql -U {{ postgres_user | default('lifebit_user') }} -d {{ postgres_db | default('lifebit_db') }} < /srv/{{ project_name }}/LifeBit.sql
+        if [ "{{ schema_check.rc }}" != "0" ]; then
+          echo "데이터베이스 스키마가 없습니다. LifeBit.sql을 실행합니다..."
+          docker compose exec -T postgres-db psql -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }} < /srv/{{ project_name }}/LifeBit.sql
+          echo "LifeBit.sql 실행 완료"
+        else
+          echo "데이터베이스 스키마가 이미 존재합니다. 초기화를 건너뜁니다."
+        fi
       args:
         chdir: "/srv/{{ project_name }}"
       register: db_init_result
-      failed_when: db_init_result.rc != 0
       tags: [database]
 
     - name: DB 초기화 결과 출력
       debug:
         var: db_init_result.stdout_lines
+      tags: [database]
+
+    - name: 데이터베이스 테이블 확인
+      shell: |
+        cd /srv/{{ project_name }}
+        docker compose exec -T postgres-db psql -U {{ POSTGRES_USER }} -d {{ POSTGRES_DB }} -c "\dt"
+      register: db_tables_check
+      tags: [database]
+
+    - name: 데이터베이스 테이블 목록 출력
+      debug:
+        var: db_tables_check.stdout_lines
       tags: [database]
 
     # ================================================

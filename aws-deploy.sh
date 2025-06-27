@@ -282,16 +282,26 @@ save_ssh_key() {
     # SSH 디렉토리 생성
     mkdir -p ~/.ssh
     
+    # 실제 키페어 이름 가져오기
+    KEY_NAME=$(terraform output -raw ssh_key_name 2>/dev/null)
+    if [[ -z "$KEY_NAME" ]]; then
+        log_error "SSH 키페어 이름을 가져올 수 없습니다."
+        cleanup_on_failure "ssh_key_name_fetch"
+    fi
+    
+    SSH_KEY_FILE="~/.ssh/${KEY_NAME}.pem"
+    log_info "SSH 키 파일: $SSH_KEY_FILE"
+    
     # 기존 SSH 키 백업
-    if [[ -f ~/.ssh/lifebit.pem ]]; then
-        cp ~/.ssh/lifebit.pem ~/.ssh/lifebit.pem.backup.$(date +%Y%m%d_%H%M%S)
+    if [[ -f ~/.ssh/${KEY_NAME}.pem ]]; then
+        cp ~/.ssh/${KEY_NAME}.pem ~/.ssh/${KEY_NAME}.pem.backup.$(date +%Y%m%d_%H%M%S)
         log_info "기존 SSH 키 백업 완료"
     fi
     
     # SSH 키 추출 및 저장
-    if terraform output -raw ssh_private_key > ~/.ssh/lifebit.pem; then
-        chmod 600 ~/.ssh/lifebit.pem
-        log_success "SSH 키 저장 완료: ~/.ssh/lifebit.pem"
+    if terraform output -raw ssh_private_key > ~/.ssh/${KEY_NAME}.pem; then
+        chmod 600 ~/.ssh/${KEY_NAME}.pem
+        log_success "SSH 키 저장 완료: ~/.ssh/${KEY_NAME}.pem"
     else
         log_error "SSH 키 저장 실패"
         cleanup_on_failure "ssh_key_save"
@@ -308,7 +318,7 @@ update_inventory() {
         return 0
     fi
     
-    log_info "Ansible inventory 업데이트 중..."
+    log_info "Ansible inventory 확인 중..."
     
     cd "$SCRIPT_DIR/infrastructure"
     
@@ -324,14 +334,21 @@ update_inventory() {
     
     cd "$SCRIPT_DIR"
     
-    # inventory.ini를 항상 최신 PUBLIC_IP로 덮어쓰기
-    cat > ansible/inventory.ini << EOF
+    # 테라폼에서 자동 생성된 inventory 파일 확인
+    if [[ -f "ansible/inventory.ini" ]]; then
+        log_info "테라폼에서 자동 생성된 inventory 파일 발견"
+        log_success "Ansible inventory 준비 완료"
+    else
+        log_warning "자동 생성된 inventory 파일이 없습니다. 수동으로 생성합니다."
+        # 수동으로 inventory 생성 (백업용)
+        KEY_NAME=$(cd infrastructure && terraform output -raw ssh_key_name 2>/dev/null)
+        cat > ansible/inventory.ini << EOF
 [lifebit_servers]
-$PUBLIC_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/lifebit.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+$PUBLIC_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/${KEY_NAME}.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 EOF
-    log_success "inventory.ini 덮어쓰기 완료: $PUBLIC_IP"
+        log_success "inventory.ini 수동 생성 완료: $PUBLIC_IP"
+    fi
     
-    log_success "Ansible inventory 업데이트 완료"
     create_checkpoint "inventory_update"
 }
 
@@ -344,6 +361,7 @@ wait_for_ssh_ready() {
     
     log_info "EC2 SSH 연결 대기 중... (최대 10분)"
     PUBLIC_IP=$(cd infrastructure && terraform output -raw public_ip)
+    KEY_NAME=$(cd infrastructure && terraform output -raw ssh_key_name)
     
     # 기존 호스트 키 제거 (호스트 키 충돌 방지)
     ssh-keygen -R "$PUBLIC_IP" 2>/dev/null || true
@@ -351,7 +369,7 @@ wait_for_ssh_ready() {
     local max_attempts=40  # 40 * 15초 = 10분
     local attempt=1
     while (( attempt <= max_attempts )); do
-        if timeout 20 ssh -i ~/.ssh/lifebit.pem \
+        if timeout 20 ssh -i ~/.ssh/${KEY_NAME}.pem \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=15 \
             -o UserKnownHostsFile=/dev/null \
@@ -359,7 +377,7 @@ wait_for_ssh_ready() {
             log_success "SSH 연결 성공 (시도: $attempt)"
             
             log_info "서버 초기화(cloud-init) 완료 대기 중... (최대 5분)"
-            if timeout 300 ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" 'cloud-init status --wait' 2>/dev/null; then
+            if timeout 300 ssh -i ~/.ssh/${KEY_NAME}.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" 'cloud-init status --wait' 2>/dev/null; then
                 log_success "서버 초기화 완료."
                 create_checkpoint "ssh_ready"
                 return 0
@@ -379,8 +397,8 @@ wait_for_ssh_ready() {
     log_error "10분 내 SSH 연결 실패"
     log_info "다음을 확인하세요:"
     log_info "1. EC2 인스턴스 상태: aws ec2 describe-instances --instance-ids \$(cd infrastructure && terraform output -raw server_id)"
-    log_info "2. SSH 키 권한: ls -la ~/.ssh/lifebit.pem"
-    log_info "3. 수동 SSH 접속: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP"
+    log_info "2. SSH 키 권한: ls -la ~/.ssh/${KEY_NAME}.pem"
+    log_info "3. 수동 SSH 접속: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP"
     cleanup_on_failure "ssh_connection_timeout"
 }
 
@@ -394,6 +412,7 @@ update_docker_compose() {
     log_info "Docker Compose 최신 버전으로 업데이트 중..."
     
     PUBLIC_IP=$(cd infrastructure && terraform output -raw public_ip)
+    KEY_NAME=$(cd infrastructure && terraform output -raw ssh_key_name)
     
     # 여러 Docker Compose 다운로드 미러 시도
     local compose_urls=(
@@ -404,7 +423,7 @@ update_docker_compose() {
     for url in "${compose_urls[@]}"; do
         log_info "Docker Compose 다운로드 시도: $url"
         
-        if ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" << EOF
+        if ssh -i ~/.ssh/${KEY_NAME}.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" << EOF
             set -e
             
             # 기존 docker-compose 제거
@@ -457,12 +476,13 @@ deploy_application() {
     # SSH 연결 테스트
     log_info "SSH 연결 테스트 중..."
     PUBLIC_IP=$(cd infrastructure && terraform output -raw public_ip)
+    KEY_NAME=$(cd infrastructure && terraform output -raw ssh_key_name)
     
-    if timeout 15 ssh -i ~/.ssh/lifebit.pem -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "echo 'SSH 연결 성공'" 2>/dev/null; then
+    if timeout 15 ssh -i ~/.ssh/${KEY_NAME}.pem -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "echo 'SSH 연결 성공'" 2>/dev/null; then
         log_success "SSH 연결 확인 완료"
     else
         log_error "SSH 연결 실패"
-        log_info "수동으로 SSH 접속을 시도해보세요: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP"
+        log_info "수동으로 SSH 접속을 시도해보세요: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP"
         exit 1
     fi
     
@@ -480,7 +500,7 @@ deploy_application() {
         # 배포 전 원격 서버 상태 확인 및 정리
         if (( retry > 1 )); then
             log_info "재시도 전 원격 서버 정리 중..."
-            ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "
+            ssh -i ~/.ssh/${KEY_NAME}.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" "
                 echo '=== 시스템 상태 확인 ==='
                 df -h /
                 free -h
@@ -531,9 +551,10 @@ manual_docker_deploy() {
     log_info "단계별 Docker 배포 시작 (용량 부족 방지)..."
     
     PUBLIC_IP=$(cd infrastructure && terraform output -raw public_ip)
+    KEY_NAME=$(cd infrastructure && terraform output -raw ssh_key_name)
     
     # 서버에서 단계별 Docker 빌드 및 배포
-    if ssh -i ~/.ssh/lifebit.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" << 'EOF'
+    if ssh -i ~/.ssh/${KEY_NAME}.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$PUBLIC_IP" << 'EOF'
         set -e
         
         echo "=== 시스템 상태 확인 ==="
@@ -545,9 +566,9 @@ manual_docker_deploy() {
         sudo systemctl status docker --no-pager -l || echo "Docker 서비스 확인 필요"
         
         echo "=== 애플리케이션 디렉토리로 이동 ==="
-        cd /opt/lifebit || {
+        cd /srv/lifebit || {
             echo "애플리케이션 디렉토리를 찾을 수 없습니다"
-            ls -la /opt/ || true
+            ls -la /srv/ || true
             exit 1
         }
         
@@ -662,8 +683,8 @@ EOF
     else
         log_error "단계별 Docker 배포 실패"
         log_info "수동 배포 가이드:"
-        log_info "1. SSH 접속: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP"
-        log_info "2. 애플리케이션 디렉토리: cd /opt/lifebit"
+        log_info "1. SSH 접속: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP"
+        log_info "2. 애플리케이션 디렉토리: cd /srv/lifebit"
         log_info "3. Docker 상태 확인: sudo docker ps"
         log_info "4. 서비스 재시작: sudo /usr/local/bin/docker-compose restart"
         exit 1
@@ -695,8 +716,9 @@ cleanup_on_failure() {
     fi
     
     # SSH 키 정리
-    if [[ -f ~/.ssh/lifebit.pem ]]; then
-        rm -f ~/.ssh/lifebit.pem*
+    KEY_NAME=$(cd infrastructure && terraform output -raw ssh_key_name 2>/dev/null)
+    if [[ -n "$KEY_NAME" && -f ~/.ssh/${KEY_NAME}.pem ]]; then
+        rm -f ~/.ssh/${KEY_NAME}.pem*
         log_info "SSH 키 정리 완료"
     fi
     
@@ -717,11 +739,12 @@ show_deployment_info() {
     cd "$SCRIPT_DIR/infrastructure"
     
     local PUBLIC_IP=$(terraform output -raw public_ip 2>/dev/null)
+    local KEY_NAME=$(terraform output -raw ssh_key_name 2>/dev/null)
     
     echo
     log_info "📋 배포 정보:"
     echo "서버 IP: $PUBLIC_IP"
-    echo "SSH 접속: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP"
+    echo "SSH 접속: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP"
     
     echo
     log_info "🌐 애플리케이션 URLs:"
@@ -743,9 +766,9 @@ show_deployment_info() {
     
     echo
     log_info "🔧 관리 명령어:"
-    echo "서비스 상태 확인: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP 'sudo docker ps'"
-    echo "로그 확인: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP 'cd /opt/lifebit/app && sudo /usr/local/bin/docker-compose logs'"
-    echo "서비스 재시작: ssh -i ~/.ssh/lifebit.pem ubuntu@$PUBLIC_IP 'cd /opt/lifebit/app && sudo /usr/local/bin/docker-compose restart'"
+    echo "서비스 상태 확인: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP 'sudo docker ps'"
+    echo "로그 확인: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP 'cd /srv/lifebit && sudo /usr/local/bin/docker-compose logs'"
+    echo "서비스 재시작: ssh -i ~/.ssh/${KEY_NAME}.pem ubuntu@$PUBLIC_IP 'cd /srv/lifebit && sudo /usr/local/bin/docker-compose restart'"
     
     echo
     log_info "🔄 재배포 명령어:"
