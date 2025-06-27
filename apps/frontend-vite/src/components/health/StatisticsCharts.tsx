@@ -121,7 +121,8 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
       case 'day':
         return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
       case 'week':
-        return `${date.getMonth() + 1}/${date.getDate()}`;
+        // 주별의 경우 이미 groupDataByPeriod에서 적절한 형식으로 처리됨
+        return dateStr.includes('~') ? dateStr : `${date.getMonth() + 1}/${date.getDate()}`;
       case 'month':
         return date.toLocaleDateString('ko-KR', { month: 'short' });
       case 'year':
@@ -131,102 +132,304 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
     }
   }, []);
 
-  // 데이터 그룹핑 함수
+  // 데이터 그룹핑 함수 (Forward Fill 로직 포함)
   const groupDataByPeriod = useCallback((data: Record<string, unknown>[], period: 'day' | 'week' | 'month' | 'year', dateField: string, valueField: string) => {
     if (!Array.isArray(data)) return [];
 
-    // 현재 날짜 기준으로 기간별 시작일/종료일 계산
+    // 현재 날짜 기준으로 기간별 데이터 생성
     const today = new Date();
-    const startDate = new Date();
-    switch (period) {
-      case 'day':
-        startDate.setDate(today.getDate() - 7); // 최근 7일
-        break;
-      case 'week':
-        startDate.setDate(today.getDate() - 28); // 최근 4주
-        break;
-      case 'month':
-        startDate.setMonth(today.getMonth() - 6); // 최근 6개월
-        break;
-      case 'year':
-        startDate.setFullYear(today.getFullYear() - 1); // 최근 1년
-        break;
-    }
+    const result: Array<{ date: string; value: number; displayDate: string; count: number }> = [];
 
-    // 데이터 필터링 및 그룹핑
-    const filteredData = data
-      .sort((a, b) => new Date(b[dateField] as string).getTime() - new Date(a[dateField] as string).getTime()) // 최신 데이터부터 정렬
-      .slice(0, period === 'day' ? 7 : period === 'week' ? 6 : 6) // 일별 7일, 주별 6주, 월별 6개월
-      .reverse() // 다시 오름차순으로
-      .filter(item => {
-        const itemDate = new Date(item[dateField] as string);
-        return itemDate >= startDate && itemDate <= today;
-      });
-
-    // 날짜별 그룹핑
-    const grouped: Record<string, { dates: string[]; values: number[] }> = {};
-    
-    filteredData.forEach(item => {
-      const date = new Date(item[dateField] as string);
-      let groupKey: string;
-      
-      if (period === 'week') {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        groupKey = weekStart.toISOString().split('T')[0];
-      } else if (period === 'month') {
-        groupKey = date.toISOString().slice(0, 7); // YYYY-MM
-      } else if (period === 'year') {
-        groupKey = date.getFullYear().toString();
-      } else {
-        groupKey = date.toISOString().split('T')[0];
-      }
-
-      if (!grouped[groupKey]) {
-        grouped[groupKey] = {
-          dates: [],
-          values: []
-        };
-      }
-
-      grouped[groupKey].dates.push(item[dateField] as string);
-      grouped[groupKey].values.push(Number(item[valueField]) || 0);
+    // 입력 데이터를 날짜별로 정렬
+    const sortedData = data.sort((a, b) => {
+      const dateA = new Date(a[dateField] as string);
+      const dateB = new Date(b[dateField] as string);
+      return dateA.getTime() - dateB.getTime();
     });
 
-    // 그룹별 합계 또는 평균값 계산하여 차트 데이터 생성
-    const result = Object.entries(grouped)
-      .map(([key, group]) => {
-        // 운동 시간은 합계, 체중/BMI는 평균
-        const isExerciseData = valueField === 'duration_minutes';
-        const value = isExerciseData 
-          ? group.values.reduce((sum, val) => sum + val, 0) // 합계
-          : group.values.reduce((sum, val) => sum + val, 0) / group.values.length; // 평균
+    // 🔍 Forward Fill을 위한 초기값 설정: 가장 최근의 유효한 과거 데이터 찾기
+    let lastValidValue: number | null = null;
+    
+    // 표시 기간 시작일 계산
+    let periodStartDate: Date;
+    if (period === 'day') {
+      periodStartDate = new Date(today);
+      periodStartDate.setDate(today.getDate() - 6); // 7일 전
+    } else if (period === 'week') {
+      periodStartDate = new Date(today);
+      periodStartDate.setDate(today.getDate() - (5 * 7)); // 6주 전
+    } else {
+      periodStartDate = new Date(today.getFullYear(), today.getMonth() - 5, 1); // 6개월 전
+    }
+    
+    // 표시 기간 이전의 데이터에서 가장 최근 유효값 찾기
+    const pastData = sortedData.filter(item => {
+      const itemDate = new Date(item[dateField] as string);
+      return itemDate < periodStartDate;
+    });
+    
+    if (pastData.length > 0) {
+      // 가장 최근의 과거 데이터에서 유효값 추출
+      for (let i = pastData.length - 1; i >= 0; i--) {
+        const val = Number(pastData[i][valueField]);
+        if (!isNaN(val) && val > 0) {
+          lastValidValue = val;
+          console.log(`🔍 [${period}] 과거 데이터에서 초기값 설정: ${lastValidValue} (날짜: ${pastData[i][dateField]})`);
+          break;
+        }
+      }
+    }
+
+    if (period === 'day') {
+      // 일별: 최근 7일 (오늘 포함)
+      for (let i = 6; i >= 0; i--) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() - i);
+        const dateKey = targetDate.toISOString().split('T')[0];
         
-        return {
-          date: key,
-          value: Number(value.toFixed(2)),
-          displayDate: formatDateForChart(group.dates[0], period),
-          count: group.values.length // 해당 기간의 데이터 개수
-        };
-      })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        // 해당 날짜의 데이터 찾기
+        const dayData = sortedData.filter(item => {
+          const itemDate = new Date(item[dateField] as string);
+          return itemDate.toISOString().split('T')[0] === dateKey;
+        });
+        
+        let value = 0;
+        if (dayData.length > 0) {
+          // 데이터가 있는 경우: 평균값 계산 후 lastValidValue 업데이트
+          const sum = dayData.reduce((acc, item) => {
+            const val = Number(item[valueField]);
+            return acc + (isNaN(val) ? 0 : val);
+          }, 0);
+          value = dayData.length > 0 ? sum / dayData.length : 0;
+          if (value > 0) {
+            lastValidValue = value;
+          }
+        } else if (lastValidValue !== null) {
+          // 데이터가 없는 경우: 직전 유효 값 사용 (Forward Fill)
+          value = lastValidValue;
+        }
+        
+        result.push({
+          date: dateKey,
+          value: Math.round(value * 100) / 100,
+          displayDate: targetDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+          count: dayData.length
+        });
+      }
+    } else if (period === 'week') {
+      // 주별: 최근 6주 (이번 주 포함)
+      for (let i = 5; i >= 0; i--) {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(today.getDate() - (i * 7));
+        
+        // 주의 시작일 (일요일)
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekEnd.getDate() - weekEnd.getDay());
+        
+        // 주의 종료일 (토요일)
+        const actualWeekEnd = new Date(weekStart);
+        actualWeekEnd.setDate(weekStart.getDate() + 6);
 
-    console.log(`📊 [${period}] 데이터 처리 결과:`, result);
+        // 해당 주의 데이터 찾기
+        const weekData = sortedData.filter(item => {
+          const itemDate = new Date(item[dateField] as string);
+          return itemDate >= weekStart && itemDate <= actualWeekEnd;
+        });
+        
+        let value = 0;
+        if (weekData.length > 0) {
+          // 데이터가 있는 경우: 평균값 계산 후 lastValidValue 업데이트
+          const sum = weekData.reduce((acc, item) => {
+            const val = Number(item[valueField]);
+            return acc + (isNaN(val) ? 0 : val);
+          }, 0);
+          value = weekData.length > 0 ? sum / weekData.length : 0;
+          if (value > 0) {
+            lastValidValue = value;
+          }
+        } else if (lastValidValue !== null) {
+          // 데이터가 없는 경우: 직전 유효 값 사용 (Forward Fill)
+          value = lastValidValue;
+        }
+        
+        const weekStartStr = `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
+        const weekEndStr = `${actualWeekEnd.getMonth() + 1}/${actualWeekEnd.getDate()}`;
+        
+        result.push({
+          date: weekStart.toISOString().split('T')[0],
+          value: Math.round(value * 100) / 100,
+          displayDate: `${weekStartStr}~${weekEndStr}`,
+          count: weekData.length
+        });
+      }
+    } else if (period === 'month') {
+      // 월별: 최근 6개월 (이번 달 포함)
+      for (let i = 5; i >= 0; i--) {
+        const targetDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const nextMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+        
+        // 해당 월의 데이터 찾기
+        const monthData = sortedData.filter(item => {
+          const itemDate = new Date(item[dateField] as string);
+          return itemDate.getFullYear() === targetDate.getFullYear() && 
+                 itemDate.getMonth() === targetDate.getMonth();
+        });
+        
+        let value = 0;
+        if (monthData.length > 0) {
+          // 데이터가 있는 경우: 평균값 계산 후 lastValidValue 업데이트
+          const sum = monthData.reduce((acc, item) => {
+            const val = Number(item[valueField]);
+            return acc + (isNaN(val) ? 0 : val);
+          }, 0);
+          value = monthData.length > 0 ? sum / monthData.length : 0;
+          if (value > 0) {
+            lastValidValue = value;
+          }
+        } else if (lastValidValue !== null) {
+          // 데이터가 없는 경우: 직전 유효 값 사용 (Forward Fill)
+          value = lastValidValue;
+        }
+        
+        result.push({
+          date: targetDate.toISOString().split('T')[0],
+          value: Math.round(value * 100) / 100,
+          displayDate: targetDate.toLocaleDateString('ko-KR', { month: 'short' }),
+          count: monthData.length
+        });
+      }
+    }
+
+    console.log(`📊 [${period}] Forward Fill 적용 결과:`, result.map(r => ({ date: r.displayDate, value: r.value, hasData: r.count > 0 })));
     return result;
-  }, [formatDateForChart]);
+  }, []);
 
-  // ✨ 백엔드 차트 데이터 우선 사용, 없으면 기존 로직으로 폴백
+  // 운동 데이터 전용 그룹핑 함수 (합계 기반)
+  const groupExerciseDataByPeriod = useCallback((data: Record<string, unknown>[], period: 'day' | 'week' | 'month' | 'year', dateField: string, valueField: string) => {
+    if (!Array.isArray(data)) return [];
+
+    const today = new Date();
+    const result: Array<{ date: string; value: number; displayDate: string; count: number }> = [];
+
+    // 입력 데이터를 날짜별로 정렬
+    const sortedData = data.sort((a, b) => {
+      const dateA = new Date(a[dateField] as string);
+      const dateB = new Date(b[dateField] as string);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    if (period === 'day') {
+      // 일별: 최근 7일 (오늘 포함)
+      for (let i = 6; i >= 0; i--) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() - i);
+        const dateKey = targetDate.toISOString().split('T')[0];
+        
+        // 해당 날짜의 데이터 찾기
+        const dayData = sortedData.filter(item => {
+          const itemDate = new Date(item[dateField] as string);
+          return itemDate.toISOString().split('T')[0] === dateKey;
+        });
+        
+        // 운동 시간은 합계로 계산
+        const value = dayData.reduce((acc, item) => {
+          const val = Number(item[valueField]);
+          return acc + (isNaN(val) ? 0 : val);
+        }, 0);
+        
+        result.push({
+          date: dateKey,
+          value: value,
+          displayDate: targetDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+          count: dayData.length
+        });
+      }
+    } else if (period === 'week') {
+      // 주별: 최근 6주 (이번 주 포함)
+      for (let i = 5; i >= 0; i--) {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(today.getDate() - (i * 7));
+        
+        // 주의 시작일 (일요일)
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekEnd.getDate() - weekEnd.getDay());
+        
+        // 주의 종료일 (토요일)
+        const actualWeekEnd = new Date(weekStart);
+        actualWeekEnd.setDate(weekStart.getDate() + 6);
+
+        // 해당 주의 데이터 찾기
+        const weekData = sortedData.filter(item => {
+          const itemDate = new Date(item[dateField] as string);
+          return itemDate >= weekStart && itemDate <= actualWeekEnd;
+        });
+        
+        // 운동 시간은 합계로 계산
+        const value = weekData.reduce((acc, item) => {
+          const val = Number(item[valueField]);
+          return acc + (isNaN(val) ? 0 : val);
+        }, 0);
+        
+        const weekStartStr = `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
+        const weekEndStr = `${actualWeekEnd.getMonth() + 1}/${actualWeekEnd.getDate()}`;
+        
+        result.push({
+          date: weekStart.toISOString().split('T')[0],
+          value: value,
+          displayDate: `${weekStartStr}~${weekEndStr}`,
+          count: weekData.length
+        });
+      }
+    } else if (period === 'month') {
+      // 월별: 최근 6개월 (이번 달 포함)
+      for (let i = 5; i >= 0; i--) {
+        const targetDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        
+        // 해당 월의 데이터 찾기
+        const monthData = sortedData.filter(item => {
+          const itemDate = new Date(item[dateField] as string);
+          return itemDate.getFullYear() === targetDate.getFullYear() && 
+                 itemDate.getMonth() === targetDate.getMonth();
+        });
+        
+        // 운동 시간은 합계로 계산
+        const value = monthData.reduce((acc, item) => {
+          const val = Number(item[valueField]);
+          return acc + (isNaN(val) ? 0 : val);
+        }, 0);
+        
+        result.push({
+          date: targetDate.toISOString().split('T')[0],
+          value: value,
+          displayDate: targetDate.toLocaleDateString('ko-KR', { month: 'short' }),
+          count: monthData.length
+        });
+      }
+    }
+
+    console.log(`🏃 [${period}] 운동 데이터 처리 결과:`, result.map(r => ({ date: r.displayDate, value: r.value, sessions: r.count })));
+    return result;
+  }, []);
+
+  // 차트 데이터 생성
   const chartData = useMemo(() => {
     console.log('🔄 Chart data recalculating with period:', period);
     
-    // 1️⃣ 백엔드에서 제공하는 차트 데이터 확인
-    if (healthStatistics?.healthChartData || healthStatistics?.exerciseChartData) {
+    // 1️⃣ 백엔드에서 제공하는 차트 데이터 우선 사용
+    if (healthStatistics?.data?.healthChartData && healthStatistics?.data?.exerciseChartData) {
       console.log('✨ Using backend chart data from HealthStatistics API');
       
-      const backendHealthData = (healthStatistics.healthChartData || []) as BackendHealthDataItem[];
-      const backendExerciseData = (healthStatistics.exerciseChartData || []) as BackendExerciseDataItem[];
+      const backendHealthData: BackendHealthDataItem[] = healthStatistics.data.healthChartData || [];
+      const backendExerciseData: BackendExerciseDataItem[] = healthStatistics.data.exerciseChartData || [];
       
-      // 기간별 최대 데이터 포인트 수를 반환하는 함수
+      console.log('📊 Backend data details:', {
+        healthChartData: backendHealthData.length,
+        exerciseChartData: backendExerciseData.length,
+        healthSample: backendHealthData.slice(0, 3),
+        exerciseSample: backendExerciseData.slice(0, 3)
+      });
+
+      // 데이터 포인트 수 결정
       function getMaxDataPoints(chartPeriod: string) {
         switch (chartPeriod) {
           case 'day':
@@ -240,39 +443,19 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
         }
       }
 
-      // 데이터 정렬 및 필터링 함수
+      // 데이터 처리 함수
       function processDataPoints<T extends { date: string }>(
         data: T[],
         valueField: keyof T,
         maxPoints: number
       ) {
-        const now = new Date();
-        let startDate: Date;
-        
-        // 기간별 시작 날짜 계산
-        switch (period) {
-          case 'day':
-            startDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); // 7일 전
-            break;
-          case 'week':
-            startDate = new Date(now.getTime() - 5 * 7 * 24 * 60 * 60 * 1000); // 6주 전
-            break;
-          case 'month':
-            startDate = new Date(now.getTime() - 5 * 30 * 24 * 60 * 60 * 1000); // 6개월 전
-            break;
-          default:
-            startDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+        if (period === 'week' && 'duration_minutes' in (data[0] || {})) {
+          // 운동 데이터는 합계 기반 처리
+          return groupExerciseDataByPeriod(data as unknown as Record<string, unknown>[], period, 'date', valueField as string);
+        } else {
+          // 건강 기록은 Forward Fill 기반 처리 (평균값)
+          return groupDataByPeriod(data as unknown as Record<string, unknown>[], period, 'date', valueField as string);
         }
-
-        return data
-          .filter(item => new Date(item.date) >= startDate) // 시작 날짜 이후 데이터만 필터링
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // 과거에서 최신 순으로 정렬
-          .slice(-maxPoints) // 최대 포인트 수만큼 최신 데이터 선택
-          .map(item => ({
-            date: item.date,
-            value: Number(item[valueField]),
-            displayDate: formatDateForChart(item.date, period)
-          }));
       }
 
       const maxPoints = getMaxDataPoints(period);
@@ -291,9 +474,9 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
         maxPoints
       );
 
-      // 운동 데이터 처리
+      // 운동 데이터 처리 - 백엔드 exerciseChartData 사용
       const exerciseData = processDataPoints(
-        backendExerciseData.filter(item => item.duration_minutes !== null),
+        backendExerciseData.filter(item => item.duration_minutes !== null && item.duration_minutes > 0),
         'duration_minutes',
         maxPoints
       );
@@ -313,6 +496,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
         maxPoints,
         avgWeight,
         avgBMI,
+        exerciseTotal: exerciseData.reduce((sum, item) => sum + item.value, 0)
       });
 
       return {
@@ -322,7 +506,9 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
         stats: {
           avgWeight: Number(avgWeight.toFixed(2)),
           avgBMI: Number(avgBMI.toFixed(2)),
-          totalExerciseTime: exerciseData.reduce((sum, item) => sum + item.value, 0)
+          totalExerciseTime: exerciseData.reduce((sum, item) => sum + item.value, 0),
+          weightTrend: 0,
+          bmiTrend: 0
         }
       };
     }
@@ -380,9 +566,9 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
   // Period에 따른 차트 제목 생성
   const getChartTitle = useCallback((baseTitle: string, period: 'day' | 'week' | 'month' | 'year'): string => {
     const periodLabels = {
-      day: '일별',
-      week: '주별', 
-      month: '월별',
+      day: '일별 (최근 7일)',
+      week: '주별 (최근 6주)', 
+      month: '월별 (최근 6개월)',
       year: '연별'
     };
     
@@ -559,7 +745,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
               평균: <span className="font-semibold text-gray-900">{chartData.stats.avgWeight}kg</span>
             </span>
             <span className="text-gray-500">
-              {period === 'day' ? '최근' : period === 'week' ? '주별' : period === 'month' ? '월별' : '연별'} {chartData.weight.length}회 기록
+              {period === 'day' ? '최근 7일' : period === 'week' ? '최근 6주' : period === 'month' ? '최근 6개월' : '연별'} 기록 {chartData.weight.length}회
             </span>
           </div>
         </div>
@@ -637,7 +823,9 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
             <span className="text-gray-600">
               평균: <span className="font-semibold text-gray-900">{chartData.stats.avgBMI}</span>
             </span>
-            <span className="text-gray-500">정상 범위 (18.5-24.9)</span>
+            <span className="text-gray-500">
+              {period === 'day' ? '최근 7일' : period === 'week' ? '최근 6주' : period === 'month' ? '최근 6개월' : '연별'} 기록
+            </span>
           </div>
         </div>
       )}
@@ -703,10 +891,10 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = memo(({
           
           <div className="flex justify-between items-center text-sm mt-4">
             <span className="text-gray-600">
-              총 운동 시간: <span className="font-semibold text-gray-900">{chartData.stats.totalExerciseTime}분</span>
+              총 운동시간: <span className="font-semibold text-gray-900">{chartData.stats.totalExerciseTime}분</span>
             </span>
             <span className="text-gray-500">
-              평균: {chartData.exercise.length > 0 ? Math.round(chartData.stats.totalExerciseTime / chartData.exercise.length) : 0}분/{period === 'day' ? '일' : period === 'week' ? '주' : period === 'month' ? '월' : '년'}
+              {period === 'day' ? '최근 7일' : period === 'week' ? '최근 6주' : period === 'month' ? '최근 6개월' : '연별'} 총합
             </span>
           </div>
         </div>

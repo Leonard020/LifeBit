@@ -71,11 +71,12 @@ public class HealthStatisticsService {
             
             // ✨ 차트용 시계열 데이터 추가
             Map<String, Object> chartData = getChartTimeSeriesData(userId, period);
+            log.info("🔍 차트 데이터 생성 완료 - 사용자: {}, 기간: {}, 항목: {}", userId, period, chartData.keySet());
             
             // 🏋️ 운동 부위별 빈도 데이터 추가
             Map<String, Object> bodyPartStats = getBodyPartFrequencyData(userId, period);
             
-            // ��️ 실제 식단 기록 기반 영양소 통계 계산
+            // 🍽️ 실제 식단 기록 기반 영양소 통계 계산
             Map<String, Object> realMealNutritionStats = getRealMealNutritionStatistics(userId, period);
             
             // 종합 통계 구성
@@ -100,6 +101,7 @@ public class HealthStatisticsService {
             
             // ✨ 차트 데이터 추가
             statistics.putAll(chartData);
+            log.info("🔍 차트 데이터 포함 후 - 사용자: {}, 전체 키: {}", userId, statistics.keySet());
             
             // 🏋️ 운동 부위별 통계 추가
             statistics.putAll(bodyPartStats);
@@ -490,10 +492,12 @@ public class HealthStatisticsService {
             // 건강 기록 차트 데이터
             List<Map<String, Object>> healthChartData = createHealthChartData(userId, period);
             chartData.put("healthChartData", healthChartData);
+            log.info("📊 건강 기록 차트 데이터: {} 개", healthChartData.size());
             
             // 운동 차트 데이터
             List<Map<String, Object>> exerciseChartData = createExerciseChartData(userId, period);
             chartData.put("exerciseChartData", exerciseChartData);
+            log.info("📊 운동 차트 데이터: {} 개", exerciseChartData.size());
             
             log.info("✅ 차트 시계열 데이터 생성 완료 - 건강기록: {}, 운동: {}", 
                     healthChartData.size(), exerciseChartData.size());
@@ -513,8 +517,9 @@ public class HealthStatisticsService {
     private List<Map<String, Object>> createHealthChartData(Long userId, String period) {
         try {
             List<HealthRecord> records = getHealthRecordsByPeriod(userId, period);
+            log.info("📊 건강 기록 조회 결과 - 사용자: {}, 기간: {}, 기록 수: {}", userId, period, records.size());
             
-            return records.stream()
+            List<Map<String, Object>> chartData = records.stream()
                 .map(record -> {
                     Map<String, Object> dataPoint = new HashMap<>();
                     dataPoint.put("date", record.getRecordDate().toString());
@@ -526,6 +531,9 @@ public class HealthStatisticsService {
                 .sorted((a, b) -> ((String) a.get("date")).compareTo((String) b.get("date")))
                 .toList();
                 
+            log.info("📊 건강 기록 차트 데이터 생성 완료 - {} 개 데이터 포인트", chartData.size());
+            return chartData;
+                
         } catch (Exception e) {
             log.error("건강 기록 차트 데이터 생성 실패: {}", e.getMessage());
             return List.of();
@@ -533,11 +541,12 @@ public class HealthStatisticsService {
     }
     
     /**
-     * 운동 차트 데이터 생성 (일별/주별 운동 시간 추이)
+     * 운동 차트 데이터 생성 (운동 시간, 칼로리 추이)
      */
     private List<Map<String, Object>> createExerciseChartData(Long userId, String period) {
         try {
             List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, period);
+            log.info("📊 운동 세션 조회 결과 - 사용자: {}, 기간: {}, 세션 수: {}", userId, period, sessions.size());
             
             // 날짜별로 그룹핑하여 운동 시간 합계 계산
             Map<String, Integer> dailyExerciseMinutes = sessions.stream()
@@ -560,7 +569,7 @@ public class HealthStatisticsService {
                 ));
             
             // 차트 데이터 포인트 생성
-            return dailyExerciseMinutes.entrySet().stream()
+            List<Map<String, Object>> chartData = dailyExerciseMinutes.entrySet().stream()
                 .map(entry -> {
                     Map<String, Object> dataPoint = new HashMap<>();
                     String date = entry.getKey();
@@ -571,6 +580,9 @@ public class HealthStatisticsService {
                 })
                 .sorted((a, b) -> ((String) a.get("date")).compareTo((String) b.get("date")))
                 .toList();
+                
+            log.info("📊 운동 차트 데이터 생성 완료 - {} 개 데이터 포인트", chartData.size());
+            return chartData;
                 
         } catch (Exception e) {
             log.error("운동 차트 데이터 생성 실패: {}", e.getMessage());
@@ -759,20 +771,33 @@ public class HealthStatisticsService {
 
     /**
      * 기간별 건강 기록 조회 헬퍼 메소드
+     * 차트 시작점에 적절한 데이터가 표시되도록 충분한 과거 데이터를 포함하여 조회
      */
     private List<HealthRecord> getHealthRecordsByPeriod(Long userId, String period) {
+        int days;
         switch (period.toLowerCase()) {
             case "day":
-                return healthRecordService.getRecentHealthRecords(userId, 1);
+                days = 97;  // 일별 차트용 7일 + 3개월 전 데이터 (7 + 90 = 97일)
+                break;
             case "week":
-                return healthRecordService.getRecentHealthRecords(userId, 7);
+                days = 132; // 주별 차트용 6주 + 3개월 전 데이터 (42 + 90 = 132일)
+                break;
             case "month":
-                return healthRecordService.getRecentHealthRecords(userId, 30);
+                days = 270; // 월별 차트용 6개월 + 3개월 전 데이터 (180 + 90 = 270일)
+                break;
             case "year":
-                return healthRecordService.getRecentHealthRecords(userId, 365);
+                days = 455; // 연별 차트용 1년 + 3개월 전 데이터 (365 + 90 = 455일)
+                break;
             default:
-                return healthRecordService.getRecentHealthRecords(userId, 30);
+                days = 270; // 기본값 9개월
+                break;
         }
+        
+        log.info("📊 건강 기록 조회 요청 - 사용자: {}, 기간: {}, 일수: {} (3개월 전 데이터 포함)", userId, period, days);
+        List<HealthRecord> records = healthRecordService.getRecentHealthRecords(userId, days);
+        log.info("📊 건강 기록 조회 완료 - 사용자: {}, 조회된 기록 수: {}", userId, records.size());
+        
+        return records;
     }
 
     /**
