@@ -608,9 +608,9 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             temp_path = tmp.name
 
         with open(temp_path, "rb") as f:
-            transcript = openai.Audio.transcribe("whisper-1", f)
+            transcript = openai.Audio.transcribe("whisper-1", f)  # type: ignore
 
-        user_text = transcript["text"]
+        user_text = transcript.get("text", "") if hasattr(transcript, 'get') else str(transcript)  # type: ignore
         print("[INFO] Whisper 결과:", user_text)
 
         # 간단 룰베이스로 GPT 프롬프트 분기 (운동/식단 구분)
@@ -628,7 +628,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         # GPT 호출
         if USE_GPT:
             # 1. 데이터 추출
-            extraction_response = openai.ChatCompletion.create(
+            extraction_response = openai.ChatCompletion.create(  # type: ignore
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": extraction_prompt},
@@ -637,11 +637,11 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                 temperature=0.3
             )
 
-            parsed_data = json.loads(extraction_response.choices[0].message["content"])
+            parsed_data = json.loads(extraction_response.choices[0].message["content"])  # type: ignore
             print("[INFO] GPT 파싱 결과:", json.dumps(parsed_data, indent=2, ensure_ascii=False))
 
             # 2. 데이터 검증
-            validation_response = openai.ChatCompletion.create(
+            validation_response = openai.ChatCompletion.create(  # type: ignore
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": validation_prompt},
@@ -650,11 +650,11 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                 temperature=0.3
             )
 
-            validation_result = json.loads(validation_response.choices[0].message["content"])
+            validation_result = json.loads(validation_response.choices[0].message["content"])  # type: ignore
 
             # 3. 데이터가 완전한 경우에만 확인 단계로 진행
-            if validation_result["status"] == "complete":
-                confirmation_response = openai.ChatCompletion.create(
+            if validation_result.get("status") == "complete":
+                confirmation_response = openai.ChatCompletion.create(  # type: ignore
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": confirmation_prompt},
@@ -663,134 +663,21 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                     temperature=0.3
                 )
 
-                confirmation_text = confirmation_response.choices[0].message["content"]
+                confirmation_text = confirmation_response.choices[0].message["content"]  # type: ignore
 
-                # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
-                response_type = parsed_response.get("response_type", "success")
-                
-                # Always ensure parsed_data is an array for diet records
-                parsed_data = parsed_response.get("system_message", {}).get("data")
-                if record_type == "diet":
-                    if parsed_data:
-                        if isinstance(parsed_data, dict):
-                            parsed_data = [parsed_data]
-                        elif not isinstance(parsed_data, list):
-                            parsed_data = [parsed_data]
-                    else:
-                        parsed_data = []
-                
-                if (response_type == "confirmation" and 
-                    request.message.strip().lower() in ["네", "yes", "y", "저장", "기록해줘", "완료", "끝"] and 
-                    request.current_data and 
-                    request.record_type):
-                    
-                    print(f"[🚀 AUTO-SAVE] 확인 응답 받음 → 실제 DB 저장 시작")
-                    print(f"  기록 타입: {request.record_type}")
-                    print(f"  수집된 데이터: {request.current_data}")
-                    
-                    try:
-                        if request.record_type == "diet":
-                            # 🍽️ 식단 자동 저장
-                            # user_id 우선순위: request.user_id > current_data.user_id > 기본값 3
-                            user_id = (request.user_id or 
-                                      request.current_data.get("user_id") or 
-                                      3)
-                            user_id = int(user_id)
-                            
-                            # 여러 음식이 있는 경우 각각 저장
-                            foods_to_save = parsed_data if isinstance(parsed_data, list) else [parsed_data]
-                            saved_results = []
-                            
-                            for food_data in foods_to_save:
-                                if not food_data or not food_data.get("food_name"):
-                                    continue
-                                    
-                                # GPT를 사용하여 그램 수 추정
-                                amount_str = food_data.get("amount", "1개")
-                                estimated_grams = estimate_grams_with_gpt(food_data["food_name"], amount_str)
-                                
-                                # 식사시간 변환
-                                meal_time_mapping = {
-                                    "아침": "breakfast",
-                                    "점심": "lunch", 
-                                    "저녁": "dinner",
-                                    "야식": "snack",
-                                    "간식": "snack"
-                                }
-                                meal_time_eng = meal_time_mapping.get(food_data.get("meal_time", "간식"), "snack")
-                                
-                                # note_routes.py의 save_diet_record 사용
-                                from note_routes import save_diet_record
-                                from schemas import MealInput
-                                
-                                meal_input = MealInput(
-                                    user_id=user_id,
-                                    food_name=food_data["food_name"],
-                                    quantity=estimated_grams,
-                                    meal_time=meal_time_eng,
-                                    log_date=date.today()
-                                )
-                                
-                                # DB 객체 생성 (FastAPI의 Depends와 동일한 방식)
-                                from database import SessionLocal
-                                db = SessionLocal()
-                                
-                                try:
-                                    save_result = save_diet_record(meal_input, db)
-                                    saved_results.append(save_result)
-                                    print(f"[✅ SUCCESS] 음식 저장 완료: {food_data['food_name']}")
-                                finally:
-                                    db.close()
-                                
-                            # 저장 결과 요약 메시지 생성
-                            if saved_results:
-                                food_names = [food.get("food_name", "알 수 없는 음식") for food in foods_to_save if food]
-                                food_list = ", ".join(food_names)
-                                
-                                return {
-                                    "type": "saved",
-                                    "message": f"✅ 식단 기록이 성공적으로 저장되었습니다!\n\n📋 저장된 음식:\n• {food_list}\n\n영양정보는 자동으로 계산되어 데이터베이스에 저장되었습니다.",
-                                    "parsed_data": request.current_data,
-                                    "save_results": saved_results,
-                                    "missing_fields": [],
-                                    "suggestions": []
-                                }
-                            else:
-                                return {
-                                    "type": "save_error",
-                                    "message": "저장할 음식 정보가 없습니다.",
-                                    "parsed_data": request.current_data,
-                                    "missing_fields": [],
-                                    "suggestions": []
-                                }
-                                
-                        elif request.record_type == "exercise":
-                            # 🏋️ 운동 자동 저장 (향후 구현)
-                            print(f"[INFO] 운동 자동 저장은 향후 구현 예정")
-                            
-                    except Exception as save_error:
-                        print(f"[❌ ERROR] 자동 저장 실패: {save_error}")
-                        return {
-                            "type": "save_error",
-                            "message": f"저장 중 오류가 발생했습니다: {str(save_error)}\n다시 시도해 주세요.",
-                            "parsed_data": request.current_data,
-                            "missing_fields": [],
-                            "suggestions": []
-                        }
-
-                # 일반적인 응답 (저장하지 않는 경우)
+                # 간단한 응답 반환 (voice 기능은 단순화)
                 return {
-                    "type": parsed_response.get("response_type", "success"),
-                    "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
+                    "type": "success",
+                    "message": f"음성 인식 완료: {user_text}",
                     "parsed_data": parsed_data,
-                    "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
+                    "record_type": record_type,
                     "suggestions": []
                 }
             else:
                 # 일반 텍스트 응답
                 return {
                     "type": "incomplete",
-                    "message": raw,
+                    "message": f"음성 인식 완료: {user_text}",
                     "suggestions": []
                 }
         else:
@@ -798,10 +685,10 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
 
     except Exception as e:
-        print(f"[ERROR] Chat error: {e}")
+        print(f"[ERROR] Voice processing error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
+            detail=f"음성 처리 중 오류가 발생했습니다: {e}"
         )
 
 def determine_chat_step_automatically(message: str, current_data: dict, record_type: str) -> str:
@@ -918,14 +805,14 @@ async def chat(request: ChatRequest):
             ]
 
             # ChatCompletion API 실행
-            response = openai.ChatCompletion.create(
+            response = openai.ChatCompletion.create(  # type: ignore
                 model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.3
             )
 
             # 응답 JSON 파싱
-            raw = response.choices[0].message["content"]
+            raw = response.choices[0].message["content"]  # type: ignore
             
             try:
                 # JSON 응답인지 확인하고 파싱
@@ -1118,13 +1005,13 @@ def estimate_grams_with_gpt(food_name: str, amount: str) -> float:
             f"{food_name} {amount}는(은) 몇 g입니까? "
             f"예시: 1개=30g이면 2개=60g. 숫자만 답변하세요."
         )
-        response = openai.ChatCompletion.create(
+        response = openai.ChatCompletion.create(  # type: ignore
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=20
         )
-        result = response.choices[0].message["content"].strip()
+        result = response.choices[0].message["content"].strip()  # type: ignore
         print(f"[DEBUG] GPT raw response for grams: {result}")
         grams = float(''.join(filter(lambda c: c.isdigit() or c == '.', result)))
         print(f"[DEBUG] GPT grams estimate for {food_name} {amount}: {grams}")
@@ -1148,11 +1035,12 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
     results = []
     for record in records:
         results.append(DailyExerciseRecord(
-            name=record.notes,
-            weight=f"{record.weight}kg" if record.weight else "체중",
-            sets=record.sets or 1,
-            reps=record.reps or 1,
-            time=f"{record.duration_minutes}분"
+            exercise_session_id=int(record.exercise_session_id),  # type: ignore
+            name=str(record.notes) if record.notes is not None else "운동",  # type: ignore
+            weight=f"{record.weight}kg" if record.weight is not None else "체중",  # type: ignore
+            sets=int(record.sets) if record.sets is not None else 1,  # type: ignore
+            reps=int(record.reps) if record.reps is not None else 1,  # type: ignore
+            time=f"{record.duration_minutes}분" if record.duration_minutes is not None else "0분"  # type: ignore
         ))
 
     return results
@@ -1210,7 +1098,7 @@ def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session 
             "meal_log_id": record.meal_log_id,
             "food_item_id": record.food_item_id,
             "food_name": food_item.name if food_item else "Unknown",
-            "quantity": float(record.quantity),
+            "quantity": float(record.quantity),  # type: ignore
             "meal_time": record.meal_time,
             "log_date": str(record.log_date),
             "nutrition": {
@@ -1325,13 +1213,13 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str) -> dict:
 
 값은 소수점 첫째자리까지 반올림하여 제공해주세요.
 """
-        response = openai.ChatCompletion.create(
+        response = openai.ChatCompletion.create(  # type: ignore
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200
         )
-        result = response.choices[0].message["content"].strip()
+        result = response.choices[0].message["content"].strip()  # type: ignore
         nutrition_data = json.loads(result)
         print(f"[GPT] '{food_name}' 100g 기준 영양소: {nutrition_data}")
         return nutrition_data
@@ -1363,13 +1251,13 @@ def calculate_nutrition_from_gpt(food_name: str, amount: str) -> dict:
 
 값은 소수점 첫째자리까지 반올림하여 제공해주세요.
 """
-        response = openai.ChatCompletion.create(
+        response = openai.ChatCompletion.create(  # type: ignore
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200
         )
-        result = response.choices[0].message["content"].strip()
+        result = response.choices[0].message["content"].strip()  # type: ignore
         print(f"[GPT] '{food_name}' 섭취량 '{amount}' 기준 영양소: {result}")
         nutrition_data = json.loads(result)
         return nutrition_data
