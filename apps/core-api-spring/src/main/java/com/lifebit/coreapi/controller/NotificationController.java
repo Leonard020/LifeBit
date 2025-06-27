@@ -80,4 +80,14 @@ public class NotificationController {
             ));
         }
     }
+
+    /**
+     * 읽지 않은 알림 개수 반환
+     */
+    @GetMapping("/unread-count")
+    public ResponseEntity<Map<String, Long>> getUnreadCount(@AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = Long.parseLong(userDetails.getUsername());
+        long count = notificationService.getUnreadCount(userId);
+        return ResponseEntity.ok(Map.of("unreadCount", count));
+    }
 } 

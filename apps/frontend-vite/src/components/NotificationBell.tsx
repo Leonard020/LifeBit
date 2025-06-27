@@ -22,6 +22,7 @@ const NotificationBell = () => {
   const [loading, setLoading] = useState(false);
   const { isLoggedIn } = useAuth();
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
 
   type LinkType = string | { pathname: string; state?: Record<string, unknown> };
@@ -71,7 +72,7 @@ const NotificationBell = () => {
       const notificationList = response.content || [];
       setNotifications(notificationList);
       
-      // 읽지 않은 알림 개수 계산
+      // 읽지 않은 알림 개수 계산 (모든 알림 포함)
       const unread = notificationList.filter(n => !n.isRead).length;
       setUnreadCount(unread);
       
@@ -115,8 +116,12 @@ const NotificationBell = () => {
   const handleMarkAsRead = async (notificationId: number) => {
     try {
       await markNotificationAsRead(notificationId);
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setNotifications(prev =>
+        prev.map(n =>
+          n.id === notificationId ? { ...n, isRead: true } : n
+        )
+      );
+      await fetchUnreadCount();
     } catch (error: unknown) {
       // 이미 읽음 처리된 경우는 에러 토스트를 띄우지 않고 목록에서 제거
       if (
@@ -126,8 +131,10 @@ const NotificationBell = () => {
         hasStringMessage((error as AxiosError).response?.data) &&
         ((error as AxiosError).response?.data as { message: string }).message.includes('이미 읽은 알림')
       ) {
-        setNotifications(prev => prev.filter(n => n.id !== notificationId));
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        setNotifications(prev => prev.map(n =>
+          n.id === notificationId ? { ...n, isRead: true } : n
+        ));
+        await fetchUnreadCount();
         return;
       }
       toast.error('알림 읽음 처리에 실패했습니다.');
@@ -138,8 +145,8 @@ const NotificationBell = () => {
   const handleMarkAllAsRead = async () => {
     try {
       await markAllNotificationsAsRead();
-      // 모든 알림을 목록에서 제거
-      setNotifications([]);
+      // 모든 알림을 읽음 처리만 하고, 목록은 유지
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
       toast.success('모든 알림을 읽음 처리했습니다.');
     } catch (error) {
@@ -150,14 +157,49 @@ const NotificationBell = () => {
   // 알림 삭제
   const handleDeleteNotification = async (notificationId: number) => {
     try {
+      // 이미 삭제 중인 알림인지 확인
+      if (deletingIds.has(notificationId)) {
+        return;
+      }
+
+      // 삭제 중 상태로 표시
+      setDeletingIds(prev => new Set(prev).add(notificationId));
+
       await deleteNotification(notificationId);
+      
       const notification = notifications.find(n => n.id === notificationId);
       if (notification && !notification.isRead) {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(notificationId);
+        return newSet;
+      });
       toast.success('알림을 삭제했습니다.');
     } catch (error) {
+      // 삭제 실패 시 삭제 중 상태 해제
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(notificationId);
+        return newSet;
+      });
+      
+      // 이미 삭제된 알림인 경우 조용히 처리
+      if (error && typeof error === 'object' && (error as AxiosError).isAxiosError) {
+        const axiosError = error as AxiosError;
+        if (axiosError.response?.status === 400) {
+          const errorData = axiosError.response.data as { message?: string };
+          if (errorData?.message?.includes('찾을 수 없습니다') || 
+              errorData?.message?.includes('권한이 없습니다')) {
+            // 이미 삭제된 알림이므로 목록에서 제거
+            setNotifications(prev => prev.filter(n => n.id !== notificationId));
+            return;
+          }
+        }
+      }
+      
       toast.error('알림 삭제에 실패했습니다.');
     }
   };
@@ -193,14 +235,20 @@ const NotificationBell = () => {
     return () => clearInterval(interval);
   }, [isLoggedIn]);
 
+  // 알림 목록 필터링: 타입별 필터만 적용, 읽음 여부로는 필터링하지 않음
   const filteredNotifications = filterType
     ? notifications.filter((n) => n.type === filterType)
     : notifications;
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.isRead) {
-      await markNotificationAsRead(notification.id);
-      setNotifications((prev) => prev.map((n) => n.id === notification.id ? { ...n, isRead: true } : n));
+      try {
+        await markNotificationAsRead(notification.id);
+        setNotifications((prev) => prev.map((n) => n.id === notification.id ? { ...n, isRead: true } : n));
+        await fetchUnreadCount();
+      } catch (error) {
+        toast.error('알림 읽음 처리에 실패했습니다.');
+      }
     }
     const meta = typeMeta[notification.type];
     if (meta && meta.link) {
@@ -214,16 +262,17 @@ const NotificationBell = () => {
   };
 
   // 알림 아이템 컴포넌트 (드래그 지원)
-  function DraggableNotification({ notification, children, onDelete }: { notification: Notification, children: React.ReactNode, onDelete: (id: number) => void }) {
+  function DraggableNotification({ notification, children, onDelete, disableDrag = false }: { notification: Notification, children: React.ReactNode, onDelete: (id: number) => void, disableDrag?: boolean }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: notification.id,
+      disabled: disableDrag,
     });
     // 오른쪽으로 120px 이상 드래그하면 삭제
     useEffect(() => {
-      if (transform && transform.x > 120) {
+      if (!disableDrag && transform && transform.x > 120 && !deletingIds.has(notification.id)) {
         onDelete(notification.id);
       }
-    }, [transform, notification.id, onDelete]);
+    }, [transform, notification.id, onDelete, deletingIds, disableDrag]);
     return (
       <div
         ref={setNodeRef}
@@ -233,16 +282,30 @@ const NotificationBell = () => {
           transition: isDragging ? 'none' : 'transform 0.2s',
           boxShadow: isDragging ? '0 4px 16px rgba(0,0,0,0.08)' : undefined,
         }}
-        {...listeners}
+        {...(!disableDrag ? listeners : {})}
         {...attributes}
       >
         {children}
-        {isDragging && (
+        {isDragging && !disableDrag && (
           <span style={{ position: 'absolute', right: 16, top: 16, color: '#f87171', fontWeight: 700 }}>→ 삭제</span>
         )}
       </div>
     );
   }
+
+  // 1. fetchUnreadCount 함수 추가
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await fetch('/api/v1/notifications/unread-count', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+      });
+      if (!res.ok) throw new Error('unreadCount fetch 실패');
+      const data = await res.json();
+      setUnreadCount(data.unreadCount ?? 0);
+    } catch (e) {
+      setUnreadCount(0);
+    }
+  };
 
   if (!isLoggedIn) return null;
 
@@ -294,7 +357,13 @@ const NotificationBell = () => {
             )}
           </div>
         </div>
-        <ScrollArea className="max-h-[480px]">
+        <ScrollArea
+          className="max-h-[700px] overflow-y-scroll"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'transparent transparent',
+          }}
+        >
           {loading ? (
             <div className="flex items-center justify-center p-10">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -309,7 +378,12 @@ const NotificationBell = () => {
                 {filteredNotifications.map((notification) => {
                   const meta = typeMeta[notification.type] || { icon: <Info className="w-4 h-4" />, color: 'text-gray-400', label: notification.type, link: () => null };
                   return (
-                    <DraggableNotification key={notification.id} notification={notification} onDelete={handleDeleteNotification}>
+                    <DraggableNotification
+                      key={notification.id}
+                      notification={notification}
+                      onDelete={handleDeleteNotification}
+                      disableDrag={!notification.userId}
+                    >
                       <div
                         className={`p-4 rounded-xl mb-3 cursor-pointer transition-colors flex items-start gap-3 shadow-sm relative ${
                           notification.isRead 
@@ -326,12 +400,15 @@ const NotificationBell = () => {
                             }`}>
                               {notification.title}
                               <span className="ml-2 text-xs text-gray-400">[{meta.label}]</span>
+                              {!notification.userId && (
+                                <span className="ml-1 text-xs text-orange-500">[공용]</span>
+                              )}
                             </h5>
                             {!notification.isRead && (
                               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                             )}
                           </div>
-                          <p className={`text-sm leading-relaxed ${
+                          <p className={`text-xs leading-relaxed ${
                             notification.isRead ? 'text-gray-600' : 'text-blue-700'
                           }`}>
                             {notification.message}
@@ -343,17 +420,21 @@ const NotificationBell = () => {
                             {formatDate(notification.createdAt)}
                           </p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteNotification(notification.id);
-                          }}
-                          className="text-gray-400 hover:text-red-500 h-6 w-6 p-0"
-                        >
-                          ×
-                        </Button>
+                        {/* 시스템 공용 알림은 삭제 버튼 숨김 */}
+                        {notification.userId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={deletingIds.has(notification.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteNotification(notification.id);
+                            }}
+                            className="text-gray-400 hover:text-red-500 h-6 w-6 p-0 disabled:opacity-50"
+                          >
+                            {deletingIds.has(notification.id) ? '⋯' : '×'}
+                          </Button>
+                        )}
                       </div>
                     </DraggableNotification>
                   );
@@ -362,6 +443,17 @@ const NotificationBell = () => {
             </DndContext>
           )}
         </ScrollArea>
+
+        {/* 글로벌 CSS로도 추가 */}
+        <style>{`
+          .max-h-700px::-webkit-scrollbar {
+            width: 8px;
+            background: transparent;
+          }
+          .max-h-700px::-webkit-scrollbar-thumb {
+            background: transparent;
+          }
+        `}</style>
       </PopoverContent>
     </Popover>
   );

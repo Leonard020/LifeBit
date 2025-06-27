@@ -10,6 +10,7 @@ from pathlib import Path
 from passlib.hash import bcrypt
 from sqlalchemy import text
 from datetime import datetime
+from typing import Optional
 
 
 # Load .env
@@ -130,27 +131,34 @@ async def kakao_callback(code: str, db: Session = Depends(get_db)):
                     status_code=500,
                     detail="사용자 정보 저장 실패"
                 )
+        
         # Always re-fetch the user before updating last_visited
         user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=500,
+                detail="사용자 정보를 찾을 수 없습니다"
+            )
+        
         print(f"[DEBUG] Kakao before update last_visited: {user.last_visited}")
-        user.last_visited = get_kst_now()
-        user.updated_at = user.last_visited
+        user.last_visited = get_kst_now()  # type: ignore
+        user.updated_at = user.last_visited  # type: ignore
         db.commit()
         print(f"[DEBUG] Kakao after update last_visited: {user.last_visited}")
 
         # 5️⃣ JWT 발급
         jwt_token = create_access_token(
-            email=email,
-            user_id=user.user_id,
+            email=str(user.email),
+            user_id=int(user.user_id),  # type: ignore
             role=user.role.value
         )
 
         return {
             "access_token": jwt_token,
             "provider": "kakao",
-            "user_id": user.user_id,
-            "email": user.email,
-            "nickname": user.nickname,
+            "user_id": int(user.user_id),  # type: ignore
+            "email": str(user.email),
+            "nickname": str(user.nickname),
             "role": user.role.value
         }
 
@@ -279,18 +287,25 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
                     status_code=500,
                     detail="사용자 정보 저장 실패"
                 )
+        
         # Always re-fetch the user before updating last_visited
         user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=500,
+                detail="사용자 정보를 찾을 수 없습니다"
+            )
+        
         print(f"[DEBUG] Google before update last_visited: {user.last_visited}")
-        user.last_visited = get_kst_now()
-        user.updated_at = user.last_visited
+        user.last_visited = get_kst_now()  # type: ignore
+        user.updated_at = user.last_visited  # type: ignore
         db.commit()
         print(f"[DEBUG] Google after update last_visited: {user.last_visited}")
 
         # JWT 토큰 생성
         jwt_token = create_access_token(
-            email=email,
-            user_id=user.user_id,
+            email=str(user.email),
+            user_id=int(user.user_id),  # type: ignore
             role=user.role.value
         )
 
@@ -298,10 +313,10 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         return {
             "access_token": jwt_token,
             "user_id": str(user.user_id),
-            "email": user.email,
-            "nickname": user.nickname,
+            "email": str(user.email),
+            "nickname": str(user.nickname),
             "role": user.role.value,
-            "provider": user.provider or "local"
+            "provider": str(user.provider or "local")
         }
 
     except HTTPException as he:
@@ -337,14 +352,21 @@ def login_user(data: dict, db: Session = Depends(get_db)):
 
     # ORM 객체로 다시 로드 (user_id 필요)
     user = db.query(models.User).filter(models.User.email == email).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="사용자 정보를 찾을 수 없습니다.")
 
-    jwt_token = create_access_token(email=user.email, user_id=user.user_id, role=user.role.value)
+    jwt_token = create_access_token(
+        email=str(user.email), 
+        user_id=int(user.user_id),  # type: ignore
+        role=user.role.value
+    )
 
     return {
         "access_token": jwt_token,
-        "user_id": user.user_id,
-        "email": user.email,
-        "nickname": user.nickname,
+        "user_id": int(user.user_id),  # type: ignore
+        "email": str(user.email),
+        "nickname": str(user.nickname),
         "role": user.role.value,
-        "provider": user.provider or "local"
+        "provider": str(user.provider or "local")
     }

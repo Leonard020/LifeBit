@@ -4,13 +4,14 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models
 from schemas import ExerciseChatInput, ExerciseChatOutput, MealInput
-from typing import Optional
+from typing import Optional, Union
 from models import FoodItem
 import openai
 import os
 import requests
 import json
 import re
+from datetime import date as dt_date
 from korean_amount_normalizer import normalize_korean_amount
 import logging
 
@@ -94,14 +95,26 @@ def search_nutrition_on_internet(food_name: str) -> dict:
 - 다른 설명이나 텍스트는 포함하지 마세요
 """
         
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=200
-        )
+        # OpenAI API 호출 (버전에 따라 다를 수 있음)
+        try:
+            # 새로운 API 방식 시도
+            response = openai.chat.completions.create(  # type: ignore
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=200
+            )
+            result = response.choices[0].message.content.strip() if response.choices[0].message.content else ""  # type: ignore
+        except:
+            # 기존 API 방식 시도
+            response = openai.ChatCompletion.create(  # type: ignore
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=200
+            )
+            result = response.choices[0].message["content"].strip()  # type: ignore
         
-        result = response.choices[0].message["content"].strip()
         print(f"[INTERNET SEARCH] GPT 응답: {result}")
         
         # JSON 파싱
@@ -139,10 +152,10 @@ def calculate_nutrition_from_gpt_for_100g(food_name: str, db: Session) -> dict:
         if existing_food:
             print(f"[NUTRITION CALC] DB에서 발견: {existing_food.name}")
             return {
-                "calories": float(existing_food.calories) if existing_food.calories else 200.0,
-                "carbs": float(existing_food.carbs) if existing_food.carbs else 30.0,
-                "protein": float(existing_food.protein) if existing_food.protein else 10.0,
-                "fat": float(existing_food.fat) if existing_food.fat else 5.0,
+                "calories": float(existing_food.calories) if existing_food.calories is not None else 200.0,  # type: ignore
+                "carbs": float(existing_food.carbs) if existing_food.carbs is not None else 30.0,  # type: ignore
+                "protein": float(existing_food.protein) if existing_food.protein is not None else 10.0,  # type: ignore
+                "fat": float(existing_food.fat) if existing_food.fat is not None else 5.0,  # type: ignore
                 "source": "database",
                 "food_item_id": existing_food.food_item_id
             }
@@ -422,7 +435,7 @@ def estimate_grams_from_korean_amount(food_name: str, amount: str) -> float:
 @router.post("/diet")
 def save_diet_record(data: MealInput, db: Session = Depends(get_db)):
     # 1. food_item_id가 없으면 food_items에 자동 생성
-    food_item_id = data.food_item_id
+    food_item_id = data.food_item_id  # type: ignore
     debug_info = {}
     
     if not food_item_id and hasattr(data, 'food_name') and data.food_name:
@@ -455,7 +468,7 @@ def save_diet_record(data: MealInput, db: Session = Depends(get_db)):
     debug_info['final_food_item_id'] = food_item_id
     
     # food_item_id가 여전히 없으면 에러 반환
-    if not food_item_id:
+    if food_item_id is None:
         return {"error": "food_item_id가 없습니다. 음식명/영양정보를 확인하세요.", "debug": debug_info}
 
     # 2. 사용자 섭취량 기준 영양정보 계산 (GPT 활용)
@@ -507,28 +520,32 @@ def save_diet_record(data: MealInput, db: Session = Depends(get_db)):
         "estimated_quantity": float(estimated_quantity),
         "log_date": str(meal_log.log_date),
         "meal_time": meal_log.meal_time,
-        "created_at": str(meal_log.created_at) if meal_log.created_at else None,
+        "created_at": str(meal_log.created_at) if meal_log.created_at is not None else None,  # type: ignore
         "nutrition_source": user_nutrition.get('source', 'unknown'),
         "debug": debug_info
     }
 
 @router.get("/diet/daily")
 def get_today_diet(user_id: int, date: Optional[str] = None, db: Session = Depends(get_db)):
-    from datetime import date as dt_date
+    target_date: Union[str, dt_date]
     if date is None:
-        date = dt_date.today().isoformat()
-    # date가 string이면 date 타입으로 변환
-    if isinstance(date, str):
-        date = dt_date.fromisoformat(date)
+        target_date = dt_date.today()
+    else:
+        # date가 string이면 date 타입으로 변환
+        if isinstance(date, str):
+            target_date = dt_date.fromisoformat(date)
+        else:
+            target_date = date
+    
     records = db.query(models.MealLog).filter(
         models.MealLog.user_id == user_id,
-        models.MealLog.log_date == date
+        models.MealLog.log_date == target_date
     ).all()
     return [
         {
             "meal_log_id": r.meal_log_id,
             "food_item_id": r.food_item_id,
-            "quantity": float(r.quantity),
+            "quantity": float(r.quantity),  # type: ignore
             "log_date": r.log_date,
             "meal_time": r.meal_time,
         } for r in records

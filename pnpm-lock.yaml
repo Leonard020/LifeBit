@@ -164,9 +164,6 @@ importers:
       recharts:
         specifier: ^2.12.7
         version: 2.15.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      shared-types:
-        specifier: workspace:*
-        version: link:../../packages/shared-types
       sonner:
         specifier: ^1.5.0
         version: 1.7.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -234,12 +231,6 @@ importers:
       vite:
         specifier: ^5.4.1
         version: 5.4.19(@types/node@22.15.31)
-
-  packages/shared-types:
-    devDependencies:
-      typescript:
-        specifier: ^5.8.3
-        version: 5.8.3
 
 packages:
 

@@ -608,9 +608,9 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             temp_path = tmp.name
 
         with open(temp_path, "rb") as f:
-            transcript = openai.Audio.transcribe("whisper-1", f)
+            transcript = openai.Audio.transcribe("whisper-1", f)  # type: ignore
 
-        user_text = transcript["text"]
+        user_text = transcript.get("text", "") if hasattr(transcript, 'get') else str(transcript)  # type: ignore
         print("[INFO] Whisper 결과:", user_text)
 
         # 간단 룰베이스로 GPT 프롬프트 분기 (운동/식단 구분)
@@ -628,7 +628,7 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
         # GPT 호출
         if USE_GPT:
             # 1. 데이터 추출
-            extraction_response = openai.ChatCompletion.create(
+            extraction_response = openai.ChatCompletion.create(  # type: ignore
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": extraction_prompt},
@@ -637,11 +637,11 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                 temperature=0.3
             )
 
-            parsed_data = json.loads(extraction_response.choices[0].message["content"])
+            parsed_data = json.loads(extraction_response.choices[0].message["content"])  # type: ignore
             print("[INFO] GPT 파싱 결과:", json.dumps(parsed_data, indent=2, ensure_ascii=False))
 
             # 2. 데이터 검증
-            validation_response = openai.ChatCompletion.create(
+            validation_response = openai.ChatCompletion.create(  # type: ignore
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": validation_prompt},
@@ -650,11 +650,11 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                 temperature=0.3
             )
 
-            validation_result = json.loads(validation_response.choices[0].message["content"])
+            validation_result = json.loads(validation_response.choices[0].message["content"])  # type: ignore
 
             # 3. 데이터가 완전한 경우에만 확인 단계로 진행
-            if validation_result["status"] == "complete":
-                confirmation_response = openai.ChatCompletion.create(
+            if validation_result.get("status") == "complete":
+                confirmation_response = openai.ChatCompletion.create(  # type: ignore
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": confirmation_prompt},
@@ -783,14 +783,14 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                     "type": parsed_response.get("response_type", "success"),
                     "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
                     "parsed_data": parsed_data,
-                    "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
+                    "record_type": record_type,
                     "suggestions": []
                 }
             else:
                 # 일반 텍스트 응답
                 return {
                     "type": "incomplete",
-                    "message": raw,
+                    "message": f"음성 인식 완료: {user_text}",
                     "suggestions": []
                 }
         else:
@@ -798,10 +798,10 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
 
     except Exception as e:
-        print(f"[ERROR] Chat error: {e}")
+        print(f"[ERROR] Voice processing error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
+            detail=f"음성 처리 중 오류가 발생했습니다: {e}"
         )
 
 def determine_chat_step_automatically(message: str, current_data: dict, record_type: str) -> str:
@@ -918,14 +918,14 @@ async def chat(request: ChatRequest):
             ]
 
             # ChatCompletion API 실행
-            response = openai.ChatCompletion.create(
+            response = openai.ChatCompletion.create(  # type: ignore
                 model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.3
             )
 
             # 응답 JSON 파싱
-            raw = response.choices[0].message["content"]
+            raw = response.choices[0].message["content"]  # type: ignore
             
             try:
                 # JSON 응답인지 확인하고 파싱
@@ -1125,11 +1125,12 @@ def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Se
     results = []
     for record in records:
         results.append(DailyExerciseRecord(
-            name=record.notes,
-            weight=f"{record.weight}kg" if record.weight else "체중",
-            sets=record.sets or 1,
-            reps=record.reps or 1,
-            time=f"{record.duration_minutes}분"
+            exercise_session_id=int(record.exercise_session_id),  # type: ignore
+            name=str(record.notes) if record.notes is not None else "운동",  # type: ignore
+            weight=f"{record.weight}kg" if record.weight is not None else "체중",  # type: ignore
+            sets=int(record.sets) if record.sets is not None else 1,  # type: ignore
+            reps=int(record.reps) if record.reps is not None else 1,  # type: ignore
+            time=f"{record.duration_minutes}분" if record.duration_minutes is not None else "0분"  # type: ignore
         ))
 
     return results
@@ -1187,7 +1188,7 @@ def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session 
             "meal_log_id": record.meal_log_id,
             "food_item_id": record.food_item_id,
             "food_name": food_item.name if food_item else "Unknown",
-            "quantity": float(record.quantity),
+            "quantity": float(record.quantity),  # type: ignore
             "meal_time": record.meal_time,
             "log_date": str(record.log_date),
             "nutrition": {

@@ -139,6 +139,64 @@ const Index = () => {
     
     if (!chatInputText.trim() || !recordType) return;
 
+    // ✅ 저장 키워드 감지 로직 추가
+    const lowered = chatInputText.toLowerCase();
+    const saveKeywords = /^(저장|기록|완료|끝|등록|저장해|저장해줘|기록해|기록해줘|등록해|등록해줘)$/;
+    
+    if (saveKeywords.test(lowered) && !hasSaved) {
+      console.log('💾 [Index] 저장 키워드 감지');
+      
+      // chatStructuredData가 없으면 저장할 데이터가 없다는 메시지 표시
+      if (!chatStructuredData) {
+        console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
+        
+        // 사용자 메시지를 대화 기록에 추가
+        const updatedHistory: Message[] = [
+          ...conversationHistory,
+          { role: 'user', content: chatInputText }
+        ];
+        setConversationHistory(updatedHistory);
+        
+        // 데이터 부족 메시지 추가
+        const noDataMessage = recordType === 'exercise' ? 
+          '저장할 운동 정보가 없습니다. 먼저 운동 정보를 입력해주세요! 💪\n\n예시: "자전거 120분 탔어요"' : 
+          '저장할 식단 정보가 없습니다. 먼저 식단 정보를 입력해주세요! 🍽️\n\n예시: "아침에 계란 2개 먹었어요"';
+        
+        const finalHistory: Message[] = [
+          ...updatedHistory,
+          { role: 'assistant', content: noDataMessage }
+        ];
+        setConversationHistory(finalHistory);
+        setChatInputText('');
+        return;
+      }
+      
+      console.log('💾 [Index] handleRecordSubmit 호출');
+      
+      // 사용자 메시지를 대화 기록에 추가
+      const updatedHistory: Message[] = [
+        ...conversationHistory,
+        { role: 'user', content: chatInputText }
+      ];
+      setConversationHistory(updatedHistory);
+      
+      // AI 응답 메시지 추가
+      const saveMessage = recordType === 'exercise' ? 
+        '운동 기록이 저장되었습니다! 💪' : 
+        '식단 기록이 저장되었습니다! 🍽️';
+      
+      const finalHistory: Message[] = [
+        ...updatedHistory,
+        { role: 'assistant', content: saveMessage }
+      ];
+      setConversationHistory(finalHistory);
+      
+      setHasSaved(true);
+      setChatInputText(''); // 입력창 초기화
+      await handleRecordSubmit(recordType, JSON.stringify(chatStructuredData));
+      return; // 저장 후 함수 종료
+    }
+
     // Clear the input box immediately after sending
     setChatInputText('');
 
@@ -352,6 +410,22 @@ const Index = () => {
           title: '기록 완료',
           description: `${exerciseName} 운동이 저장되었습니다.`
         });
+        
+        // ✅ 운동기록 저장 후 초기화 및 페이지 이동
+        setHasSaved(true);
+        
+        // 상태 초기화
+        setChatInputText('');
+        setChatAiFeedback(null);
+        setChatStructuredData(null);
+        setShowChat(false);
+        setRecordType(null);
+        setConversationHistory([]);
+        setChatStep('extraction');
+        setCurrentMealFoods([]);
+        setIsAddingMoreFood(false);
+        setCurrentMealTime(null);
+        
       } catch (err) {
         console.error('💪 [Index 운동기록] Spring Boot API 저장 실패:', err);
         toast({
@@ -432,20 +506,23 @@ const Index = () => {
       }
       toast({ title: '기록 완료', description: '식단이 성공적으로 저장되었습니다.' });
       setHasSaved(true);
+      
+      // ✅ 식단기록 저장 후 초기화
+      setChatInputText('');
+      setChatAiFeedback(null);
+      setChatStructuredData(null);
+      setShowChat(false);
+      setRecordType(null);
+      setConversationHistory([]);
+      setChatStep('extraction');
+      setCurrentMealFoods([]);
+      setIsAddingMoreFood(false);
+      setCurrentMealTime(null);
+      
       navigate('/note', { state: { refreshDiet: true } });
     } else {
       console.warn('[기록 저장] 알 수 없는 recordType:', type, chatStructuredData);
     }
-    setChatInputText('');
-    setChatAiFeedback(null);
-    setChatStructuredData(null);
-    setShowChat(false);
-    setRecordType(null);
-    setConversationHistory([]);
-    setChatStep('extraction');
-    setCurrentMealFoods([]);
-    setIsAddingMoreFood(false);
-    setCurrentMealTime(null);
   }, [chatStructuredData, getUserIdFromToken, getToken, toast, navigate]);
 
   const { user } = useAuth();
