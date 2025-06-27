@@ -1203,21 +1203,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
               // 텍스트가 없을 때: 마이크 버튼
               <>
                 <span style={{ color: 'red', fontWeight: 'bold' }}>마이크버튼</span>
-                <Button
-                  size="icon"
-                  variant={isRecording ? 'default' : 'ghost'}
+              <Button
+                size="icon"
+                variant={isRecording ? 'default' : 'ghost'}
                   className={`$
-                    isRecording 
-                      ? 'gradient-bg text-white animate-pulse' 
-                      : 'hover:bg-gradient-to-br hover:from-teal-400 hover:to-blue-500 hover:text-white'
-                  }`}
+                  isRecording 
+                    ? 'gradient-bg text-white animate-pulse' 
+                    : 'hover:bg-gradient-to-br hover:from-teal-400 hover:to-blue-500 hover:text-white'
+                }`}
                   onClick={() => {
                     console.log('[마이크] 버튼 onClick 직접 호출됨');
                     handleVoiceToggle();
                   }}
-                >
-                  {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                </Button>
+              >
+                {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
               </>
             ) : (
               // 텍스트가 있을 때: 전송 버튼

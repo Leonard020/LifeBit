@@ -64,6 +64,16 @@ interface FoodItem {
 }
 
 const Note = () => {
+  // 1. 다크모드 감지 state를 최상단에 위치
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [todayScore, setTodayScore] = useState(12);
@@ -246,9 +256,31 @@ const Note = () => {
   }, [userGoalsData]);
 
   const MAX_EDGE_VALUE = 7;
+  // 1. 운동명-부위 매핑에 벤치프레스 포함
+  const exerciseNameToBodyPart: Record<string, string> = {
+    '벤치프레스': '가슴',
+    '사이클링': '유산소',
+    '수영': '유산소',
+    '조깅': '유산소',
+    '러닝': '유산소',
+    // 필요시 추가
+  };
+
+  // 2. todayBodyPartCounts 집계
+  const todayBodyPartCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    todayExercise.forEach((ex) => {
+      // bodyPart가 있으면 한글화, 없으면 매핑
+      const part = ex.bodyPart ? getBodyPartLabel(ex.bodyPart) : (exerciseNameToBodyPart[ex.exerciseName] || ex.bodyPart || '기타');
+      counts[part] = (counts[part] || 0) + 1;
+    });
+    return counts;
+  }, [todayExercise]);
+
+  // 3. exerciseData value에 todayBodyPartCounts 반영
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: weeklySummary[label] || 0,
+    value: todayBodyPartCounts[label] || 0,
     goal: exerciseGoals[label] || 0,
   }));
 
@@ -894,14 +926,24 @@ const Note = () => {
 
 
   // Custom tooltip for radar chart
-  const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
+  const RadarGoalTooltip: React.FC<TooltipProps<number, string> & { isDarkMode: boolean }> = ({ active, payload, isDarkMode }) => {
     if (active && payload && payload.length > 0) {
-      // Find the goal value
       const part = payload[0].payload.subject;
       const goal = payload[0].payload.goal;
+      const value = payload[0].payload.value;
       return (
-        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <strong>{part}</strong>: {goal}회
+        <div style={{
+          background: isDarkMode ? '#23272e' : 'white',
+          color: isDarkMode ? '#fff' : '#222',
+          border: '1px solid #ddd',
+          borderRadius: 6,
+          padding: '8px 12px',
+          fontSize: 14,
+          boxShadow: '0 2px 8px #0001'
+        }}>
+          <strong>{part}</strong><br />
+          목표: {goal}회<br />
+          달성: {value}회
         </div>
       );
     }
@@ -928,6 +970,12 @@ const Note = () => {
 
   // Note.tsx 상단 state 부분에 추가
   const [inputSource, setInputSource] = useState('TYPING'); // 입력 방식(직접입력/음성입력)
+
+  // 오늘의 운동 기록만을 위한 레이더 차트 데이터
+  const todayRadarData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: todayBodyPartCounts[label] || 0,
+  }));
 
   return (
     <Layout>
@@ -1030,9 +1078,15 @@ const Note = () => {
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
-                        <Tooltip content={<RadarGoalTooltip />} />
+                        <Tooltip content={<RadarGoalTooltip isDarkMode={isDarkMode} />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+                        <defs>
+                          <linearGradient id="todayGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="#8B5CF6" />
+                            <stop offset="100%" stopColor="#EC4899" />
+                          </linearGradient>
+                        </defs>
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
