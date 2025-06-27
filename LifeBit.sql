@@ -448,3 +448,61 @@ SELECT * FROM exercise_sessions ORDER BY created_at DESC LIMIT 5;
     SELECT * FROM meal_logs WHERE user_id=2 ORDER BY log_date DESC;
 
 
+
+-- 1. notification_read 테이블 생성
+CREATE TABLE IF NOT EXISTS notification_read (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    notification_id BIGINT NOT NULL REFERENCES notification(id) ON DELETE CASCADE,
+    read_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, notification_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_read_user_notification ON notification_read(user_id, notification_id);
+
+-- 2. 시스템 공용 알림 데이터 (user_id = NULL)
+INSERT INTO notification (user_id, type, ref_id, title, message) VALUES
+(NULL, 'SYSTEM', NULL, '앱 사용 팁', '앱의 다양한 기능을 활용해보세요. 더욱 효율적인 건강 관리가 가능합니다.'),
+(NULL, 'SYSTEM', NULL, '단축키 안내', '앱 사용을 더욱 편리하게 해주는 단축키를 확인해보세요. 빠른 접근이 가능합니다.'),
+(NULL, 'SYSTEM', NULL, '음성 인식 기능', '음성으로 운동 기록을 남길 수 있는 기능이 추가되었습니다. 편리하게 이용해보세요.'),
+(NULL, 'SYSTEM', NULL, 'AI 운동 추천', 'AI 운동 추천 기능을 활용해보세요. 개인 맞춤형 운동을 추천받을 수 있습니다.'),
+(NULL, 'SYSTEM', NULL, '데이터 동기화', '여러 기기에서 사용하실 때는 데이터 동기화를 확인해주세요. 모든 기기에서 동일한 정보를 확인할 수 있습니다.');
+
+-- 3. 신규 사용자 환영 알림 (user_id 1~10)
+INSERT INTO notification (user_id, type, ref_id, title, message) VALUES
+(1, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(2, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(3, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(4, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(5, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(6, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(7, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(8, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(9, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
+(10, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.');
+
+-- 4. 시스템 알림만 조회
+SELECT * FROM notification WHERE user_id IS NULL;
+
+-- 5. 특정 사용자가 읽은 시스템 알림
+SELECT * FROM notification_read WHERE user_id = 1 AND notification_id IN (SELECT id FROM notification WHERE user_id IS NULL);
+
+-- 6. 개인 알림만 조회
+SELECT * FROM notification WHERE user_id IS NOT NULL;
+
+-- 7. 실제 유저 읽은 여부 확인
+SELECT * FROM notification_read WHERE user_id = 2;
+SELECT * FROM notification_read WHERE user_id = 2 AND notification_id = 10;
+
+-- 8. (예시) 읽지 않은 알림 개수 조회
+-- SELECT COUNT(*) FROM notification WHERE is_read = false AND user_id = 1;
+
+-- 9. (예시) 알림 타입별 개수 조회
+-- SELECT type, COUNT(*) FROM notification GROUP BY type;
+
+
+-- 실제 유저 읽은 여부 확인
+-- 유저 MinSoo_Kim 기준, 이메일 user001@example.com
+-- 예시)
+--SELECT * FROM notification_read WHERE user_id = 2
+  -- SELECT * FROM notification_read WHERE user_id = 2 AND notification_id = 10;

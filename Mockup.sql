@@ -447,7 +447,7 @@ SELECT
     1 + (random() * 49)::integer AS food_item_id, -- 1~50 범위
     (ARRAY['breakfast', 'lunch', 'dinner', 'snack'])[1 + (random() * 3)::integer]::meal_time_type,
     (50 + random() * 200)::decimal(6,2) AS quantity,
-    DATE '2025-02-01' + (random() * 180)::integer * INTERVAL '1 day' AS log_date,
+    DATE '2025-01-01' + (random() * 176)::integer * INTERVAL '1 day' AS log_date,
     (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
     CASE 
         WHEN random() > 0.7 THEN (0.75 + random() * 0.25)::decimal(4,2) 
@@ -459,7 +459,7 @@ FROM users u
 CROSS JOIN generate_series(1, 18) AS series -- 각 사용자당 18개씩 (50명 × 18 = 900개)
 WHERE u.user_id IS NOT NULL
 ORDER BY u.user_id, series
-LIMIT 900; 
+LIMIT 900;
 
 -- ===================================================================
 -- 9. 사용자 랭킹 49개 (각 사용자당 1개)
