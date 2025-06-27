@@ -299,8 +299,8 @@ SELECT
     65 + (random() * 20) + (random() - 0.5) * 10 AS weight,
     -- 키 (160~185cm 범위)
     160 + (random() * 25) AS height,
-    -- 기록 날짜: 2025년 2월 1일부터 균일하게 분포
-    '2025-02-01'::date + (row_number() OVER () - 1) * INTERVAL '1 day' / 5 AS record_date
+    -- 기록 날짜: 2025년 1월 1일부터 6월 26일까지 균등하게 분포 (176일간)
+    '2025-01-01'::date + ((row_number() OVER () - 1) * 175 / 899)::integer * INTERVAL '1 day' AS record_date
 FROM generate_series(1, 900) AS series;
 
 -- ===================================================================
@@ -406,8 +406,8 @@ SELECT
         WHEN random() > 0.5 THEN 2 + (random() * 4)::integer -- 세트수: 2-6세트
         ELSE NULL 
     END,
-    -- 기록 날짜: 2025년 2월 1일부터 균일하게 분포
-    ('2025-02-01'::date + (row_number() OVER () - 1) * INTERVAL '1 day' / 5)::date AS exercise_date,
+    -- 기록 날짜: 2025년 2월 1일부터 6월 26일까지 균등하게 분포 (144일간)
+    ('2025-02-01'::date + ((row_number() OVER () - 1) * 143 / 899)::integer * INTERVAL '1 day')::date AS exercise_date,
     (ARRAY['dawn', 'morning', 'afternoon', 'night'])[1 + (random() * 3)::integer]::time_period_type,
     (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
     CASE 
@@ -726,6 +726,29 @@ FROM generate_series(1, 200);
 
 
 
+
+-- 등급 구간별 tier 값 일괄 업데이트 (점수 기준, 필요에 따라 조정)
+UPDATE user_ranking SET tier = 'UNRANK'      WHERE total_score < 100;
+UPDATE user_ranking SET tier = 'BRONZE'      WHERE total_score >= 100   AND total_score < 500;
+UPDATE user_ranking SET tier = 'SILVER'      WHERE total_score >= 500   AND total_score < 1000;
+UPDATE user_ranking SET tier = 'GOLD'        WHERE total_score >= 1000  AND total_score < 2000;
+UPDATE user_ranking SET tier = 'PLATINUM'    WHERE total_score >= 2000  AND total_score < 3000;
+UPDATE user_ranking SET tier = 'DIAMOND'     WHERE total_score >= 3000  AND total_score < 4000;
+UPDATE user_ranking SET tier = 'MASTER'      WHERE total_score >= 4000  AND total_score < 5000;
+UPDATE user_ranking SET tier = 'GRANDMASTER' WHERE total_score >= 5000  AND total_score < 6000;
+UPDATE user_ranking SET tier = 'CHALLENGER'  WHERE total_score >= 6000;
+
+-- ranking_history.user_id 값 동기화 (user_ranking_id → user_id)
+UPDATE ranking_history rh
+SET user_ranking_id = ur.user_id
+FROM user_ranking ur
+WHERE rh.user_ranking_id = ur.id;
+
+-- ranking_history.tier 값 동기화 (user_id 기준)
+UPDATE ranking_history rh
+SET tier = ur.tier
+FROM user_ranking ur
+WHERE rh.user_ranking_id = ur.user_id;
 
 
 
