@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/tls"
       version = ">= 4.0"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = ">= 2.0"
+    }
   }
 }
 
@@ -209,4 +213,26 @@ resource "aws_eip_association" "web" {
   allocation_id = aws_eip.web.id
 }
 
- 
+# ================================================
+# 자동화: SSH 키와 Ansible Inventory 자동 생성
+# ================================================
+
+# SSH 키 파일을 AWS 키페어 이름과 동일하게 자동 생성
+resource "local_file" "ssh_private_key" {
+  content         = tls_private_key.lifebit.private_key_pem
+  filename        = pathexpand("~/.ssh/${aws_key_pair.lifebit.key_name}.pem")
+  file_permission = "0600"
+  
+  depends_on = [aws_key_pair.lifebit]
+}
+
+# Ansible Inventory 자동 생성 (AWS 키페어 이름 사용)
+resource "local_file" "ansible_inventory" {
+  content = templatefile("${path.module}/../ansible/templates/inventory.ini.tpl", {
+    server_ip = aws_eip.web.public_ip
+    key_name  = aws_key_pair.lifebit.key_name
+  })
+  filename = "${path.module}/../ansible/inventory.ini"
+  
+  depends_on = [aws_eip_association.web, local_file.ssh_private_key]
+}
