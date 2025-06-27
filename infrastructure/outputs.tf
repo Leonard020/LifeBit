@@ -49,7 +49,7 @@ output "ssh_key_name" {
 # 접속 정보
 output "ssh_connection" {
   description = "SSH 접속 명령어"
-  value       = "ssh -i ~/.ssh/lifebit.pem ubuntu@${aws_eip.web.public_ip}"
+  value       = "ssh -i ~/.ssh/${aws_key_pair.lifebit.key_name}.pem ubuntu@${aws_eip.web.public_ip}"
 }
 
 # 애플리케이션 접속 URLs
@@ -83,7 +83,7 @@ output "deployment_guide" {
 - SSH 접속: ssh -i ~/.ssh/lifebit.pem ubuntu@${aws_eip.web.public_ip}
 
 🔑 SSH 키 저장:
-- 키 파일을 ~/.ssh/lifebit.pem에 저장하고 chmod 600 설정
+- 키 파일이 자동으로 ~/.ssh/${aws_key_pair.lifebit.key_name}.pem에 생성됨
 
 🌐 애플리케이션 URLs:
 - Frontend:     http://${aws_eip.web.public_ip}:3000
@@ -95,10 +95,11 @@ output "deployment_guide" {
 - Airflow:      http://${aws_eip.web.public_ip}:8081
 
 🔧 다음 단계:
-1. SSH 키 파일 저장: terraform output -raw ssh_private_key > ~/.ssh/lifebit.pem && chmod 600 ~/.ssh/lifebit.pem
-2. SSH로 서버 접속
-3. Ansible 플레이북 실행: ansible-playbook -i inventory.ini playbook.yml
-4. 애플리케이션 접속 확인
+1. ✅ SSH 키 파일 자동 생성 완료
+2. ✅ Ansible Inventory 자동 생성 완료  
+3. SSH로 서버 접속: ssh -i ~/.ssh/${aws_key_pair.lifebit.key_name}.pem ubuntu@${aws_eip.web.public_ip}
+4. Ansible 플레이북 실행: ansible-playbook -i inventory.ini playbook.yml
+5. 애플리케이션 접속 확인
 
 💰 예상 비용: 월 2-3만원 (t3.small 2GB RAM)
 EOT
@@ -118,4 +119,14 @@ output "resource_summary" {
     vpc_id           = aws_vpc.main.id
     subnet_id        = aws_subnet.public.id
   }
-} 
+}
+
+# 자동화 정보
+output "automation_info" {
+  description = "자동 생성된 파일 정보"
+  value = {
+    ssh_key_file      = "~/.ssh/${aws_key_pair.lifebit.key_name}.pem"
+    ansible_inventory = "ansible/inventory.ini"
+    key_name_matches  = "AWS와 로컬 파일명이 자동으로 일치됨"
+  }
+}
