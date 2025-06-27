@@ -23,6 +23,7 @@ import {
   Moon,
   Sun,
   ChevronUp,
+  Settings,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
@@ -78,8 +79,10 @@ const WebHeader = () => {
             >
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-
             <NotificationBell />
+            <Link to="/settings">
+              <Settings className="w-5 h-5 text-foreground hover:text-primary transition" />
+            </Link>
 
             {isLoggedIn ? (
               <DropdownMenu>
@@ -189,7 +192,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <span className="gradient-text text-2xl font-bold">LifeBit</span>
           </Link>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
               size="icon"
@@ -198,8 +201,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-
             <NotificationBell />
+            <Link to="/settings">
+              <Settings className="w-5 h-5 text-foreground hover:text-primary transition" />
+            </Link>
 
             {isLoggedIn ? (
               <DropdownMenu>

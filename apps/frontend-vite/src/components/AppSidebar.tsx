@@ -1,9 +1,12 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { 
   FileText, 
   User, 
   Trophy, 
-  Heart
+  Heart,
+  Settings,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -15,8 +18,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Switch } from '@/components/ui/switch';
+import React, { useState } from 'react';
 
 export const AppSidebar = () => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const toggleDarkMode = () => setIsDarkMode((prev) => !prev);
+
   const navItems = [
     { to: '/note', icon: FileText, label: '노트' },
     { to: '/profile', icon: User, label: '프로필' },

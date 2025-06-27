@@ -523,4 +523,23 @@ export const deleteNotification = async (notificationId: number) => {
   return response.data;
 };
 
+// 업적 초기화
+export const initializeAchievements = async () => {
+  const response = await axios.post('/api/v1/health-statistics/achievements/initialize');
+  return response.data;
+};
+
+// 업적 달성 처리
+export const completeAchievement = async (userId: number, achievementTitle: string) => {
+  console.log('Debug - completeAchievement called with:', { userId, achievementTitle });
+  console.log('Debug - API URL:', '/api/achievements/complete');
+  
+  const response = await axios.post('/api/achievements/complete', null, {
+    params: { userId, achievementTitle }
+  });
+  
+  console.log('Debug - completeAchievement response:', response.data);
+  return response.data;
+};
+
 

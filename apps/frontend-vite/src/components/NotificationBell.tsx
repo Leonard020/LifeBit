@@ -13,6 +13,7 @@ import { useAuth } from '@/AuthContext';
 import { toast } from 'sonner';
 import type { AxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { DndContext, useDraggable, DragEndEvent } from '@dnd-kit/core';
 
 const NotificationBell = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -212,6 +213,37 @@ const NotificationBell = () => {
     }
   };
 
+  // 알림 아이템 컴포넌트 (드래그 지원)
+  function DraggableNotification({ notification, children, onDelete }: { notification: Notification, children: React.ReactNode, onDelete: (id: number) => void }) {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+      id: notification.id,
+    });
+    // 오른쪽으로 120px 이상 드래그하면 삭제
+    useEffect(() => {
+      if (transform && transform.x > 120) {
+        onDelete(notification.id);
+      }
+    }, [transform, notification.id, onDelete]);
+    return (
+      <div
+        ref={setNodeRef}
+        style={{
+          transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+          opacity: isDragging ? 0.5 : 1,
+          transition: isDragging ? 'none' : 'transform 0.2s',
+          boxShadow: isDragging ? '0 4px 16px rgba(0,0,0,0.08)' : undefined,
+        }}
+        {...listeners}
+        {...attributes}
+      >
+        {children}
+        {isDragging && (
+          <span style={{ position: 'absolute', right: 16, top: 16, color: '#f87171', fontWeight: 700 }}>→ 삭제</span>
+        )}
+      </div>
+    );
+  }
+
   if (!isLoggedIn) return null;
 
   return (
@@ -272,59 +304,62 @@ const NotificationBell = () => {
               <p className="text-base">새로운 알림이 없습니다</p>
             </div>
           ) : (
-            <div className="p-3">
-              {filteredNotifications.map((notification) => {
-                const meta = typeMeta[notification.type] || { icon: <Info className="w-4 h-4" />, color: 'text-gray-400', label: notification.type, link: () => null };
-                return (
-                  <div
-                    key={notification.id}
-                    className={`p-4 rounded-xl mb-3 cursor-pointer transition-colors flex items-start gap-3 shadow-sm ${
-                      notification.isRead 
-                        ? 'bg-gray-50 hover:bg-gray-100' 
-                        : 'bg-blue-50 hover:bg-blue-100 border-l-4 border-blue-500'
-                    }`}
-                    onClick={() => handleNotificationClick(notification)}
-                  >
-                    <span className={`mt-1 ${meta.color}`}>{meta.icon}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h5 className={`font-semibold text-base ${
-                          notification.isRead ? 'text-gray-700' : 'text-blue-900'
-                        }`}>
-                          {notification.title}
-                          <span className="ml-2 text-xs text-gray-400">[{meta.label}]</span>
-                        </h5>
-                        {!notification.isRead && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        )}
+            <DndContext onDragEnd={() => {}}>
+              <div className="p-3">
+                {filteredNotifications.map((notification) => {
+                  const meta = typeMeta[notification.type] || { icon: <Info className="w-4 h-4" />, color: 'text-gray-400', label: notification.type, link: () => null };
+                  return (
+                    <DraggableNotification key={notification.id} notification={notification} onDelete={handleDeleteNotification}>
+                      <div
+                        className={`p-4 rounded-xl mb-3 cursor-pointer transition-colors flex items-start gap-3 shadow-sm relative ${
+                          notification.isRead 
+                            ? 'bg-gray-50 hover:bg-gray-100' 
+                            : 'bg-blue-50 hover:bg-blue-100 border-l-4 border-blue-500'
+                        }`}
+                        onClick={() => handleNotificationClick(notification)}
+                      >
+                        <span className={`mt-1 ${meta.color}`}>{meta.icon}</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h5 className={`font-semibold text-base ${
+                              notification.isRead ? 'text-gray-700' : 'text-blue-900'
+                            }`}>
+                              {notification.title}
+                              <span className="ml-2 text-xs text-gray-400">[{meta.label}]</span>
+                            </h5>
+                            {!notification.isRead && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            )}
+                          </div>
+                          <p className={`text-sm leading-relaxed ${
+                            notification.isRead ? 'text-gray-600' : 'text-blue-700'
+                          }`}>
+                            {notification.message}
+                          </p>
+                          {notification.refId && (
+                            <p className="text-xs text-gray-400 mt-1">관련 ID: {notification.refId}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-2">
+                            {formatDate(notification.createdAt)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNotification(notification.id);
+                          }}
+                          className="text-gray-400 hover:text-red-500 h-6 w-6 p-0"
+                        >
+                          ×
+                        </Button>
                       </div>
-                      <p className={`text-sm leading-relaxed ${
-                        notification.isRead ? 'text-gray-600' : 'text-blue-700'
-                      }`}>
-                        {notification.message}
-                      </p>
-                      {notification.refId && (
-                        <p className="text-xs text-gray-400 mt-1">관련 ID: {notification.refId}</p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-2">
-                        {formatDate(notification.createdAt)}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteNotification(notification.id);
-                      }}
-                      className="text-gray-400 hover:text-red-500 h-6 w-6 p-0"
-                    >
-                      ×
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
+                    </DraggableNotification>
+                  );
+                })}
+              </div>
+            </DndContext>
           )}
         </ScrollArea>
       </PopoverContent>

@@ -18,6 +18,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.List;
 import java.util.Map;
@@ -239,6 +241,12 @@ public class HealthStatisticsController {
             // 실제 데이터베이스에서 사용자 업적 조회
             List<Map<String, Object>> achievements = achievementService.getUserAchievements(currentUserId);
             
+            // 업적이 없으면 초기화
+            if (achievements.isEmpty()) {
+                achievementService.initializeUserAchievements(currentUserId);
+                achievements = achievementService.getUserAchievements(currentUserId);
+            }
+            
             log.debug("Retrieved {} achievements for user {}", achievements.size(), currentUserId);
 
             Map<String, Object> rankingData = Map.of(
@@ -306,6 +314,34 @@ public class HealthStatisticsController {
         } catch (Exception e) {
             log.error("운동 캘린더 히트맵 조회 중 예상치 못한 오류 발생 - 사용자: {}", userId, e);
             return ResponseEntity.ok(List.of()); // 빈 리스트 반환
+        }
+    }
+
+    /**
+     * 사용자 업적 초기화
+     */
+    @PostMapping("/achievements/initialize")
+    public ResponseEntity<Map<String, Object>> initializeAchievements(@AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            Long currentUserId = Long.parseLong(userDetails.getUsername());
+            achievementService.initializeUserAchievements(currentUserId);
+            
+            Map<String, Object> response = Map.of(
+                "message", "업적이 성공적으로 초기화되었습니다.",
+                "userId", currentUserId
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error initializing achievements", e);
+            
+            Map<String, Object> errorResponse = Map.of(
+                "error", "업적 초기화에 실패했습니다.",
+                "message", e.getMessage()
+            );
+            
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 
