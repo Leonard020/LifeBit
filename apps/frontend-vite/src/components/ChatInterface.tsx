@@ -50,6 +50,16 @@ const ChatMessage: React.FC<{
     hour12: false
   });
 
+  // 다크모드 감지
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2`}>
       <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[70%]`}>
@@ -62,11 +72,21 @@ const ChatMessage: React.FC<{
           </div>
         )}
 
-        <div className={`relative px-4 py-3 rounded-2xl shadow-sm ${isUser
+        <div
+          className={`relative px-4 py-3 rounded-2xl shadow-sm ${isUser
             ? 'bg-purple-500 text-white rounded-br-md'
             : 'bg-white border border-gray-200 rounded-bl-md'
-          }`}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+          }`}
+          style={
+            !isUser && isDarkMode
+              ? { background: '#23272e' }
+              : undefined
+          }
+        >
+          <div
+            className="whitespace-pre-wrap text-sm leading-relaxed"
+            style={{ color: '#222', fontWeight: 600 }}
+          >
             {message.content}
           </div>
 

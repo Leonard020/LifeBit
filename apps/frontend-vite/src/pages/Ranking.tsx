@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Trophy, Medal, Award, TrendingUp, Calendar, Target, Loader2 } from 'lucide-react';
-import { getRanking } from '@/api/auth';
+import { Trophy, Medal, Award, TrendingUp, Calendar, Target, Loader2, Check } from 'lucide-react';
+import { getRanking, initializeAchievements, completeAchievement } from '@/api/auth';
 import { getToken, getUserInfo } from '@/utils/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Drawer, DrawerContent, DrawerTrigger, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 import { getTierMeta } from '@/constants/rankingTierMeta';
+import { Button } from '@/components/ui/button';
 
 interface RankingUser {
   rank: number;
@@ -55,8 +56,117 @@ const Ranking = () => {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+  const [initializing, setInitializing] = useState(false);
+  const [completingAchievement, setCompletingAchievement] = useState<string | null>(null);
+  const location = useLocation();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // 업적 완료 상태 체크 헬퍼 함수
+  const isAchievementCompleted = (achievement: Achievement) => {
+    return achievement.progress >= (achievement.target || 100);
+  };
+
+  // 업적 상태에 따른 스타일 클래스 반환
+  const getAchievementStatusClass = (achievement: Achievement) => {
+    if (achievement.achieved) {
+      return {
+        container: 'border-green-200 bg-green-50',
+        title: 'text-green-800',
+        description: 'text-green-600'
+      };
+    } else if (isAchievementCompleted(achievement)) {
+      return {
+        container: 'border-yellow-200 bg-yellow-50',
+        title: 'text-yellow-800',
+        description: 'text-yellow-600'
+      };
+    } else {
+      return {
+        container: 'border-gray-200 bg-gray-50',
+        title: 'text-gray-700',
+        description: 'text-gray-500'
+      };
+    }
+  };
+
+  // 업적 달성 처리 함수
+  const handleCompleteAchievement = async (achievement: Achievement) => {
+    // 이미 처리 중인 경우 중복 실행 방지
+    if (completingAchievement === achievement.title) {
+      return;
+    }
+    
+    try {
+      const userInfo = getUserInfo();
+      console.log('Debug - UserInfo:', userInfo);
+      console.log('Debug - Achievement:', achievement);
+      
+      if (!userInfo?.userId) {
+        toast.error('사용자 정보를 찾을 수 없습니다.');
+        return;
+      }
+      
+      const userId = Number(userInfo.userId);
+      console.log('Debug - Calling completeAchievement with:', { userId, achievementTitle: achievement.title });
+      
+      setCompletingAchievement(achievement.title);
+      
+      // API 호출
+      await completeAchievement(userId, achievement.title);
+      
+      // 성공 처리
+      toast.success('업적이 달성되었습니다!');
+      
+      // 즉시 로컬 상태 업데이트
+      if (rankingData) {
+        const updatedAchievements = rankingData.achievements.map(a => {
+          if (a.title === achievement.title) {
+            const today = new Date();
+            const formattedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            console.log('Debug - Updating achievement:', { title: a.title, date: formattedDate });
+            return {
+              ...a,
+              achieved: true,
+              date: formattedDate
+            };
+          }
+          return a;
+        });
+        
+        console.log('Debug - Updated achievements:', updatedAchievements);
+        setRankingData({
+          ...rankingData,
+          achievements: updatedAchievements
+        });
+      }
+      
+      // Drawer 닫기 (상세 보기에서 클릭한 경우)
+      if (selectedAchievement?.title === achievement.title) {
+        setDrawerOpen(false);
+      }
+      
+      // 백그라운드에서 데이터 새로고침 (캐시 무효화)
+      setTimeout(async () => {
+        try {
+          await fetchRankingData();
+        } catch (error) {
+          console.log('Background refresh failed:', error);
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Failed to complete achievement:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      toast.error('업적 달성 처리에 실패했습니다.');
+    } finally {
+      setCompletingAchievement(null);
+    }
+  };
+
     const fetchRankingData = async () => {
       try {
         const token = getToken();
@@ -78,6 +188,21 @@ const Ranking = () => {
           console.log('Debug - About to call getRanking API');
           const data = await getRanking();
           console.log('Debug - getRanking API response:', data);
+        
+        // 업적 데이터 상세 로깅
+        if (data.achievements) {
+          console.log('Debug - Achievements data:', data.achievements);
+          data.achievements.forEach((achievement: Achievement, index: number) => {
+            console.log(`Debug - Achievement ${index}:`, {
+              title: achievement.title,
+              achieved: achievement.achieved,
+              date: achievement.date,
+              progress: achievement.progress,
+              target: achievement.target
+            });
+          });
+        }
+        
           setRankingData(data);
         } catch (apiError) {
           console.log('Debug - API call failed:', apiError);
@@ -99,8 +224,40 @@ const Ranking = () => {
       }
     };
 
+  useEffect(() => {
     fetchRankingData();
   }, [navigate]);
+
+  // 알림에서 전달받은 achievementId 처리
+  useEffect(() => {
+    const state = location.state as { achievementId?: number };
+    if (state?.achievementId && rankingData) {
+      // 업적 섹션으로 스크롤
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          });
+        }
+      }, 500); // 데이터 로드 후 스크롤
+    }
+  }, [location.state, rankingData]);
+
+  // 업적 초기화 함수
+  const handleInitializeAchievements = async () => {
+    try {
+      setInitializing(true);
+      await initializeAchievements();
+      toast.success('업적이 초기화되었습니다!');
+      // 데이터 다시 로드
+      fetchRankingData();
+    } catch (error) {
+      toast.error('업적 초기화에 실패했습니다.');
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   const getBadgeColor = (badge: string) => {
     switch (badge) {
@@ -339,7 +496,7 @@ const Ranking = () => {
 
         {/* Achievement Badges */}
         {!hasNoData && achievements.length > 0 && (
-          <Card className="hover-lift">
+          <Card className="hover-lift" ref={scrollRef}>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Award className="mr-2 h-5 w-5" />
@@ -348,20 +505,35 @@ const Ranking = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {achievements.map((achievement: Achievement, index: number) => (
-                  <Tooltip key={index}>
+                {achievements.map((achievement: Achievement, index: number) => {
+                  const statusClass = getAchievementStatusClass(achievement);
+                  return (
+                    <div key={index} className="relative">
+                      <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className={`p-4 rounded-lg border ${achievement.achieved ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer hover:shadow-lg hover:border-primary transition`}
-                        onClick={() => { setSelectedAchievement(achievement); setDrawerOpen(true); }}
+                            className={`p-4 rounded-lg border cursor-pointer hover:shadow-lg hover:border-primary transition ${statusClass.container}`}
+                            onClick={(e) => {
+                              // 버튼 클릭이 아닌 경우에만 Drawer 열기
+                              const target = e.target as HTMLElement;
+                              if (!target.closest('button')) {
+                                setSelectedAchievement(achievement);
+                                setDrawerOpen(true);
+                              }
+                            }}
                         tabIndex={0}
                         role="button"
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setSelectedAchievement(achievement); setDrawerOpen(true); } }}
+                            onKeyDown={e => { 
+                              if (e.key === 'Enter' || e.key === ' ') { 
+                                setSelectedAchievement(achievement); 
+                                setDrawerOpen(true); 
+                              } 
+                            }}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
-                            <h4 className={`font-medium ${achievement.achieved ? 'text-green-800' : 'text-gray-700'}`}>{achievement.title}</h4>
-                            <p className={`text-sm ${achievement.achieved ? 'text-green-600' : 'text-gray-500'}`}>{achievement.description}</p>
+                                <h4 className={`font-medium ${statusClass.title}`}>{achievement.title}</h4>
+                                <p className={`text-sm ${statusClass.description}`}>{achievement.description}</p>
                           </div>
                           <span
                             className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
@@ -374,7 +546,9 @@ const Ranking = () => {
                         {achievement.achieved ? (
                           <div className="flex items-center space-x-2 text-green-600">
                             <Trophy className="h-4 w-4" />
-                            <span className="text-sm">달성: {achievement.date}</span>
+                                <span className="text-sm">
+                                  달성: {achievement.date || '날짜 정보 없음'}
+                                </span>
                           </div>
                         ) : (
                           <div className="space-y-1">
@@ -382,9 +556,55 @@ const Ranking = () => {
                               <span>진행도</span>
                               <span>{achievement.progress}/{achievement.target || 100}</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} />
-                            </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
+                                  {isAchievementCompleted(achievement) ? (
+                                    // 완료된 경우: 그라데이션 배경 + 체크 아이콘 (애니메이션 제거)
+                                    <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-2 rounded-full transition-all duration-500 flex items-center justify-end pr-1">
+                                      <Check className="h-3 w-3 text-white" />
+                                    </div>
+                                  ) : (
+                                    // 진행 중인 경우: 기본 진행바
+                                    <div 
+                                      className="bg-primary h-2 rounded-full transition-all duration-300" 
+                                      style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} 
+                                    />
+                                  )}
+                                </div>
+                                {isAchievementCompleted(achievement) && !achievement.achieved && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setTimeout(() => handleCompleteAchievement(achievement), 0);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setTimeout(() => handleCompleteAchievement(achievement), 0);
+                                      }
+                                    }}
+                                    disabled={completingAchievement === achievement.title}
+                                    className="flex items-center justify-center text-sm text-green-600 font-medium animate-pulse mt-2 hover:text-green-700 hover:scale-105 transition-all duration-200 w-full py-2 rounded bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {completingAchievement === achievement.title ? (
+                                      <>
+                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                        달성 처리 중...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Check className="h-3 w-3 mr-1" />
+                                        목표 달성! (클릭하여 달성)
+                                      </>
+                                    )}
+                                  </button>
+                                )}
                           </div>
                         )}
                       </div>
@@ -393,7 +613,9 @@ const Ranking = () => {
                       특정 업적을 달성하면 획득할 수 있는 뱃지입니다.
                     </TooltipContent>
                   </Tooltip>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
               {/* 업적 상세 Drawer */}
               <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
@@ -422,14 +644,62 @@ const Ranking = () => {
                             <span>진행도</span>
                             <span>{selectedAchievement.progress}/{selectedAchievement.target || 100}</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(selectedAchievement.progress / (selectedAchievement.target || 100) * 100, 100)}%` }} />
+                          <div className="w-full bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                            {isAchievementCompleted(selectedAchievement) ? (
+                              // 완료된 경우: 그라데이션 배경 + 체크 아이콘 (애니메이션 제거)
+                              <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2">
+                                <Check className="h-4 w-4 text-white" />
+                              </div>
+                            ) : (
+                              // 진행 중인 경우: 기본 진행바
+                              <div 
+                                className="bg-primary h-3 rounded-full transition-all duration-300" 
+                                style={{ width: `${Math.min(selectedAchievement.progress / (selectedAchievement.target || 100) * 100, 100)}%` }} 
+                              />
+                            )}
                           </div>
+                          {isAchievementCompleted(selectedAchievement) && !selectedAchievement.achieved && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setTimeout(() => handleCompleteAchievement(selectedAchievement), 0);
+                              }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setTimeout(() => handleCompleteAchievement(selectedAchievement), 0);
+                                }
+                              }}
+                              disabled={completingAchievement === selectedAchievement.title}
+                              className="flex items-center justify-center text-sm text-green-600 font-medium animate-pulse mt-2 hover:text-green-700 hover:scale-105 transition-all duration-200 w-full py-2 rounded bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {completingAchievement === selectedAchievement.title ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  달성 처리 중...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-4 w-4 mr-1" />
+                                  목표 달성! (클릭하여 달성)
+                                </>
+                              )}
+                            </button>
+                          )}
                         </div>
                         {selectedAchievement.achieved ? (
                           <div className="flex items-center space-x-2 text-green-600 mb-2">
                             <Trophy className="h-4 w-4" />
-                            <span className="text-sm">달성: {selectedAchievement.date}</span>
+                            <span className="text-sm">
+                              달성: {selectedAchievement.date || '날짜 정보 없음'}
+                            </span>
                           </div>
                         ) : null}
                         <button className="mt-4 px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 text-base font-medium" style={{minWidth:'120px'}} onClick={() => setDrawerOpen(false)}>닫기</button>
@@ -438,6 +708,41 @@ const Ranking = () => {
                   )}
                 </DrawerContent>
               </Drawer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 업적이 없을 때 초기화 버튼 */}
+        {!hasNoData && achievements.length === 0 && (
+          <Card className="hover-lift">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Award className="mr-2 h-5 w-5" />
+                나의 업적/뱃지
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">🏆</div>
+                <h4 className="text-lg font-medium mb-2">업적이 초기화되지 않았습니다</h4>
+                <p className="text-muted-foreground mb-6">
+                  업적을 초기화하여 다양한 뱃지를 수집해보세요!
+                </p>
+                <Button
+                  onClick={handleInitializeAchievements}
+                  disabled={initializing}
+                  className="px-6 py-3"
+                >
+                  {initializing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      초기화 중...
+                    </>
+                  ) : (
+                    '업적 초기화하기'
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

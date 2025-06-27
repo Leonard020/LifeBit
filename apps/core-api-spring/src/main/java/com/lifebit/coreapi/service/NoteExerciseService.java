@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
+import com.lifebit.coreapi.entity.enums.AchievementType;
 
 @Service
 @RequiredArgsConstructor
@@ -82,17 +83,22 @@ public class NoteExerciseService {
 
         // ✅ 업적 체크 및 업데이트
         try {
+            // 사용자 업적 초기화 (없으면 생성)
+            achievementService.initializeUserAchievements(dto.getUserId());
+            
             // 연속 운동 일수 계산 및 업적 업데이트
             int currentStreak = calculateCurrentStreak(dto.getUserId());
             achievementService.updateStreakAchievements(dto.getUserId(), currentStreak);
             
-            // 총 운동 일수 업적 업데이트
+            // 총 운동 일수 업적 업데이트 (설정 기반)
             int totalWorkoutDays = getTotalWorkoutDays(dto.getUserId());
-            achievementService.updateUserAchievementProgress(dto.getUserId(), "총 운동 일수", totalWorkoutDays);
+            achievementService.updateUserAchievementProgress(dto.getUserId(), 
+                AchievementType.TOTAL_WORKOUT_DAYS.getTitle(), totalWorkoutDays);
             
-            // 주간 운동 횟수 업적 업데이트
+            // 주간 운동 횟수 업적 업데이트 (설정 기반)
             int weeklyExerciseCount = getWeeklyExerciseCount(dto.getUserId());
-            achievementService.updateUserAchievementProgress(dto.getUserId(), "주간 운동", weeklyExerciseCount);
+            achievementService.updateUserAchievementProgress(dto.getUserId(), 
+                AchievementType.WEEKLY_EXERCISE.getTitle(), weeklyExerciseCount);
             
         } catch (Exception e) {
             // 업적 업데이트 실패 시 로그만 남기고 계속 진행

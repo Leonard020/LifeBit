@@ -18,9 +18,14 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
 
     public void saveNotification(Long userId, String type, String title, String message) {
+        saveNotification(userId, type, title, message, null);
+    }
+
+    public void saveNotification(Long userId, String type, String title, String message, Long refId) {
         Notification notification = new Notification();
         notification.setUserId(userId);
         notification.setType(type);
+        notification.setRefId(refId);
         notification.setTitle(title);
         notification.setMessage(message);
         notification.setRead(false);

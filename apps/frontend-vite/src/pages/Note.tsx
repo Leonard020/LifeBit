@@ -64,6 +64,16 @@ interface FoodItem {
 }
 
 const Note = () => {
+  // 1. 다크모드 감지 state를 최상단에 위치
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [todayScore, setTodayScore] = useState(12);
@@ -77,24 +87,9 @@ const Note = () => {
   const [dietError, setDietError] = useState<string | null>(null);
 
   // 식단 추가 관련 상태
-  const [isAddDietDialogOpen, setIsAddDietDialogOpen] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
-  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [quantity, setQuantity] = useState('100');
-  const [isSearching, setIsSearching] = useState(false);
   const [mealTime, setMealTime] = useState('breakfast');
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
-
-  // 운동 추가 관련 상태
-  const [isAddExerciseDialogOpen, setIsAddExerciseDialogOpen] = useState(false);
-  const [exerciseName, setExerciseName] = useState('');
-  const [sets, setSets] = useState(1);
-  const [reps, setReps] = useState(10);
-  const [weight, setWeight] = useState(0);
-  const [time, setTime] = useState('');
-  const [exerciseOptions, setExerciseOptions] = useState<{ value: string; label: string }[]>([]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -252,9 +247,31 @@ const Note = () => {
   }, [userGoalsData]);
 
   const MAX_EDGE_VALUE = 7;
+  // 1. 운동명-부위 매핑에 벤치프레스 포함
+  const exerciseNameToBodyPart: Record<string, string> = {
+    '벤치프레스': '가슴',
+    '사이클링': '유산소',
+    '수영': '유산소',
+    '조깅': '유산소',
+    '러닝': '유산소',
+    // 필요시 추가
+  };
+
+  // 2. todayBodyPartCounts 집계
+  const todayBodyPartCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    todayExercise.forEach((ex) => {
+      // bodyPart가 있으면 한글화, 없으면 매핑
+      const part = ex.bodyPart ? getBodyPartLabel(ex.bodyPart) : (exerciseNameToBodyPart[ex.exerciseName] || ex.bodyPart || '기타');
+      counts[part] = (counts[part] || 0) + 1;
+    });
+    return counts;
+  }, [todayExercise]);
+
+  // 3. exerciseData value에 todayBodyPartCounts 반영
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: weeklySummary[label] || 0,
+    value: todayBodyPartCounts[label] || 0,
     goal: exerciseGoals[label] || 0,
   }));
 
@@ -371,98 +388,8 @@ const Note = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  // 음식 검색
-  const searchFood = async () => {
-    if (!searchKeyword.trim()) return;
-
-    setIsSearching(true);
-    try {
-      const results = await searchFoodItems(searchKeyword);
-      setSearchResults(results);
-    } catch (error) {
-      console.error("음식 검색 중 오류:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // 식단 추가
-  const addDietRecord = async () => {
-    if (!selectedFood || !quantity) {
-      alert('음식과 양을 입력해주세요.');
-      return;
-    }
-    try {
-      const userId = getUserIdFromToken();
-      if (!userId) {
-        toast({
-          title: "사용자 정보를 찾을 수 없습니다.",
-          description: "다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        navigate('/login');
-        return;
-      }
-
-      const request: any = {
-        quantity: parseFloat(quantity),
-        meal_time: mealTime,
-        unit: 'g',
-        log_date: selectedDate.toISOString().split('T')[0],
-        input_source: 'TYPING', // 항상 직접입력으로 고정
-      };
-
-      if (selectedFood.foodItemId) {
-        // DB에 있는 음식
-        request.food_item_id = selectedFood.foodItemId;
-      } else {
-        // 직접 입력 음식
-        request.food_name = selectedFood.name;
-        request.calories = selectedFood.calories;
-        request.carbs = selectedFood.carbs;
-        request.protein = selectedFood.protein;
-        request.fat = selectedFood.fat;
-      }
-
-      const newRecord = await createDietRecord(request);
-
-      setDailyDietLogs(prevLogs => [newRecord, ...prevLogs]);
-      await fetchDietData();
-      await fetchCalendarRecords();
-
-      setIsAddDietDialogOpen(false);
-      setSearchKeyword('');
-      setSearchResults([]);
-      setSelectedFood(null);
-      setQuantity('100');
-      setMealTime('breakfast');
-      setInputSource('TYPING');
-
-      toast({
-        title: "식단 기록 추가 완료",
-        description: `${format(selectedDate, 'yyyy-MM-dd')}에 식단이 추가되었습니다.`,
-      });
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
-        toast({
-          title: "권한 오류",
-          description: "로그인이 만료되었거나 권한이 없습니다. 다시 로그인 해주세요.",
-          variant: "destructive"
-        });
-        removeToken();
-        navigate('/login');
-        return;
-      }
-      console.error('식단 기록 추가 중 오류:', error);
-      toast({
-        title: "식단 기록 추가 실패",
-        description: "기록 추가 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
-    }
-  };
-
+  
+  
   // 식단 기록 삭제
   const handleDeleteDietRecord = async (id: number) => {
     try {
@@ -651,8 +578,8 @@ const Note = () => {
 
     // 점 스타일: 크게, 색상별
     const dotStyle = {
-      width: '14px',
-      height: '14px',
+      width: '7px',
+      height: '7px',
       borderRadius: '50%',
       marginTop: '6px',
       display: 'inline-block',
@@ -851,36 +778,6 @@ const Note = () => {
     }
   };
 
-  // 💪 일일 운동 추가 - Spring API 사용
-  const [bodyPart, setBodyPart] = useState('chest');         // 선택한 부위
-
-  const addExerciseRecord = async () => {
-    try {
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      const request: any = {
-        exerciseName: exerciseName.trim(),
-        sets: sets || 1,
-        reps: reps || 10,
-        weight: weight || 0.0,
-        exerciseDate: formattedDate
-      };
-      await createExerciseSession(request);
-      await fetchExercise();
-      setIsAddExerciseDialogOpen(false);
-      setExerciseName('');
-      setSets(1);
-      setReps(10);
-      setWeight(0);
-      setTime('');
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "운동 추가 실패",
-        description: "기록을 저장하는 중 문제가 발생했습니다.",
-        variant: "destructive"
-      });
-    }
-  };
 
   // 일일 운동 기록 수정
   const [isEditExerciseDialogOpen, setIsEditExerciseDialogOpen] = useState(false);
@@ -904,26 +801,6 @@ const Note = () => {
     setIsEditExerciseDialogOpen(true);
   };
 
-
-  useEffect(() => {
-    const fetchExercises = async () => {
-      try {
-        console.log(`🏋️ [fetchExercises] 운동 카탈로그 조회 시작`);
-
-        const data = await getExerciseCatalog();
-        console.log('✅ [fetchExercises] 운동 카탈로그 조회 성공:', data);
-
-        setExerciseOptions(data.map(item => ({
-          value: item.name,
-          label: item.name
-        })));
-      } catch (err) {
-        console.error("❌ [fetchExercises] 운동 카탈로그 조회 실패:", err);
-      }
-    };
-
-    fetchExercises();
-  }, []);
 
 
   // 점(●) 표시용 modifiers와 classNames 추가
@@ -990,14 +867,24 @@ const Note = () => {
 
 
   // Custom tooltip for radar chart
-  const RadarGoalTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload }) => {
+  const RadarGoalTooltip: React.FC<TooltipProps<number, string> & { isDarkMode: boolean }> = ({ active, payload, isDarkMode }) => {
     if (active && payload && payload.length > 0) {
-      // Find the goal value
       const part = payload[0].payload.subject;
       const goal = payload[0].payload.goal;
+      const value = payload[0].payload.value;
       return (
-        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 14, boxShadow: '0 2px 8px #0001' }}>
-          <strong>{part}</strong>: {goal}회
+        <div style={{
+          background: isDarkMode ? '#23272e' : 'white',
+          color: isDarkMode ? '#fff' : '#222',
+          border: '1px solid #ddd',
+          borderRadius: 6,
+          padding: '8px 12px',
+          fontSize: 14,
+          boxShadow: '0 2px 8px #0001'
+        }}>
+          <strong>{part}</strong><br />
+          목표: {goal}회<br />
+          달성: {value}회
         </div>
       );
     }
@@ -1024,6 +911,12 @@ const Note = () => {
 
   // Note.tsx 상단 state 부분에 추가
   const [inputSource, setInputSource] = useState('TYPING'); // 입력 방식(직접입력/음성입력)
+
+  // 오늘의 운동 기록만을 위한 레이더 차트 데이터
+  const todayRadarData = bodyPartMap.map(({ label }) => ({
+    subject: label,
+    value: todayBodyPartCounts[label] || 0,
+  }));
 
   return (
     <Layout>
@@ -1126,9 +1019,15 @@ const Note = () => {
                         <PolarGrid />
                         <PolarAngleAxis dataKey="subject" className="text-sm" />
                         <PolarRadiusAxis angle={90} domain={[0, MAX_EDGE_VALUE]} tickCount={MAX_EDGE_VALUE + 1} tick={false} />
-                        <Tooltip content={<RadarGoalTooltip />} />
+                        <Tooltip content={<RadarGoalTooltip isDarkMode={isDarkMode} />} />
                         <Radar name="현재 운동량" dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.3} strokeWidth={2} />
                         <Radar name="목표치" dataKey="goal" stroke="#EF4444" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+                        <defs>
+                          <linearGradient id="todayGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="#8B5CF6" />
+                            <stop offset="100%" stopColor="#EC4899" />
+                          </linearGradient>
+                        </defs>
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
@@ -1139,90 +1038,6 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                {isToday(selectedDate) && todayExercise.length > 0 && (
-                  <Button onClick={handleClaimExerciseScore} disabled={hasClaimedExerciseScore} className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50" size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    {hasClaimedExerciseScore ? '점수 획득 완료' : '+1점 획득'}
-                  </Button>
-                )}
-                <Dialog open={isAddExerciseDialogOpen} onOpenChange={setIsAddExerciseDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
-                      <Plus className="h-4 w-4 mr-1" />
-                      운동 추가
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>운동 기록 추가</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      {/* ✅ 운동 부위 선택 */}
-                      <div>
-                        <Label>운동 부위 선택</Label>
-                        <select
-                          value={bodyPart}
-                          onChange={(e) => setBodyPart(e.target.value as 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'abs' | 'cardio' | 'full_body')}
-                          className="w-full border p-2 rounded"
-                          title="운동 부위 선택"
-                        >
-                          <option value="chest">가슴</option>
-                          <option value="back">등</option>
-                          <option value="legs">하체</option>
-                          <option value="shoulders">어깨</option>
-                          <option value="arms">팔</option>
-                          <option value="abs">복부</option>
-                          <option value="cardio">유산소</option>
-                          <option value="full_body">전신</option>
-                        </select>
-                      </div>
-
-                      {/* ✅ 운동 이름 선택 */}
-                      <div>
-                        <Label>운동 선택</Label>
-                        <select
-                          value={exerciseName}
-                          onChange={(e) => setExerciseName(e.target.value)}
-                          className="w-full border p-2 rounded"
-                          disabled={exerciseOptions.length === 0}
-                          title="운동 선택"
-                        >
-                          <option value="">
-                            {exerciseOptions.length === 0 ? '운동 부위를 먼저 선택하세요' : '운동을 선택하세요'}
-                          </option>
-                          {exerciseOptions.map((exercise) => (
-                            <option key={exercise.value} value={exercise.value}>
-                              {exercise.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label>세트</Label>
-                          <Input type="number" value={sets} onChange={(e) => setSets(Number(e.target.value))} min={1} />
-                        </div>
-                        <div>
-                          <Label>횟수</Label>
-                          <Input type="number" value={reps} onChange={(e) => setReps(Number(e.target.value))} min={1} />
-                        </div>
-                      </div>
-                      <div>
-                        <Label>무게 (kg)</Label>
-                        <Input type="number" value={weight} onChange={(e) => setWeight(Number(e.target.value))} min={0} />
-                      </div>
-                      <div>
-                        <Label>운동 시간</Label>
-                        <Input value={time} onChange={(e) => setTime(e.target.value)} placeholder="예: 20분" />
-                      </div>
-
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" onClick={() => setIsAddExerciseDialogOpen(false)}>취소</Button>
-                        <Button onClick={addExerciseRecord}>추가</Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
               </CardHeader>
               <CardContent>
                 {todayExercise.length > 0 ? (
@@ -1242,10 +1057,17 @@ const Note = () => {
                         if (record.weight !== undefined) infoParts.push(`${record.weight}kg`);
                       }
                       return (
-                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div
+                          key={record.exerciseSessionId}
+                          className="flex items-center justify-between p-3 rounded-lg"
+                          style={{
+                            background: isDarkMode ? '#23272e' : '#fff',
+                            border: isDarkMode ? '2px solid #8B5CF6' : '1px solid #eee',
+                            color: isDarkMode ? '#fff' : '#222',
+                          }}
+                        >
                           <div>
-                            <p className="font-medium">
-                              {record.exerciseName}
+                            <p className="font-medium" style={{ color: isDarkMode ? '#fff' : undefined }}>{record.exerciseName}
                               {record.bodyPart && (
                                 <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                               )}
@@ -1282,11 +1104,7 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedExerciseScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!</p>
-                      </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">아직 운동 기록이 없습니다.</div>
@@ -1438,192 +1256,7 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 식단 기록</CardTitle>
-                <div className="flex space-x-2">
-                  <Dialog open={isAddDietDialogOpen} onOpenChange={setIsAddDietDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        식단 추가
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>식단 기록 추가</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="search">음식 검색</Label>
-                          <div className="flex space-x-2 mt-1">
-                            <Input
-                              id="search"
-                              value={searchKeyword}
-                              onChange={(e) => setSearchKeyword(e.target.value)}
-                              placeholder="음식명을 입력하세요"
-                              onKeyPress={(e) => e.key === 'Enter' && searchFood()}
-                            />
-                            <Button onClick={searchFood} disabled={isSearching}>
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="h-4 w-4"
-                              >
-                                <circle cx="11" cy="11" r="8" />
-                                <path d="m21 21-4.3-4.3" />
-                              </svg>
-                            </Button>
-                          </div>
-                        </div>
-
-                        {searchResults.length > 0 ? (
-                          <div>
-                            <Label>검색 결과</Label>
-                            <div className="max-h-40 overflow-y-auto space-y-2 mt-1">
-                              {searchResults.map((food) => (
-                                <div
-                                  key={food.foodItemId}
-                                  className={`p-2 border rounded cursor-pointer hover:bg-accent ${selectedFood?.foodItemId === food.foodItemId ? 'bg-accent' : ''
-                                    }`}
-                                  onClick={() => setSelectedFood(food)}
-                                >
-                                  <div className="font-medium">{food.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {Math.round(food.calories)}kcal / 100g
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          searchKeyword.trim() && (
-                            <div className="text-center text-muted-foreground mt-4">
-                              <div>검색 결과가 없습니다.</div>
-                              <Button
-                                className="mt-2"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedFood({
-                                    foodItemId: undefined,
-                                    name: searchKeyword,
-                                    calories: 0,
-                                    carbs: 0,
-                                    protein: 0,
-                                    fat: 0,
-                                    servingSize: 100
-                                  });
-                                }}
-                              >
-                                직접 입력하기
-                              </Button>
-                            </div>
-                          )
-                        )}
-
-                        {selectedFood && (
-                          <div className="mt-4 space-y-2">
-                            {selectedFood.foodItemId === undefined && (
-                              <>
-                                <Label>음식명</Label>
-                                <Input
-                                  value={selectedFood.name}
-                                  onChange={e => setSelectedFood({ ...selectedFood, name: e.target.value })}
-                                  placeholder="음식명을 입력하세요"
-                                />
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <Label>칼로리 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.calories}
-                                      onChange={e => setSelectedFood({ ...selectedFood, calories: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>탄수화물 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.carbs}
-                                      onChange={e => setSelectedFood({ ...selectedFood, carbs: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>단백질 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.protein}
-                                      onChange={e => setSelectedFood({ ...selectedFood, protein: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>지방 (100g당)</Label>
-                                    <Input
-                                      type="number"
-                                      value={selectedFood.fat}
-                                      onChange={e => setSelectedFood({ ...selectedFood, fat: Number(e.target.value) })}
-                                    />
-                                  </div>
-                                </div>
-                              </>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <Label>섭취량 (g)</Label>
-                                <Input
-                                  type="number"
-                                  value={quantity}
-                                  onChange={e => setQuantity(e.target.value)}
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <Label>식사 시간</Label>
-                                <select
-                                  value={mealTime}
-                                  onChange={e => setMealTime(e.target.value)}
-                                  className="block w-full border rounded px-2 py-1"
-                                >
-                                  <option value="breakfast">아침</option>
-                                  <option value="lunch">점심</option>
-                                  <option value="dinner">저녁</option>
-                                  <option value="snack">간식</option>
-                                  <option value="midnight">야식</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="outline" onClick={() => setIsAddDietDialogOpen(false)}>
-                            취소
-                          </Button>
-                          <Button onClick={addDietRecord} disabled={!selectedFood}>
-                            추가
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  {isToday(selectedDate) && dailyDietLogs.length > 0 && (
-                    <Button
-                      onClick={handleClaimDietScore}
-                      disabled={hasClaimedDietScore}
-                      className="gradient-bg hover:opacity-90 transition-opacity disabled:opacity-50"
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      {hasClaimedDietScore ? '점수 획득 완료' : '+1점 획득'}
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
+                </CardHeader>
               <CardContent>
                 {isLoadingDietData ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -1681,13 +1314,7 @@ const Note = () => {
                         </div>
                       );
                     })}
-                    {isToday(selectedDate) && !hasClaimedDietScore && (
-                      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700 text-center">
-                          🎉 오늘 기록이 등록되었습니다! 점수를 획득하세요!
-                        </p>
-                      </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

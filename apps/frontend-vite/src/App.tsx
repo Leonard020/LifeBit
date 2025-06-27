@@ -22,6 +22,7 @@ import { AuthProvider } from './AuthContext'; // ← 이 줄 추가
 import { AdminPage } from './pages/AdminPage';
 import UserInfo from './pages/UserInfo';
 import { API_CONFIG } from './config/env';
+import Settings from './pages/Settings';
 
 
 // ===================================================================
@@ -130,6 +131,7 @@ const App = () => (
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/userinfo" element={<UserInfo />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/auth/social-redirect" element={<SocialRedirect />} />
 

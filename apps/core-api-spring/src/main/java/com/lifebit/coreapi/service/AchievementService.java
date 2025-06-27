@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.lifebit.coreapi.entity.enums.AchievementType;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -96,12 +98,12 @@ public class AchievementService {
         
         userAchievement.setProgress(progress);
         
-        // 목표 달성 확인
+        // 목표 달성 확인 (진행도가 목표 이상이고 아직 달성되지 않은 경우)
         if (achievement.getTargetDays() != null && progress >= achievement.getTargetDays() && !userAchievement.getIsAchieved()) {
             userAchievement.setIsAchieved(true);
             userAchievement.setAchievedDate(LocalDate.now());
             log.info("Achievement unlocked for user: {}, achievement: {}", userId, achievementTitle);
-            notificationService.saveNotification(userId, "ACHIEVEMENT", "업적 달성", String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()));
+            notificationService.saveNotification(userId, "ACHIEVEMENT", "업적 달성", String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()), userAchievement.getUserAchievementId());
         }
         
         userAchievementRepository.save(userAchievement);
@@ -138,25 +140,70 @@ public class AchievementService {
     public void updateStreakAchievements(Long userId, int streakDays) {
         log.debug("Updating streak achievements for user: {}, streak: {}", userId, streakDays);
         
-        // 7일 연속 기록 업적
+        // 사용자 업적이 없으면 초기화
+        initializeUserAchievements(userId);
+        
+        // 연속 운동 업적 업데이트 (설정 기반)
         if (streakDays >= 7) {
-            updateUserAchievementProgress(userId, "7일 연속 기록", streakDays);
+            updateUserAchievementProgress(userId, AchievementType.STREAK_7.getTitle(), streakDays);
         }
         
-        // 30일 연속 기록 업적
         if (streakDays >= 30) {
-            updateUserAchievementProgress(userId, "30일 연속 기록", streakDays);
+            updateUserAchievementProgress(userId, AchievementType.STREAK_30.getTitle(), streakDays);
         }
         
-        // 100일 연속 기록 업적
-        if (streakDays >= 100) {
-            updateUserAchievementProgress(userId, "100일 연속 기록", streakDays);
+        if (streakDays >= 90) {
+            updateUserAchievementProgress(userId, AchievementType.STREAK_90.getTitle(), streakDays);
         }
         
-        // 1년 연속 기록 업적
-        if (streakDays >= 365) {
-            updateUserAchievementProgress(userId, "1년 연속 기록", streakDays);
+        if (streakDays >= 180) {
+            updateUserAchievementProgress(userId, AchievementType.STREAK_180.getTitle(), streakDays);
         }
+        }
+        
+    /**
+     * 사용자가 수동으로 업적을 달성 처리합니다.
+     */
+    @Transactional
+    public void completeAchievement(Long userId, String achievementTitle) {
+        log.debug("Completing achievement for user: {}, achievement: {}", userId, achievementTitle);
+        
+        Achievement achievement = achievementRepository.findByTitle(achievementTitle);
+        if (achievement == null) {
+            log.warn("Achievement not found: {}", achievementTitle);
+            throw new RuntimeException("업적을 찾을 수 없습니다: " + achievementTitle);
+        }
+        
+        UserAchievement userAchievement = userAchievementRepository
+            .findByUserIdAndAchievementId(userId, achievement.getAchievementId())
+            .orElse(null);
+        
+        if (userAchievement == null) {
+            log.warn("User achievement not found for user: {}, achievement: {}", userId, achievementTitle);
+            throw new RuntimeException("사용자 업적을 찾을 수 없습니다.");
+        }
+        
+        // 이미 달성된 경우
+        if (userAchievement.getIsAchieved()) {
+            log.info("Achievement already completed for user: {}, achievement: {}", userId, achievementTitle);
+            return;
+        }
+        
+        // 진행도가 목표에 도달하지 않은 경우
+        if (achievement.getTargetDays() != null && userAchievement.getProgress() < achievement.getTargetDays()) {
+            log.warn("Progress not enough for achievement completion. Progress: {}, Target: {}", 
+                    userAchievement.getProgress(), achievement.getTargetDays());
+            throw new RuntimeException("업적 달성을 위한 진행도가 부족합니다.");
+        }
+        
+        // 업적 달성 처리
+        userAchievement.setIsAchieved(true);
+        userAchievement.setAchievedDate(LocalDate.now());
+        
+        userAchievementRepository.save(userAchievement);
+        
+        log.info("Achievement manually completed for user: {}, achievement: {}", userId, achievementTitle);
+        notificationService.saveNotification(userId, "ACHIEVEMENT", "업적 달성", String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()), userAchievement.getUserAchievementId());
     }
     
     /**
