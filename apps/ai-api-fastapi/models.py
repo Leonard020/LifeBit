@@ -47,10 +47,6 @@ class MealLog(Base):
     quantity = Column(DECIMAL(6, 2))
     log_date = Column(Date, nullable=False)
     meal_time = Column(SqlEnum('breakfast', 'lunch', 'dinner', 'snack', 'midnight', name='meal_time_type'), nullable=False)
-    calories = Column(DECIMAL(6, 2), nullable=True)
-    carbs = Column(DECIMAL(6, 2), nullable=True)
-    protein = Column(DECIMAL(6, 2), nullable=True)
-    fat = Column(DECIMAL(6, 2), nullable=True)
     created_at = Column(TIMESTAMP, default=get_kst_now)
 
 # 👤 사용자 테이블
