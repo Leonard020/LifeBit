@@ -85,7 +85,7 @@ const ChatMessage: React.FC<{
         >
           <div
             className="whitespace-pre-wrap text-sm leading-relaxed"
-            style={{ color: '#222', fontWeight: 600 }}
+            style={{ color: '#C7BFFF', fontWeight: 600 }}
           >
             {message.content}
           </div>
@@ -212,6 +212,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [localIsRecording, setLocalIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const inputTextRef = useRef(inputText);
+
+  useEffect(() => {
+    inputTextRef.current = inputText;
+  }, [inputText]);
 
   // recognition 인스턴스 생성 함수 (컴포넌트 내부에 위치)
   const createRecognition = () => {
@@ -226,8 +231,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setInputText(transcript);
       setLocalIsRecording(false);
       setTimeout(() => {
-        onSendMessage(transcript);
-      }, 2000);
+        onSendMessage(inputTextRef.current);
+      }, 1000);
     };
     recognition.onerror = (event: WebSpeechRecognitionErrorEvent) => {
       console.error('[STT] onerror fired:', event.error, event);
@@ -260,10 +265,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         console.log('[STT] 인식 결과:', transcript);
         setInputText(transcript);
         setLocalIsRecording(false);
-        // 2초 후 자동 전송
         setTimeout(() => {
-          onSendMessage(transcript);
-        }, 2000);
+          onSendMessage(inputTextRef.current);
+        }, 1000);
       };
       recognitionRef.current.onerror = (event: WebSpeechRecognitionErrorEvent) => {
         console.error('[STT] 에러:', event.error);

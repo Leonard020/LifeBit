@@ -134,13 +134,13 @@ const Index = () => {
     // 최소한의 테스트 메시지 → 나중에 자동저장 로직이 완성되면 제거 가능
   };
 
-  const handleSendMessage = async (retryCount = 0) => {
+  const handleSendMessage = async (retryCount = 0, transcript?: string) => {
     const maxRetries = 2;
-    
-    if (!chatInputText.trim() || !recordType) return;
+    const messageToSend = transcript ?? chatInputText;
+    if (!messageToSend.trim() || !recordType) return;
 
     // ✅ 저장 키워드 감지 로직 추가
-    const lowered = chatInputText.toLowerCase();
+    const lowered = messageToSend.toLowerCase();
     const saveKeywords = /^(저장|기록|완료|끝|등록|저장해|저장해줘|기록해|기록해줘|등록해|등록해줘)$/;
     
     if (saveKeywords.test(lowered) && !hasSaved) {
@@ -153,7 +153,7 @@ const Index = () => {
         // 사용자 메시지를 대화 기록에 추가
         const updatedHistory: Message[] = [
           ...conversationHistory,
-          { role: 'user', content: chatInputText }
+          { role: 'user', content: messageToSend }
         ];
         setConversationHistory(updatedHistory);
         
@@ -176,7 +176,7 @@ const Index = () => {
       // 사용자 메시지를 대화 기록에 추가
       const updatedHistory: Message[] = [
         ...conversationHistory,
-        { role: 'user', content: chatInputText }
+        { role: 'user', content: messageToSend }
       ];
       setConversationHistory(updatedHistory);
       
@@ -208,12 +208,12 @@ const Index = () => {
       // 기존 히스토리에 사용자 메시지 추가
       const updatedHistory: Message[] = [
         ...conversationHistory,
-        { role: 'user', content: chatInputText }
+        { role: 'user', content: messageToSend }
       ];
 
       // 백엔드에 메시지 전송
       const response = await sendChatMessage(
-        chatInputText,
+        messageToSend,
         updatedHistory,
         recordType,
         chatStep
@@ -276,7 +276,7 @@ const Index = () => {
       if (retryCount < maxRetries && isRetryableError) {
         console.log(`🔄 [Index handleSendMessage] 재시도 중... (${retryCount + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
-        return handleSendMessage(retryCount + 1);
+        return handleSendMessage(retryCount + 1, transcript);
       }
       
       // 최대 재시도 횟수 초과 또는 재시도 불가능한 오류
@@ -601,10 +601,7 @@ const Index = () => {
 
             // Fix: Wrap handleSendMessage to match expected signature
             onSendMessage={(transcript?: string) => {
-              if (typeof transcript === 'string') {
-                setChatInputText(transcript);
-              }
-              handleSendMessage(0);
+              handleSendMessage(0, transcript);
             }}
 
             onRetry={() => {
