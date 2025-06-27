@@ -651,8 +651,8 @@ const Note = () => {
 
     // 점 스타일: 크게, 색상별
     const dotStyle = {
-      width: '14px',
-      height: '14px',
+      width: '7px',
+      height: '7px',
       borderRadius: '50%',
       marginTop: '6px',
       display: 'inline-block',
