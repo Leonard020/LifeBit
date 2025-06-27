@@ -185,6 +185,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 다크모드 감지 (컴포넌트 내부로 이동)
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDarkMode(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // 마이크 권한 요청 함수
   const requestMicrophonePermission = useCallback(async () => {
     try {
@@ -1166,12 +1176,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
                       )}
                     </Avatar>
                     <div className={`space-y-1 ${message.type === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-                      <div className={`rounded-lg px-3 py-2 ${
-                        message.type === 'user' 
-                          ? 'bg-primary text-primary-foreground' 
-                          : 'bg-muted'
-                      }`}>
-                        <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
+                      <div
+                        className="rounded-lg px-3 py-2"
+                        style={{
+                          background: '#f7f7fa',
+                          border: '1px solid #eee',
+                        }}
+                      >
+                        <p style={{ color: '#222', fontWeight: 600 }}>
+                          테스트용 텍스트입니다. 이 문장이 보이면 message.content에 문제가 있습니다.
+                        </p>
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {formatTime(message.timestamp)}

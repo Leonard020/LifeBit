@@ -1194,10 +1194,17 @@ const Note = () => {
                         if (record.weight !== undefined) infoParts.push(`${record.weight}kg`);
                       }
                       return (
-                        <div key={record.exerciseSessionId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div
+                          key={record.exerciseSessionId}
+                          className="flex items-center justify-between p-3 rounded-lg"
+                          style={{
+                            background: isDarkMode ? '#23272e' : '#fff',
+                            border: isDarkMode ? '2px solid #8B5CF6' : '1px solid #eee',
+                            color: isDarkMode ? '#fff' : '#222',
+                          }}
+                        >
                           <div>
-                            <p className="font-medium">
-                              {record.exerciseName}
+                            <p className="font-medium" style={{ color: isDarkMode ? '#fff' : undefined }}>{record.exerciseName}
                               {record.bodyPart && (
                                 <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                               )}
