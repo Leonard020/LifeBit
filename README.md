@@ -238,10 +238,25 @@ pnpm dev:mac
 
 프로젝트는 Terraform과 Ansible을 사용한 자동화 배포를 지원합니다.
 
+#### 사전 요구사항
+- AWS CLI 설치 및 설정 (`aws configure`)
+- Terraform 설치
+- Ansible 설치
+- `.env` 파일 설정 (키페어는 자동 생성됨)
+
+#### 배포 실행
 ```bash
-# 배포 스크립트 실행
-./infrastructure/scripts/deploy.sh
+# 배포
+./aws-deploy.sh deploy
+
+# 리소스 삭제
+./aws-deploy.sh destroy
 ```
+
+#### 주요 개선사항
+- **자동 키페어 생성**: 수동으로 키페어를 생성할 필요 없음
+- **자동 정리**: destroy 시 키페어와 로컬 키 파일도 자동 삭제
+- **배포 정보 추적**: `.deployment_info` 파일로 배포 상태 관리
 
 자세한 배포 가이드는 [배포 가이드](docs/배포%20가이드.md)를 참조하세요.
 

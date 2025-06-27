@@ -60,29 +60,21 @@
         version: main
         force: yes
 
+    - name: Create .env file for Docker Compose
+      template:
+        src: env.j2
+        dest: "{{ project_dir }}/.env"
+        mode: '0600'
+      vars:
+        OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') }}"
+        JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') }}"
+        GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') }}"
+        KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') }}"
+        GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') }}"
+        USE_GPT: "{{ lookup('env', 'USE_GPT') | default('True') }}"
+        CORS_ORIGINS: "{{ lookup('env', 'CORS_ORIGINS') | default('http://*') }}"
+
     - name: Run Docker Compose
       command: docker-compose -f "{{ project_dir }}/docker-compose.prod.yml" up -d --build
-      environment:
-        OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') }}"
-        JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') }}"
-        GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') }}"
-        KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') }}"
-        GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') }}"
-
-    - name: Run docker-compose
-      command: docker-compose -f /srv/lifebit/docker-compose.prod.yml up -d --build
       args:
-        chdir: /srv/lifebit
-      environment:
-        # Secrets for backend services
-        OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') }}"
-        JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') }}"
-        GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') }}"
-
-        # Secrets for frontend build args
-        KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') }}"
-        GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') }}"
-
-        # Non-secret configurations
-        USE_GPT: "{{ lookup('env', 'USE_GPT') | default('True') }}"
-        CORS_ORIGINS: "{{ lookup('env', 'CORS_ORIGINS') | default('http://*') }}" 
+        chdir: "{{ project_dir }}"

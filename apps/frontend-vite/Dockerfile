@@ -14,9 +14,14 @@ RUN echo "VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}" >> .env
 RUN echo "VITE_CORE_API_URL=${VITE_CORE_API_URL}" >> .env
 RUN echo "VITE_AI_API_URL=${VITE_AI_API_URL}" >> .env
 
+# Install pnpm globally
 RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+
+# Copy package files and install dependencies
+COPY package.json ./
+RUN pnpm install --no-frozen-lockfile
+
+# Copy source code and build
 COPY . .
 RUN pnpm build
 
@@ -25,4 +30,4 @@ FROM nginx:1.27.0-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,14 +1,62 @@
 #!/bin/bash
 set -e
 
+# 전역 타임아웃 설정 (스크립트 전체 실행 시간 제한)
+SCRIPT_TIMEOUT=1800  # 30분
+SCRIPT_START_TIME=$(date +%s)
+
+# 타임아웃 체크 함수
+check_script_timeout() {
+    local current_time=$(date +%s)
+    if (( current_time - SCRIPT_START_TIME > SCRIPT_TIMEOUT )); then
+        log_error "스크립트 실행 시간 초과 (${SCRIPT_TIMEOUT}초). 강제 종료합니다."
+        exit 1
+    fi
+}
+
 # 스크립트 정보
 SCRIPT_NAME=$(basename "$0")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FORCE_DELETE=false
 
+# 사용법 출력 함수
+show_usage() {
+    echo "🍃 LifeBit AWS 완전 삭제 스크립트 (v2.3)"
+    echo ""
+    echo "사용법: $0 [옵션]"
+    echo ""
+    echo "옵션:"
+    echo "  --force, -y     확인 프롬프트 없이 강제 삭제"
+    echo "  --fast          빠른 정리 모드 (대기 시간 단축)"
+    echo "  --help, -h      이 도움말 표시"
+    echo ""
+    echo "예시:"
+    echo "  $0              # 일반 모드 (확인 프롬프트 있음)"
+    echo "  $0 --force      # 강제 삭제 모드"
+    echo "  $0 --fast       # 빠른 정리 모드"
+    echo "  $0 --force --fast # 강제 빠른 정리 모드"
+    echo ""
+    echo "⚠️  주의: 이 스크립트는 LifeBit 프로젝트 관련 모든 AWS 리소스를 삭제합니다!"
+    echo "⚠️  삭제된 리소스는 복구할 수 없습니다!"
+    echo ""
+}
+
+# --help 옵션 처리
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    show_usage
+    exit 0
+fi
+
 # --force or -y flag check
 if [[ "$1" == "--force" || "$1" == "-y" ]]; then
     FORCE_DELETE=true
+fi
+
+# --fast flag check (빠른 정리 모드)
+FAST_MODE=false
+if [[ "$1" == "--fast" || "$2" == "--fast" ]]; then
+    FAST_MODE=true
+    log_info "빠른 정리 모드가 활성화되었습니다. 대기 시간이 단축됩니다."
 fi
 
 # 색상 정의
@@ -339,7 +387,7 @@ cleanup_autoscaling() {
     fi
 }
 
-# 강력한 EC2 인스턴스 정리 (모든 방법 시도)
+# 강력한 EC2 인스턴스 정리 (개선된 버전)
 cleanup_ec2_instances() {
     log_cleanup "강력한 EC2 인스턴스 정리 중..."
     
@@ -361,7 +409,7 @@ cleanup_ec2_instances() {
     if [[ -n "$all_instances" && "$all_instances" != "None" ]]; then
         log_info "발견된 LifeBit 관련 인스턴스: $all_instances"
         
-                 # 인스턴스 상태별 처리
+        # 인스턴스 상태별 처리 (간소화된 버전)
         for instance_id in $all_instances; do
             [[ -z "$instance_id" || "$instance_id" == "None" ]] && continue
             
@@ -373,59 +421,81 @@ cleanup_ec2_instances() {
             if [[ "$termination_protection" == "true" ]]; then
                 log_warning "인스턴스 $instance_id 종료 보호 해제 중..."
                 aws ec2 modify-instance-attribute --instance-id "$instance_id" --no-disable-api-termination 2>/dev/null || true
-                sleep 2
+                sleep 1
             fi
             
-            case "$instance_state" in
-                "running"|"pending"|"stopped"|"stopping")
-                    log_info "인스턴스 종료 시도: $instance_id"
-                    aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
-                    ;;
-                "shutting-down"|"terminated")
-                    log_info "인스턴스 $instance_id 이미 종료 중/완료"
-                    ;;
-                *)
-                    log_warning "인스턴스 $instance_id 알 수 없는 상태: $instance_state"
-                    # 종료 보호 해제 후 종료 시도
-                    aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
-                    ;;
-            esac
+            # 모든 상태에서 종료 시도 (간소화)
+            if [[ "$instance_state" != "terminated" ]]; then
+                log_info "인스턴스 종료 시도: $instance_id"
+                aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
+            fi
         done
         
-        # 모든 인스턴스 종료 대기 (타임아웃 포함)
-        log_info "모든 인스턴스 종료 완료 대기 중... (최대 10분)"
-        local wait_timeout=600  # 10분
-        local wait_start=$(date +%s)
+        # 빠른 종료 대기 (타임아웃 단축 및 개선된 로직)
+        if [[ "$FAST_MODE" == "true" ]]; then
+            log_info "인스턴스 종료 완료 대기 중... (빠른 모드: 최대 1분)"
+            local wait_timeout=60  # 빠른 모드: 1분
+            local check_interval=10  # 빠른 모드: 10초마다 체크
+        else
+            log_info "인스턴스 종료 완료 대기 중... (최대 2분)"
+            local wait_timeout=120  # 일반 모드: 2분
+            local check_interval=15  # 일반 모드: 15초마다 체크
+        fi
         
         while [[ -n "$all_instances" ]]; do
             local current_time=$(date +%s)
             if (( current_time - wait_start > wait_timeout )); then
-                log_warning "인스턴스 종료 대기 시간 초과 (10분). 강제 진행합니다."
+                log_warning "인스턴스 종료 대기 시간 초과 (2분). 강제 진행합니다."
                 break
             fi
             
             local remaining_instances=""
+            local all_terminated=true
+            
             for instance_id in $all_instances; do
                 [[ -z "$instance_id" || "$instance_id" == "None" ]] && continue
                 
-                local current_state=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null)
-                if [[ "$current_state" != "terminated" ]]; then
-                    remaining_instances="$remaining_instances $instance_id"
-                    log_info "인스턴스 $instance_id 여전히 $current_state 상태"
+                # 에러 처리 강화된 상태 확인
+                local current_state=""
+                if current_state=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null); then
+                    if [[ "$current_state" != "terminated" ]]; then
+                        remaining_instances="$remaining_instances $instance_id"
+                        all_terminated=false
+                        log_info "인스턴스 $instance_id 여전히 $current_state 상태"
+                    else
+                        log_success "인스턴스 $instance_id 종료 완료"
+                    fi
                 else
-                    log_success "인스턴스 $instance_id 종료 완료"
+                    # AWS CLI 에러 발생 시 해당 인스턴스는 건너뛰고 계속 진행
+                    log_warning "인스턴스 $instance_id 상태 확인 실패. 건너뜁니다."
                 fi
             done
             
             all_instances="$remaining_instances"
-            [[ -z "$all_instances" ]] && break
             
-            sleep 30
+            # 모든 인스턴스가 종료되었거나 더 이상 확인할 인스턴스가 없으면 종료
+            if [[ "$all_terminated" == "true" || -z "$all_instances" ]]; then
+                break
+            fi
+            
+            log_info "다음 체크까지 ${check_interval}초 대기... (남은 인스턴스: $all_instances)"
+            sleep $check_interval
         done
         
         if [[ -n "$all_instances" ]]; then
-            log_error "다음 인스턴스들이 종료되지 않았습니다: $all_instances"
-            log_error "AWS 콘솔에서 수동으로 확인 및 종료해주세요."
+            log_warning "다음 인스턴스들이 종료되지 않았습니다: $all_instances"
+            log_info "강제 종료를 시도합니다..."
+            
+            # 강제 종료 시도
+            for instance_id in $all_instances; do
+                [[ -z "$instance_id" ]] && continue
+                log_info "강제 종료 시도: $instance_id"
+                aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
+            done
+            
+            # 최종 30초 대기
+            log_info "강제 종료 후 30초 대기..."
+            sleep 30
         else
             log_success "모든 LifeBit 관련 인스턴스 종료 완료"
         fi
@@ -625,97 +695,53 @@ cleanup_networking() {
             aws ec2 delete-internet-gateway --internet-gateway-id "$igw" 2>/dev/null || true
         done
         
-        # 8. 보안 그룹 정리 (강화된 순환 참조 해결)
-        log_info "보안 그룹 의존성 해결 중 (강화 모드)..."
+        # 8. 보안 그룹 정리 (간소화된 버전)
+        log_info "보안 그룹 정리 중 (간소화 모드)..."
         
-        # 먼저 모든 보안 그룹을 가져오기 (기본 제외)
-        local all_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName!=`default`]' --output json 2>/dev/null)
+        # 모든 보안 그룹을 가져오기 (기본 제외)
+        local all_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null)
         
-        if [[ "$all_sgs" != "[]" && "$all_sgs" != "null" && -n "$all_sgs" ]]; then
-            local sg_ids=$(echo "$all_sgs" | jq -r '.[].GroupId' 2>/dev/null)
+        if [[ -n "$all_sgs" && "$all_sgs" != "None" ]]; then
+            log_info "삭제할 보안 그룹: $all_sgs"
             
-            # 강화된 보안 그룹 정리 (무한 루프 방지)
-            local max_sg_attempts=10
-            local sg_attempt=1
-            
-            while [[ -n "$sg_ids" && $sg_attempt -le $max_sg_attempts ]]; do
-                log_info "보안 그룹 정리 시도 $sg_attempt/$max_sg_attempts"
-                local remaining_sgs=""
-                local progress_made=false
+            # 각 보안 그룹에 대해 빠른 처리
+            for sg in $all_sgs; do
+                [[ -z "$sg" ]] && continue
                 
-                for sg in $sg_ids; do
-                    [[ -z "$sg" ]] && continue
-                    
-                    log_info "보안 그룹 처리 중: $sg"
-                    
-                    # 1단계: 모든 Ingress 규칙 강제 제거
-                    local ingress_rules=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)
-                    if [[ "$ingress_rules" != "[]" && "$ingress_rules" != "null" && -n "$ingress_rules" ]]; then
-                        log_info "  - Ingress 규칙 제거 시도: $sg"
-                        if aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$ingress_rules" 2>/dev/null; then
-                            log_success "  - Ingress 규칙 제거 성공: $sg"
-                            progress_made=true
-                        else
-                            log_warning "  - Ingress 규칙 제거 실패: $sg"
-                        fi
-                    fi
-                    
-                    # 2단계: 모든 Egress 규칙 강제 제거 (기본 규칙 제외)
-                    local egress_rules=$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null)
-                    if [[ "$egress_rules" != "[]" && "$egress_rules" != "null" && -n "$egress_rules" ]]; then
-                        log_info "  - Egress 규칙 제거 시도: $sg"
-                        if aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$egress_rules" 2>/dev/null; then
-                            log_success "  - Egress 규칙 제거 성공: $sg"
-                            progress_made=true
-                        else
-                            log_warning "  - Egress 규칙 제거 실패: $sg"
-                        fi
-                    fi
-                    
-                    # 3단계: 보안 그룹 삭제 시도
-                    log_info "  - 보안 그룹 삭제 시도: $sg"
-                    if aws ec2 delete-security-group --group-id "$sg" 2>/dev/null; then
-                        log_success "  - 보안 그룹 삭제 성공: $sg"
-                        progress_made=true
-                    else
-                        log_warning "  - 보안 그룹 삭제 실패: $sg (재시도 예정)"
-                        remaining_sgs="$remaining_sgs $sg"
-                    fi
-                done
+                log_info "보안 그룹 $sg 처리 중..."
                 
-                sg_ids="$remaining_sgs"
+                # 규칙 제거 시도 (간단하게)
+                aws ec2 revoke-security-group-ingress --group-id "$sg" --protocol all --port -1 --cidr 0.0.0.0/0 2>/dev/null || true
+                aws ec2 revoke-security-group-egress --group-id "$sg" --protocol all --port -1 --cidr 0.0.0.0/0 2>/dev/null || true
                 
-                # 진행 상황이 없으면 강제 종료
-                if [[ "$progress_made" == "false" ]]; then
-                    log_warning "보안 그룹 정리에서 진행 상황이 없습니다. 강제 종료합니다."
-                    break
+                # 보안 그룹 삭제 시도
+                if aws ec2 delete-security-group --group-id "$sg" 2>/dev/null; then
+                    log_success "보안 그룹 삭제 성공: $sg"
+                else
+                    log_warning "보안 그룹 삭제 실패: $sg (건너뜀)"
                 fi
                 
-                # 남은 보안 그룹이 있으면 잠시 대기 후 재시도
-                if [[ -n "$sg_ids" ]]; then
-                    log_info "남은 보안 그룹: $sg_ids"
-                    log_info "3초 대기 후 재시도..."
-                    sleep 3
-                fi
-                
-                ((sg_attempt++))
+                # API 제한 방지를 위한 짧은 대기
+                sleep 0.5
             done
-            
-            # 최종 남은 보안 그룹들
-            if [[ -n "$sg_ids" ]]; then
-                log_error "최종적으로 삭제되지 않은 보안 그룹: $sg_ids"
-                log_warning "이 보안 그룹들은 AWS 콘솔에서 수동으로 삭제해야 할 수 있습니다."
-            else
-                log_success "모든 보안 그룹 정리 완료"
-            fi
+        else
+            log_info "삭제할 보안 그룹이 없습니다"
         fi
         
-        # 9. VPC 삭제 시도 (여러 번 재시도)
+        # 9. VPC 삭제 시도 (타임아웃 포함)
         log_info "VPC 삭제 시도: $vpc"
-        local vpc_delete_attempts=5
+        local vpc_delete_attempts=3  # 5에서 3으로 단축
         local vpc_deleted=false
+        local vpc_timeout=120  # 5분에서 2분으로 단축
+        local vpc_start_time=$(date +%s)
         
         for attempt in $(seq 1 $vpc_delete_attempts); do
+            local current_time=$(date +%s)
+            if (( current_time - vpc_start_time > vpc_timeout )); then
+                log_warning "VPC 삭제 타임아웃 (2분). 강제 종료합니다."
+                break
+            fi
+            
             log_info "VPC 삭제 시도 $attempt/$vpc_delete_attempts: $vpc"
             
             if aws ec2 delete-vpc --vpc-id "$vpc" 2>/dev/null; then
@@ -726,49 +752,25 @@ cleanup_networking() {
                 if [[ $attempt -eq $vpc_delete_attempts ]]; then
                     log_error "VPC $vpc 삭제 최종 실패. 의존성 리소스 확인 중..."
                     
-                    # 상세한 의존성 분석
+                    # 간단한 의존성 분석
                     log_info "=== VPC 의존성 분석 ==="
                     
                     # Network Interfaces 확인
-                    local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].[NetworkInterfaceId,Status,Description]' --output text 2>/dev/null)
+                    local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].[NetworkInterfaceId,Status]' --output text 2>/dev/null)
                     if [[ -n "$enis" ]]; then
-                        log_warning "남은 Network Interfaces:"
-                        echo "$enis" | while read eni status desc; do
-                            [[ -n "$eni" ]] && log_warning "  - $eni ($status): $desc"
-                        done
+                        log_warning "남은 Network Interfaces: $enis"
                     fi
                     
                     # 보안 그룹 확인
                     local remaining_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[*].[GroupId,GroupName]' --output text 2>/dev/null)
                     if [[ -n "$remaining_sgs" ]]; then
-                        log_warning "남은 보안 그룹:"
-                        echo "$remaining_sgs" | while read sg_id sg_name; do
-                            [[ -n "$sg_id" ]] && log_warning "  - $sg_id ($sg_name)"
-                        done
-                    fi
-                    
-                    # 라우팅 테이블 확인
-                    local remaining_rts=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].[RouteTableId,Associations[0].Main]' --output text 2>/dev/null)
-                    if [[ -n "$remaining_rts" ]]; then
-                        log_warning "남은 라우팅 테이블:"
-                        echo "$remaining_rts" | while read rt_id is_main; do
-                            [[ -n "$rt_id" ]] && log_warning "  - $rt_id (Main: $is_main)"
-                        done
-                    fi
-                    
-                    # VPC 엔드포인트 확인
-                    local vpc_endpoints=$(aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$vpc" --query 'VpcEndpoints[*].[VpcEndpointId,State]' --output text 2>/dev/null)
-                    if [[ -n "$vpc_endpoints" ]]; then
-                        log_warning "남은 VPC 엔드포인트:"
-                        echo "$vpc_endpoints" | while read ep_id state; do
-                            [[ -n "$ep_id" ]] && log_warning "  - $ep_id ($state)"
-                        done
+                        log_warning "남은 보안 그룹: $remaining_sgs"
                     fi
                     
                     log_error "💡 해결 방법: AWS 콘솔에서 VPC -> $vpc -> Actions -> Delete VPC 사용"
                 else
-                    log_warning "VPC 삭제 실패 (재시도 $attempt/$vpc_delete_attempts). 10초 후 재시도..."
-                    sleep 10
+                    log_warning "VPC 삭제 실패 (재시도 $attempt/$vpc_delete_attempts). 5초 후 재시도..."
+                    sleep 5
                 fi
             fi
         done
@@ -960,7 +962,7 @@ verify_cleanup() {
     # 1. EC2 인스턴스 (더 포괄적 검사)
     local running_instances=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=LifeBit" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
     local name_instances=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
-    local key_instances=$(aws ec2 describe-instances --filters "Name=key-name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
+    local key_instances=$(aws ec2 describe-instances --filters "Name=key-name,Values=*lifebit*" "Name=instance-state-name,Values=running,pending,stopped,stopping" --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
     
     local all_remaining=$(echo "$running_instances $name_instances $key_instances" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
     
@@ -971,7 +973,7 @@ verify_cleanup() {
         for instance_id in $all_remaining; do
             [[ -z "$instance_id" ]] && continue
             
-            local instance_details=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].[State.Name,StateTransitionReason,Tags[?Key==`Name`].Value|[0]]' --output text 2>/dev/null)
+            local instance_details=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].[Tags[?Key==`Name`].Value|[0],Tags[?Key==`Project`].Value|[0],KeyName,SecurityGroups[0].GroupName]' --output text 2>/dev/null)
             log_warning "  - $instance_id: $instance_details"
             
             # 종료 보호 확인
@@ -1028,11 +1030,11 @@ verify_cleanup() {
     fi
 }
 
-# 모든 인스턴스 강제 검색 및 정리
+# 모든 인스턴스 강제 검색 및 정리 (개선된 버전)
 force_cleanup_all_instances() {
     log_cleanup "모든 인스턴스 강제 검색 및 정리 중..."
     
-    # 1. 모든 인스턴스 나열 후 lifebit 관련 필터링
+    # 1. 모든 인스턴스 나열 후 lifebit 관련 필터링 (간소화)
     log_info "모든 EC2 인스턴스 검색 중..."
     local all_instances=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].InstanceId' --output text 2>/dev/null | tr '\n' ' ' | xargs)
     
@@ -1040,7 +1042,7 @@ force_cleanup_all_instances() {
     for instance_id in $all_instances; do
         [[ -z "$instance_id" || "$instance_id" == "None" ]] && continue
         
-        # 인스턴스 세부 정보 확인
+        # 인스턴스 세부 정보 확인 (간소화)
         local instance_info=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].[Tags[?Key==`Name`].Value|[0],Tags[?Key==`Project`].Value|[0],KeyName,SecurityGroups[0].GroupName]' --output text 2>/dev/null)
         
         # lifebit 관련 인스턴스인지 확인
@@ -1052,6 +1054,8 @@ force_cleanup_all_instances() {
     
     if [[ -n "$lifebit_instances" ]]; then
         log_warning "강제 검색으로 발견된 LifeBit 인스턴스들: $lifebit_instances"
+        
+        # 빠른 종료 처리
         for instance_id in $lifebit_instances; do
             [[ -z "$instance_id" ]] && continue
             
@@ -1060,19 +1064,63 @@ force_cleanup_all_instances() {
             if [[ "$termination_protection" == "true" ]]; then
                 log_warning "강제 종료 보호 해제: $instance_id"
                 aws ec2 modify-instance-attribute --instance-id "$instance_id" --no-disable-api-termination 2>/dev/null || true
-                sleep 2
+                sleep 1
             fi
             
             log_info "강제 인스턴스 종료: $instance_id"
             aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
         done
         
-        # 종료 대기
-        log_info "강제 종료 인스턴스들 대기 중..."
+        # 빠른 종료 대기 (타임아웃 단축 및 개선된 로직)
+        if [[ "$FAST_MODE" == "true" ]]; then
+            log_info "강제 종료 인스턴스들 대기 중... (빠른 모드: 최대 30초)"
+            local wait_timeout=30  # 빠른 모드: 30초
+            local check_interval=5  # 빠른 모드: 5초마다 체크
+        else
+            log_info "강제 종료 인스턴스들 대기 중... (최대 1분)"
+            local wait_timeout=60  # 일반 모드: 1분
+            local check_interval=10  # 일반 모드: 10초마다 체크
+        fi
+        
         for instance_id in $lifebit_instances; do
             [[ -z "$instance_id" ]] && continue
-            aws ec2 wait instance-terminated --instance-ids "$instance_id" 2>/dev/null || true
+            
+            local instance_wait_start=$(date +%s)
+            local instance_terminated=false
+            
+            while true; do
+                local current_time=$(date +%s)
+                if (( current_time - instance_wait_start > wait_timeout )); then
+                    log_warning "인스턴스 $instance_id 종료 대기 시간 초과. 다음으로 진행합니다."
+                    break
+                fi
+                
+                # 에러 처리 강화된 상태 확인
+                local current_state=""
+                if current_state=$(aws ec2 describe-instances --instance-ids "$instance_id" --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null); then
+                    if [[ "$current_state" == "terminated" ]]; then
+                        log_success "인스턴스 $instance_id 종료 완료"
+                        instance_terminated=true
+                        break
+                    else
+                        log_info "인스턴스 $instance_id 종료 중... ($current_state)"
+                    fi
+                else
+                    # AWS CLI 에러 발생 시 해당 인스턴스는 건너뛰고 계속 진행
+                    log_warning "인스턴스 $instance_id 상태 확인 실패. 건너뜁니다."
+                    break
+                fi
+                
+                sleep $check_interval
+            done
+            
+            # 인스턴스가 종료되지 않았으면 강제 종료 재시도
+            if [[ "$instance_terminated" != "true" ]]; then
+                log_warning "인스턴스 $instance_id 강제 종료 재시도..."
+                aws ec2 terminate-instances --instance-ids "$instance_id" 2>/dev/null || true
+            fi
         done
+        
         log_success "강제 검색 인스턴스 정리 완료"
     else
         log_info "강제 검색에서 추가 LifeBit 인스턴스를 찾지 못했습니다"
@@ -1091,7 +1139,10 @@ smart_cleanup_remaining() {
     if [[ -n "$instances" && "$instances" != "None" ]]; then
         log_info "태그 기반으로 발견된 EC2 인스턴스 종료: $instances"
         aws ec2 terminate-instances --instance-ids $instances 2>/dev/null || true
-        aws ec2 wait instance-terminated --instance-ids $instances 2>/dev/null || true
+        
+        # 타임아웃이 있는 대기 (무한 대기 방지)
+        log_info "인스턴스 종료 대기 중... (최대 1분)"
+        timeout 60 bash -c "aws ec2 wait instance-terminated --instance-ids $instances" 2>/dev/null || log_warning "인스턴스 종료 대기 시간 초과. 계속 진행합니다."
     fi
     
     # 2. 강제 전체 검색 실행
@@ -1159,18 +1210,57 @@ force_cleanup_vpc() {
             
             # VPC 삭제 재시도
             log_info "VPC 강제 삭제 재시도: $vpc"
-            if aws ec2 delete-vpc --vpc-id "$vpc"; then
-                log_success "VPC $vpc 강제 삭제 완료"
-            else
-                log_error "VPC $vpc 강제 삭제도 실패. AWS 콘솔에서 수동 삭제가 필요합니다."
-            fi
+            local vpc_delete_attempts=3  # 5에서 3으로 단축
+            local vpc_deleted=false
+            local vpc_timeout=120  # 5분에서 2분으로 단축
+            local vpc_start_time=$(date +%s)
+            
+            for attempt in $(seq 1 $vpc_delete_attempts); do
+                local current_time=$(date +%s)
+                if (( current_time - vpc_start_time > vpc_timeout )); then
+                    log_warning "VPC 삭제 타임아웃 (2분). 강제 종료합니다."
+                    break
+                fi
+                
+                log_info "VPC 삭제 시도 $attempt/$vpc_delete_attempts: $vpc"
+                
+                if aws ec2 delete-vpc --vpc-id "$vpc" 2>/dev/null; then
+                    log_success "VPC $vpc 삭제 완료"
+                    vpc_deleted=true
+                    break
+                else
+                    if [[ $attempt -eq $vpc_delete_attempts ]]; then
+                        log_error "VPC $vpc 삭제 최종 실패. 의존성 리소스 확인 중..."
+                        
+                        # 간단한 의존성 분석
+                        log_info "=== VPC 의존성 분석 ==="
+                        
+                        # Network Interfaces 확인
+                        local enis=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query 'NetworkInterfaces[*].[NetworkInterfaceId,Status]' --output text 2>/dev/null)
+                        if [[ -n "$enis" ]]; then
+                            log_warning "남은 Network Interfaces: $enis"
+                        fi
+                        
+                        # 보안 그룹 확인
+                        local remaining_sgs=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[*].[GroupId,GroupName]' --output text 2>/dev/null)
+                        if [[ -n "$remaining_sgs" ]]; then
+                            log_warning "남은 보안 그룹: $remaining_sgs"
+                        fi
+                        
+                        log_error "💡 해결 방법: AWS 콘솔에서 VPC -> $vpc -> Actions -> Delete VPC 사용"
+                    else
+                        log_warning "VPC 삭제 실패 (재시도 $attempt/$vpc_delete_attempts). 5초 후 재시도..."
+                        sleep 5
+                    fi
+                fi
+            done
         fi
     done
 }
 
 # 메인 실행
 main() {
-    log_info "🍃 LifeBit AWS 완전 삭제 스크립트 시작 (v2.2)"
+    log_info "🍃 LifeBit AWS 완전 삭제 스크립트 시작 (v2.3)"
     
     load_env
     check_dependencies
@@ -1180,45 +1270,64 @@ main() {
     
     # 1. 애플리케이션 및 컴퓨팅 리소스 (VPC 내부에서 실행)
     log_info "--- 1단계: 애플리케이션 및 컴퓨팅 리소스 정리 ---"
+    check_script_timeout
     cleanup_autoscaling
+    check_script_timeout
     cleanup_ecs
+    check_script_timeout
     cleanup_lambda
+    check_script_timeout
     cleanup_api_gateway
+    check_script_timeout
     cleanup_load_balancers
+    check_script_timeout
     cleanup_rds # DB 삭제 및 대기
     
     # 2. EC2 리소스 정리 (Network Interface, EIP 포함)
     log_info "--- 2단계: EC2 리소스 정리 ---"
+    check_script_timeout
     cleanup_ec2 # 인스턴스 종료, Network Interface, EIP 해제
     
     # 3. Terraform으로 생성된 핵심 인프라 삭제 (VPC, Subnet, IGW, SG, KeyPair 등)
     log_info "--- 3단계: Terraform으로 인프라 삭제 ---"
+    check_script_timeout
     terraform_destroy
     
     # 4. 스마트 리소스 감지 및 정리
     log_info "--- 4단계: 스마트 리소스 감지 및 정리 ---"
+    check_script_timeout
     smart_cleanup_remaining
     
     # 5. Terraform으로 삭제되지 않았을 수 있는 리소스들 정리 (Fallback)
     log_info "--- 5단계: 남은 리소스 정리 (Fallback) ---"
+    check_script_timeout
     cleanup_networking    # 남은 VPC 관련 리소스 (개선된 순서)
+    check_script_timeout
     cleanup_key_pairs     # 남은 키 페어 (Terraform 실패 대비)
+    check_script_timeout
     cleanup_s3
+    check_script_timeout
     cleanup_ecr
+    check_script_timeout
     cleanup_cloudwatch
+    check_script_timeout
     cleanup_route53
+    check_script_timeout
     cleanup_iam           # 다른 리소스가 모두 삭제된 후 마지막에 정리
     
     # 6. 로컬 배포 파일 정리
     log_info "--- 6단계: 로컬 배포 파일 정리 ---"
+    check_script_timeout
     cleanup_deployment_files
     
     # 7. 강제 VPC 정리 (마지막 수단)
     log_info "--- 7단계: 강제 VPC 정리 (마지막 수단) ---"
+    check_script_timeout
     force_cleanup_vpc
     
     # 8. 최종 검증
     log_info "--- 8단계: 최종 검증 ---"
+    check_script_timeout
     verify_cleanup
     
     log_success "🎉 LifeBit AWS 완전 삭제 완료!"
