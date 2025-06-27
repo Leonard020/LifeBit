@@ -91,15 +91,6 @@ const Note = () => {
   const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
-  // 운동 추가 관련 상태
-  const [isAddExerciseDialogOpen, setIsAddExerciseDialogOpen] = useState(false);
-  const [exerciseName, setExerciseName] = useState('');
-  const [sets, setSets] = useState(1);
-  const [reps, setReps] = useState(10);
-  const [weight, setWeight] = useState(0);
-  const [time, setTime] = useState('');
-  const [exerciseOptions, setExerciseOptions] = useState<{ value: string; label: string }[]>([]);
-
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -822,36 +813,6 @@ const Note = () => {
     }
   };
 
-  // 💪 일일 운동 추가 - Spring API 사용
-  const [bodyPart, setBodyPart] = useState('chest');         // 선택한 부위
-
-  const addExerciseRecord = async () => {
-    try {
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      const request: any = {
-        exerciseName: exerciseName.trim(),
-        sets: sets || 1,
-        reps: reps || 10,
-        weight: weight || 0.0,
-        exerciseDate: formattedDate
-      };
-      await createExerciseSession(request);
-      await fetchExercise();
-      setIsAddExerciseDialogOpen(false);
-      setExerciseName('');
-      setSets(1);
-      setReps(10);
-      setWeight(0);
-      setTime('');
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "운동 추가 실패",
-        description: "기록을 저장하는 중 문제가 발생했습니다.",
-        variant: "destructive"
-      });
-    }
-  };
 
   // 일일 운동 기록 수정
   const [isEditExerciseDialogOpen, setIsEditExerciseDialogOpen] = useState(false);
@@ -875,26 +836,6 @@ const Note = () => {
     setIsEditExerciseDialogOpen(true);
   };
 
-
-  useEffect(() => {
-    const fetchExercises = async () => {
-      try {
-        console.log(`🏋️ [fetchExercises] 운동 카탈로그 조회 시작`);
-
-        const data = await getExerciseCatalog();
-        console.log('✅ [fetchExercises] 운동 카탈로그 조회 성공:', data);
-
-        setExerciseOptions(data.map(item => ({
-          value: item.name,
-          label: item.name
-        })));
-      } catch (err) {
-        console.error("❌ [fetchExercises] 운동 카탈로그 조회 실패:", err);
-      }
-    };
-
-    fetchExercises();
-  }, []);
 
 
   // 점(●) 표시용 modifiers와 classNames 추가
@@ -1132,84 +1073,6 @@ const Note = () => {
             <Card className="hover-lift">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>오늘의 운동 기록</CardTitle>
-                <Dialog open={isAddExerciseDialogOpen} onOpenChange={setIsAddExerciseDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gradient-bg hover:opacity-90 transition-opacity" size="sm">
-                      <Plus className="h-4 w-4 mr-1" />
-                      운동 추가
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>운동 기록 추가</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      {/* ✅ 운동 부위 선택 */}
-                      <div>
-                        <Label>운동 부위 선택</Label>
-                        <select
-                          value={bodyPart}
-                          onChange={(e) => setBodyPart(e.target.value as 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'abs' | 'cardio' | 'full_body')}
-                          className="w-full border p-2 rounded"
-                          title="운동 부위 선택"
-                        >
-                          <option value="chest">가슴</option>
-                          <option value="back">등</option>
-                          <option value="legs">하체</option>
-                          <option value="shoulders">어깨</option>
-                          <option value="arms">팔</option>
-                          <option value="abs">복부</option>
-                          <option value="cardio">유산소</option>
-                          <option value="full_body">전신</option>
-                        </select>
-                      </div>
-
-                      {/* ✅ 운동 이름 선택 */}
-                      <div>
-                        <Label>운동 선택</Label>
-                        <select
-                          value={exerciseName}
-                          onChange={(e) => setExerciseName(e.target.value)}
-                          className="w-full border p-2 rounded"
-                          disabled={exerciseOptions.length === 0}
-                          title="운동 선택"
-                        >
-                          <option value="">
-                            {exerciseOptions.length === 0 ? '운동 부위를 먼저 선택하세요' : '운동을 선택하세요'}
-                          </option>
-                          {exerciseOptions.map((exercise) => (
-                            <option key={exercise.value} value={exercise.value}>
-                              {exercise.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label>세트</Label>
-                          <Input type="number" value={sets} onChange={(e) => setSets(Number(e.target.value))} min={1} />
-                        </div>
-                        <div>
-                          <Label>횟수</Label>
-                          <Input type="number" value={reps} onChange={(e) => setReps(Number(e.target.value))} min={1} />
-                        </div>
-                      </div>
-                      <div>
-                        <Label>무게 (kg)</Label>
-                        <Input type="number" value={weight} onChange={(e) => setWeight(Number(e.target.value))} min={0} />
-                      </div>
-                      <div>
-                        <Label>운동 시간</Label>
-                        <Input value={time} onChange={(e) => setTime(e.target.value)} placeholder="예: 20분" />
-                      </div>
-
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" onClick={() => setIsAddExerciseDialogOpen(false)}>취소</Button>
-                        <Button onClick={addExerciseRecord}>추가</Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
               </CardHeader>
               <CardContent>
                 {todayExercise.length > 0 ? (
