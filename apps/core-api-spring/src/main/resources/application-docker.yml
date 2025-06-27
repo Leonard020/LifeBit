@@ -37,9 +37,16 @@ management:
 
 logging:
   level:
-    com.lifebit: INFO
+    com.lifebit: DEBUG
+    com.lifebit.coreapi.security: DEBUG
+    com.lifebit.coreapi.controller.AuthController: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
     org.hibernate.SQL: INFO
     root: INFO
 
 server:
-  forward-headers-strategy: framework 
+  forward-headers-strategy: framework
+  tomcat:
+    remote-ip-header: x-forwarded-for
+    protocol-header: x-forwarded-proto 

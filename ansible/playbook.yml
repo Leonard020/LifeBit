@@ -36,45 +36,11 @@
     
   tasks:
     # ================================================
-    # 0. 방화벽 설정 (최우선 실행)
+    # 0. 방화벽 설정 (AWS 보안그룹 사용으로 UFW 비활성화)
     # ================================================
-    - name: UFW 초기화
+    - name: UFW 비활성화 (AWS 보안그룹으로 보안 관리)
       ufw:
-        state: reset
-      tags: [security]
-
-    - name: UFW 기본 정책 설정
-      ufw:
-        direction: "{{ item.direction }}"
-        policy: "{{ item.policy }}"
-      loop:
-        - { direction: 'incoming', policy: 'deny' }
-        - { direction: 'outgoing', policy: 'allow' }
-      tags: [security]
-
-    - name: UFW 포트 허용
-      ufw:
-        rule: allow
-        port: "{{ item.port }}"
-        proto: "{{ item.proto | default('tcp') }}"
-        comment: "{{ item.comment }}"
-      loop:
-        - { port: '22', comment: 'SSH' }
-        - { port: '80', comment: 'HTTP' }
-        - { port: '443', comment: 'HTTPS' }
-        - { port: '3000', comment: 'Frontend' }
-        - { port: '8080', comment: 'Spring Boot API' }
-        - { port: '8001', comment: 'FastAPI' }
-        - { port: '8081', comment: 'Airflow' }
-        - { port: '8082', comment: 'Nginx Proxy' }
-        - { port: '3001', comment: 'Grafana' }
-        - { port: '9090', comment: 'Prometheus' }
-        - { port: '9100', comment: 'Node Exporter' }
-      tags: [security]
-
-    - name: UFW 활성화
-      ufw:
-        state: enabled
+        state: disabled
       tags: [security]
 
     # ================================================
