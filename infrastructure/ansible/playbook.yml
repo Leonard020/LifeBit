@@ -257,6 +257,7 @@
         src: /etc/letsencrypt/
         dest: "{{ app_directory }}/letsencrypt/"
         recursive: yes
+        mode: push
       when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
 
     - name: Build and start services
