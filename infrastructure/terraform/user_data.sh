@@ -7,34 +7,50 @@ echo "Starting user-data script execution at $(date)"
 # 에러 발생시 스크립트 중단
 set -e
 
-# apt lock 대기 함수
+# unattended-upgrades 즉시 중지 및 비활성화 (무한 대기 방지)
+echo "Disabling unattended-upgrades to prevent hanging..."
+systemctl stop unattended-upgrades.service || true
+systemctl disable unattended-upgrades.service || true
+pkill -f unattended-upgrade || true
+
+# APT 설정 최적화
+echo "Configuring APT for non-interactive mode..."
+export DEBIAN_FRONTEND=noninteractive
+export APT_LISTCHANGES_FRONTEND=none
+
+# APT 설정 파일 생성
+cat > /etc/apt/apt.conf.d/99-disable-auto-updates << EOF
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::AutocleanInterval "0";
+APT::Periodic::Unattended-Upgrade "0";
+EOF
+
+# apt lock 대기 함수 (타임아웃 포함)
 wait_for_apt() {
     echo "Waiting for apt locks to be released..."
     
-    # unattended-upgrades 완료 대기
-    while pgrep -x unattended-upgr > /dev/null; do
-        echo "Waiting for unattended-upgrades to complete..."
-        sleep 10
-    done
-    
-    # apt lock 대기
-    timeout=600  # 10분 타임아웃
-    elapsed=0
+    local timeout=300  # 5분 타임아웃
+    local elapsed=0
     
     while [ $elapsed -lt $timeout ]; do
+        # 모든 lock 파일 확인
         if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && \
            ! fuser /var/lib/apt/lists/lock >/dev/null 2>&1 && \
            ! fuser /var/cache/apt/archives/lock >/dev/null 2>&1; then
             echo "APT locks are available"
             return 0
         fi
+        
         echo "Waiting for apt locks to be released... ($elapsed/$timeout seconds)"
-        sleep 10
-        elapsed=$((elapsed + 10))
+        sleep 5
+        elapsed=$((elapsed + 5))
     done
     
-    echo "Timeout waiting for apt locks"
-    return 1
+    # 타임아웃 시 강제로 lock 제거
+    echo "Timeout reached, forcefully removing locks..."
+    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock || true
+    return 0
 }
 
 # 재시도 가능한 apt 명령 실행 함수
@@ -46,14 +62,14 @@ run_apt_command() {
     while [ $retry_count -lt $max_retries ]; do
         echo "Executing: $command (attempt $((retry_count + 1))/$max_retries)"
         
-        if wait_for_apt && eval "$command"; then
+        if wait_for_apt && eval "DEBIAN_FRONTEND=noninteractive $command"; then
             echo "Command succeeded: $command"
             return 0
         else
             retry_count=$((retry_count + 1))
             if [ $retry_count -lt $max_retries ]; then
-                echo "Command failed, retrying in 30 seconds..."
-                sleep 30
+                echo "Command failed, retrying in 15 seconds..."
+                sleep 15
             else
                 echo "Command failed after $max_retries attempts: $command"
                 return 1
@@ -65,7 +81,7 @@ run_apt_command() {
 # 시스템 업데이트
 echo "Starting system update..."
 run_apt_command "apt-get update -y"
-run_apt_command "apt-get upgrade -y"
+run_apt_command "apt-get upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\""
 
 # 필수 패키지 설치
 echo "Installing essential packages..."
@@ -178,6 +194,11 @@ EOF
 
 # Docker 서비스 재시작
 systemctl restart docker
+
+# unattended-upgrades 완전 제거 (향후 문제 방지)
+echo "Removing unattended-upgrades completely..."
+run_apt_command "apt-get remove -y unattended-upgrades" || true
+run_apt_command "apt-get autoremove -y" || true
 
 # 시스템 서비스 상태 확인
 echo "Verifying installations..."

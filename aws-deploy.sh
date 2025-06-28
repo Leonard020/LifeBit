@@ -154,23 +154,38 @@ for i in {1..60}; do
     fi
 done
 
-# user_data 스크립트 완료 대기
-log_info "시스템 초기화 완료 대기 중... (최대 15분 소요)"
-max_wait=900  # 15분
+# user_data 스크립트 완료 대기 (개선된 로직)
+log_info "시스템 초기화 완료 대기 중... (최대 10분 소요)"
+max_wait=600  # 10분으로 단축
 elapsed=0
+user_data_completed=false
+
 while [ $elapsed -lt $max_wait ]; do
     if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" ubuntu@$EC2_PUBLIC_IP "test -f /home/ubuntu/.user-data-completed" 2>/dev/null; then
         log_success "시스템 초기화가 완료되었습니다."
+        user_data_completed=true
         break
     fi
     echo -n "."
-    sleep 30
-    elapsed=$((elapsed + 30))
-    if [ $elapsed -ge $max_wait ]; then
-        log_warning "시스템 초기화 완료 확인 시간이 초과되었습니다. 계속 진행합니다..."
-        break
-    fi
+    sleep 20
+    elapsed=$((elapsed + 20))
 done
+
+if [ "$user_data_completed" = false ]; then
+    log_warning "시스템 초기화 완료 확인 시간이 초과되었습니다."
+    log_info "unattended-upgrades 문제를 수동으로 해결합니다..."
+    
+    # unattended-upgrades 문제 해결
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" ubuntu@$EC2_PUBLIC_IP "
+        sudo systemctl stop unattended-upgrades.service || true
+        sudo systemctl disable unattended-upgrades.service || true
+        sudo pkill -f unattended-upgrade || true
+        sudo apt-get install -y rsync htop vim tree jq || true
+        echo 'Manual setup completed'
+    " 2>/dev/null || log_warning "수동 설정에 일부 실패했지만 계속 진행합니다."
+    
+    log_info "계속 진행합니다..."
+fi
 
 # Ansible 인벤토리 파일 생성
 log_info "Ansible 인벤토리 생성 중..."

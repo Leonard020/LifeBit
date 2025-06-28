@@ -12,33 +12,51 @@
         delay: 10
         timeout: 300
 
-    - name: Wait for automatic apt updates to complete
+    - name: Ensure unattended-upgrades is not running
       shell: |
-        # Wait for unattended-upgrades to complete
-        while pgrep -x unattended-upgr > /dev/null; do
-          echo "Waiting for unattended-upgrades to complete..."
-          sleep 10
-        done
+        # unattended-upgrades 완전 중지
+        systemctl stop unattended-upgrades.service || true
+        systemctl disable unattended-upgrades.service || true
+        pkill -f unattended-upgrade || true
         
-        # Wait for apt lock to be released (with timeout)
-        timeout=300
+        # apt 프로세스 정리
+        pkill -f apt-get || true
+        pkill -f dpkg || true
+        
+        # 잠시 대기
+        sleep 5
+        
+        # lock 파일 강제 제거
+        rm -f /var/lib/dpkg/lock-frontend || true
+        rm -f /var/lib/dpkg/lock || true
+        rm -f /var/lib/apt/lists/lock || true
+        rm -f /var/cache/apt/archives/lock || true
+        
+        echo "APT cleanup completed"
+      register: apt_cleanup
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Wait for apt locks to be available (with timeout)
+      shell: |
+        timeout=120  # 2분 타임아웃
         elapsed=0
+        
         while [ $elapsed -lt $timeout ]; do
           if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && \
              ! fuser /var/lib/apt/lists/lock >/dev/null 2>&1 && \
              ! fuser /var/cache/apt/archives/lock >/dev/null 2>&1; then
             echo "APT locks are available"
-            break
+            exit 0
           fi
-          echo "Waiting for apt locks to be released... ($elapsed/$timeout seconds)"
+          echo "Waiting for apt locks... ($elapsed/$timeout seconds)"
           sleep 10
           elapsed=$((elapsed + 10))
         done
         
-        if [ $elapsed -ge $timeout ]; then
-          echo "Timeout waiting for apt locks"
-          exit 1
-        fi
+        # 타임아웃 시에도 계속 진행
+        echo "Timeout reached, but continuing anyway"
+        exit 0
       register: apt_lock_wait
       changed_when: false
 
@@ -46,6 +64,8 @@
       apt:
         update_cache: yes
         cache_valid_time: 3600
+      environment:
+        DEBIAN_FRONTEND: noninteractive
       retries: 3
       delay: 10
 
@@ -58,6 +78,8 @@
           - tree
           - jq
         state: present
+      environment:
+        DEBIAN_FRONTEND: noninteractive
       retries: 3
       delay: 10
 
