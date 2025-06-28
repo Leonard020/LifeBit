@@ -237,12 +237,18 @@
       register: ssl_cert_exists
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
+    - name: Check if letsencrypt directory exists
+      stat:
+        path: "/etc/letsencrypt"
+      register: letsencrypt_dir
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
     - name: Copy letsencrypt to app directory
       synchronize:
         src: /etc/letsencrypt/
         dest: "{{ app_directory }}/letsencrypt/"
         recursive: yes
-      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
 
     - name: Build and start services
       shell: |
