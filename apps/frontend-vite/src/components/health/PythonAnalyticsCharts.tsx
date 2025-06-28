@@ -1,4 +1,5 @@
-/**
+/*헬스로그 개발
+
  * AI 기반 고급 건강 데이터 분석 차트 컴포넌트
  * - 전문적인 통계 분석 및 시각화
  * - 일/주/월별 운동, 식단, 체중, BMI 목표치와 성취도 표시
@@ -41,6 +42,7 @@ import {
 import { Skeleton } from '../ui/skeleton';
 import { 
   ComposedChart, 
+  LineChart as RechartsLineChart,
   Line, 
   Bar, 
   XAxis, 
@@ -212,7 +214,18 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
           const dayOfWeek = date.getDay();
           const weekStart = new Date(date);
           weekStart.setDate(date.getDate() - dayOfWeek);
-          return weekStart.toISOString().split('T')[0];
+          const result = weekStart.toISOString().split('T')[0];
+          
+          // 디버깅용 로그
+          if (period === 'week') {
+            console.log(`🔧 주별 키 생성:`, {
+              originalDate: dateStr,
+              dayOfWeek,
+              weekStart: result
+            });
+          }
+          
+          return result;
         }
         case 'month':
           return dateStr.substring(0, 7); // YYYY-MM
@@ -242,80 +255,91 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     const getExtendedPeriod = () => {
       const now = new Date();
       const extendedData: { [key: string]: {
-        label: string;
-        date: string;
+      label: string;
+      date: string;
         weightValues: number[];
         bmiValues: number[];
-        exerciseMinutes: number;
-        exerciseCalories: number;
-        mealCalories: number;
-        mealCount: number;
+      exerciseMinutes: number;
+      exerciseCalories: number;
+      mealCalories: number;
+      mealCount: number;
         isDisplayPeriod: boolean; // 실제 표시할 기간인지 구분
-      } } = {};
-
-      if (period === 'day') {
+    } } = {};
+    
+    if (period === 'day') {
         // 표시할 최근 7일 + 3개월 전 데이터 (97일)
         for (let i = 96; i >= 0; i--) {
-          const date = new Date(now);
-          date.setDate(date.getDate() - i);
-          const key = date.toISOString().split('T')[0];
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const key = date.toISOString().split('T')[0];
           const label = generatePeriodLabel(date, period, i);
           extendedData[key] = {
-            label,
-            date: key,
+          label,
+          date: key,
             weightValues: [],
             bmiValues: [],
-            exerciseMinutes: 0,
-            exerciseCalories: 0,
-            mealCalories: 0,
+          exerciseMinutes: 0,
+          exerciseCalories: 0,
+          mealCalories: 0,
             mealCount: 0,
             isDisplayPeriod: i <= 6 // 최근 7일만 표시
-          };
-        }
-      } else if (period === 'week') {
+        };
+      }
+    } else if (period === 'week') {
         // 표시할 최근 8주 + 3개월 전 데이터 (20주)
         for (let i = 19; i >= 0; i--) {
-          const weekEnd = new Date(now);
-          weekEnd.setDate(weekEnd.getDate() - (i * 7));
+          // 현재 주의 일요일 기준으로 i주 전 계산
+          const currentWeekStart = new Date(now);
+          const currentDayOfWeek = now.getDay();
+          currentWeekStart.setDate(now.getDate() - currentDayOfWeek);
           
-          const dayOfWeek = weekEnd.getDay();
-          const weekStart = new Date(weekEnd);
-          weekStart.setDate(weekEnd.getDate() - dayOfWeek);
+          // i주 전의 주 시작일 계산
+          const weekStart = new Date(currentWeekStart);
+          weekStart.setDate(currentWeekStart.getDate() - (i * 7));
           
           const key = weekStart.toISOString().split('T')[0];
           const label = generatePeriodLabel(weekStart, period, i);
-          extendedData[key] = {
+          
+          console.log(`🔧 [week] 주별 그룹 생성:`, {
+            i,
+            currentWeekStart: currentWeekStart.toISOString().split('T')[0],
+            weekStart: key,
             label,
-            date: key,
+            isDisplayPeriod: i <= 7
+          });
+          
+          extendedData[key] = {
+          label,
+          date: key,
             weightValues: [],
             bmiValues: [],
-            exerciseMinutes: 0,
-            exerciseCalories: 0,
-            mealCalories: 0,
+          exerciseMinutes: 0,
+          exerciseCalories: 0,
+          mealCalories: 0,
             mealCount: 0,
             isDisplayPeriod: i <= 7 // 최근 8주만 표시
-          };
-        }
-      } else {
+        };
+      }
+    } else {
         // 표시할 최근 12개월 + 3개월 전 데이터 (15개월)
         for (let i = 14; i >= 0; i--) {
-          const date = new Date(now);
-          date.setMonth(date.getMonth() - i);
-          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const date = new Date(now);
+        date.setMonth(date.getMonth() - i);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
           const label = generatePeriodLabel(date, period, i);
           extendedData[key] = {
-            label,
-            date: key,
+          label,
+          date: key,
             weightValues: [],
             bmiValues: [],
-            exerciseMinutes: 0,
-            exerciseCalories: 0,
-            mealCalories: 0,
+          exerciseMinutes: 0,
+          exerciseCalories: 0,
+          mealCalories: 0,
             mealCount: 0,
             isDisplayPeriod: i <= 11 // 최근 12개월만 표시
-          };
-        }
+        };
       }
+    }
 
       return extendedData;
     };
@@ -324,24 +348,138 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
 
     // 건강 기록 데이터 매핑 (3개월 전 데이터까지 포함)
     if (Array.isArray(healthRecordsData)) {
+      console.log(`🔧 [${period}] 건강 기록 데이터 매핑 시작:`, healthRecordsData.length);
+      
       healthRecordsData.forEach(record => {
         const dateKey = getDateKey(record.record_date, period);
         
+        console.log(`🔧 [${period}] 매핑 시도:`, {
+          record_date: record.record_date,
+          dateKey,
+          hasGroup: !!groupedData[dateKey],
+          weight: record.weight,
+          bmi: record.bmi
+        });
+        
         if (groupedData[dateKey]) {
-          if (record.weight) groupedData[dateKey].weightValues.push(record.weight);
-          if (record.bmi) groupedData[dateKey].bmiValues.push(record.bmi);
+          if (record.weight) {
+            groupedData[dateKey].weightValues.push(record.weight);
+            console.log(`✅ [${period}] 체중 데이터 추가:`, dateKey, record.weight);
+          }
+          if (record.bmi) {
+            groupedData[dateKey].bmiValues.push(record.bmi);
+            console.log(`✅ [${period}] BMI 데이터 추가:`, dateKey, record.bmi);
+          }
+        } else {
+          // 🔧 정확한 키가 없으면 가장 가까운 주별 그룹 찾기
+          if (period === 'week') {
+            const recordDate = new Date(record.record_date);
+            const availableKeys = Object.keys(groupedData).sort();
+            
+            // 기록 날짜가 포함되는 주를 찾기
+            let targetKey = null;
+            for (const key of availableKeys) {
+              const weekStart = new Date(key);
+              const weekEnd = new Date(weekStart);
+              weekEnd.setDate(weekStart.getDate() + 6);
+              
+              if (recordDate >= weekStart && recordDate <= weekEnd) {
+                targetKey = key;
+                break;
+              }
+            }
+            
+            if (targetKey && groupedData[targetKey]) {
+              if (record.weight) {
+                groupedData[targetKey].weightValues.push(record.weight);
+                console.log(`✅ [${period}] 대체 체중 매핑:`, {
+                  original: dateKey,
+                  target: targetKey,
+                  record_date: record.record_date,
+                  weight: record.weight
+                });
+              }
+              if (record.bmi) {
+                groupedData[targetKey].bmiValues.push(record.bmi);
+                console.log(`✅ [${period}] 대체 BMI 매핑:`, {
+                  original: dateKey,
+                  target: targetKey,
+                  record_date: record.record_date,
+                  bmi: record.bmi
+                });
+              }
+            } else {
+              console.log(`❌ [${period}] 매핑 실패:`, {
+                dateKey,
+                record_date: record.record_date,
+                availableKeys: availableKeys.slice(0, 5)
+              });
+            }
+          } else {
+            console.log(`❌ [${period}] 그룹 없음:`, dateKey, '사용 가능한 키:', Object.keys(groupedData).slice(0, 5));
+          }
         }
       });
     }
 
-    // 운동 세션 데이터 매핑
+    // 운동 세션 데이터 매핑 (3개월 전 데이터까지 포함)
     if (Array.isArray(exerciseSessionsData)) {
+      console.log(`🔧 [${period}] 운동 세션 데이터 매핑 시작:`, exerciseSessionsData.length);
+      
       exerciseSessionsData.forEach(session => {
         const dateKey = getDateKey(session.exercise_date, period);
+        
+        console.log(`🔧 [${period}] 운동 매핑 시도:`, {
+          exercise_date: session.exercise_date,
+          dateKey,
+          hasGroup: !!groupedData[dateKey],
+          duration_minutes: session.duration_minutes,
+          calories_burned: session.calories_burned
+        });
         
         if (groupedData[dateKey]) {
           groupedData[dateKey].exerciseMinutes += session.duration_minutes || 0;
           groupedData[dateKey].exerciseCalories += session.calories_burned || 0;
+          console.log(`✅ [${period}] 운동 데이터 추가:`, dateKey, `${session.duration_minutes}분, ${session.calories_burned}kcal`);
+        } else {
+          // 🔧 정확한 키가 없으면 가장 가까운 주별 그룹 찾기
+          if (period === 'week') {
+            const exerciseDate = new Date(session.exercise_date);
+            const availableKeys = Object.keys(groupedData).sort();
+            
+            // 운동 날짜가 포함되는 주를 찾기
+            let targetKey = null;
+            for (const key of availableKeys) {
+              const weekStart = new Date(key);
+              const weekEnd = new Date(weekStart);
+              weekEnd.setDate(weekStart.getDate() + 6);
+              
+              if (exerciseDate >= weekStart && exerciseDate <= weekEnd) {
+                targetKey = key;
+                break;
+              }
+            }
+            
+            if (targetKey && groupedData[targetKey]) {
+              groupedData[targetKey].exerciseMinutes += session.duration_minutes || 0;
+              groupedData[targetKey].exerciseCalories += session.calories_burned || 0;
+              console.log(`✅ [${period}] 대체 운동 매핑:`, {
+                original: dateKey,
+                target: targetKey,
+                exercise_date: session.exercise_date,
+                duration: session.duration_minutes,
+                calories: session.calories_burned
+              });
+            } else {
+              console.log(`❌ [${period}] 운동 매핑 실패:`, {
+                dateKey,
+                exercise_date: session.exercise_date,
+                availableKeys: availableKeys.slice(0, 5)
+              });
+            }
+          } else {
+            console.log(`❌ [${period}] 운동 그룹 없음:`, dateKey, '사용 가능한 키:', Object.keys(groupedData).slice(0, 5));
+          }
         }
       });
     }
@@ -365,6 +503,25 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     const sortedKeys = Object.keys(groupedData).sort();
     let lastValidWeight: number | null = null;
     let lastValidBmi: number | null = null;
+
+    // 🔧 먼저 전체 데이터에서 가장 최근 유효값을 찾기 (시드 데이터)
+    const allHealthData = Array.isArray(healthRecordsData) ? healthRecordsData : [];
+    if (allHealthData.length > 0) {
+      // 날짜순 정렬하여 가장 최근 데이터 사용
+      const sortedHealthData = allHealthData.sort((a, b) => 
+        new Date(b.record_date).getTime() - new Date(a.record_date).getTime()
+      );
+      
+      const latestRecord = sortedHealthData[0];
+      if (latestRecord.weight) lastValidWeight = latestRecord.weight;
+      if (latestRecord.bmi) lastValidBmi = latestRecord.bmi;
+      
+      console.log(`🔧 [${period}] 시드 데이터 설정:`, {
+        latestRecord: latestRecord.record_date,
+        seedWeight: lastValidWeight,
+        seedBmi: lastValidBmi
+      });
+    }
 
     const processedData = sortedKeys.map(key => {
       const group = groupedData[key];
@@ -392,7 +549,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       return {
         label: group.label,
         date: group.date,
-        // 🔧 차트 연결을 위해 null 처리 (값이 없으면 null, Forward Fill 값이 있으면 사용)
+        // 🔧 차트 연결을 위해 Forward Fill 값 또는 null 사용
         weight: currentWeight,
         bmi: currentBmi,
         exerciseMinutes: group.exerciseMinutes,
@@ -410,14 +567,17 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     // 표시할 기간만 필터링하여 반환
     const displayData = processedData.filter(item => item.isDisplayPeriod);
     
-    // 🔧 로그로 데이터 확인
+    // 🔧 상세 로그로 데이터 확인
+    console.log(`📊 [${period}] 원본 건강 데이터 개수:`, allHealthData.length);
+    console.log(`📊 [${period}] 그룹핑된 데이터 키:`, Object.keys(groupedData));
     console.log(`📊 [${period}] 처리된 차트 데이터:`, displayData.map(d => ({
       label: d.label,
       weight: d.weight,
       bmi: d.bmi,
       exerciseMinutes: d.exerciseMinutes,
       hasWeightData: d.hasWeightData,
-      hasBmiData: d.hasBmiData
+      hasBmiData: d.hasBmiData,
+      isDisplayPeriod: d.isDisplayPeriod
     })));
 
     return displayData;
@@ -591,20 +751,17 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 <div className="flex items-center">
                   <Weight className="h-8 w-8 text-blue-600" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">현재 체중</p>
+                    <p className="text-sm font-medium text-gray-600">{getPeriodLabel()} 평균 체중</p>
                     <p className="text-2xl font-bold">
                       {(() => {
-                        // health_records 테이블에서 최신 체중 데이터 가져오기
-                        const healthRecordsData = Array.isArray(healthRecords) 
-                          ? healthRecords 
-                          : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                        // 기간별 평균 체중 계산
+                        const validWeights = chartData
+                          .filter(item => item.weight !== null && item.hasWeightData)
+                          .map(item => item.weight);
                         
-                        const latestRecord = healthRecordsData.length > 0 
-                          ? healthRecordsData[healthRecordsData.length - 1] 
-                          : null;
-                        
-                        if (latestRecord?.weight) {
-                          return `${latestRecord.weight}kg`;
+                        if (validWeights.length > 0) {
+                          const avgWeight = validWeights.reduce((sum, weight) => sum + weight, 0) / validWeights.length;
+                          return `${avgWeight.toFixed(1)}kg`;
                         }
                         return '데이터 없음';
                       })()}
@@ -619,20 +776,17 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 <div className="flex items-center">
                   <Heart className="h-8 w-8 text-red-600" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">현재 BMI</p>
+                    <p className="text-sm font-medium text-gray-600">{getPeriodLabel()} 평균 BMI</p>
                     <p className="text-2xl font-bold">
                       {(() => {
-                        // health_records 테이블에서 최신 BMI 데이터 가져오기
-                        const healthRecordsData = Array.isArray(healthRecords) 
-                          ? healthRecords 
-                          : (healthRecords?.data && Array.isArray(healthRecords.data) ? healthRecords.data : []);
+                        // 기간별 평균 BMI 계산
+                        const validBmis = chartData
+                          .filter(item => item.bmi !== null && item.hasBmiData)
+                          .map(item => item.bmi);
                         
-                        const latestRecord = healthRecordsData.length > 0 
-                          ? healthRecordsData[healthRecordsData.length - 1] 
-                          : null;
-                        
-                        if (latestRecord?.bmi) {
-                          return latestRecord.bmi.toFixed(1);
+                        if (validBmis.length > 0) {
+                          const avgBmi = validBmis.reduce((sum, bmi) => sum + bmi, 0) / validBmis.length;
+                          return avgBmi.toFixed(1);
                         }
                         return 'N/A';
                       })()}
@@ -647,7 +801,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 <div className="flex items-center">
                   <Activity className="h-8 w-8 text-green-600" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">{getPeriodLabel()} 운동</p>
+                    <p className="text-sm font-medium text-gray-600">{getPeriodLabel()} 총 운동</p>
                     <p className="text-2xl font-bold">
                       {(() => {
                         // exercise_sessions 테이블에서 기간별 운동 시간 계산
@@ -671,7 +825,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 <div className="flex items-center">
                   <Flame className="h-8 w-8 text-orange-600" />
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">소모 칼로리</p>
+                    <p className="text-sm font-medium text-gray-600">{getPeriodLabel()} 총 칼로리</p>
                     <p className="text-2xl font-bold">
                       {(() => {
                         // exercise_sessions 테이블에서 기간별 소모 칼로리 계산
@@ -701,7 +855,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={450}>
-                <ComposedChart 
+                <RechartsLineChart 
                   data={chartData}
                   margin={{
                     top: 20,
@@ -763,13 +917,23 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     iconType="line"
                     wrapperStyle={{ fontSize: '14px', paddingTop: '20px' }}
                   />
-                  <Bar 
+                  <Line 
                     yAxisId="exercise" 
+                    type="monotone" 
                     dataKey="exerciseMinutes" 
-                    fill={COLORS.primary} 
-                    name="운동 시간(분)"
-                    radius={[2, 2, 0, 0]}
-                    opacity={0.8}
+                    stroke={COLORS.primary} 
+                    strokeWidth={2} 
+                    name="운동 시간(분)" 
+                    dot={(props) => {
+                      const { cx, cy, payload, index } = props;
+                      const key = `exercise-dot-${index}`;
+                      
+                      if (payload?.hasExerciseData) {
+                        return <circle key={key} cx={cx} cy={cy} r={3} stroke={COLORS.primary} strokeWidth={2} fill="#fff" />;
+                      }
+                      return <circle key={key} cx={cx} cy={cy} r={1.5} stroke={COLORS.primary} strokeWidth={1} fill={COLORS.primary} opacity={0.5} />;
+                    }}
+                    activeDot={{ r: 5, strokeWidth: 2, fill: COLORS.primary }}
                   />
                   <Line 
                     yAxisId="weight" 
@@ -781,13 +945,16 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     dot={(props) => {
                       const { cx, cy, payload, index } = props;
                       const key = `weight-dot-${index}`;
+                      // 체중이 null/undefined면 점 표시하지 않음
+                      if (payload?.weight == null) return null;
+                      
                       if (payload?.hasWeightData) {
                         return <circle key={key} cx={cx} cy={cy} r={4} stroke={COLORS.danger} strokeWidth={2} fill="#fff" />;
                       }
                       return <circle key={key} cx={cx} cy={cy} r={2} stroke={COLORS.danger} strokeWidth={1} fill={COLORS.danger} opacity={0.5} />;
                     }}
                     activeDot={{ r: 6, strokeWidth: 2, fill: COLORS.danger }}
-                    connectNulls={true}
+                    connectNulls={false}
                   />
                   <Line 
                     yAxisId="bmi" 
@@ -799,16 +966,19 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     dot={(props) => {
                       const { cx, cy, payload, index } = props;
                       const key = `bmi-dot-${index}`;
+                      // BMI가 null/undefined면 점 표시하지 않음
+                      if (payload?.bmi == null) return null;
+                      
                       if (payload?.hasBmiData) {
                         return <circle key={key} cx={cx} cy={cy} r={3} stroke={COLORS.purple} strokeWidth={2} fill="#fff" />;
                       }
                       return <circle key={key} cx={cx} cy={cy} r={1.5} stroke={COLORS.purple} strokeWidth={1} fill={COLORS.purple} opacity={0.5} />;
                     }}
                     activeDot={{ r: 5, strokeWidth: 2, fill: COLORS.purple }}
-                    connectNulls={true}
+                    connectNulls={false}
                     strokeDasharray="5 5"
                   />
-                </ComposedChart>
+                </RechartsLineChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
