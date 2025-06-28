@@ -431,55 +431,6 @@ EXECUTE FUNCTION update_processed_at();
 CREATE INDEX IF NOT EXISTS idx_user_ranking_total_score ON user_ranking(total_score DESC);
 CREATE INDEX IF NOT EXISTS idx_user_ranking_user_id ON user_ranking(user_id);
 
--- 등급 구간별 tier 값 일괄 업데이트 (점수 기준, 필요에 따라 조정)
-UPDATE user_ranking SET tier = 'UNRANK'      WHERE total_score < 100;
-UPDATE user_ranking SET tier = 'BRONZE'      WHERE total_score >= 100   AND total_score < 500;
-UPDATE user_ranking SET tier = 'SILVER'      WHERE total_score >= 500   AND total_score < 1000;
-UPDATE user_ranking SET tier = 'GOLD'        WHERE total_score >= 1000  AND total_score < 2000;
-UPDATE user_ranking SET tier = 'PLATINUM'    WHERE total_score >= 2000  AND total_score < 3000;
-UPDATE user_ranking SET tier = 'DIAMOND'     WHERE total_score >= 3000  AND total_score < 4000;
-UPDATE user_ranking SET tier = 'MASTER'      WHERE total_score >= 4000  AND total_score < 5000;
-UPDATE user_ranking SET tier = 'GRANDMASTER' WHERE total_score >= 5000  AND total_score < 6000;
-UPDATE user_ranking SET tier = 'CHALLENGER'  WHERE total_score >= 6000;
-
--- ranking_history.user_id 값 동기화 (user_ranking_id → user_id)
-UPDATE ranking_history rh
-SET user_id = ur.user_id
-FROM user_ranking ur
-WHERE rh.user_ranking_id = ur.id;
-
--- ranking_history.tier 값 동기화 (user_id 기준)
-UPDATE ranking_history rh
-SET tier = ur.tier
-FROM user_ranking ur
-WHERE rh.user_id = ur.user_id;
-
--- (선택) 더미 데이터 삽입 예시
--- INSERT INTO user_ranking (user_id, total_score, tier, rank_position, streak_days, is_active)
--- VALUES (1, 1200, 'GOLD', 1, 10, TRUE), (2, 800, 'SILVER', 2, 5, TRUE);
-
--- 더미 사용자 데이터 추가 (notification 외래 키 제약 조건 해결)
-INSERT INTO users (email, password_hash, nickname, height, weight, age, gender) VALUES
-('user001@example.com', crypt('password123', gen_salt('bf')), 'User001', 170.5, 65.0, 25, 'male'),
-('user002@example.com', crypt('password123', gen_salt('bf')), 'User002', 165.0, 55.0, 28, 'female'),
-('user003@example.com', crypt('password123', gen_salt('bf')), 'User003', 180.0, 75.0, 30, 'male'),
-('user004@example.com', crypt('password123', gen_salt('bf')), 'User004', 160.0, 50.0, 22, 'female'),
-('user005@example.com', crypt('password123', gen_salt('bf')), 'User005', 175.0, 70.0, 27, 'male'),
-('user006@example.com', crypt('password123', gen_salt('bf')), 'User006', 168.0, 58.0, 24, 'female'),
-('user007@example.com', crypt('password123', gen_salt('bf')), 'User007', 182.0, 80.0, 29, 'male'),
-('user008@example.com', crypt('password123', gen_salt('bf')), 'User008', 163.0, 52.0, 26, 'female'),
-('user009@example.com', crypt('password123', gen_salt('bf')), 'User009', 177.0, 72.0, 31, 'male'),
-('user010@example.com', crypt('password123', gen_salt('bf')), 'User010', 167.0, 56.0, 23, 'female');
-
--- (선택) 기타 필요한 컬럼/인덱스 추가 (예: 시즌별 인덱스, created_at/last_updated_at 인덱스 등)
-
-SELECT * FROM exercise_sessions ORDER BY created_at DESC LIMIT 5;
-  SELECT * FROM meal_logs WHERE user_id = 2 AND log_date = '2025-06-21';
-
-    SELECT * FROM meal_logs WHERE user_id=2 ORDER BY log_date DESC;
-
-
-
 -- 1. notification_read 테이블 생성
 CREATE TABLE IF NOT EXISTS notification_read (
     id BIGSERIAL PRIMARY KEY,
@@ -491,49 +442,35 @@ CREATE TABLE IF NOT EXISTS notification_read (
 
 CREATE INDEX IF NOT EXISTS idx_notification_read_user_notification ON notification_read(user_id, notification_id);
 
--- 2. 시스템 공용 알림 데이터 (user_id = NULL)
-INSERT INTO notification (user_id, type, ref_id, title, message) VALUES
-(NULL, 'SYSTEM', NULL, '앱 사용 팁', '앱의 다양한 기능을 활용해보세요. 더욱 효율적인 건강 관리가 가능합니다.'),
-(NULL, 'SYSTEM', NULL, '단축키 안내', '앱 사용을 더욱 편리하게 해주는 단축키를 확인해보세요. 빠른 접근이 가능합니다.'),
-(NULL, 'SYSTEM', NULL, '음성 인식 기능', '음성으로 운동 기록을 남길 수 있는 기능이 추가되었습니다. 편리하게 이용해보세요.'),
-(NULL, 'SYSTEM', NULL, 'AI 운동 추천', 'AI 운동 추천 기능을 활용해보세요. 개인 맞춤형 운동을 추천받을 수 있습니다.'),
-(NULL, 'SYSTEM', NULL, '데이터 동기화', '여러 기기에서 사용하실 때는 데이터 동기화를 확인해주세요. 모든 기기에서 동일한 정보를 확인할 수 있습니다.');
+-- 랭크(티어) 자동 업데이트 함수 및 트리거
+CREATE OR REPLACE FUNCTION update_user_tier()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.total_score < 100 THEN
+        NEW.tier := 'UNRANK';
+    ELSIF NEW.total_score < 500 THEN
+        NEW.tier := 'BRONZE';
+    ELSIF NEW.total_score < 1000 THEN
+        NEW.tier := 'SILVER';
+    ELSIF NEW.total_score < 2000 THEN
+        NEW.tier := 'GOLD';
+    ELSIF NEW.total_score < 3000 THEN
+        NEW.tier := 'PLATINUM';
+    ELSIF NEW.total_score < 4000 THEN
+        NEW.tier := 'DIAMOND';
+    ELSIF NEW.total_score < 5000 THEN
+        NEW.tier := 'MASTER';
+    ELSIF NEW.total_score < 6000 THEN
+        NEW.tier := 'GRANDMASTER';
+    ELSE
+        NEW.tier := 'CHALLENGER';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- 3. 신규 사용자 환영 알림 (user_id 1~10)
-INSERT INTO notification (user_id, type, ref_id, title, message) VALUES
-(1, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(2, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(3, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(4, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(5, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(6, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(7, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(8, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(9, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'),
-(10, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.');
-
--- 4. 시스템 알림만 조회
-SELECT * FROM notification WHERE user_id IS NULL;
-
--- 5. 특정 사용자가 읽은 시스템 알림
-SELECT * FROM notification_read WHERE user_id = 1 AND notification_id IN (SELECT id FROM notification WHERE user_id IS NULL);
-
--- 6. 개인 알림만 조회
-SELECT * FROM notification WHERE user_id IS NOT NULL;
-
--- 7. 실제 유저 읽은 여부 확인
-SELECT * FROM notification_read WHERE user_id = 2;
-SELECT * FROM notification_read WHERE user_id = 2 AND notification_id = 10;
-
--- 8. (예시) 읽지 않은 알림 개수 조회
--- SELECT COUNT(*) FROM notification WHERE is_read = false AND user_id = 1;
-
--- 9. (예시) 알림 타입별 개수 조회
--- SELECT type, COUNT(*) FROM notification GROUP BY type;
-
-
--- 실제 유저 읽은 여부 확인
--- 유저 MinSoo_Kim 기준, 이메일 user001@example.com
--- 예시)
---SELECT * FROM notification_read WHERE user_id = 2
-  -- SELECT * FROM notification_read WHERE user_id = 2 AND notification_id = 10;
+DROP TRIGGER IF EXISTS user_ranking_tier_trigger ON user_ranking;
+CREATE TRIGGER user_ranking_tier_trigger
+BEFORE INSERT OR UPDATE ON user_ranking
+FOR EACH ROW
+EXECUTE FUNCTION update_user_tier();

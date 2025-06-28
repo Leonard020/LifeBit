@@ -1,4 +1,3 @@
-
 -- ===================================================================
 -- 1. 사용자 데이터 50명 (관리자 1명 + 일반 사용자 49명)
 -- ===================================================================
@@ -55,13 +54,13 @@ INSERT INTO users (email, password_hash, nickname, profile_image_url, height, we
 ('user046@example.com', crypt('password123', gen_salt('bf')), 'JiYeon_Han', NULL, 164.0, 54.0, 26, 'female', 'USER'),
 ('user047@example.com', crypt('password123', gen_salt('bf')), 'JunHyuk_Hyun', NULL, 180.0, 76.0, 29, 'male', 'USER'),
 ('user048@example.com', crypt('password123', gen_salt('bf')), 'DaIn_Hong', NULL, 168.0, 58.0, 27, 'female', 'USER'),
-('user049@example.com', crypt('password123', gen_salt('bf')), 'JaeWook_Hwang', NULL, 176.0, 71.0, 28, 'male', 'USER');
+('user049@example.com', crypt('password123', gen_salt('bf')), 'JaeWook_Hwang', NULL, 176.0, 71.0, 28, 'male', 'USER'),
+('user050@example.com', crypt('password123', gen_salt('bf')), 'MinJun_Song', NULL, 176.0, 71.0, 28, 'male', 'USER');
 
 -- ===================================================================
 -- 2. 운동 카탈로그 50개 (다양한 운동 종류)
 -- ===================================================================
 INSERT INTO exercise_catalog (name, exercise_type, body_part, description, intensity) VALUES
--- 가슴 운동 (8개)
 ('벤치프레스', 'strength', 'chest', '가슴 운동의 대표적인 기본 운동', 'high'),
 ('인클라인 벤치프레스', 'strength', 'chest', '상부 가슴을 집중적으로 단련하는 운동', 'high'),
 ('디클라인 벤치프레스', 'strength', 'chest', '하부 가슴을 집중적으로 단련하는 운동', 'high'),
@@ -70,8 +69,6 @@ INSERT INTO exercise_catalog (name, exercise_type, body_part, description, inten
 ('푸시업', 'strength', 'chest', '기본적인 자체 체중 가슴 운동', 'low'),
 ('케이블 크로스오버', 'strength', 'chest', '케이블을 이용한 가슴 운동', 'medium'),
 ('펙 덱 플라이', 'strength', 'chest', '머신을 이용한 가슴 운동', 'medium'),
-
--- 등 운동 (8개)
 ('데드리프트', 'strength', 'back', '전신 근력 향상을 위한 복합 운동', 'high'),
 ('풀업', 'strength', 'back', '자체 체중을 이용한 등 운동', 'high'),
 ('랫 풀다운', 'strength', 'back', '머신을 이용한 등 운동', 'medium'),
@@ -80,8 +77,6 @@ INSERT INTO exercise_catalog (name, exercise_type, body_part, description, inten
 ('티바 로우', 'strength', 'back', '티바를 이용한 등 운동', 'medium'),
 ('원암 덤벨 로우', 'strength', 'back', '한 팔씩 하는 덤벨 등 운동', 'medium'),
 ('케이블 로우', 'strength', 'back', '케이블을 이용한 등 운동', 'medium'),
-
--- 하체 운동 (10개)
 ('스쿼트', 'strength', 'legs', '하체 운동의 기본이 되는 복합 운동', 'high'),
 ('프론트 스쿼트', 'strength', 'legs', '앞쪽에 무게를 두고 하는 스쿼트', 'high'),
 ('레그 프레스', 'strength', 'legs', '머신을 이용한 하체 운동', 'high'),
@@ -92,8 +87,6 @@ INSERT INTO exercise_catalog (name, exercise_type, body_part, description, inten
 ('카프 레이즈', 'strength', 'legs', '종아리 근육 운동', 'low'),
 ('힙 쓰러스트', 'strength', 'legs', '둔근 집중 운동', 'medium'),
 ('워킹 런지', 'strength', 'legs', '이동하면서 하는 런지 운동', 'medium'),
-
--- 어깨 운동 (8개)
 ('숄더 프레스', 'strength', 'shoulders', '전체 어깨 근육을 위한 운동', 'medium'),
 ('사이드 레터럴 레이즈', 'strength', 'shoulders', '어깨 측면 근육 운동', 'low'),
 ('프론트 레이즈', 'strength', 'shoulders', '어깨 앞쪽 근육 운동', 'low'),
@@ -102,92 +95,22 @@ INSERT INTO exercise_catalog (name, exercise_type, body_part, description, inten
 ('아놀드 프레스', 'strength', 'shoulders', '아놀드 스타일 어깨 운동', 'medium'),
 ('케이블 사이드 레터럴', 'strength', 'shoulders', '케이블을 이용한 어깨 측면 운동', 'low'),
 ('밀리터리 프레스', 'strength', 'shoulders', '서서 하는 어깨 프레스', 'high'),
-
--- 팔 운동 (6개)
 ('바이셉 컬', 'strength', 'arms', '이두근 집중 운동', 'low'),
 ('해머 컬', 'strength', 'arms', '해머 그립으로 하는 이두근 운동', 'low'),
 ('트라이셉 익스텐션', 'strength', 'arms', '삼두근 집중 운동', 'low'),
 ('트라이셉 딥스', 'strength', 'arms', '자체 체중을 이용한 삼두근 운동', 'medium'),
 ('클로즈 그립 벤치프레스', 'strength', 'arms', '좁은 손 간격으로 하는 삼두근 운동', 'medium'),
 ('케이블 트라이셉 푸시다운', 'strength', 'arms', '케이블을 이용한 삼두근 운동', 'low'),
-
--- 복근 운동 (5개)
 ('플랭크', 'strength', 'abs', '코어 강화를 위한 기본 운동', 'medium'),
 ('크런치', 'strength', 'abs', '복직근 집중 운동', 'low'),
 ('레그 레이즈', 'strength', 'abs', '하복부 집중 운동', 'medium'),
 ('러시안 트위스트', 'strength', 'abs', '복사근 집중 운동', 'medium'),
 ('마운틴 클라이머', 'strength', 'abs', '전신 코어 운동', 'high'),
-
--- 유산소 운동 (5개)
 ('러닝', 'aerobic', 'cardio', '달리기 유산소 운동', 'high'),
 ('사이클링', 'aerobic', 'cardio', '자전거 유산소 운동', 'medium'),
 ('로잉', 'aerobic', 'cardio', '로잉 머신 유산소 운동', 'high'),
 ('일립티컬', 'aerobic', 'cardio', '일립티컬 머신 유산소 운동', 'medium'),
 ('스테어 클라이머', 'aerobic', 'cardio', '계단 오르기 유산소 운동', 'high');
-
--- ===================================================================
--- 3. 음식 아이템 50개 (한국 음식 중심, 영양소 정보 포함)
--- ===================================================================
-INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein, fat) VALUES
--- 주식류 (10개)
-('F001', '현미밥', 100.0, 350.0, 73.0, 7.0, 2.5),
-('F002', '백미밥', 100.0, 365.0, 80.0, 6.5, 1.0),
-('F003', '잡곡밥', 100.0, 340.0, 70.0, 8.0, 3.0),
-('F004', '귀리밥', 100.0, 380.0, 66.0, 12.0, 6.0),
-('F005', '보리밥', 100.0, 325.0, 69.0, 8.5, 2.0),
-('F006', '김밥', 150.0, 280.0, 45.0, 8.0, 7.0),
-('F007', '볶음밥', 200.0, 420.0, 55.0, 12.0, 15.0),
-('F008', '비빔밥', 300.0, 480.0, 65.0, 18.0, 12.0),
-('F009', '덮밥', 250.0, 450.0, 60.0, 20.0, 10.0),
-('F010', '주먹밥', 120.0, 320.0, 58.0, 7.0, 5.0),
-
--- 단백질류 (12개)
-('F011', '닭가슴살', 100.0, 165.0, 0.0, 31.0, 3.6),
-('F012', '닭다리살', 100.0, 205.0, 0.0, 26.0, 11.0),
-('F013', '소고기 등심', 100.0, 250.0, 0.0, 26.0, 15.0),
-('F014', '돼지고기 등심', 100.0, 280.0, 0.0, 22.0, 20.0),
-('F015', '연어', 100.0, 208.0, 0.0, 25.0, 12.0),
-('F016', '고등어', 100.0, 190.0, 0.0, 25.0, 12.0),
-('F017', '계란', 50.0, 78.0, 0.6, 6.3, 5.3),
-('F018', '두부', 100.0, 84.0, 2.0, 8.0, 5.0),
-('F019', '콩', 100.0, 350.0, 30.0, 35.0, 18.0),
-('F020', '아몬드', 30.0, 174.0, 6.1, 6.4, 15.0),
-('F021', '호두', 30.0, 196.0, 4.1, 4.6, 19.6),
-('F022', '참치캔', 100.0, 132.0, 0.0, 29.0, 1.0),
-
--- 채소류 (15개)
-('F023', '시금치', 100.0, 23.0, 3.6, 2.9, 0.4),
-('F024', '브로콜리', 100.0, 34.0, 7.0, 2.8, 0.4),
-('F025', '양배추', 100.0, 25.0, 6.0, 1.3, 0.1),
-('F026', '당근', 100.0, 41.0, 10.0, 0.9, 0.2),
-('F027', '오이', 100.0, 16.0, 4.0, 0.7, 0.1),
-('F028', '토마토', 100.0, 18.0, 3.9, 0.9, 0.2),
-('F029', '상추', 100.0, 15.0, 2.9, 1.4, 0.1),
-('F030', '무', 100.0, 18.0, 4.1, 0.6, 0.1),
-('F031', '고구마', 100.0, 86.0, 20.0, 1.6, 0.1),
-('F032', '감자', 100.0, 77.0, 17.0, 2.0, 0.1),
-('F033', '양파', 100.0, 40.0, 9.3, 1.1, 0.1),
-('F034', '마늘', 10.0, 42.0, 9.9, 1.8, 0.1),
-('F035', '생강', 10.0, 8.0, 1.8, 0.2, 0.1),
-('F036', '피망', 100.0, 26.0, 6.0, 1.0, 0.3),
-('F037', '버섯', 100.0, 22.0, 3.3, 3.1, 0.3),
-
--- 과일류 (8개)
-('F038', '사과', 150.0, 78.0, 20.6, 0.4, 0.3),
-('F039', '바나나', 120.0, 105.0, 27.0, 1.3, 0.4),
-('F040', '오렌지', 150.0, 62.0, 15.4, 1.2, 0.2),
-('F041', '포도', 100.0, 69.0, 18.1, 0.7, 0.2),
-('F042', '딸기', 100.0, 32.0, 7.7, 0.7, 0.3),
-('F043', '블루베리', 100.0, 57.0, 14.5, 0.7, 0.3),
-('F044', '키위', 100.0, 61.0, 14.7, 1.1, 0.5),
-('F045', '수박', 100.0, 30.0, 7.6, 0.6, 0.2),
-
--- 음료 및 기타 (5개)
-('F046', '우유', 200.0, 134.0, 9.6, 6.6, 7.6),
-('F047', '요거트', 100.0, 59.0, 4.7, 10.0, 0.4),
-('F048', '아보카도', 100.0, 160.0, 8.5, 2.0, 14.7),
-('F049', '올리브오일', 10.0, 90.0, 0.0, 0.0, 10.0),
-('F050', '견과류 믹스', 30.0, 180.0, 5.0, 6.0, 16.0);
 
 -- ===================================================================
 -- 4. -- 사용자 목표 설정 (각 사용자당 10개씩, 500개)
@@ -293,15 +216,15 @@ ORDER BY calculated_data.user_id, calculated_data.week_num;
 -- ===================================================================
 INSERT INTO health_records (user_id, weight, height, record_date)
 SELECT 
-    -- 사용자 ID: 2~50 사이
-    2 + (row_number() OVER () - 1) % 49 AS user_id,
-    -- 체중 변화 (60~90kg 범위에서 ±5kg 변화)
+    u.user_id,
     65 + (random() * 20) + (random() - 0.5) * 10 AS weight,
-    -- 키 (160~185cm 범위)
     160 + (random() * 25) AS height,
-    -- 기록 날짜: 2025년 1월 1일부터 6월 26일까지 균등하게 분포 (176일간)
-    '2025-01-01'::date + ((row_number() OVER () - 1) * 175 / 899)::integer * INTERVAL '1 day' AS record_date
-FROM generate_series(1, 900) AS series;
+    '2025-01-01'::date + ((row_number() OVER (ORDER BY u.user_id) - 1) * 175 / 899)::integer * INTERVAL '1 day' AS record_date
+FROM (
+    SELECT user_id FROM users WHERE role = 'USER' ORDER BY user_id LIMIT 49
+) u
+CROSS JOIN generate_series(1, 900) AS series
+LIMIT 900;
 
 -- ===================================================================
 -- 6. 업적 시스템 50개 (다양한 배지 타입과 목표)
@@ -389,9 +312,8 @@ INSERT INTO exercise_sessions (
     notes
 )
 SELECT 
-    -- 사용자 ID: 2~50 사이 (49명)
-    2 + (row_number() OVER () - 1) % 49 AS user_id,
-    1 + (random() * 49)::integer, -- 운동 카탈로그 ID (1-50)
+    u.user_id,
+    ec.exercise_catalog_id,
     45 + (random() * 45)::integer, -- 운동 시간: 45-90분
     200 + (random() * 400)::integer, -- 칼로리: 200-600
     CASE 
@@ -406,8 +328,7 @@ SELECT
         WHEN random() > 0.5 THEN 2 + (random() * 4)::integer -- 세트수: 2-6세트
         ELSE NULL 
     END,
-    -- 기록 날짜: 2025년 2월 1일부터 6월 26일까지 균등하게 분포 (144일간)
-    ('2025-02-01'::date + ((row_number() OVER () - 1) * 143 / 899)::integer * INTERVAL '1 day')::date AS exercise_date,
+    ('2025-02-01'::date + ((row_number() OVER (ORDER BY u.user_id) - 1) * 143 / 899)::integer * INTERVAL '1 day')::date AS exercise_date,
     (ARRAY['dawn', 'morning', 'afternoon', 'night'])[1 + (random() * 3)::integer]::time_period_type,
     (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
     CASE 
@@ -423,7 +344,14 @@ SELECT
         '완벽한 자세로 운동 완료',
         '집중력이 좋았던 운동'
     ])[1 + (random() * 5)::integer]
-FROM generate_series(1, 900) AS series;
+FROM (
+    SELECT user_id FROM users WHERE role = 'USER' ORDER BY user_id LIMIT 49
+) u
+JOIN LATERAL (
+    SELECT exercise_catalog_id FROM exercise_catalog ORDER BY random() LIMIT 1
+) ec ON TRUE
+CROSS JOIN generate_series(1, 900) AS series
+LIMIT 900;
 
 -- ===================================================================
 -- 8. 식단 로그 900개+ (현실적인 식사 패턴)
@@ -444,7 +372,7 @@ INSERT INTO meal_logs (
 )
 SELECT 
     u.user_id,
-    1 + (random() * 49)::integer AS food_item_id, -- 1~50 범위
+    f.food_item_id,
     (ARRAY['breakfast', 'lunch', 'dinner', 'snack'])[1 + (random() * 3)::integer]::meal_time_type,
     (50 + random() * 200)::decimal(6,2) AS quantity,
     DATE '2025-01-01' + (random() * 176)::integer * INTERVAL '1 day' AS log_date,
@@ -456,7 +384,10 @@ SELECT
     'VALIDATED'::validation_status_type,
     CURRENT_TIMESTAMP AS created_at
 FROM users u
-CROSS JOIN generate_series(1, 18) AS series -- 각 사용자당 18개씩 (50명 × 18 = 900개)
+JOIN LATERAL (
+    SELECT food_item_id FROM food_items ORDER BY random() LIMIT 1
+) f ON TRUE
+CROSS JOIN generate_series(1, 18) AS series
 WHERE u.user_id IS NOT NULL
 ORDER BY u.user_id, series
 LIMIT 900;
@@ -466,40 +397,24 @@ LIMIT 900;
 -- ===================================================================
 INSERT INTO user_ranking (user_id, total_score, streak_days, rank_position, previous_rank, season, is_active)
 SELECT 
-    user_id,
+    u.user_id,
     (100 + random() * 900)::integer, -- 총점: 100-1000점
     (random() * 30)::integer, -- 연속일: 0-30일
     ROW_NUMBER() OVER (ORDER BY random()), -- 임시 순위
     ROW_NUMBER() OVER (ORDER BY random()), -- 이전 순위
     1, -- 현재 시즌
     true -- 활성 상태
-FROM users WHERE role = 'USER';
+FROM users u WHERE role = 'USER';
 
 -- 점수 기반 순위 재정렬
 UPDATE user_ranking 
 SET rank_position = subquery.new_rank
 FROM (
-    SELECT user_id, ROW_NUMBER() OVER (ORDER BY total_score DESC) as new_rank
+    SELECT id, ROW_NUMBER() OVER (ORDER BY total_score DESC) as new_rank
     FROM user_ranking
 ) AS subquery
-WHERE user_ranking.user_id = subquery.user_id;
+WHERE user_ranking.id = subquery.id;
 
-
-INSERT INTO ranking_history (
-    user_ranking_id, total_score, streak_days, rank_position, season, period_type, recorded_at
-) VALUES
-(5, 1200, 10, 1, 2025, 'weekly', '2025-06-10 09:00:00'),
-(12, 980, 7, 2, 2025, 'weekly', '2025-06-10 09:00:00'),
-(25, 600, 5, 3, 2025, 'weekly', '2025-06-10 09:00:00'),
-(1, 1500, 12, 1, 2025, 'monthly', '2025-06-01 00:00:00'),
-(33, 1400, 10, 2, 2025, 'monthly', '2025-06-01 00:00:00'),
-(17, 1100, 9, 3, 2025, 'monthly', '2025-06-01 00:00:00'),
-(7, 500, 4, 10, 2024, 'weekly', '2024-12-20 10:00:00'),
-(19, 800, 6, 6, 2024, 'weekly', '2024-12-20 10:00:00'),
-(3, 300, 2, 20, 2024, 'monthly', '2024-11-01 00:00:00'),
-(42, 1600, 15, 1, 2025, 'weekly', '2025-06-17 09:00:00');
-
---2025-06-19 18:32:11 [ERROR] TypeError: Cannot read properties of null (reading 'name')
 -- ===================================================================
 -- 10. 사용자 업적 달성 기록 500개+ (각 사용자가 여러 업적에 도전)
 -- ===================================================================
@@ -528,12 +443,10 @@ LIMIT 500;
 INSERT INTO recommendation (user_id, item_id, recommendation_data, created_at)
 SELECT 
     u.user_id,
-    CASE 
-        WHEN random() > 0.5 THEN -- 50% 확률로 운동 추천
-            (SELECT exercise_catalog_id FROM exercise_catalog ORDER BY random() LIMIT 1)
-        ELSE -- 50% 확률로 식단 추천  
-            (SELECT food_item_id FROM food_items ORDER BY random() LIMIT 1)
-    END,
+    COALESCE(
+        (SELECT exercise_catalog_id FROM exercise_catalog ORDER BY random() LIMIT 1),
+        (SELECT food_item_id FROM food_items ORDER BY random() LIMIT 1)
+    ),
     CASE 
         WHEN random() > 0.5 THEN 
             ('{"type": "exercise", "reason": "' || 
@@ -546,10 +459,8 @@ SELECT
                     '건강한 식습관 형성', '개인 영양 상태 고려', '균형잡힌 영양 섭취'])[1 + (random() * 5)::integer] 
              || '", "priority": ' || (1 + random() * 5)::integer || '}')::jsonb
     END,
-    -- 최근 60일 내로 제한하되 현재 날짜 기준으로 설정
     CURRENT_DATE - (random() * 60)::integer * INTERVAL '1 day'
 FROM users u
-CROSS JOIN generate_series(1, 11) AS series -- 사용자당 11개씩
 WHERE u.role = 'USER'
 LIMIT 500;
 
@@ -560,13 +471,7 @@ INSERT INTO feedback (recommendation_id, user_id, feedback_type, feedback_data, 
 SELECT 
     r.recommendation_id,
     r.user_id,
-    (ARRAY['positive', 'neutral', 'negative'])[
-        CASE 
-            WHEN random() > 0.6 THEN 1 -- 60% 긍정적
-            WHEN random() > 0.3 THEN 2 -- 30% 중립적  
-            ELSE 3 -- 10% 부정적
-        END
-    ]::varchar(100),
+    (ARRAY['positive', 'neutral', 'negative'])[1 + (random() * 2)::integer],
     CASE 
         WHEN random() > 0.6 THEN -- 긍정적 피드백
             ('{"rating": ' || (4 + random())::integer || ', "comment": "' || 
@@ -584,171 +489,49 @@ SELECT
                     '효과가 없었어요', '아쉬웠습니다', '기대에 못 미쳤어요', '개선이 필요해요'])[1 + (random() * 5)::integer] 
              || '"}')::jsonb
     END,
-    r.created_at + (random() * 7)::integer * INTERVAL '1 day' -- 추천 후 1주일 내 피드백
+    r.created_at + (random() * 7)::integer * INTERVAL '1 day'
 FROM recommendation r
-WHERE random() > 0.2 -- 80% 확률로 피드백 제공
+WHERE random() > 0.2
 LIMIT 400;
 
 -- ===================================================================
--- 13. 정책 데이터 10개 (서비스 운영 정책)
+-- 13. ranking_history (user_ranking_id 동적 참조)
 -- ===================================================================
-INSERT INTO policy (policy_name, policy_data, created_at, updated_at) VALUES
-('이용약관', '{"version": "1.0", "content": "LifeBit 서비스 이용 약관 및 조건", "last_updated": "2024-01-01"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('개인정보처리방침', '{"version": "1.0", "content": "개인정보 수집, 이용, 제공 및 관리 정책", "last_updated": "2024-01-01"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('운동 안전 가이드라인', '{"version": "1.0", "content": "안전한 운동 수행을 위한 지침", "safety_tips": ["준비운동 필수", "적절한 휴식", "수분 섭취"]}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('식단 관리 정책', '{"version": "1.0", "content": "건강한 식단 관리를 위한 가이드", "guidelines": ["균형잡힌 영양", "적정 칼로리", "규칙적인 식사"]}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('데이터 보안 정책', '{"version": "1.0", "content": "사용자 데이터 보안 및 암호화 정책", "encryption": "AES-256"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('커뮤니티 가이드라인', '{"version": "1.0", "content": "건전한 커뮤니티 운영을 위한 규칙", "rules": ["존중", "배려", "긍정적 소통"]}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('환불 및 취소 정책', '{"version": "1.0", "content": "서비스 환불 및 구독 취소 관련 정책", "refund_period": "7일"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('AI 추천 시스템 정책', '{"version": "1.0", "content": "AI 기반 개인화 추천 서비스 정책", "algorithm": "머신러닝 기반"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('음성 인식 서비스 정책', '{"version": "1.0", "content": "음성 데이터 처리 및 보관 정책", "retention": "30일"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('서비스 이용 제한 정책', '{"version": "1.0", "content": "부적절한 이용에 대한 제재 정책", "warning_system": "3단계"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
--- ===================================================================
--- 14. 시스템 로그 500개+ (사용자 활동 및 시스템 이벤트)
--- ===================================================================
--- 파티션 테이블이므로 현재 존재하는 파티션 범위 내에서만 데이터 생성 (2025-04-01 ~ 2025-07-31)
-INSERT INTO log (event_type, event_data, created_at)
-SELECT 
-    (ARRAY['USER_LOGIN', 'USER_LOGOUT', 'EXERCISE_COMPLETE', 'MEAL_LOG', 'ACHIEVEMENT_UNLOCK', 
-           'RECOMMENDATION_VIEW', 'FEEDBACK_SUBMIT', 'VOICE_RECOGNITION', 'DATA_SYNC', 'ERROR_OCCURRED'])[1 + (random() * 9)::integer],
-    CASE (random() * 9)::integer + 1
-        WHEN 1 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "ip": "192.168.1.' || (1 + random() * 254)::integer || '", "device": "mobile"}')::jsonb
-        WHEN 2 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "session_duration": ' || (random() * 3600)::integer || '}')::jsonb
-        WHEN 3 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "exercise_id": ' || (1 + random() * 49)::integer || ', "duration": ' || (30 + random() * 90)::integer || '}')::jsonb
-        WHEN 4 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "food_id": ' || (1 + random() * 49)::integer || ', "calories": ' || (100 + random() * 500)::integer || '}')::jsonb
-        WHEN 5 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "achievement_id": ' || (1 + random() * 49)::integer || '}')::jsonb
-        WHEN 6 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "recommendation_id": ' || (1 + random() * 100)::integer || '}')::jsonb
-        WHEN 7 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "feedback_type": "positive", "rating": ' || (1 + random() * 5)::integer || '}')::jsonb
-        WHEN 8 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "recognition_type": "EXERCISE", "confidence": ' || (0.7 + random() * 0.3)::numeric(4,2) || '}')::jsonb
-        WHEN 9 THEN ('{"user_id": ' || (2 + (random() * 48)::integer) || ', "data_type": "health_record", "sync_status": "success"}')::jsonb
-        ELSE ('{"error_code": "E' || (100 + random() * 899)::integer || '", "message": "시스템 오류 발생", "severity": "' || (ARRAY['low', 'medium', 'high'])[1 + (random() * 2)::integer] || '"}')::jsonb
-    END,
-    -- 파티션 범위 내 날짜로 제한: 2025-04-01 ~ 2025-06-30 (약 90일)
-    '2025-04-01'::timestamp + (random() * 90)::integer * INTERVAL '1 day'
-FROM generate_series(1, 500);
-
--- ===================================================================
--- 15. 검증 히스토리 300개+ (음성인식 및 데이터 검증 이력)
--- ===================================================================
-INSERT INTO validation_history (user_id, record_type, record_id, validation_status, validation_notes, validated_by, created_at)
-SELECT 
-    (2 + (random() * 48)::integer), -- user_id (2-49, 관리자 제외, 총 48명)
-    (ARRAY['EXERCISE', 'MEAL'])[1 + (random() * 1)::integer]::record_type,
-    (1 + random() * 500)::integer, -- record_id
-    (ARRAY['VALIDATED', 'PENDING', 'REJECTED'])[
-        CASE 
-            WHEN random() > 0.8 THEN 1 -- 80% 검증 완료
-            WHEN random() > 0.1 THEN 2 -- 10% 대기중
-            ELSE 3 -- 10% 거부
-        END
-    ]::validation_status_type,
-    CASE 
-        WHEN random() > 0.8 THEN -- 검증 완료
-            (ARRAY['정확한 데이터로 확인됨', '음성 인식 결과 정확함', 
-                   '사용자 확인 완료', '데이터 검증 통과', '정상 처리됨'])[1 + (random() * 4)::integer]
-        WHEN random() > 0.1 THEN -- 대기중
-            (ARRAY['추가 확인 필요', '모호한 음성 인식 결과', 
-                   '사용자 재확인 요청', '데이터 정확성 검토중'])[1 + (random() * 3)::integer]
-        ELSE -- 거부
-            (ARRAY['부정확한 데이터', '음성 인식 오류', 
-                   '데이터 불일치', '검증 기준 미달'])[1 + (random() * 3)::integer]
-    END,
-    CASE 
-        WHEN random() > 0.3 THEN 'AI_SYSTEM' -- 70% AI 자동 검증
-        ELSE 'ADMIN_USER' -- 30% 관리자 수동 검증
-    END,
-    -- 최근 60일 내로 제한하되 현재 시간 기준으로 설정
-    CURRENT_DATE - (random() * 60)::integer * INTERVAL '1 day'
-FROM generate_series(1, 300);
-
-
--- ===================================================================
--- 16. 음성 인식 로그 200개+ (음성 입력 처리 이력) - 수정된 버전
--- ===================================================================
-INSERT INTO voice_recognition_logs (
-    user_id,
-    audio_file_path,
-    transcription_text,
-    confidence_score,
-    recognition_type,
-    status,
-    error_message,
-    created_at
-)
-SELECT 
-    (2 + (random() * 48)::integer), -- user_id (2-49, 총 48명)
-    '/audio/user_' || (2 + (random() * 48)::integer) || '_' || 
-    (ARRAY['exercise', 'meal'])[1 + (random() * 1)::integer] || '_' || 
-    (1000 + random() * 8999)::integer || '.mp3',
-    CASE 
-        WHEN random() > 0.5 THEN -- 운동 관련 음성
-            (ARRAY[
-                '30분 동안 벤치프레스 3세트 12회씩 했어요',
-                '스쿼트 운동 45분 했습니다',
-                '데드리프트 5세트 8회 완료했어요',
-                '플랭크 2분씩 3세트 했습니다',
-                '러닝 30분 했어요 컨디션 좋았어요',
-                '풀업 10회씩 4세트 완료',
-                '레그프레스 120kg로 12회씩 3세트',
-                '유산소 운동 40분 했습니다'
-            ])[1 + (random() * 7)::integer]
-        ELSE -- 식단 관련 음성
-            (ARRAY[
-                '아침에 현미밥 200g 먹었어요',
-                '점심에 닭가슴살 150g 섭취했습니다',
-                '저녁에 연어 구이 120g 먹었어요',
-                '간식으로 바나나 한 개 먹었습니다',
-                '계란 후라이 2개 아침에 먹었어요',
-                '두부 샐러드 200g 점심에 섭취',
-                '견과류 30g 간식으로 먹었어요',
-                '요거트 100g 아침에 드셨어요'
-            ])[1 + (random() * 7)::integer]
-    END,
-    0.70 + (random() * 0.25), -- confidence_score 0.70-0.95
-    (ARRAY['EXERCISE', 'MEAL'])[1 + (random() * 1)::integer]::recognition_type,
-    (ARRAY['VALIDATED', 'PENDING', 'REJECTED'])[
-        CASE 
-            WHEN random() > 0.8 THEN 1 -- 80% 성공
-            WHEN random() > 0.1 THEN 2 -- 10% 대기
-            ELSE 3 -- 10% 거부
-        END
-    ]::validation_status_type,
-    CASE 
-        WHEN random() < 0.1 THEN -- 10% 오류 메시지
-            (ARRAY['음성이 불분명합니다', '배경 소음이 많습니다', 
-                   '지원하지 않는 언어입니다', '음성 파일이 손상되었습니다'])[1 + (random() * 3)::integer]
-        ELSE NULL
-    END,
-    -- 🔧 누락된 created_at 값 추가
-    CURRENT_DATE - (random() * 30)::integer * INTERVAL '1 day'
-FROM generate_series(1, 200); 
-
-
-
-
--- 등급 구간별 tier 값 일괄 업데이트 (점수 기준, 필요에 따라 조정)
-UPDATE user_ranking SET tier = 'UNRANK'      WHERE total_score < 100;
-UPDATE user_ranking SET tier = 'BRONZE'      WHERE total_score >= 100   AND total_score < 500;
-UPDATE user_ranking SET tier = 'SILVER'      WHERE total_score >= 500   AND total_score < 1000;
-UPDATE user_ranking SET tier = 'GOLD'        WHERE total_score >= 1000  AND total_score < 2000;
-UPDATE user_ranking SET tier = 'PLATINUM'    WHERE total_score >= 2000  AND total_score < 3000;
-UPDATE user_ranking SET tier = 'DIAMOND'     WHERE total_score >= 3000  AND total_score < 4000;
-UPDATE user_ranking SET tier = 'MASTER'      WHERE total_score >= 4000  AND total_score < 5000;
-UPDATE user_ranking SET tier = 'GRANDMASTER' WHERE total_score >= 5000  AND total_score < 6000;
-UPDATE user_ranking SET tier = 'CHALLENGER'  WHERE total_score >= 6000;
-
--- ranking_history.user_id 값 동기화 (user_ranking_id → user_id)
-UPDATE ranking_history rh
-SET user_ranking_id = ur.user_id
+INSERT INTO ranking_history (
+    user_ranking_id, total_score, streak_days, rank_position, season, period_type, recorded_at
+) 
+SELECT
+    ur.id,
+    (100 + random() * 900)::integer,
+    (random() * 30)::integer,
+    ROW_NUMBER() OVER (ORDER BY random()),
+    1,
+    (ARRAY['weekly', 'monthly'])[1 + (random() * 1)::integer],
+    NOW() - (random() * 60)::integer * INTERVAL '1 day'
 FROM user_ranking ur
-WHERE rh.user_ranking_id = ur.id;
+ORDER BY ur.id
+LIMIT 10;
 
--- ranking_history.tier 값 동기화 (user_id 기준)
-UPDATE ranking_history rh
-SET tier = ur.tier
-FROM user_ranking ur
-WHERE rh.user_ranking_id = ur.user_id;
+-- ===================================================================
+-- 14. 알림 데이터
+-- ===================================================================
+
+-- 시스템 공용 알림 데이터 (user_id = NULL)
+INSERT INTO notification (user_id, type, ref_id, title, message) VALUES
+(NULL, 'SYSTEM', NULL, '앱 사용 팁', '앱의 다양한 기능을 활용해보세요. 더욱 효율적인 건강 관리가 가능합니다.'),
+(NULL, 'SYSTEM', NULL, '단축키 안내', '앱 사용을 더욱 편리하게 해주는 단축키를 확인해보세요. 빠른 접근이 가능합니다.'),
+(NULL, 'SYSTEM', NULL, '음성 인식 기능', '음성으로 운동 기록을 남길 수 있는 기능이 추가되었습니다. 편리하게 이용해보세요.'),
+(NULL, 'SYSTEM', NULL, 'AI 운동 추천', 'AI 운동 추천 기능을 활용해보세요. 개인 맞춤형 운동을 추천받을 수 있습니다.'),
+(NULL, 'SYSTEM', NULL, '데이터 동기화', '여러 기기에서 사용하실 때는 데이터 동기화를 확인해주세요. 모든 기기에서 동일한 정보를 확인할 수 있습니다.');
+
+-- 신규 사용자 환영 알림 (admin 제외, 일반 사용자 10명)
+INSERT INTO notification (user_id, type, ref_id, title, message)
+SELECT user_id, 'SYSTEM', NULL, '신규 사용자 환영', 'LifeBit에 오신 것을 환영합니다! 첫 운동 기록을 남겨보세요.'
+FROM users
+WHERE role = 'USER'
+ORDER BY user_id
+LIMIT 10;
+
 
 
 

@@ -124,9 +124,26 @@ public class ExerciseSessionController {
             log.info("운동 세션 생성 요청: {}", request);
 
             Long tokenUserId = getUserIdFromToken(httpRequest);
-            Long catalogId = request.get("exercise_catalog_id") != null
-                    ? Long.valueOf(request.get("exercise_catalog_id").toString())
-                    : 1L;
+            // Long catalogId = request.get("exercise_catalog_id") != null
+            // ? Long.valueOf(request.get("exercise_catalog_id").toString())    //오류최소화를위해 수정
+            // : 1L;
+            Long catalogId = null;
+
+            // 1. exercise_catalog_id가 있으면 그대로 사용
+            if (request.get("exercise_catalog_id") != null) {
+                catalogId = Long.valueOf(request.get("exercise_catalog_id").toString());
+            } else if (request.get("exercise_name") != null) {
+                // 2. 없으면 exercise_name/body_part/description으로 findOrCreate
+                String exerciseName = request.get("exercise_name").toString();
+                String bodyPart = request.getOrDefault("body_part", "cardio").toString();
+                String description = request.getOrDefault("description", "").toString();
+                ExerciseCatalog catalog = exerciseService.findOrCreateExercise(exerciseName, bodyPart, description);  //일단 오류 최소화
+                catalogId = catalog.getExerciseCatalogId();
+            } else {
+                // 3. 아무 정보도 없으면 기본값(1L)
+                catalogId = 1L;
+            }
+
             Integer durationMinutes = request.get("duration_minutes") != null
                     ? Integer.valueOf(request.get("duration_minutes").toString())
                     : null;
