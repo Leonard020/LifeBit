@@ -194,6 +194,28 @@
         mode: '0755'
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
+    - name: Wait for DNS propagation (max 10 min, check every 15s)
+      shell: |
+        timeout=600
+        interval=15
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          ip=$(dig +short {{ domain_name }} | tail -n1)
+          if [ "$ip" = "{{ ansible_host }}" ]; then
+            echo "DNS propagation complete: $ip"
+            exit 0
+          fi
+          echo "Waiting for DNS propagation... ($elapsed/$timeout seconds, current: $ip)"
+          sleep $interval
+          elapsed=$((elapsed + interval))
+        done
+        echo "DNS propagation timeout"
+        exit 1
+      register: dns_check
+      changed_when: false
+      failed_when: dns_check.rc != 0
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
     - name: Install certbot (standalone)
       apt:
         name: certbot
@@ -209,12 +231,18 @@
         creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
+    - name: Check if SSL certificate exists
+      stat:
+        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: ssl_cert_exists
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
     - name: Copy letsencrypt to app directory
       synchronize:
         src: /etc/letsencrypt/
         dest: "{{ app_directory }}/letsencrypt/"
         recursive: yes
-      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists
 
     - name: Build and start services
       shell: |

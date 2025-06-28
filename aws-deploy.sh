@@ -160,12 +160,12 @@ if [ -n "$USER_DOMAIN_NAME" ]; then
         -var="public_key_path=${SSH_KEY_PATH}.pub" \
         -var="domain_name=$USER_DOMAIN_NAME"
 else
-    terraform plan \
-        -var="aws_region=$AWS_REGION" \
-        -var="project_name=$PROJECT_NAME" \
-        -var="environment=$ENVIRONMENT" \
-        -var="instance_type=$INSTANCE_TYPE" \
-        -var="public_key_path=${SSH_KEY_PATH}.pub"
+terraform plan \
+    -var="aws_region=$AWS_REGION" \
+    -var="project_name=$PROJECT_NAME" \
+    -var="environment=$ENVIRONMENT" \
+    -var="instance_type=$INSTANCE_TYPE" \
+    -var="public_key_path=${SSH_KEY_PATH}.pub"
 fi
 
 # 사용자 확인
@@ -188,12 +188,12 @@ if [ -n "$USER_DOMAIN_NAME" ]; then
         -var="public_key_path=${SSH_KEY_PATH}.pub" \
         -var="domain_name=$USER_DOMAIN_NAME"
 else
-    terraform apply -auto-approve \
-        -var="aws_region=$AWS_REGION" \
-        -var="project_name=$PROJECT_NAME" \
-        -var="environment=$ENVIRONMENT" \
-        -var="instance_type=$INSTANCE_TYPE" \
-        -var="public_key_path=${SSH_KEY_PATH}.pub"
+terraform apply -auto-approve \
+    -var="aws_region=$AWS_REGION" \
+    -var="project_name=$PROJECT_NAME" \
+    -var="environment=$ENVIRONMENT" \
+    -var="instance_type=$INSTANCE_TYPE" \
+    -var="public_key_path=${SSH_KEY_PATH}.pub"
 fi
 
 # 퍼블릭 IP 가져오기
