@@ -71,7 +71,18 @@ public class HealthStatisticsController {
             
             // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
             if (!tokenUserId.equals(userId)) {
-                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}, IP: {}, User-Agent: {}", 
+                        tokenUserId, userId, 
+                        request.getRemoteAddr(), 
+                        request.getHeader("User-Agent"));
+                
+                // 🔧 개발 환경에서는 더 자세한 정보 로그
+                String bearerToken = request.getHeader("Authorization");
+                if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+                    String token = bearerToken.substring(7);
+                    log.debug("토큰 정보: {}", token.length() > 20 ? token.substring(0, 20) + "..." : token);
+                }
+                
                 return ResponseEntity.status(403).build();
             }
             
