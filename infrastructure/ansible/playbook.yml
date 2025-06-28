@@ -312,18 +312,96 @@
       debug:
         msg: "{{ container_status.stdout_lines }}"
 
+    # SSL 인증서 설정 (사용자 정의 도메인이 있는 경우)
+    - name: Install Certbot and nginx plugin
+      apt:
+        name: 
+          - certbot
+          - python3-certbot-nginx
+        state: present
+        update_cache: yes
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+      retries: 2
+      delay: 5
+
+    - name: Check if SSL certificate already exists
+      stat:
+        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: ssl_cert_exists
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Generate SSL certificate with Certbot
+      shell: |
+        certbot --nginx --non-interactive --agree-tos \
+        --email admin@{{ domain_name }} -d {{ domain_name }} \
+        --redirect --expand
+      when: 
+        - domain_name is defined 
+        - domain_name != ansible_host 
+        - domain_name != ""
+        - not ssl_cert_exists.stat.exists
+        - not ansible_check_mode
+      register: certbot_result
+      ignore_errors: yes
+
+    - name: Test SSL certificate renewal
+      shell: certbot renew --dry-run
+      when: 
+        - domain_name is defined 
+        - domain_name != ansible_host 
+        - domain_name != ""
+        - ssl_cert_exists.stat.exists or (certbot_result is defined and certbot_result.rc == 0)
+        - not ansible_check_mode
+      ignore_errors: yes
+
+    - name: Setup SSL certificate auto-renewal cron job
+      cron:
+        name: "Certbot SSL renewal"
+        minute: "0"
+        hour: "12"
+        job: "/usr/bin/certbot renew --quiet"
+        user: root
+      when: 
+        - domain_name is defined 
+        - domain_name != ansible_host 
+        - domain_name != ""
+        - ssl_cert_exists.stat.exists or (certbot_result is defined and certbot_result.rc == 0)
+
+    - name: Update Nginx configuration for SSL (if certificate was generated)
+      shell: nginx -t && systemctl reload nginx
+      when: 
+        - domain_name is defined 
+        - domain_name != ansible_host 
+        - domain_name != ""
+        - certbot_result is defined 
+        - certbot_result.rc == 0
+        - not ansible_check_mode
+      ignore_errors: yes
+
     - name: Create deployment info file
       copy:
         content: |
           # LifeBit 배포 정보
           배포 시간: {{ ansible_date_time.iso8601 }}
           서버 IP: {{ ansible_host }}
+          {% if domain_name is defined and domain_name != ansible_host and domain_name != "" %}
+          도메인: {{ domain_name }}
+          SSL 인증서: {{ 'OK' if ssl_cert_exists.stat.exists or (certbot_result is defined and certbot_result.rc == 0) else 'FAILED' }}
+          {% endif %}
           
           # 서비스 URL
+          {% if domain_name is defined and domain_name != ansible_host and domain_name != "" %}
+          Frontend: https://{{ domain_name }}
+          Core API: https://{{ domain_name }}/api
+          AI API: https://{{ domain_name }}/ai-api
+          {% else %}
           Frontend: http://{{ ansible_host }}:3000
           Core API: http://{{ ansible_host }}:8080
           AI API: http://{{ ansible_host }}:8001
           Nginx: http://{{ ansible_host }}
+          {% endif %}
           
           # 서비스 상태
           Core API: {{ 'OK' if (core_api_health.status is defined and core_api_health.status == 200) else 'FAILED' }}

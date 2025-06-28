@@ -1,147 +1,289 @@
-# Traefik 기반 도메인 및 SSL 자동화 가이드 (AWS EC2, Docker)
+# 도메인 및 SSL 설정 가이드
 
-이 문서는 가비아에서 구매한 도메인을 AWS EC2 인스턴스에 연결하고, Traefik을 통해 완전 자동으로 SSL 인증서를 발급받아 여러 도메인/팀원이 쉽게 HTTPS 서비스를 운영하는 방법을 안내합니다.
+## 개요
+LifeBit 애플리케이션을 사용자 정의 도메인으로 배포하고 SSL 인증서를 설정하는 방법을 안내합니다.
 
----
+## 1. 도메인 설정 방식
 
-### 목차
-1. [Traefik이란? 왜 도입해야 하나요?](#traefik이란-왜-도입해야-하나요)
-2. [1단계: 도메인 구매 및 DNS 연결](#1단계-도메인-구매-및-dns-연결)
-3. [2단계: AWS EC2 보안 그룹 설정](#2단계-aws-ec2-보안-그룹-설정)
-4. [3단계: Traefik 설정 및 도커 컴포즈 수정](#3단계-traefik-설정-및-도커-컴포즈-수정)
-5. [4단계: 팀원 도메인 추가 방법](#4단계-팀원-도메인-추가-방법)
-6. [5단계: 배포 및 접속 확인](#5단계-배포-및-접속-확인)
+### 1.1 환경변수 기반 도메인 설정
+LifeBit은 하드코딩 없이 환경변수를 통해 도메인을 유동적으로 설정할 수 있습니다.
 
----
+**주요 환경변수:**
+- `DOMAIN_NAME`: 메인 도메인 (예: `lifebit.example.com`)
+- `CORS_ORIGINS`: CORS 허용 도메인 목록
+- `KAKAO_REDIRECT_URI`: 카카오 로그인 리다이렉트 URI
+- `GOOGLE_REDIRECT_URI`: 구글 로그인 리다이렉트 URI
 
-### Traefik이란? 왜 도입해야 하나요?
+### 1.2 배포 시 도메인 설정
+배포 스크립트 실행 시 도메인을 입력할 수 있습니다:
 
-- Traefik은 현대적인 리버스 프록시/로드밸런서로, **도메인만 추가하면 자동으로 SSL 인증서(HTTPS)를 발급**해줍니다.
-- 팀원이 각자 도메인을 추가해도, 설정 한 줄만 추가하면 자동으로 HTTPS가 적용됩니다.
-- 인증서 갱신, 리디렉션, 프록시 등 모든 관리가 자동화되어 실수할 일이 없습니다.
-
----
-
-### 1단계: 도메인 구매 및 DNS 연결
-
-1. [가비아](https://www.gabia.com/) 등에서 도메인을 구매합니다. (예: jisub.store, team1.com 등)
-2. 도메인 DNS 관리에서 **A 레코드**를 아래와 같이 추가합니다.
-
-| 타입 | 호스트 | 값/위치          | TTL  |
-| :--- | :--- | :--------------- | :--- |
-| A    | @    | `52.78.16.135`   | 3600 |
-| A    | www  | `52.78.16.135`   | 3600 |
-
-- 팀원도 각자 자신의 도메인을 위와 같이 서버 IP로 연결하면 됩니다.
-- DNS 전파는 수 분~수 시간 소요될 수 있습니다. (ping, nslookup 등으로 확인)
-
----
-
-### 2단계: AWS EC2 보안 그룹 설정
-
-- 80(HTTP), 443(HTTPS) 포트가 모두 열려 있어야 합니다.
-- AWS 콘솔 > EC2 > 인스턴스 > 보안 그룹 > 인바운드 규칙에 아래 두 항목이 있는지 확인/추가하세요.
-  - HTTP  80  0.0.0.0/0
-  - HTTPS 443 0.0.0.0/0
-
----
-
-### 3단계: Traefik 설정 및 도커 컴포즈 수정
-
-1. **letsencrypt 디렉토리 생성**
-   ```bash
-   mkdir -p letsencrypt
-   chmod 600 letsencrypt
-   ```
-2. **docker-compose.prod.yml** 파일에서 Traefik 서비스와 각 서비스의 라벨(label) 설정을 아래 예시처럼 추가합니다.
-
-```yaml
-traefik:
-  image: traefik:v2.11
-  container_name: traefik
-  command:
-    - --api.insecure=true
-    - --providers.docker=true
-    - --providers.docker.exposedbydefault=false
-    - --entrypoints.web.address=:80
-    - --entrypoints.websecure.address=:443
-    - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
-    - --certificatesresolvers.letsencrypt.acme.email=your-email@example.com
-    - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-  ports:
-    - "80:80"
-    - "443:443"
-    - "8081:8080" # Traefik 대시보드
-  volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
-    - ./letsencrypt:/letsencrypt
-  networks:
-    - lifebit-network
-  restart: unless-stopped
-
-frontend:
-  # ... 기존 설정 ...
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.frontend.rule=Host(`jisub.store`,`www.jisub.store`)"
-    - "traefik.http.routers.frontend.entrypoints=web,websecure"
-    - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-    # 팀원 도메인 예시
-    # - "traefik.http.routers.frontend.rule=Host(`team1.example.com`)"
-
-core-api:
-  # ... 기존 설정 ...
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.coreapi.rule=Host(`api.jisub.store`)"
-    - "traefik.http.routers.coreapi.entrypoints=web,websecure"
-    - "traefik.http.routers.coreapi.tls.certresolver=letsencrypt"
-
-ai-api:
-  # ... 기존 설정 ...
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.aiapi.rule=Host(`ai.jisub.store`)"
-    - "traefik.http.routers.aiapi.entrypoints=web,websecure"
-    - "traefik.http.routers.aiapi.tls.certresolver=letsencrypt"
+```bash
+./aws-deploy.sh
+# 실행 중 도메인 입력 프롬프트가 나타남
+# 예: my.lifebit.com
 ```
 
-- **your-email@example.com** 부분은 실제 이메일로 변경하세요.
-- 기존 nginx 서비스는 주석 처리하거나 삭제하세요.
+## 2. SSL 인증서 설정
+
+### 2.1 Let's Encrypt를 사용한 무료 SSL 인증서
+
+#### 2.1.1 Certbot 설치 및 설정
+```bash
+# EC2 인스턴스에 SSH 접속
+ssh -i ~/.ssh/lifebit_key ubuntu@YOUR_EC2_IP
+
+# Certbot 설치
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+
+# SSL 인증서 발급
+sudo certbot --nginx -d your-domain.com
+```
+
+#### 2.1.2 자동 갱신 설정
+```bash
+# 자동 갱신 테스트
+sudo certbot renew --dry-run
+
+# 크론탭 설정 (자동 갱신)
+sudo crontab -e
+# 다음 라인 추가:
+# 0 12 * * * /usr/bin/certbot renew --quiet
+```
+
+### 2.2 AWS Certificate Manager (ACM) 사용
+
+#### 2.2.1 로드밸런서와 함께 사용
+```bash
+# Application Load Balancer 생성 후 ACM 인증서 연결
+# 이 방법은 추가 비용이 발생할 수 있습니다
+```
+
+## 3. Nginx 설정 업데이트
+
+### 3.1 SSL 설정이 포함된 Nginx 설정
+SSL 인증서 발급 후 Nginx 설정이 자동으로 업데이트됩니다.
+
+### 3.2 수동 Nginx 설정 (필요시)
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    # SSL 보안 설정
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    
+    # 나머지 설정은 기존과 동일...
+}
+```
+
+## 4. DNS 설정
+
+### 4.1 도메인 DNS 레코드 설정
+도메인 등록업체에서 다음 DNS 레코드를 설정하세요:
+
+```
+Type: A
+Name: @ (또는 서브도메인명)
+Value: EC2_PUBLIC_IP
+TTL: 300
+```
+
+### 4.2 서브도메인 설정 (선택사항)
+```
+Type: A
+Name: api
+Value: EC2_PUBLIC_IP
+TTL: 300
+
+Type: A  
+Name: www
+Value: EC2_PUBLIC_IP
+TTL: 300
+```
+
+## 5. 소셜 로그인 설정 업데이트
+
+### 5.1 카카오 개발자 콘솔
+1. [Kakao Developers](https://developers.kakao.com) 접속
+2. 애플리케이션 선택
+3. 플랫폼 > Web 플랫폼 설정
+4. 사이트 도메인: `https://your-domain.com`
+5. Redirect URI: `https://your-domain.com/auth/kakao/callback`
+
+### 5.2 구글 클라우드 콘솔
+1. [Google Cloud Console](https://console.cloud.google.com) 접속
+2. API 및 서비스 > 사용자 인증 정보
+3. OAuth 2.0 클라이언트 ID 수정
+4. 승인된 JavaScript 원본: `https://your-domain.com`
+5. 승인된 리디렉션 URI: `https://your-domain.com/auth/google/callback`
+
+## 6. 환경변수 업데이트
+
+### 6.1 프로덕션 환경변수 수동 업데이트 (필요시)
+```bash
+# EC2 인스턴스에 접속
+ssh -i ~/.ssh/lifebit_key ubuntu@YOUR_EC2_IP
+
+# .env 파일 수정
+sudo nano /opt/lifebit/.env
+
+# 다음 변수들 확인/수정:
+DOMAIN_NAME=your-domain.com
+CORS_ORIGINS=https://your-domain.com
+KAKAO_REDIRECT_URI=https://your-domain.com/auth/kakao/callback
+GOOGLE_REDIRECT_URI=https://your-domain.com/auth/google/callback
+```
+
+### 6.2 Docker 컨테이너 재시작
+```bash
+cd /opt/lifebit
+sudo docker-compose -f docker-compose.prod.yml down
+sudo docker-compose -f docker-compose.prod.yml up -d
+```
+
+## 7. 완전 자동화된 배포 (권장)
+
+### 7.1 Terraform에 SSL 설정 추가
+```hcl
+# infrastructure/terraform/main.tf에 추가할 수 있는 설정
+resource "aws_acm_certificate" "lifebit_cert" {
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+```
+
+### 7.2 Ansible에 Certbot 자동화 추가
+```yaml
+# infrastructure/ansible/playbook.yml에 추가할 수 있는 태스크
+- name: Install and configure SSL certificate
+  block:
+    - name: Install certbot
+      apt:
+        name: 
+          - certbot
+          - python3-certbot-nginx
+        state: present
+    
+    - name: Generate SSL certificate
+      command: >
+        certbot --nginx --non-interactive --agree-tos 
+        --email admin@{{ domain_name }} -d {{ domain_name }}
+      when: domain_name is defined and domain_name != ansible_host
+```
+
+## 8. 트러블슈팅
+
+### 8.1 일반적인 문제들
+
+**DNS 전파 지연**
+```bash
+# DNS 전파 확인
+nslookup your-domain.com
+dig your-domain.com
+```
+
+**SSL 인증서 발급 실패**
+```bash
+# Nginx 설정 테스트
+sudo nginx -t
+
+# 80번 포트 확인
+sudo netstat -tlnp | grep :80
+
+# 방화벽 확인
+sudo ufw status
+```
+
+**CORS 오류**
+```bash
+# 브라우저 개발자 도구에서 네트워크 탭 확인
+# Access-Control-Allow-Origin 헤더 확인
+```
+
+### 8.2 로그 확인
+```bash
+# Nginx 로그
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+
+# Docker 컨테이너 로그
+sudo docker-compose -f docker-compose.prod.yml logs -f
+
+# Certbot 로그
+sudo cat /var/log/letsencrypt/letsencrypt.log
+```
+
+## 9. 보안 고려사항
+
+### 9.1 HTTP에서 HTTPS로 강제 리다이렉트
+```nginx
+# 이미 Nginx 설정에 포함되어 있음
+return 301 https://$server_name$request_uri;
+```
+
+### 9.2 보안 헤더 추가
+```nginx
+# HSTS
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+# XSS Protection
+add_header X-XSS-Protection "1; mode=block" always;
+
+# Content Type Options
+add_header X-Content-Type-Options "nosniff" always;
+
+# Frame Options
+add_header X-Frame-Options "SAMEORIGIN" always;
+```
+
+## 10. 모니터링 및 유지보수
+
+### 10.1 SSL 인증서 만료 모니터링
+```bash
+# 인증서 만료일 확인
+openssl x509 -in /etc/letsencrypt/live/your-domain.com/cert.pem -text -noout | grep "Not After"
+```
+
+### 10.2 자동화된 모니터링 스크립트
+```bash
+#!/bin/bash
+# ssl-check.sh
+DOMAIN="your-domain.com"
+DAYS_UNTIL_EXPIRY=$(openssl s_client -connect $DOMAIN:443 -servername $DOMAIN 2>/dev/null | openssl x509 -noout -dates | grep "notAfter" | cut -d= -f2 | xargs -I {} date -d "{}" +%s)
+CURRENT_TIME=$(date +%s)
+DAYS_LEFT=$(( ($DAYS_UNTIL_EXPIRY - $CURRENT_TIME) / 86400 ))
+
+if [ $DAYS_LEFT -lt 30 ]; then
+    echo "WARNING: SSL certificate expires in $DAYS_LEFT days"
+    # 알림 전송 로직 추가 가능
+fi
+```
 
 ---
 
-### 4단계: 팀원 도메인 추가 방법
+## 요약
 
-1. 팀원이 도메인을 구매하고 DNS를 서버 IP로 연결합니다.
-2. `docker-compose.prod.yml`의 프론트엔드 서비스에 아래와 같이 라벨을 추가합니다.
-   ```yaml
-   labels:
-     - "traefik.http.routers.frontend.rule=Host(`jisub.store`,`www.jisub.store`,`team1.example.com`,`team2.example.com`)"
-   ```
-3. Ansible로 재배포하면, 각 도메인마다 자동으로 SSL이 적용됩니다.
+1. **도메인 설정**: 배포 시 사용자 정의 도메인 입력
+2. **DNS 설정**: A 레코드로 EC2 IP 연결
+3. **SSL 인증서**: Let's Encrypt Certbot 사용
+4. **소셜 로그인**: 각 플랫폼에서 도메인 업데이트
+5. **자동 갱신**: 크론탭으로 SSL 인증서 자동 갱신
 
----
-
-### 5단계: 배포 및 접속 확인
-
-1. **Ansible 플레이북 실행**
-   ```bash
-   ansible-playbook -i infrastructure/ansible/inventory infrastructure/ansible/playbook.yml
-   ```
-2. **접속 확인**
-   - `https://jisub.store`, `https://team1.example.com` 등 각 도메인으로 접속
-   - 자물쇠(SSL) 아이콘이 정상적으로 표시되는지 확인
-
----
-
-### 참고
-- Traefik 대시보드: `http://서버IP:8081` (보안상 외부 노출은 피하세요)
-- 인증서 발급/갱신은 Traefik이 자동으로 처리합니다.
-- 도메인 추가/삭제는 라벨만 수정하면 됩니다.
-
----
-
-**이 방식은 실수 없이, 누구나 쉽게 도메인/SSL을 관리할 수 있는 최적의 방법입니다.**
-
-궁금한 점이 있으면 언제든 문의하세요! 
+이 가이드를 따라하면 LifeBit 애플리케이션을 안전하고 전문적인 도메인으로 배포할 수 있습니다. 
