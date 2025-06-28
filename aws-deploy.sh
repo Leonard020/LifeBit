@@ -151,12 +151,22 @@ terraform init
 
 # Terraform 계획 확인
 log_info "Terraform 실행 계획 확인 중..."
+if [ -n "$USER_DOMAIN_NAME" ]; then
+    terraform plan \
+        -var="aws_region=$AWS_REGION" \
+        -var="project_name=$PROJECT_NAME" \
+        -var="environment=$ENVIRONMENT" \
+        -var="instance_type=$INSTANCE_TYPE" \
+        -var="public_key_path=${SSH_KEY_PATH}.pub" \
+        -var="domain_name=$USER_DOMAIN_NAME"
+else
 terraform plan \
     -var="aws_region=$AWS_REGION" \
     -var="project_name=$PROJECT_NAME" \
     -var="environment=$ENVIRONMENT" \
     -var="instance_type=$INSTANCE_TYPE" \
     -var="public_key_path=${SSH_KEY_PATH}.pub"
+fi
 
 # 사용자 확인
 echo ""
@@ -169,12 +179,22 @@ fi
 
 # Terraform 적용
 log_info "AWS 인프라 생성 중... (약 3-5분 소요)"
+if [ -n "$USER_DOMAIN_NAME" ]; then
+    terraform apply -auto-approve \
+        -var="aws_region=$AWS_REGION" \
+        -var="project_name=$PROJECT_NAME" \
+        -var="environment=$ENVIRONMENT" \
+        -var="instance_type=$INSTANCE_TYPE" \
+        -var="public_key_path=${SSH_KEY_PATH}.pub" \
+        -var="domain_name=$USER_DOMAIN_NAME"
+else
 terraform apply -auto-approve \
     -var="aws_region=$AWS_REGION" \
     -var="project_name=$PROJECT_NAME" \
     -var="environment=$ENVIRONMENT" \
     -var="instance_type=$INSTANCE_TYPE" \
     -var="public_key_path=${SSH_KEY_PATH}.pub"
+fi
 
 # 퍼블릭 IP 가져오기
 EC2_PUBLIC_IP=$(terraform output -raw instance_public_ip)
@@ -324,7 +344,23 @@ echo -e "${YELLOW}⚠️  주의사항:${NC}"
 echo -e "   - 서비스가 완전히 시작되기까지 2-3분 정도 더 소요될 수 있습니다."
 echo -e "   - 배포 정보는 .deployment_info 파일에 저장되었습니다."
 echo -e "   - 리소스 정리는 './aws-destroy.sh'를 실행하세요."
-echo -e "${YELLOW}중요: 사용자 정의 도메인을 사용한 경우, 해당 도메인의 DNS 설정에서 A 레코드를 서버 IP(${NC}$EC2_PUBLIC_IP${YELLOW})로 지정해야 합니다.${NC}"
+if [ -n "$USER_DOMAIN_NAME" ]; then
+    echo -e "${YELLOW}⚠️  DNS 설정 필요:${NC}"
+    echo -e "   도메인 등록업체에서 다음 DNS 레코드를 설정하세요:"
+    echo -e "   Type: A"
+    echo -e "   Name: @ (또는 ${USER_DOMAIN_NAME%.*})"
+    echo -e "   Value: $EC2_PUBLIC_IP"
+    echo -e "   TTL: 300"
+    echo ""
+    echo -e "${GREEN}📋 SSL 인증서 발급 (DNS 설정 후):${NC}"
+    echo -e "   ssh -i $SSH_KEY_PATH ubuntu@$EC2_PUBLIC_IP"
+    echo -e "   sudo certbot --nginx -d $USER_DOMAIN_NAME"
+    echo -e ""
+    echo -e "${GREEN}🔗 최종 접속 URL (SSL 설정 후):${NC}"
+    echo -e "   https://$USER_DOMAIN_NAME"
+else
+    echo -e "${YELLOW}💡 팁: 사용자 정의 도메인을 사용하려면 배포 시 도메인을 입력하세요.${NC}"
+fi
 echo -e "${GREEN}═══════════════════════════════════════${NC}"
 
 log_success "배포 스크립트 실행이 완료되었습니다!" 

@@ -48,7 +48,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/${POSTGRES_DB:-lifebit_db}?stringtype=unspecified&connectTimeout=30&socketTimeout=60&loginTimeout=30&prepareThreshold=0&ApplicationName=LifeBit-Core-API
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-lifebit_user}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-lifebit_password}
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 경고: 개발/테스트용 설정입니다. 실제 프로덕션에서는 데이터 유실 방지를 위해 'validate' 사용을 강력히 권장합니다.
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 초기 배포 시 테이블 생성을 위해 update 사용
       - SPRING_JPA_SHOW_SQL=false
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
@@ -136,8 +136,8 @@ services:
       context: ./apps/frontend-vite
       dockerfile: Dockerfile
       args:
-        - VITE_CORE_API_URL=http://${DOMAIN_NAME:-localhost}:8080
-        - VITE_AI_API_URL=http://${DOMAIN_NAME:-localhost}:8001
+        - VITE_CORE_API_URL=http://${DOMAIN_NAME:-localhost}/api
+        - VITE_AI_API_URL=http://${DOMAIN_NAME:-localhost}/ai-api
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
         - VITE_KAKAO_CLIENT_ID=${VITE_KAKAO_CLIENT_ID:-}
     container_name: lifebit_frontend_prod
@@ -162,8 +162,10 @@ services:
     container_name: lifebit_nginx_prod
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./letsencrypt:/etc/letsencrypt:ro
     depends_on:
       frontend:
         condition: service_started

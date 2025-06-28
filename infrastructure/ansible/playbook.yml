@@ -185,6 +185,82 @@
       ignore_errors: yes
       when: not ansible_check_mode
 
+    - name: Ensure letsencrypt directory exists
+      file:
+        path: /etc/letsencrypt
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Wait for DNS propagation (max 30 min, check every 15s)
+      shell: |
+        timeout=1800
+        interval=15
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          ip=$(dig +short {{ domain_name }} | tail -n1)
+          if [ "$ip" = "{{ ansible_host }}" ]; then
+            echo "DNS propagation complete: $ip"
+            exit 0
+          fi
+          echo "Waiting for DNS propagation... ($elapsed/$timeout seconds, current: $ip)"
+          sleep $interval
+          elapsed=$((elapsed + interval))
+        done
+        echo "DNS propagation timeout"
+        exit 1
+      register: dns_check
+      changed_when: false
+      failed_when: dns_check.rc != 0
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Install certbot (standalone)
+      apt:
+        name: certbot
+        state: present
+        update_cache: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Generate SSL certificate with Certbot (standalone)
+      shell: |
+        # [주의] 실제 운영 배포 시 --staging 옵션을 반드시 삭제하세요!
+        certbot certonly --standalone --non-interactive --agree-tos \
+          --email admin@{{ domain_name }} -d {{ domain_name }}
+      args:
+        creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Check if SSL certificate exists
+      stat:
+        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: ssl_cert_exists
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Check if letsencrypt directory exists
+      stat:
+        path: "/etc/letsencrypt"
+      register: letsencrypt_dir
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Ensure letsencrypt directory exists on remote
+      file:
+        path: "{{ app_directory }}/letsencrypt"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+
+    - name: Copy letsencrypt to app directory
+      synchronize:
+        src: /etc/letsencrypt/
+        dest: "{{ app_directory }}/letsencrypt/"
+        recursive: yes
+        mode: push
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+
     - name: Build and start services
       shell: |
         if command -v docker-compose >/dev/null 2>&1; then
@@ -197,7 +273,7 @@
       become_user: ubuntu
       when: not ansible_check_mode
       register: docker_start
-      
+
     - name: Wait for PostgreSQL to be ready
       shell: |
         timeout=300
@@ -312,18 +388,37 @@
       debug:
         msg: "{{ container_status.stdout_lines }}"
 
+    - name: Setup SSL certificate auto-renewal cron job
+      cron:
+        name: "Certbot SSL renewal"
+        minute: "0"
+        hour: "12"
+        job: "/usr/bin/certbot renew --quiet"
+        user: root
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
     - name: Create deployment info file
       copy:
         content: |
           # LifeBit 배포 정보
           배포 시간: {{ ansible_date_time.iso8601 }}
           서버 IP: {{ ansible_host }}
+          {% if domain_name is defined and domain_name != ansible_host and domain_name != "" %}
+          도메인: {{ domain_name }}
+          SSL 인증서: {{ 'OK' if ssl_cert_exists.stat.exists or (certbot_result is defined and certbot_result.rc == 0) else 'FAILED' }}
+          {% endif %}
           
           # 서비스 URL
+          {% if domain_name is defined and domain_name != ansible_host and domain_name != "" %}
+          Frontend: https://{{ domain_name }}
+          Core API: https://{{ domain_name }}/api
+          AI API: https://{{ domain_name }}/ai-api
+          {% else %}
           Frontend: http://{{ ansible_host }}:3000
           Core API: http://{{ ansible_host }}:8080
           AI API: http://{{ ansible_host }}:8001
           Nginx: http://{{ ansible_host }}
+          {% endif %}
           
           # 서비스 상태
           Core API: {{ 'OK' if (core_api_health.status is defined and core_api_health.status == 200) else 'FAILED' }}

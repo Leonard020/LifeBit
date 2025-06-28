@@ -33,3 +33,9 @@ variable "allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 } 
+
+variable "domain_name" {
+  description = "Custom domain name for the application (optional)"
+  type        = string
+  default     = ""
+} 

@@ -32,7 +32,7 @@ EXPOSE 8001
 
 # 헬스체크 추가
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8001/health || exit 1
+  CMD curl -f http://localhost:8001/api/py/health || exit 1
 
 # 애플리케이션 실행
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"] 
