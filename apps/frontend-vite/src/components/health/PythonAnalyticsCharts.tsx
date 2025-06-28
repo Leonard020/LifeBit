@@ -144,6 +144,14 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     refetch: refetchHealthStats 
   } = useHealthStatistics(userId.toString(), 'week');
 
+  // ✅ 실제 영양소 통계를 위한 day period 호출 추가
+  const { 
+    data: nutritionStats, 
+    isLoading: isNutritionStatsLoading,
+    error: nutritionStatsError,
+    refetch: refetchNutritionStats 
+  } = useHealthStatistics(userId.toString(), 'day');
+
   // 🚀 Python AI Analytics API 호출
   const { 
     data: pythonAnalytics, 
@@ -158,10 +166,10 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
   } = useAIHealthInsights(userId, period);
   
   // 로딩 상태
-  const isLoading = isHealthLoading || isMealLoading || isExerciseLoading || isGoalsLoading || isHealthStatsLoading || isPythonAnalyticsLoading || isAIInsightsLoading;
+  const isLoading = isHealthLoading || isMealLoading || isExerciseLoading || isGoalsLoading || isHealthStatsLoading || isNutritionStatsLoading || isPythonAnalyticsLoading || isAIInsightsLoading;
   
   // 오류 상태  
-  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError;
+  const hasError = healthError || mealError || exerciseError || goalsError || healthStatsError || nutritionStatsError;
 
   // 🐛 디버그 로그 추가
   console.log('🔍 [PythonAnalyticsCharts] 데이터 확인:', {
@@ -490,8 +498,9 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
         const dateKey = getDateKey(meal.log_date, period);
         
         if (groupedData[dateKey]) {
+          // ✅ 실제 API 응답 구조에 맞게 수정
           const mealCalories = meal.food_item ? 
-            (meal.food_item.calories_per_100g * (meal.amount || 100) / 100) : 
+            (meal.food_item.calories * (meal.quantity || 100) / 100) : 
             200;
           groupedData[dateKey].mealCalories += mealCalories;
           groupedData[dateKey].mealCount += 1;
@@ -590,6 +599,9 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     const exerciseData = exerciseSessions?.success && exerciseSessions?.data ? exerciseSessions.data : [];
     const mealData = mealLogs?.success && mealLogs?.data ? mealLogs.data : [];
     
+    // ✅ 실제 영양소 통계 데이터 활용
+    const actualNutrition = nutritionStats?.success && nutritionStats?.data ? nutritionStats.data : null;
+    
     const today = new Date().toISOString().split('T')[0];
     
     const todayExercise = Array.isArray(exerciseData) 
@@ -607,6 +619,12 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       ? Math.round(goalsData.weekly_workout_target / 7) 
       : 60;
 
+    // ✅ 실제 영양소 데이터 사용 (백엔드에서 계산된 값)
+    const dailyCalories = actualNutrition?.dailyCalories || 0;
+    const dailyCarbs = actualNutrition?.dailyCarbs || 0;
+    const dailyProtein = actualNutrition?.dailyProtein || 0;
+    const dailyFat = actualNutrition?.dailyFat || 0;
+
     return {
       exercise: {
         current: exerciseMinutes,
@@ -615,23 +633,28 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       },
       nutrition: {
         carbs: {
-          current: todayMeals.length * 50, // 임시 계산
+          current: Math.round(dailyCarbs * 10) / 10, // 소수점 1자리로 반올림
           target: goalsData?.daily_carbs_target || 300,
-          percentage: Math.min((todayMeals.length * 50) / (goalsData?.daily_carbs_target || 300) * 100, 100)
+          percentage: Math.min((dailyCarbs / (goalsData?.daily_carbs_target || 300)) * 100, 100)
         },
         protein: {
-          current: todayMeals.length * 20,
+          current: Math.round(dailyProtein * 10) / 10,
           target: goalsData?.daily_protein_target || 120,
-          percentage: Math.min((todayMeals.length * 20) / (goalsData?.daily_protein_target || 120) * 100, 100)
+          percentage: Math.min((dailyProtein / (goalsData?.daily_protein_target || 120)) * 100, 100)
         },
         fat: {
-          current: todayMeals.length * 15,
+          current: Math.round(dailyFat * 10) / 10,
           target: goalsData?.daily_fat_target || 80,
-          percentage: Math.min((todayMeals.length * 15) / (goalsData?.daily_fat_target || 80) * 100, 100)
+          percentage: Math.min((dailyFat / (goalsData?.daily_fat_target || 80)) * 100, 100)
+        },
+        calories: {
+          current: Math.round(dailyCalories),
+          target: goalsData?.daily_calories_target || 2000,
+          percentage: Math.min((dailyCalories / (goalsData?.daily_calories_target || 2000)) * 100, 100)
         }
       }
     };
-  }, [exerciseSessions, mealLogs, userGoals]);
+  }, [exerciseSessions, mealLogs, userGoals, nutritionStats]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -639,7 +662,8 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       refetchHealth(), 
       refetchMeals(), 
       refetchExercise(), 
-      refetchGoals()
+      refetchGoals(),
+      refetchNutritionStats() // ✅ 영양소 통계 새로고침 추가
     ]).finally(() => setIsRefreshing(false));
   };
 
@@ -1598,8 +1622,8 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                       <span className="text-sm text-gray-700">
                         운동 목표까지 {goalAchievements.exercise.target - goalAchievements.exercise.current}분 더 필요합니다
                       </span>
-                  </div>
-                )}
+                    </div>
+                  )}
                   {chartData.filter(item => item.exerciseMinutes > 0).length < chartData.length / 2 && (
                     <div className="flex items-start">
                       <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0" />
@@ -1610,11 +1634,11 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0" />
                     <span className="text-sm text-gray-700">균형 잡힌 식단을 유지하세요</span>
                   </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
+            </CardContent>
       </Card>
 
       {/* AI 머신러닝 분석 섹션 - 향후 Airflow 파이프라인 연동 */}
