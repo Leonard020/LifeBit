@@ -1,80 +1,273 @@
-- name: Deploy Application Stack
-  hosts: servers
-  become: true
+---
+- name: Deploy LifeBit Application to AWS
+  hosts: lifebit_servers
+  become: yes
   vars:
-    project_dir: /home/ubuntu/LifeBit
+    app_directory: /home/ubuntu/lifebit
+    docker_compose_file: docker-compose.prod.yml
+    
   tasks:
-    - name: Ensure apt cache is updated
+    - name: Wait for system to be ready
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+
+    - name: Wait for automatic apt updates to complete
+      shell: |
+        # Wait for unattended-upgrades to complete
+        while pgrep -x unattended-upgr > /dev/null; do
+          echo "Waiting for unattended-upgrades to complete..."
+          sleep 10
+        done
+        
+        # Wait for apt lock to be released (with timeout)
+        timeout=300
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && \
+             ! fuser /var/lib/apt/lists/lock >/dev/null 2>&1 && \
+             ! fuser /var/cache/apt/archives/lock >/dev/null 2>&1; then
+            echo "APT locks are available"
+            break
+          fi
+          echo "Waiting for apt locks to be released... ($elapsed/$timeout seconds)"
+          sleep 10
+          elapsed=$((elapsed + 10))
+        done
+        
+        if [ $elapsed -ge $timeout ]; then
+          echo "Timeout waiting for apt locks"
+          exit 1
+        fi
+      register: apt_lock_wait
+      changed_when: false
+
+    - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
+      retries: 3
+      delay: 10
 
-    - name: Install required system packages
+    - name: Install additional required packages
       apt:
         name:
-          - git
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - software-properties-common
+          - rsync
+          - htop
+          - vim
+          - tree
+          - jq
         state: present
+      retries: 3
+      delay: 10
 
-    - name: Add Docker GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-
-    - name: Add Docker repository
-      apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
-        state: present
-
-    - name: Install Docker
-      apt:
-        name: docker-ce
-        state: present
-        update_cache: yes
-
-    - name: Ensure Docker service is started
-      service:
-        name: docker
-        state: started
-        enabled: yes
-
-    - name: Add ubuntu user to docker group
-      user:
-        name: ubuntu
-        groups: docker
-        append: yes
-
-    - name: Install Docker Compose
-      get_url:
-        url: "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-linux-x86_64"
-        dest: /usr/local/bin/docker-compose
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
         mode: '0755'
 
-    - name: Clone or pull the repository
-      git:
-        repo: 'https://github.com/Hyeon6492/LifeBit.git'
-        dest: "{{ project_dir }}"
-        version: main
-        force: yes
+    - name: Create uploads directory
+      file:
+        path: "{{ app_directory }}/uploads"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
 
-    - name: Create .env file for Docker Compose
+    - name: Create application archive locally
+      shell: |
+        cd {{ playbook_dir }}/../../
+        tar --exclude='.git' \
+            --exclude='apps/*/node_modules' \
+            --exclude='apps/*/target' \
+            --exclude='apps/*/venv' \
+            --exclude='.env' \
+            --exclude='*.log' \
+            --exclude='infrastructure/terraform/.terraform' \
+            --exclude='infrastructure/terraform/terraform.tfstate*' \
+            --exclude='infrastructure/ansible/inventory' \
+            -czf /tmp/lifebit-app.tar.gz .
+      delegate_to: localhost
+      become: no
+      when: not ansible_check_mode
+
+    - name: Copy application archive to remote server
+      copy:
+        src: "/tmp/lifebit-app.tar.gz"
+        dest: "/tmp/lifebit-app.tar.gz"
+        mode: '0644'
+      when: not ansible_check_mode
+
+    - name: Extract application files
+      unarchive:
+        src: "/tmp/lifebit-app.tar.gz"
+        dest: "{{ app_directory }}/"
+        remote_src: yes
+        owner: ubuntu
+        group: ubuntu
+      when: not ansible_check_mode
+
+    - name: Clean up temporary files
+      file:
+        path: "/tmp/lifebit-app.tar.gz"
+        state: absent
+      when: not ansible_check_mode
+
+    - name: Clean up local temporary archive
+      file:
+        path: "/tmp/lifebit-app.tar.gz"
+        state: absent
+      delegate_to: localhost
+      become: no
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Set ownership of application files
+      file:
+        path: "{{ app_directory }}"
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes
+
+    - name: Copy environment file
       template:
-        src: env.j2
-        dest: "{{ project_dir }}/.env"
+        src: prod.env.j2
+        dest: "{{ app_directory }}/.env"
+        owner: ubuntu
+        group: ubuntu
         mode: '0600'
-      vars:
-        OPENAI_API_KEY: "{{ lookup('env', 'OPENAI_API_KEY') }}"
-        JWT_SECRET_KEY: "{{ lookup('env', 'JWT_SECRET_KEY') }}"
-        GOOGLE_CLIENT_SECRET: "{{ lookup('env', 'GOOGLE_CLIENT_SECRET') }}"
-        KAKAO_CLIENT_ID: "{{ lookup('env', 'KAKAO_CLIENT_ID') }}"
-        GOOGLE_CLIENT_ID: "{{ lookup('env', 'GOOGLE_CLIENT_ID') }}"
-        USE_GPT: "{{ lookup('env', 'USE_GPT') | default('True') }}"
-        CORS_ORIGINS: "{{ lookup('env', 'CORS_ORIGINS') | default('http://*') }}"
 
-    - name: Run Docker Compose
-      command: docker-compose -f "{{ project_dir }}/docker-compose.prod.yml" up -d --build
+    - name: Stop existing containers (if any)
+      shell: |
+        if command -v docker-compose >/dev/null 2>&1; then
+          docker-compose -f {{ docker_compose_file }} down
+        else
+          docker compose -f {{ docker_compose_file }} down
+        fi
       args:
-        chdir: "{{ project_dir }}"
+        chdir: "{{ app_directory }}"
+      become_user: ubuntu
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Pull latest images
+      shell: |
+        if command -v docker-compose >/dev/null 2>&1; then
+          docker-compose -f {{ docker_compose_file }} pull
+        else
+          docker compose -f {{ docker_compose_file }} pull
+        fi
+      args:
+        chdir: "{{ app_directory }}"
+      become_user: ubuntu
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Build and start services
+      shell: |
+        if command -v docker-compose >/dev/null 2>&1; then
+          docker-compose -f {{ docker_compose_file }} up -d --build
+        else
+          docker compose -f {{ docker_compose_file }} up -d --build
+        fi
+      args:
+        chdir: "{{ app_directory }}"
+      become_user: ubuntu
+      when: not ansible_check_mode
+
+    - name: Wait for PostgreSQL to be ready
+      uri:
+        url: "http://localhost:8080/actuator/health"
+        method: GET
+        status_code: [200, 503]
+      register: health_check
+      until: health_check.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Verify Core API health
+      uri:
+        url: "http://localhost:8080/actuator/health"
+        method: GET
+      register: core_api_health
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Verify AI API health
+      uri:
+        url: "http://localhost:8001/health"
+        method: GET
+      register: ai_api_health
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Verify Frontend
+      uri:
+        url: "http://localhost:3000"
+        method: GET
+      register: frontend_health
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Set default health status for check mode
+      set_fact:
+        core_api_health: { status: 0 }
+        ai_api_health: { status: 0 }
+        frontend_health: { status: 0 }
+      when: ansible_check_mode
+
+    - name: Display service status
+      debug:
+        msg:
+          - "=== LifeBit 배포 상태 ==="
+          - "Core API (Spring Boot): {{ 'OK' if core_api_health.status == 200 else 'FAILED' }}"
+          - "AI API (FastAPI): {{ 'OK' if ai_api_health.status == 200 else 'FAILED' }}"
+          - "Frontend (React): {{ 'OK' if frontend_health.status == 200 else 'FAILED' }}"
+          - ""
+          - "=== 접속 URL ==="
+          - "Frontend: http://{{ ansible_host }}:3000"
+          - "Core API: http://{{ ansible_host }}:8080"
+          - "AI API: http://{{ ansible_host }}:8001"
+          - "Nginx (통합): http://{{ ansible_host }}"
+
+    - name: Show container status
+      shell: docker ps --format "table {%raw%}{{.Names}}\t{{.Status}}\t{{.Ports}}{%endraw%}"
+      become_user: ubuntu
+      register: container_status
+      when: not ansible_check_mode
+
+    - name: Set default container status for check mode
+      set_fact:
+        container_status: { stdout_lines: ["No containers running (check mode)"] }
+      when: ansible_check_mode
+
+    - name: Display container status
+      debug:
+        msg: "{{ container_status.stdout_lines }}"
+
+    - name: Create deployment info file
+      copy:
+        content: |
+          # LifeBit 배포 정보
+          배포 시간: {{ ansible_date_time.iso8601 }}
+          서버 IP: {{ ansible_host }}
+          
+          # 서비스 URL
+          Frontend: http://{{ ansible_host }}:3000
+          Core API: http://{{ ansible_host }}:8080
+          AI API: http://{{ ansible_host }}:8001
+          Nginx: http://{{ ansible_host }}
+          
+          # 서비스 상태
+          Core API: {{ 'OK' if core_api_health.status == 200 else 'FAILED' }}
+          AI API: {{ 'OK' if ai_api_health.status == 200 else 'FAILED' }}
+          Frontend: {{ 'OK' if frontend_health.status == 200 else 'FAILED' }}
+        dest: "{{ app_directory }}/deployment_info.txt"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644' 

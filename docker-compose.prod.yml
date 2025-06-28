@@ -1,172 +1,155 @@
 version: '3.8'
 
 services:
-  # 1. Reverse Proxy
-  nginx-proxy:
-    image: nginx:1.27.0-alpine
-    container_name: lifebit_nginx_proxy
-    ports:
-      - "80:80"
-      - "443:443" # HTTPS를 위해 열어둠
+  # PostgreSQL 데이터베이스
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: lifebit_postgres_prod
+    env_file:
+      - .env
     volumes:
-      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+      - postgres_data:/var/lib/postgresql/data/
+      - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-lifebit_db}
+      - POSTGRES_USER=${POSTGRES_USER:-lifebit_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lifebit_password}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+      - TZ=Asia/Seoul
+    restart: unless-stopped
     networks:
       - lifebit-network
-    restart: unless-stopped
-    depends_on:
-      - core-api
-      - ai-api
-      - frontend
-      - airflow-webserver
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lifebit_user} -d ${POSTGRES_DB:-lifebit_db}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
-  # 2. Frontend (Vite + Nginx)
+  # Core API (Spring Boot)
+  core-api:
+    build:
+      context: ./apps/core-api-spring
+      dockerfile: Dockerfile
+    container_name: lifebit_core_api_prod
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=production
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/${POSTGRES_DB:-lifebit_db}?stringtype=unspecified
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-lifebit_user}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-lifebit_password}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=false
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lifebit-network
+    volumes:
+      - ./uploads:/app/uploads
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # AI API (FastAPI)
+  ai-api:
+    build:
+      context: ./apps/ai-api-fastapi
+      dockerfile: Dockerfile
+    container_name: lifebit_ai_api_prod
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-lifebit_user}:${POSTGRES_PASSWORD:-lifebit_password}@postgres-db:5432/${POSTGRES_DB:-lifebit_db}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - USE_GPT=${USE_GPT:-False}
+      - CORS_ORIGINS=http://localhost:3000,http://${DOMAIN_NAME:-localhost}:3000,http://${DOMAIN_NAME:-localhost},http://${DOMAIN_NAME:-localhost}:80
+      - PORT=8001
+      - HOST=0.0.0.0
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lifebit-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Frontend (React)
   frontend:
-    container_name: lifebit_frontend
     build:
       context: ./apps/frontend-vite
       dockerfile: Dockerfile
       args:
-        - VITE_KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
-        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-        - VITE_CORE_API_URL=/api
-        - VITE_AI_API_URL=/ai
-    networks:
-      - lifebit-network
-    restart: unless-stopped
-
-  # 3. Core API (Spring Boot)
-  core-api:
-    container_name: lifebit_core_api
-    build:
-      context: ./apps/core-api-spring
-      dockerfile: Dockerfile
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/lifebit_db
-      - SPRING_DATASOURCE_USERNAME=lifebit_user
-      - SPRING_DATASOURCE_PASSWORD=lifebit_password
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-    networks:
-      - lifebit-network
-    restart: unless-stopped
+        - VITE_CORE_API_URL=http://${DOMAIN_NAME:-localhost}:8080
+        - VITE_AI_API_URL=http://${DOMAIN_NAME:-localhost}:8001
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
+        - VITE_KAKAO_CLIENT_ID=${VITE_KAKAO_CLIENT_ID:-}
+    container_name: lifebit_frontend_prod
+    ports:
+      - "3000:80"
     depends_on:
-      postgres-db:
-        condition: service_healthy
-
-  # 4. AI API (FastAPI)
-  ai-api:
-    container_name: lifebit_ai_api
-    build:
-      context: ./apps/ai-api-fastapi
-      dockerfile: Dockerfile
-    environment:
-      - DATABASE_URL=postgresql://lifebit_user:lifebit_password@postgres-db:5432/lifebit_db
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - USE_GPT=${USE_GPT:-True}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://*} # 실제 도메인으로 변경 권장
-    networks:
-      - lifebit-network
+      - core-api
+      - ai-api
     restart: unless-stopped
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-
-  # 5. PostgreSQL Database
-  postgres-db:
-    image: postgres:16-alpine
-    container_name: lifebit_postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
-    environment:
-      - POSTGRES_DB=lifebit_db
-      - POSTGRES_USER=lifebit_user
-      - POSTGRES_PASSWORD=lifebit_password
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
-      - TZ=Asia/Seoul
     networks:
       - lifebit-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Nginx 리버스 프록시 (선택사항)
+  nginx:
+    image: nginx:alpine
+    container_name: lifebit_nginx_prod
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - core-api
+      - ai-api
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lifebit_user -d lifebit_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # 6. Airflow Services
-  airflow-postgres:
-    image: postgres:13
-    container_name: airflow_postgres
-    environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-    volumes:
-      - airflow_postgres_data:/var/lib/postgresql/data
     networks:
       - lifebit-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 10s
-      retries: 5
-
-  airflow-webserver:
-    container_name: airflow_webserver
-    build:
-      context: ./apps/airflow-pipeline
-      dockerfile: Dockerfile
-    restart: always
-    depends_on:
-      airflow-postgres:
-        condition: service_healthy
-      postgres-db:
-        condition: service_healthy
-    networks:
-      - lifebit-network
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
-      # Connect to the main LifeBit DB
-      - LIFEBIT_DB_HOST=postgres-db
-      - LIFEBIT_DB_PORT=5432
-      - LIFEBIT_DB_USER=lifebit_user
-      - LIFEBIT_DB_PASSWORD=lifebit_password
-      - LIFEBIT_DB_NAME=lifebit_db
-      # Set user for web UI
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin123!
-    volumes:
-      - ./apps/airflow-pipeline/dags:/opt/airflow/dags
-      - ./apps/airflow-pipeline/logs:/opt/airflow/logs
-
-  airflow-scheduler:
-    container_name: airflow_scheduler
-    build:
-      context: ./apps/airflow-pipeline
-      dockerfile: Dockerfile
-    restart: always
-    depends_on:
-      airflow-postgres:
-        condition: service_healthy
-      postgres-db:
-        condition: service_healthy
-    networks:
-      - lifebit-network
-    volumes:
-      - ./apps/airflow-pipeline/dags:/opt/airflow/dags
-      - ./apps/airflow-pipeline/logs:/opt/airflow/logs
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
-    command: scheduler
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
 
 networks:
   lifebit-network:
-    name: lifebit-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres_data:
-  airflow_postgres_data: 
+    driver: local 

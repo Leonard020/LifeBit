@@ -1,2 +1,5 @@
-[servers]
-52.78.92.18 ansible_user=ubuntu ansible_ssh_private_key_file=/home/fedora/.ssh/lifebit-key-20250627-192342.pem
+[lifebit_servers]
+lifebit_server ansible_host=43.200.49.33 ansible_user=ubuntu ansible_ssh_private_key_file=/home/fedora/.ssh/lifebit_key
+
+[lifebit_servers:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'

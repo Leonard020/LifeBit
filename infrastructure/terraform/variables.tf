@@ -1,23 +1,35 @@
 variable "aws_region" {
-  description = "The AWS region to deploy resources in."
+  description = "AWS region"
   type        = string
   default     = "ap-northeast-2"
 }
 
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "production"
+}
+
+variable "project_name" {
+  description = "Project name"
+  type        = string
+  default     = "lifebit"
+}
+
 variable "instance_type" {
-  description = "The EC2 instance type."
+  description = "EC2 instance type"
   type        = string
-  default     = "t2.micro"
+  default     = "t3.medium"
 }
 
-variable "key_name" {
-  description = "The name of the EC2 key pair to use for the instance."
+variable "public_key_path" {
+  description = "Path to the public key file"
   type        = string
-  default     = "lifebit-key"
+  default     = "~/.ssh/lifebit_key.pub"
 }
 
-variable "ami_id" {
-  description = "The AMI ID for the EC2 instance."
-  type        = string
-  default     = "ami-0c9c942bd7bf113a2" # Ubuntu 22.04 LTS for ap-northeast-2
+variable "allowed_cidr_blocks" {
+  description = "CIDR blocks allowed to access the instance"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 } 
