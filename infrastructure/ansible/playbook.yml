@@ -194,9 +194,9 @@
         mode: '0755'
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
-    - name: Wait for DNS propagation (max 10 min, check every 15s)
+    - name: Wait for DNS propagation (max 30 min, check every 15s)
       shell: |
-        timeout=600
+        timeout=1800
         interval=15
         elapsed=0
         while [ $elapsed -lt $timeout ]; do
