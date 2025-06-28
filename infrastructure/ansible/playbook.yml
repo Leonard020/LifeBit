@@ -223,6 +223,13 @@
         update_cache: yes
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
+    - name: Stop nginx before certbot
+      service:
+        name: nginx
+        state: stopped
+      become: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
     - name: Generate SSL certificate with Certbot (standalone)
       shell: |
         # [주의] 실제 운영 배포 시 --staging 옵션을 반드시 삭제하세요!
@@ -260,6 +267,13 @@
         recursive: yes
         mode: push
       when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+
+    - name: Start nginx after certbot
+      service:
+        name: nginx
+        state: started
+      become: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
     - name: Build and start services
       shell: |
