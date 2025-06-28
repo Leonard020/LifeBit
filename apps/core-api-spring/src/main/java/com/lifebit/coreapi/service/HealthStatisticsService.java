@@ -434,10 +434,30 @@ public class HealthStatisticsService {
         try {
             log.info("🏃 [getExerciseSessions] 운동 세션 조회 시작 - 사용자: {}, 기간: {}", userId, period);
             
+            // 🔧 디버깅: ExerciseService 메서드 호출 전 로그
+            log.info("🔧 [DEBUG] ExerciseService.getRecentExerciseSessions 호출 예정 - userId: {}, period: {}", userId, period);
+            
             List<ExerciseSession> exerciseSessions = exerciseService.getRecentExerciseSessions(userId, period);
             
             log.info("📊 [getExerciseSessions] 조회 결과 - 사용자: {}, 기간: {}, 건수: {}", 
                 userId, period, exerciseSessions.size());
+            
+            // 🔧 디버깅: 빈 결과일 때 추가 정보
+            if (exerciseSessions.isEmpty()) {
+                log.warn("⚠️ [DEBUG] 운동 세션이 비어있음 - 다른 기간으로 재시도해보겠습니다.");
+                
+                // 전체 기간으로 한번 더 조회해보기
+                List<ExerciseSession> allSessions = exerciseService.getRecentExerciseSessions(userId, 365);
+                log.info("🔧 [DEBUG] 전체 1년 기간 조회 결과: {} 건", allSessions.size());
+                
+                if (!allSessions.isEmpty()) {
+                    ExerciseSession sample = allSessions.get(0);
+                    log.info("🔧 [DEBUG] 샘플 운동 세션 - ID: {}, 날짜: {}, 운동: {}", 
+                        sample.getExerciseSessionId(), 
+                        sample.getExerciseDate(),
+                        sample.getExerciseCatalog() != null ? sample.getExerciseCatalog().getName() : "알 수 없음");
+                }
+            }
             
             if (!exerciseSessions.isEmpty()) {
                 ExerciseSession sample = exerciseSessions.get(0);

@@ -8,6 +8,7 @@ import com.lifebit.coreapi.repository.ExerciseSessionRepository;
 import com.lifebit.coreapi.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import com.lifebit.coreapi.entity.TimePeriodType;
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
+@Slf4j
 public class ExerciseService {
     private final ExerciseSessionRepository exerciseSessionRepository;
     private final ExerciseCatalogRepository exerciseCatalogRepository;
@@ -77,6 +79,8 @@ public class ExerciseService {
      * 차트 시작점에 적절한 데이터가 표시되도록 충분한 과거 데이터를 포함하여 조회
      */
     public List<ExerciseSession> getRecentExerciseSessions(Long userId, String period) {
+        log.info("🏃 [ExerciseService] getRecentExerciseSessions 시작 - userId: {}, period: {}", userId, period);
+        
         LocalDate today = LocalDate.now();
         LocalDate startDate;
         LocalDate endDate;
@@ -104,9 +108,25 @@ public class ExerciseService {
                 endDate = today.plusMonths(1);    // 다음 달까지
         }
 
+        log.info("🔧 [ExerciseService] 날짜 범위 계산 완료 - startDate: {}, endDate: {}", startDate, endDate);
+        
         User user = userRepository.getReferenceById(userId);
-        return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
+        
+        log.info("✅ [ExerciseService] 운동 세션 조회 완료 - userId: {}, period: {}, 결과: {} 건", userId, period, sessions.size());
+        
+        if (sessions.isEmpty()) {
+            log.warn("⚠️ [ExerciseService] 운동 세션이 없음 - userId: {}, 날짜범위: {} ~ {}", userId, startDate, endDate);
+        } else {
+            ExerciseSession sample = sessions.get(0);
+            log.info("📋 [ExerciseService] 샘플 세션 - ID: {}, 날짜: {}, 운동: {}", 
+                sample.getExerciseSessionId(), 
+                sample.getExerciseDate(),
+                sample.getExerciseCatalog() != null ? sample.getExerciseCatalog().getName() : "알 수 없음");
+        }
+        
+        return sessions;
     }
 
     /**
