@@ -150,3 +150,5 @@ HELP.md
 
 # Ansible
 infrastructure/ansible/inventory
+
+.deployment_info

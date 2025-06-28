@@ -197,7 +197,20 @@
       become_user: ubuntu
       when: not ansible_check_mode
       register: docker_start
-      
+
+    - name: Copy nginx.conf to /etc/nginx/nginx.conf
+      copy:
+        src: "{{ playbook_dir }}/../nginx/nginx.conf"
+        dest: /etc/nginx/nginx.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded
+
     - name: Wait for PostgreSQL to be ready
       shell: |
         timeout=300
