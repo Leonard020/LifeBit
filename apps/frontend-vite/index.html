@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
   <head>
@@ -24,7 +23,17 @@
 
   <body>
     <div id="root"></div>
-    <script src="/env.js"></script>
+    <script>
+      const isProduction = !window.location.port || window.location.port === '80' || window.location.port === '443';
+      if (isProduction) {
+        const script = document.createElement('script');
+        script.src = '/env.js';
+        script.onerror = () => console.warn('⚠️ env.js 로드 실패 - 기본값 사용');
+        document.head.appendChild(script);
+      } else {
+        console.log('🛠️ 로컬 개발 환경 - .env 파일 사용');
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
