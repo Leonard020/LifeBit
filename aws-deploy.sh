@@ -52,6 +52,23 @@ log_info "  - Project Name: $PROJECT_NAME"
 log_info "  - Environment: $ENVIRONMENT"
 log_info "  - Instance Type: $INSTANCE_TYPE"
 
+# 사용자에게 도메인 이름 입력받기 (선택 사항)
+echo ""
+log_warning "사용자 정의 도메인 설정 (선택 사항)"
+read -p "사용할 도메인 이름을 입력하세요 (예: my.lifebit.com). IP를 사용하려면 그냥 Enter를 누르세요: " USER_DOMAIN_NAME
+if [ -z "$USER_DOMAIN_NAME" ]; then
+    log_info "사용자 정의 도메인이 입력되지 않았습니다. EC2 인스턴스의 Public IP를 기본 도메인으로 사용합니다."
+    DOMAIN_NAME_VAR=""
+else
+    # 도메인 유효성 검사 (간단한 형태)
+    if [[ ! "$USER_DOMAIN_NAME" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        log_error "유효하지 않은 도메인 형식입니다. 스크립트를 다시 실행해주세요."
+        exit 1
+    fi
+    log_success "사용자 정의 도메인으로 설정합니다: $USER_DOMAIN_NAME"
+    DOMAIN_NAME_VAR="domain_name=$USER_DOMAIN_NAME"
+fi
+
 # LifeBit.sql 파일 존재 확인
 log_info "데이터베이스 스키마 파일 확인 중..."
 if [ ! -f "./LifeBit.sql" ]; then
@@ -247,7 +264,7 @@ retry_count=0
 while [ $retry_count -lt $max_retries ]; do
     log_info "플레이북 실행 시도 $(($retry_count + 1))/$max_retries..."
     
-    if ansible-playbook playbook.yml; then
+    if ansible-playbook playbook.yml --extra-vars "$DOMAIN_NAME_VAR"; then
         log_success "Ansible 플레이북이 성공적으로 실행되었습니다."
         break
     else
@@ -256,10 +273,8 @@ while [ $retry_count -lt $max_retries ]; do
             log_warning "플레이북 실행에 실패했습니다. 30초 후 재시도합니다..."
             sleep 30
         else
-            log_error "플레이북 실행에 $max_retries 번 실패했습니다."
-            log_error "수동으로 다음 명령을 실행해보세요:"
-            log_error "  cd infrastructure/ansible"
-            log_error "  ansible-playbook playbook.yml -vvv"
+            log_error "Ansible 플레이북 실행에 최종적으로 실패했습니다."
+            log_error "서버에 접속하여 로그를 확인해주세요: ssh -i $SSH_KEY_PATH ubuntu@$EC2_PUBLIC_IP"
             exit 1
         fi
     fi
@@ -280,10 +295,7 @@ INSTANCE_ID=$INSTANCE_ID
 INSTANCE_TYPE=$INSTANCE_TYPE
 
 # 접속 URL
-FRONTEND_URL=http://$EC2_PUBLIC_IP:3000
-CORE_API_URL=http://$EC2_PUBLIC_IP:8080
-AI_API_URL=http://$EC2_PUBLIC_IP:8001
-NGINX_URL=http://$EC2_PUBLIC_IP
+FINAL_DOMAIN=${USER_DOMAIN_NAME:-$EC2_PUBLIC_IP}
 
 # SSH 접속
 SSH_COMMAND="ssh -i $SSH_KEY_PATH ubuntu@$EC2_PUBLIC_IP"
@@ -296,22 +308,23 @@ echo ""
 echo -e "${GREEN}═══════════════════════════════════════${NC}"
 echo -e "${GREEN}         배포 완료 정보${NC}"
 echo -e "${GREEN}═══════════════════════════════════════${NC}"
-echo -e "${BLUE}📱 프론트엔드:${NC}     http://$EC2_PUBLIC_IP:3000"
-echo -e "${BLUE}🔧 Core API:${NC}      http://$EC2_PUBLIC_IP:8080"
-echo -e "${BLUE}🤖 AI API:${NC}        http://$EC2_PUBLIC_IP:8001"
-echo -e "${BLUE}🌐 Nginx (통합):${NC}  http://$EC2_PUBLIC_IP"
+echo -e "${BLUE}📱 프론트엔드:${NC}     http://$FINAL_DOMAIN:3000"
+echo -e "${BLUE}🔧 Core API:${NC}      http://$FINAL_DOMAIN:8080"
+echo -e "${BLUE}🤖 AI API:${NC}        http://$FINAL_DOMAIN:8001"
+echo -e "${BLUE}🌐 Nginx (통합):${NC}  http://$FINAL_DOMAIN"
 echo ""
 echo -e "${BLUE}🔑 SSH 접속:${NC}"
 echo -e "   ssh -i $SSH_KEY_PATH ubuntu@$EC2_PUBLIC_IP"
 echo ""
 echo -e "${BLUE}📊 모니터링:${NC}"
-echo -e "   Health Check: http://$EC2_PUBLIC_IP:8080/actuator/health"
+echo -e "   Health Check: http://$FINAL_DOMAIN:8080/actuator/health"
 echo -e "   Container Status: docker ps"
 echo ""
 echo -e "${YELLOW}⚠️  주의사항:${NC}"
 echo -e "   - 서비스가 완전히 시작되기까지 2-3분 정도 더 소요될 수 있습니다."
 echo -e "   - 배포 정보는 .deployment_info 파일에 저장되었습니다."
 echo -e "   - 리소스 정리는 './aws-destroy.sh'를 실행하세요."
+echo -e "${YELLOW}중요: 사용자 정의 도메인을 사용한 경우, 해당 도메인의 DNS 설정에서 A 레코드를 서버 IP(${NC}$EC2_PUBLIC_IP${YELLOW})로 지정해야 합니다.${NC}"
 echo -e "${GREEN}═══════════════════════════════════════${NC}"
 
 log_success "배포 스크립트 실행이 완료되었습니다!" 
