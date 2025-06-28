@@ -225,6 +225,7 @@
 
     - name: Generate SSL certificate with Certbot (standalone)
       shell: |
+        # [주의] 실제 운영 배포 시 --staging 옵션을 반드시 삭제하세요!
         certbot certonly --standalone --non-interactive --agree-tos \
           --email admin@{{ domain_name }} -d {{ domain_name }}
       args:
