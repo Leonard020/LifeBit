@@ -6,8 +6,11 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axiosInstance from '@/utils/axios';
+import axiosInstance, { createAiAxiosInstance } from '@/utils/axios';
 import { API_CONFIG } from '@/config/env';
+
+// AI API 전용 인스턴스 생성
+const aiAxiosInstance = createAiAxiosInstance();
 
 // ============================================================================
 // 타입 정의
@@ -166,11 +169,9 @@ const getHealthAnalyticsReport = async (
   try {
   console.log('🤖 [AI Analytics] 건강 분석 리포트 요청:', { userId, period });
   
-    const response = await axiosInstance.post('/api/py/analytics/health-report', {
+    const response = await aiAxiosInstance.post('/api/py/analytics/health-report', {
       user_id: userId,
       period: period
-    }, {
-      baseURL: API_CONFIG.AI_API_URL // FastAPI 서버
     });
     
     return {
@@ -206,11 +207,9 @@ const getAIHealthInsights = async (
   try {
   console.log('🧠 [AI Insights] AI 인사이트 요청:', { userId, period });
   
-    const response = await axiosInstance.post('/api/py/analytics/ai-insights', {
+    const response = await aiAxiosInstance.post('/api/py/analytics/ai-insights', {
       user_id: userId,
       period: period
-    }, {
-      baseURL: API_CONFIG.AI_API_URL // FastAPI 서버
     });
     
     return {
@@ -306,7 +305,7 @@ export const useHealthAnalyticsReport = (userId: number, period: string) => {
   return useQuery({
     queryKey: ['healthAnalyticsReport', userId, period],
     queryFn: () => getHealthAnalyticsReport(userId, period),
-    enabled: false, // 현재는 비활성화, 구현 완료 후 true로 변경
+    enabled: !!userId,
     staleTime: 30 * 60 * 1000, // 30분간 캐시 유지
     gcTime: 60 * 60 * 1000, // 1시간간 가비지 컬렉션 지연
   });

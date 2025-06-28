@@ -1,8 +1,10 @@
 import { AxiosError } from 'axios';
-import axiosInstance from '@/utils/axios';
+import axiosInstance, { createAiAxiosInstance } from '@/utils/axios';
 import { convertTimeToMealType, hasTimeInformation } from '@/utils/mealTimeMapping';
 import { getToken } from '@/utils/auth';
 
+// AI API 전용 인스턴스 생성
+const aiAxiosInstance = createAiAxiosInstance();
 
 // 대화 메시지 타입
 export interface Message {
@@ -25,62 +27,40 @@ interface ChatRequestBody {
   user_id?: number; // user_id 추가
 }
 
-// API 응답 타입
-export interface ChatResponse {
-  type: 'initial' | 'success' | 'incomplete' | 'clarification' | 'error' | 'modified' | 'confirmation' | 'saved' | 'save_error';
-  message: string;
-  suggestions?: string[];
-  missingFields?: string[];
-  save_result?: any; // 저장 결과 추가
-  parsed_data?: {
-    exercise?: string;
-    category?: string;
-    subcategory?: string;
-    time_period?: string;
-    weight?: number | string;
-    sets?: number;
-    reps?: number;
-    duration_min?: number;
-    calories_burned?: number;
-    food_name?: string;
-    amount?: string;
-    meal_time?: string;
-    nutrition?: {
-      calories: number;
-      carbs: number;
-      protein: number;
-      fat: number;
-    };
-  };
-}
-
-// 현재 상태 데이터 타입 정의
-interface ExerciseState {
+// 운동 데이터 타입
+interface ExerciseData {
   exercise?: string;
   category?: string;
-  target?: string;
+  subcategory?: string;
+  weight?: number;
   sets?: number;
   reps?: number;
   duration_min?: number;
-  weight?: number | string; // string 타입도 허용하도록 수정
-  calories_burned?: number;
-  exercise_date?: string; // 운동 날짜 필드 추가
 }
 
-interface DietState {
-  food_name?: string;
-  amount?: string;
-  meal_time?: string;
-  nutrition?: {
-    calories: number;
-    carbs: number;
-    protein: number;
-    fat: number;
-  };
+// 식단 데이터 타입
+interface DietData {
+  meal_type?: string;
+  food_items?: Array<{
+    food_name: string;
+    quantity_g: number;
+    calories?: number;
+  }>;
+  total_calories?: number;
 }
 
-// 현재 데이터 타입 (any 대신 union 타입 사용)
-type CurrentDataType = ExerciseState | DietState | null;
+// 현재 데이터 타입 (운동 또는 식단)
+type CurrentDataType = ExerciseData | DietData;
+
+// 응답 타입
+export interface ChatResponse {
+  type: 'extraction' | 'validation' | 'confirmation' | 'complete' | 'error' | 'incomplete';
+  message: string;
+  data?: CurrentDataType;
+  suggestions?: string[];
+  missing_fields?: string[];
+  next_step?: string;
+}
 
 /**
  * 챗 메시지를 전송하고 응답을 반환합니다.
@@ -130,8 +110,8 @@ export const sendChatMessage = async (
       };
     }
 
-    // ✅ Authorization 헤더 추가
-    const response = await axiosInstance.post<ChatResponse>('/api/py/chat', body, {
+    // ✅ AI API 전용 인스턴스 사용 및 Authorization 헤더 추가
+    const response = await aiAxiosInstance.post<ChatResponse>('/api/py/chat', body, {
       headers: {
         Authorization: token ? `Bearer ${token}` : '',
         'Content-Type': 'application/json'
@@ -140,7 +120,7 @@ export const sendChatMessage = async (
 
     console.log('✅ [Chat API] 메시지 전송 성공');
     return response.data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`❌ [Chat API] 메시지 전송 실패 (시도: ${retryCount + 1}):`, error);
     
     // 재시도 가능한 네트워크 오류인지 확인
@@ -177,9 +157,8 @@ export const sendChatMessage = async (
   }
 };
 
-
 // 운동 기록 저장 API 호출
-export const saveExerciseRecord = async (exerciseData: ExerciseState) => {
+export const saveExerciseRecord = async (exerciseData: ExerciseData) => {
   try {
     const res = await axiosInstance.post('/api/py/note/exercise', {
       user_id: 1,
@@ -188,7 +167,6 @@ export const saveExerciseRecord = async (exerciseData: ExerciseState) => {
       sets: exerciseData.sets,
       reps: exerciseData.reps,
       time: `${exerciseData.duration_min}분`,
-      calories_burned: exerciseData.calories_burned || 0,
       exercise_date: new Date().toISOString().split('T')[0]
     });
     return res.data;

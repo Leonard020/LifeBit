@@ -12,64 +12,30 @@
         delay: 10
         timeout: 300
 
-    - name: Ensure unattended-upgrades is not running
-      shell: |
-        # unattended-upgrades 완전 중지
-        systemctl stop unattended-upgrades.service || true
-        systemctl disable unattended-upgrades.service || true
-        pkill -f unattended-upgrade || true
-        
-        # apt 프로세스 정리
-        pkill -f apt-get || true
-        pkill -f dpkg || true
-        
-        # 잠시 대기
-        sleep 5
-        
-        # lock 파일 강제 제거
-        rm -f /var/lib/dpkg/lock-frontend || true
-        rm -f /var/lib/dpkg/lock || true
-        rm -f /var/lib/apt/lists/lock || true
-        rm -f /var/cache/apt/archives/lock || true
-        
-        echo "APT cleanup completed"
-      register: apt_cleanup
-      changed_when: false
-      ignore_errors: yes
+    - name: Verify user_data completion
+      stat:
+        path: /home/ubuntu/.user-data-completed
+      register: user_data_status
 
-    - name: Wait for apt locks to be available (with timeout)
-      shell: |
-        timeout=120  # 2분 타임아웃
-        elapsed=0
-        
-        while [ $elapsed -lt $timeout ]; do
-          if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && \
-             ! fuser /var/lib/apt/lists/lock >/dev/null 2>&1 && \
-             ! fuser /var/cache/apt/archives/lock >/dev/null 2>&1; then
-            echo "APT locks are available"
-            exit 0
-          fi
-          echo "Waiting for apt locks... ($elapsed/$timeout seconds)"
-          sleep 10
-          elapsed=$((elapsed + 10))
-        done
-        
-        # 타임아웃 시에도 계속 진행
-        echo "Timeout reached, but continuing anyway"
-        exit 0
-      register: apt_lock_wait
-      changed_when: false
+    - name: Fail if user_data not completed
+      fail:
+        msg: "User data script has not completed. Please wait or run fix-unattended-upgrades.sh"
+      when: not user_data_status.stat.exists
 
-    - name: Update apt cache
+    - name: Update apt cache (if needed)
       apt:
         update_cache: yes
         cache_valid_time: 3600
       environment:
         DEBIAN_FRONTEND: noninteractive
-      retries: 3
-      delay: 10
+      retries: 2
+      delay: 5
 
-    - name: Install additional required packages
+    - name: Verify required packages are installed
+      package_facts:
+        manager: auto
+
+    - name: Install missing packages (if any)
       apt:
         name:
           - rsync
@@ -80,8 +46,10 @@
         state: present
       environment:
         DEBIAN_FRONTEND: noninteractive
-      retries: 3
-      delay: 10
+      when: "'jq' not in ansible_facts.packages or 'rsync' not in ansible_facts.packages"
+      retries: 2
+      delay: 5
+      ignore_errors: yes
 
     - name: Create application directory
       file:
@@ -154,6 +122,35 @@
         group: ubuntu
         recurse: yes
 
+    - name: Verify Docker is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Verify Docker Compose is available
+      shell: |
+        if command -v docker-compose >/dev/null 2>&1; then
+          echo "docker-compose available"
+        elif command -v docker compose >/dev/null 2>&1; then
+          echo "docker compose available"
+        else
+          echo "No Docker Compose found"
+          exit 1
+        fi
+      register: docker_compose_check
+      changed_when: false
+
+    - name: Check disk space
+      shell: df -h / | awk 'NR==2 {print $4}' | sed 's/G//'
+      register: disk_space
+      changed_when: false
+
+    - name: Warn if low disk space
+      debug:
+        msg: "Warning: Low disk space ({{ disk_space.stdout }}GB available). Consider upgrading instance type."
+      when: disk_space.stdout | int < 5
+
     - name: Copy environment file
       template:
         src: prod.env.j2
@@ -199,16 +196,59 @@
         chdir: "{{ app_directory }}"
       become_user: ubuntu
       when: not ansible_check_mode
-
+      register: docker_start
+      
     - name: Wait for PostgreSQL to be ready
+      shell: |
+        timeout=300
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          if docker exec lifebit_postgres_prod pg_isready -U lifebit_user -d lifebit_db >/dev/null 2>&1; then
+            echo "PostgreSQL is ready"
+            exit 0
+          fi
+          echo "Waiting for PostgreSQL... ($elapsed/$timeout seconds)"
+          sleep 5
+          elapsed=$((elapsed + 5))
+        done
+        echo "PostgreSQL readiness timeout"
+        exit 1
+      when: not ansible_check_mode and docker_start is succeeded
+
+    - name: Verify database initialization
+      shell: |
+        docker exec lifebit_postgres_prod psql -U lifebit_user -d lifebit_db -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';" | grep -o '[0-9]\+' | head -1
+      register: table_count
+      when: not ansible_check_mode and docker_start is succeeded
+
+    - name: Check if database has required tables
+      fail:
+        msg: "Database initialization failed. Expected at least 14 tables, found {{ table_count.stdout }}"
+      when: not ansible_check_mode and docker_start is succeeded and (table_count.stdout | int) < 14
+
+    - name: Wait for containers to stabilize
+      pause:
+        seconds: 45
+      when: not ansible_check_mode and docker_start is succeeded
+
+    - name: Wait for Core API to be ready
       uri:
         url: "http://localhost:8080/actuator/health"
         method: GET
         status_code: [200, 503]
       register: health_check
       until: health_check.status == 200
-      retries: 30
-      delay: 10
+      retries: 25
+      delay: 15
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Check Core API database connectivity
+      uri:
+        url: "http://localhost:8080/actuator/health/db"
+        method: GET
+        status_code: [200, 503]
+      register: db_health_check
       ignore_errors: yes
       when: not ansible_check_mode
 
@@ -247,9 +287,9 @@
       debug:
         msg:
           - "=== LifeBit 배포 상태 ==="
-          - "Core API (Spring Boot): {{ 'OK' if core_api_health.status == 200 else 'FAILED' }}"
-          - "AI API (FastAPI): {{ 'OK' if ai_api_health.status == 200 else 'FAILED' }}"
-          - "Frontend (React): {{ 'OK' if frontend_health.status == 200 else 'FAILED' }}"
+          - "Core API (Spring Boot): {{ 'OK' if (core_api_health.status is defined and core_api_health.status == 200) else 'FAILED' }}"
+          - "AI API (FastAPI): {{ 'OK' if (ai_api_health.status is defined and ai_api_health.status == 200) else 'FAILED' }}"
+          - "Frontend (React): {{ 'OK' if (frontend_health.status is defined and frontend_health.status == 200) else 'FAILED' }}"
           - ""
           - "=== 접속 URL ==="
           - "Frontend: http://{{ ansible_host }}:3000"
@@ -286,9 +326,9 @@
           Nginx: http://{{ ansible_host }}
           
           # 서비스 상태
-          Core API: {{ 'OK' if core_api_health.status == 200 else 'FAILED' }}
-          AI API: {{ 'OK' if ai_api_health.status == 200 else 'FAILED' }}
-          Frontend: {{ 'OK' if frontend_health.status == 200 else 'FAILED' }}
+          Core API: {{ 'OK' if (core_api_health.status is defined and core_api_health.status == 200) else 'FAILED' }}
+          AI API: {{ 'OK' if (ai_api_health.status is defined and ai_api_health.status == 200) else 'FAILED' }}
+          Frontend: {{ 'OK' if (frontend_health.status is defined and frontend_health.status == 200) else 'FAILED' }}
         dest: "{{ app_directory }}/deployment_info.txt"
         owner: ubuntu
         group: ubuntu

@@ -52,6 +52,37 @@ log_info "  - Project Name: $PROJECT_NAME"
 log_info "  - Environment: $ENVIRONMENT"
 log_info "  - Instance Type: $INSTANCE_TYPE"
 
+# LifeBit.sql 파일 존재 확인
+log_info "데이터베이스 스키마 파일 확인 중..."
+if [ ! -f "./LifeBit.sql" ]; then
+    log_error "LifeBit.sql 파일을 찾을 수 없습니다!"
+    log_error "데이터베이스 초기화를 위해 LifeBit.sql 파일이 필요합니다."
+    log_error "프로젝트 루트에 LifeBit.sql 파일이 있는지 확인해주세요."
+    exit 1
+fi
+
+# LifeBit.sql 파일 크기 확인 (최소 10KB 이상이어야 함)
+SQL_SIZE=$(stat -c%s "./LifeBit.sql" 2>/dev/null || echo "0")
+if [ "$SQL_SIZE" -lt 10240 ]; then
+    log_error "LifeBit.sql 파일이 너무 작습니다 (${SQL_SIZE} bytes)"
+    log_error "올바른 데이터베이스 스키마 파일인지 확인해주세요."
+    exit 1
+fi
+
+log_success "LifeBit.sql 파일 확인 완료 (${SQL_SIZE} bytes)"
+
+# 사전 점검 실행
+if [ -f "./pre-deployment-check.sh" ]; then
+    log_info "사전 점검 실행 중..."
+    if ! ./pre-deployment-check.sh; then
+        log_error "사전 점검에 실패했습니다. 배포를 중단합니다."
+        exit 1
+    fi
+    log_success "사전 점검 완료"
+else
+    log_warning "사전 점검 스크립트를 찾을 수 없습니다. 계속 진행합니다..."
+fi
+
 # 필수 도구 확인
 log_info "필수 도구 확인 중..."
 

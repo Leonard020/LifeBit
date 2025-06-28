@@ -20,23 +20,28 @@ export const API_ENDPOINTS = {
 const getApiUrls = () => {
     const currentPort = window.location.port;
     const currentHost = window.location.hostname;
+    const currentProtocol = window.location.protocol;
     
-    // 🔧 Docker Nginx 프록시 환경 (포트 8082)
-    if (currentPort === '8082') {
-        console.log('🐳 Docker Nginx 프록시 환경 감지 - 통합 엔드포인트 사용');
+    // 🔧 프로덕션 환경 감지 (포트 80, 443, 또는 빌드된 환경)
+    const isProduction = currentPort === '80' || currentPort === '443' || currentPort === '' || 
+                        process.env.NODE_ENV === 'production';
+    
+    if (isProduction) {
+        console.log('🚀 프로덕션 환경 감지 - Nginx 프록시 사용');
+        // 프로덕션에서는 Nginx를 통해 프록시되므로 같은 도메인 사용
+        const baseUrl = `${currentProtocol}//${currentHost}${currentPort ? ':' + currentPort : ''}`;
         return {
-            BASE_URL: `http://${currentHost}:8082`,
-            AI_API_URL: `http://${currentHost}:8082/ai`
+            BASE_URL: `${baseUrl}/api`,        // Core API는 /api로 프록시
+            AI_API_URL: `${baseUrl}/ai-api`    // AI API는 /ai-api로 프록시
         };
     }
     
-    // 🛠️ 로컬 개발 환경 (포트 5173, 3000 등)
-    // - 환경변수가 있으면 사용, 없으면 기본값
+    // 🛠️ 로컬 개발 환경
     console.log('🛠️ 로컬 개발 환경 감지 - 직접 포트 사용');
     
-    // 런타임에 환경변수 확인 (빌드 타임이 아닌)
-    const coreApiUrl = (window as any).__VITE_CORE_API_URL__ || 'http://localhost:8080';
-    const aiApiUrl = (window as any).__VITE_AI_API_URL__ || 'http://localhost:8001';
+    // 환경변수에서 URL 가져오기 (빌드 타임)
+    const coreApiUrl = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8080';
+    const aiApiUrl = import.meta.env.VITE_AI_API_URL || 'http://localhost:8001';
     
     return {
         BASE_URL: coreApiUrl,
@@ -58,10 +63,39 @@ export const API_CONFIG = {
     TIMEOUT: 30000,
 } as const;
 
+// 프록시 경로 설정 (프로덕션용)
+export const PROXY_PATHS = {
+    CORE_API: '/api',
+    AI_API: '/ai-api',
+    HEALTH: '/health'
+} as const;
+
+// 환경별 API 호출 헬퍼
+export const getApiUrl = (endpoint: string, isAiApi: boolean = false) => {
+    const currentPort = window.location.port;
+    const isProduction = currentPort === '80' || currentPort === '443' || currentPort === '' || 
+                        process.env.NODE_ENV === 'production';
+    
+    if (isProduction) {
+        // 프로덕션: 프록시 경로 사용
+        const proxyPath = isAiApi ? PROXY_PATHS.AI_API : PROXY_PATHS.CORE_API;
+        return `${proxyPath}${endpoint}`;
+    } else {
+        // 개발: 직접 URL 사용
+        const baseUrl = isAiApi ? API_CONFIG.AI_API_URL : API_CONFIG.BASE_URL;
+        return `${baseUrl}${endpoint}`;
+    }
+};
+
 // 디버깅용 로그 (개발 환경에서만)
 if (typeof window !== 'undefined') {
+    const currentPort = window.location.port;
+    const isProduction = currentPort === '80' || currentPort === '443' || currentPort === '' || 
+                        process.env.NODE_ENV === 'production';
+    
     console.log('🔗 API 설정 초기화:', {
-        현재포트: window.location.port,
+        환경: isProduction ? '프로덕션' : '개발',
+        현재포트: currentPort,
         현재호스트: window.location.hostname,
     });
     
@@ -70,6 +104,7 @@ if (typeof window !== 'undefined') {
         console.log('🔗 최종 API 설정:', {
             BASE_URL: API_CONFIG.BASE_URL,
             AI_API_URL: API_CONFIG.AI_API_URL,
+            환경: isProduction ? '프로덕션' : '개발'
         });
     }, 100);
 }

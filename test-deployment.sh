@@ -109,6 +109,19 @@ if check_service "Nginx" "http://$EC2_PUBLIC_IP" "200"; then
     ((services_ok++))
 fi
 
+# 데이터베이스 연결 확인 (Core API를 통해)
+log_info "데이터베이스 연결 확인 중..."
+db_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "http://$EC2_PUBLIC_IP:8080/actuator/health/db" 2>/dev/null || echo "000")
+
+if [ "$db_response" = "200" ]; then
+    log_success "데이터베이스 연결: 정상 (HTTP $db_response)"
+    ((services_ok++))
+    total_services=$((total_services + 1))
+else
+    log_error "데이터베이스 연결: 비정상 (HTTP $db_response)"
+    total_services=$((total_services + 1))
+fi
+
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════${NC}"
 echo -e "${GREEN}         배포 상태 요약${NC}"
@@ -161,6 +174,15 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo ''
         echo '=== 최근 Docker 로그 (Frontend) ==='
         docker logs --tail=20 lifebit-frontend 2>/dev/null || echo 'Frontend 컨테이너 로그 없음'
+        echo ''
+        echo '=== 데이터베이스 상태 확인 ==='
+        docker exec lifebit_postgres_prod pg_isready -U lifebit_user -d lifebit_db 2>/dev/null && echo 'PostgreSQL: 정상' || echo 'PostgreSQL: 비정상'
+        echo ''
+        echo '=== 데이터베이스 테이블 개수 ==='
+        docker exec lifebit_postgres_prod psql -U lifebit_user -d lifebit_db -c \"SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';\" 2>/dev/null || echo '테이블 조회 실패'
+        echo ''
+        echo '=== 사용자 데이터 확인 ==='
+        docker exec lifebit_postgres_prod psql -U lifebit_user -d lifebit_db -c \"SELECT COUNT(*) as user_count FROM users;\" 2>/dev/null || echo '사용자 데이터 조회 실패'
     "
 fi
 

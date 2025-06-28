@@ -16,34 +16,51 @@ import models
 from note_routes import router as note_router, estimate_grams_from_korean_amount
 import requests
 
-# 🔧 Docker 환경 감지 및 데이터베이스 설정 오버라이드
+# 🔧 환경 감지 및 데이터베이스 설정 오버라이드
 def setup_database():
     """환경에 따른 데이터베이스 설정"""
-    # Docker 환경인지 확인 (환경변수 또는 컨테이너 감지)
-    is_docker = os.getenv("DATABASE_URL") or os.getenv("DB_HOST") or os.path.exists("/.dockerenv")
+    # 프로덕션 환경 감지 (Docker, 환경변수 등)
+    is_production = (
+        os.getenv("DATABASE_URL") or 
+        os.getenv("DB_HOST") or 
+        os.path.exists("/.dockerenv") or
+        os.getenv("NODE_ENV") == "production" or
+        os.getenv("SPRING_PROFILES_ACTIVE") == "production"
+    )
     
-    if is_docker:
-        print("[DB] Docker environment detected - Using container database settings")
-        # Docker 환경용 데이터베이스 URL
+    if is_production:
+        print("[DB] Production environment detected - Using production database settings")
+        # 프로덕션 환경용 데이터베이스 URL
         db_user = os.getenv("DB_USER", "lifebit_user")
         db_password = os.getenv("DB_PASSWORD", "lifebit_password")
         db_name = os.getenv("DB_NAME", "lifebit_db")
         db_host = os.getenv("DB_HOST", "postgres-db")
         db_port = os.getenv("DB_PORT", "5432")
         
-        docker_database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        print(f"[DB] Using Docker database URL: {docker_database_url.replace(db_password, '***')}")
+        production_database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        print(f"[DB] Using production database URL: {production_database_url.replace(db_password, '***')}")
         
-        # 새로운 엔진과 세션 생성
-        docker_engine = create_engine(
-            docker_database_url,
-            connect_args={"options": "-c timezone=Asia/Seoul"}
+        # 프로덕션용 엔진 설정 (연결 풀 최적화)
+        production_engine = create_engine(
+            production_database_url,
+            connect_args={
+                "options": "-c timezone=Asia/Seoul",
+                "connect_timeout": 30,
+                "application_name": "LifeBit-AI-API"
+            },
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            pool_timeout=30,
+            echo=False,
+            future=True
         )
-        docker_session = sessionmaker(autocommit=False, autoflush=False, bind=docker_engine)
+        production_session = sessionmaker(autocommit=False, autoflush=False, bind=production_engine)
         
-        return docker_engine, docker_session
+        return production_engine, production_session
     else:
-        print("[DB] Local environment detected - Using default database settings")
+        print("[DB] Local development environment detected - Using default database settings")
         # 로컬 환경에서는 기존 database.py 사용
         from database import engine, SessionLocal
         return engine, SessionLocal
