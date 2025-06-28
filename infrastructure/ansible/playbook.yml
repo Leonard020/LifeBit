@@ -243,6 +243,15 @@
       register: letsencrypt_dir
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
+    - name: Ensure letsencrypt directory exists on remote
+      file:
+        path: "{{ app_directory }}/letsencrypt"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+
     - name: Copy letsencrypt to app directory
       synchronize:
         src: /etc/letsencrypt/
