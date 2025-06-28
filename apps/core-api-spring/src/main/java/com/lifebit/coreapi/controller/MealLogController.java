@@ -82,29 +82,52 @@ public class MealLogController {
         LocalDate startDate;
         
         switch (period.toLowerCase()) {
-                case "day":
-                    startDate = endDate.minusDays(1);
-                    break;
+            case "day":
+                // 오늘부터 7일 전까지 조회 (일주일치 데이터)
+                startDate = endDate.minusDays(7);
+                break;
             case "week":
-                startDate = endDate.minusWeeks(1);
+                // 오늘부터 8주 전까지 조회 (2개월치 데이터)
+                startDate = endDate.minusWeeks(8);
                 break;
             case "month":
-                startDate = endDate.minusMonths(1);
+                // 오늘부터 3개월 전까지 조회
+                startDate = endDate.minusMonths(3);
                 break;
             case "year":
+                // 오늘부터 1년 전까지 조회
                 startDate = endDate.minusYears(1);
                 break;
             default:
-                startDate = endDate.minusMonths(1);
+                // 기본값: 3개월 전까지
+                startDate = endDate.minusMonths(3);
         }
         
-            log.info("📅 [MealLogController] 조회 기간: {} ~ {}", startDate, endDate);
+        log.info("📅 [MealLogController] 조회 기간: {} ~ {} (period: {})", startDate, endDate, period);
             
             // 실제 데이터베이스에서 식단 기록 조회
-        User user = new User(userId);
-        List<MealLog> mealLogs = mealService.getMealHistory(user, startDate, endDate);
+            User user = new User(userId);
+            List<MealLog> mealLogs = mealService.getMealHistory(user, startDate, endDate);
             
             log.info("📊 [MealLogController] 조회된 식단 기록 수: {}", mealLogs.size());
+            
+            // 🔍 디버깅: 조회된 데이터의 날짜 범위 확인
+            if (!mealLogs.isEmpty()) {
+                LocalDate firstDate = mealLogs.get(mealLogs.size() - 1).getLogDate(); // 가장 오래된 날짜
+                LocalDate lastDate = mealLogs.get(0).getLogDate(); // 가장 최신 날짜
+                log.info("🔍 [MealLogController] 실제 데이터 날짜 범위: {} ~ {}", firstDate, lastDate);
+                
+                // 각 meal log의 상세 정보 로깅 (최대 5개)
+                for (int i = 0; i < Math.min(5, mealLogs.size()); i++) {
+                    MealLog mealLog = mealLogs.get(i);
+                    log.info("🔍 [MealLogController] MealLog[{}]: ID={}, Date={}, FoodItem={}", 
+                        i, mealLog.getMealLogId(), mealLog.getLogDate(), 
+                        mealLog.getFoodItem() != null ? mealLog.getFoodItem().getName() : "null");
+                }
+            } else {
+                log.warn("⚠️ [MealLogController] 조회된 식단 기록이 없습니다. 사용자: {}, 기간: {} ~ {}", 
+                    userId, startDate, endDate);
+            }
             
             // MealLog 엔티티를 Map으로 변환
             List<Map<String, Object>> mealLogsData = mealLogs.stream()

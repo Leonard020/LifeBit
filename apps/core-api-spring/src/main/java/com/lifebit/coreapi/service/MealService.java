@@ -8,6 +8,7 @@ import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import java.util.HashMap;
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
+@Slf4j
 public class MealService {
     private final MealLogRepository mealLogRepository;
     private final FoodItemRepository foodItemRepository;
@@ -44,8 +46,24 @@ public class MealService {
     }
 
     public List<MealLog> getMealHistory(User user, LocalDate startDate, LocalDate endDate) {
-        return mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(
+        log.info("🔍 [MealService] getMealHistory 호출 - userId: {}, 기간: {} ~ {}", 
+            user.getUserId(), startDate, endDate);
+        
+        List<MealLog> result = mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(
             user, startDate, endDate);
+        
+        log.info("🔍 [MealService] Repository 결과 - 조회된 기록 수: {}", result.size());
+        
+        // 디버깅을 위해 사용자 ID로도 직접 조회 시도
+        if (result.isEmpty()) {
+            log.warn("⚠️ [MealService] User 객체로 조회 실패, userId로 직접 조회 시도");
+            List<MealLog> directResult = mealLogRepository.findByUserIdAndLogDateBetweenOrderByLogDateDescCreatedAtDesc(
+                user.getUserId(), startDate, endDate);
+            log.info("🔍 [MealService] UserId 직접 조회 결과: {}", directResult.size());
+            return directResult;
+        }
+        
+        return result;
     }
 
     public List<FoodItem> searchFoodItems(String keyword) {
