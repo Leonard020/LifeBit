@@ -194,6 +194,13 @@
         mode: '0755'
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
+    - name: Install certbot (standalone)
+      apt:
+        name: certbot
+        state: present
+        update_cache: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
     - name: Generate SSL certificate with Certbot (standalone)
       shell: |
         certbot certonly --standalone --non-interactive --agree-tos \
