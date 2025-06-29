@@ -185,6 +185,288 @@
       ignore_errors: yes
       when: not ansible_check_mode
 
+    - name: Ensure letsencrypt directory exists
+      file:
+        path: /etc/letsencrypt
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Wait for DNS propagation (max 30 min, check every 15s)
+      shell: |
+        timeout=1800
+        interval=15
+        elapsed=0
+        while [ $elapsed -lt $timeout ]; do
+          ip=$(dig +short {{ domain_name }} | tail -n1)
+          if [ "$ip" = "{{ ansible_host }}" ]; then
+            echo "DNS propagation complete: $ip"
+            exit 0
+          fi
+          echo "Waiting for DNS propagation... ($elapsed/$timeout seconds, current: $ip)"
+          sleep $interval
+          elapsed=$((elapsed + interval))
+        done
+        echo "DNS propagation timeout"
+        exit 1
+      register: dns_check
+      changed_when: false
+      failed_when: dns_check.rc != 0
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Install certbot (standalone)
+      apt:
+        name: certbot
+        state: present
+        update_cache: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Check if port 80 is available for certbot
+      shell: |
+        # 80번 포트가 사용 중인지 확인
+        if netstat -tuln | grep -q ':80 '; then
+          echo "Port 80 is still in use, waiting..."
+          sleep 5
+          if netstat -tuln | grep -q ':80 '; then
+            echo "Port 80 is still occupied after waiting"
+            netstat -tuln | grep ':80'
+            exit 1
+          fi
+        fi
+        echo "Port 80 is available for certbot"
+      register: port_check
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Generate SSL certificate with Certbot (standalone)
+      shell: |
+        # [주의] 실제 운영 배포 시 --staging 옵션을 반드시 삭제하세요!
+        certbot certonly --staging --standalone --non-interactive --agree-tos \
+          --email admin@{{ domain_name }} -d {{ domain_name }}
+      args:
+        creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: certbot_result
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Display certbot execution result
+      debug:
+        msg:
+          - "Certbot execution result:"
+          - "Return code: {{ certbot_result.rc | default('N/A') }}"
+          - "Stdout: {{ certbot_result.stdout | default('N/A') }}"
+          - "Stderr: {{ certbot_result.stderr | default('N/A') }}"
+          - "Changed: {{ certbot_result.changed | default('N/A') }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and certbot_result is defined
+
+    - name: Verify certbot created letsencrypt directory
+      shell: |
+        if [ ! -d "/etc/letsencrypt" ]; then
+          echo "ERROR: /etc/letsencrypt directory was not created by certbot"
+          echo "This indicates certbot failed to generate certificates"
+          exit 1
+        fi
+        echo "SUCCESS: /etc/letsencrypt directory exists"
+        ls -la /etc/letsencrypt/
+      register: letsencrypt_verify
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Display letsencrypt directory verification
+      debug:
+        msg: "{{ letsencrypt_verify.stdout_lines | default(['Verification skipped']) }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and letsencrypt_verify is defined
+
+    - name: Check if SSL certificate exists
+      stat:
+        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: ssl_cert_exists
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Check if letsencrypt directory exists
+      stat:
+        path: "/etc/letsencrypt"
+      register: letsencrypt_dir
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Ensure letsencrypt directory exists on remote
+      file:
+        path: "{{ app_directory }}/letsencrypt"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+
+    - name: Copy letsencrypt to app directory
+      shell: |
+        # 1. 기존 letsencrypt 디렉토리 제거 (ubuntu 권한으로)
+        if [ -d "{{ app_directory }}/letsencrypt" ]; then
+          rm -rf "{{ app_directory }}/letsencrypt"
+        fi
+        
+        # 2. root 소유인 /etc/letsencrypt를 복사 (root 권한 필요)
+        cp -r /etc/letsencrypt "{{ app_directory }}/"
+        
+        # 3. 복사된 파일들의 소유자를 ubuntu로 변경
+        chown -R ubuntu:ubuntu "{{ app_directory }}/letsencrypt/"
+        
+        # 4. 권한 설정 (보안과 접근성 균형)
+        # 디렉토리: 755 (소유자 rwx, 그룹/기타 rx)
+        find "{{ app_directory }}/letsencrypt/" -type d -exec chmod 755 {} \;
+        
+        # 일반 파일: 644 (소유자 rw, 그룹/기타 r) - Docker 컨테이너가 읽을 수 있도록
+        find "{{ app_directory }}/letsencrypt/" -type f -exec chmod 644 {} \;
+        
+        # 개인키 파일: 640 (소유자 rw, 그룹 r) - Docker nginx가 읽을 수 있도록
+        # Docker 컨테이너의 nginx 사용자가 ubuntu 그룹에 속하므로 그룹 읽기 권한 필요
+        find "{{ app_directory }}/letsencrypt/" -name "privkey.pem" -exec chmod 640 {} \;
+        
+        # 5. 복사 결과 확인
+        echo "=== Letsencrypt directory structure ==="
+        ls -la "{{ app_directory }}/letsencrypt/"
+        
+        echo "=== Certificate files ==="
+        if [ -d "{{ app_directory }}/letsencrypt/live/{{ domain_name }}" ]; then
+          ls -la "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/"
+        else
+          echo "Certificate directory not found: {{ app_directory }}/letsencrypt/live/{{ domain_name }}"
+        fi
+        
+        echo "=== Private key permissions ==="
+        if [ -f "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem" ]; then
+          ls -la "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem"
+        else
+          echo "Private key not found: {{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem"
+        fi
+        
+        # 6. Docker가 접근할 수 있는지 확인
+        echo "=== Docker access test ==="
+        if [ -r "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/fullchain.pem" ]; then
+          echo "✅ fullchain.pem is readable"
+        else
+          echo "❌ fullchain.pem is NOT readable"
+        fi
+        
+        if [ -r "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem" ]; then
+          echo "✅ privkey.pem is readable by owner"
+        else
+          echo "❌ privkey.pem is NOT readable"
+        fi
+      become: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+      register: letsencrypt_copy_result
+
+    - name: Display letsencrypt copy result
+      debug:
+        msg:
+          - "Letsencrypt copy result:"
+          - "Success: {{ letsencrypt_copy_result.changed | default(false) }}"
+          - "Error: {{ letsencrypt_copy_result.msg | default('N/A') }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and letsencrypt_copy_result is defined
+
+    - name: Create nginx config with correct domain name
+      shell: |
+        # nginx.conf 백업 생성
+        cp "{{ app_directory }}/infrastructure/nginx/nginx.conf" "{{ app_directory }}/infrastructure/nginx/nginx.conf.backup"
+        
+        # ${DOMAIN_NAME}을 실제 도메인으로 치환
+        sed 's/\${DOMAIN_NAME}/{{ domain_name }}/g' "{{ app_directory }}/infrastructure/nginx/nginx.conf.backup" > "{{ app_directory }}/infrastructure/nginx/nginx.conf"
+        
+        echo "=== Nginx config updated with domain: {{ domain_name }} ==="
+        echo "=== SSL certificate paths in nginx.conf ==="
+        grep "ssl_certificate" "{{ app_directory }}/infrastructure/nginx/nginx.conf" || echo "No SSL certificate lines found"
+        
+        echo "=== Checking if certificate files exist ==="
+        if [ -f "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/fullchain.pem" ]; then
+          echo "✅ Certificate file exists: {{ app_directory }}/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+        else
+          echo "❌ Certificate file missing: {{ app_directory }}/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+        fi
+        
+        if [ -f "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem" ]; then
+          echo "✅ Private key exists: {{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem"
+        else
+          echo "❌ Private key missing: {{ app_directory }}/letsencrypt/live/{{ domain_name }}/privkey.pem"
+        fi
+      become_user: ubuntu
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+      register: nginx_config_update
+
+    - name: Display nginx config update result
+      debug:
+        msg: "{{ nginx_config_update.stdout_lines | default(['Nginx config update skipped']) }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and nginx_config_update is defined
+
+    - name: Final pre-deployment verification
+      shell: |
+        echo "=== Final Pre-deployment Verification ==="
+        
+        # 1. Docker Compose 파일 존재 확인
+        if [ -f "{{ app_directory }}/{{ docker_compose_file }}" ]; then
+          echo "✅ Docker Compose file exists: {{ docker_compose_file }}"
+        else
+          echo "❌ Docker Compose file missing: {{ docker_compose_file }}"
+          exit 1
+        fi
+        
+        # 2. 환경 파일 확인
+        if [ -f "{{ app_directory }}/.env" ]; then
+          echo "✅ Environment file exists"
+          echo "DOMAIN_NAME in .env: $(grep DOMAIN_NAME {{ app_directory }}/.env || echo 'Not found')"
+        else
+          echo "❌ Environment file missing"
+          exit 1
+        fi
+        
+        # 3. Nginx 설정 파일 확인
+        if [ -f "{{ app_directory }}/infrastructure/nginx/nginx.conf" ]; then
+          echo "✅ Nginx config exists"
+          # 도메인 치환이 제대로 되었는지 확인
+          if grep -q "{{ domain_name }}" "{{ app_directory }}/infrastructure/nginx/nginx.conf" 2>/dev/null; then
+            echo "✅ Domain name properly substituted in nginx.conf"
+          else
+            echo "⚠️  Domain name substitution may have failed in nginx.conf"
+          fi
+        else
+          echo "❌ Nginx config missing"
+        fi
+        
+        echo "=== Pre-deployment verification complete ==="
+      args:
+        chdir: "{{ app_directory }}"
+      become_user: ubuntu
+      register: pre_deployment_check
+      when: not ansible_check_mode
+
+    - name: Check SSL certificate availability
+      shell: |
+        echo "=== SSL Certificate Check ==="
+        if [ -f "{{ app_directory }}/letsencrypt/live/{{ domain_name }}/fullchain.pem" ]; then
+          echo "✅ SSL certificate ready"
+        else
+          echo "⚠️  SSL certificate not found - will run in HTTP mode"
+        fi
+      args:
+        chdir: "{{ app_directory }}"
+      become_user: ubuntu
+      register: ssl_check
+      when: not ansible_check_mode and domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Display SSL check results
+      debug:
+        msg: "{{ ssl_check.stdout_lines | default(['SSL check skipped']) }}"
+      when: not ansible_check_mode and ssl_check is defined
+
+    - name: Display no domain info
+      debug:
+        msg: "ℹ️  No domain configured - will run in HTTP mode"
+      when: not ansible_check_mode and (domain_name is not defined or domain_name == ansible_host or domain_name == "")
+
+    - name: Display pre-deployment check results
+      debug:
+        msg: "{{ pre_deployment_check.stdout_lines | default(['Pre-deployment check skipped']) }}"
+      when: not ansible_check_mode and pre_deployment_check is defined
+
     - name: Build and start services
       shell: |
         if command -v docker-compose >/dev/null 2>&1; then
@@ -312,50 +594,6 @@
       debug:
         msg: "{{ container_status.stdout_lines }}"
 
-    # SSL 인증서 설정 (사용자 정의 도메인이 있는 경우)
-    - name: Install Certbot and nginx plugin
-      apt:
-        name: 
-          - certbot
-          - python3-certbot-nginx
-        state: present
-        update_cache: yes
-      environment:
-        DEBIAN_FRONTEND: noninteractive
-      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
-      retries: 2
-      delay: 5
-
-    - name: Check if SSL certificate already exists
-      stat:
-        path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
-      register: ssl_cert_exists
-      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
-
-    - name: Generate SSL certificate with Certbot
-      shell: |
-        certbot --nginx --non-interactive --agree-tos \
-        --email admin@{{ domain_name }} -d {{ domain_name }} \
-        --redirect --expand
-      when: 
-        - domain_name is defined 
-        - domain_name != ansible_host 
-        - domain_name != ""
-        - not ssl_cert_exists.stat.exists
-        - not ansible_check_mode
-      register: certbot_result
-      ignore_errors: yes
-
-    - name: Test SSL certificate renewal
-      shell: certbot renew --dry-run
-      when: 
-        - domain_name is defined 
-        - domain_name != ansible_host 
-        - domain_name != ""
-        - ssl_cert_exists.stat.exists or (certbot_result is defined and certbot_result.rc == 0)
-        - not ansible_check_mode
-      ignore_errors: yes
-
     - name: Setup SSL certificate auto-renewal cron job
       cron:
         name: "Certbot SSL renewal"
@@ -363,22 +601,7 @@
         hour: "12"
         job: "/usr/bin/certbot renew --quiet"
         user: root
-      when: 
-        - domain_name is defined 
-        - domain_name != ansible_host 
-        - domain_name != ""
-        - ssl_cert_exists.stat.exists or (certbot_result is defined and certbot_result.rc == 0)
-
-    - name: Update Nginx configuration for SSL (if certificate was generated)
-      shell: nginx -t && systemctl reload nginx
-      when: 
-        - domain_name is defined 
-        - domain_name != ansible_host 
-        - domain_name != ""
-        - certbot_result is defined 
-        - certbot_result.rc == 0
-        - not ansible_check_mode
-      ignore_errors: yes
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
     - name: Create deployment info file
       copy:

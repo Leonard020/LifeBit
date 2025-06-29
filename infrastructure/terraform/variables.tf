@@ -32,7 +32,7 @@ variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to access the instance"
   type        = list(string)
   default     = ["0.0.0.0/0"]
-}
+} 
 
 variable "domain_name" {
   description = "Custom domain name for the application (optional)"
