@@ -278,11 +278,10 @@ const Note = () => {
     // 필요시 추가
   };
 
-  // weekStart(일요일) 계산 정확히
+  // 1. weekStart(일요일) 계산 확실히
   const day = selectedDate.getDay(); // 0(일) ~ 6(토)
-  const diffToSunday = -day;
   const weekStartDate = new Date(selectedDate);
-  weekStartDate.setDate(selectedDate.getDate() + diffToSunday);
+  weekStartDate.setDate(selectedDate.getDate() - day); // 일요일로 맞춤
   weekStartDate.setHours(0,0,0,0);
 
   function getDateRangeArray(start, end) {
@@ -362,17 +361,17 @@ const Note = () => {
     // 날짜별로 부위별 1회만 카운트
     const datePartSet: Record<string, Set<string>> = {};
     filteredSummary.forEach((item) => {
-      if (!Array.isArray(item.exerciseNames)) return;
+      if (!Array.isArray(item.exerciseNames) || item.exerciseNames.length === 0) return;
       const date = item.workoutDate;
       if (!datePartSet[date]) datePartSet[date] = new Set();
       item.exerciseNames.forEach((name: string) => {
+        // 유산소 판별
         const lower = name.toLowerCase();
         const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(cardio => lower.includes(cardio));
         const part = isCardio ? '유산소' : (exerciseNameToBodyPart[name] || getBodyPartLabel(name) || '기타');
-        if (!part || part === '기타') {
-          console.warn('[Radar] 매핑되지 않은 운동명:', name);
+        if (part !== '기타') {
+          datePartSet[date].add(part);
         }
-        datePartSet[date].add(part);
       });
     });
     // 부위별로 날짜별 1회씩만 누적
@@ -382,8 +381,6 @@ const Note = () => {
         counts[part] = (counts[part] || 0) + 1;
       });
     });
-    console.log('🟡 [Radar] datePartSet:', datePartSet);
-    console.log('🟠 [Radar] counts:', counts);
     return counts;
   }, [filteredSummary]);
 
