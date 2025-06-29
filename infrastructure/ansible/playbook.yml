@@ -223,11 +223,20 @@
         update_cache: yes
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
-    - name: Stop nginx before certbot
-      service:
-        name: nginx
-        state: stopped
-      become: yes
+    - name: Check if port 80 is available for certbot
+      shell: |
+        # 80번 포트가 사용 중인지 확인
+        if netstat -tuln | grep -q ':80 '; then
+          echo "Port 80 is still in use, waiting..."
+          sleep 5
+          if netstat -tuln | grep -q ':80 '; then
+            echo "Port 80 is still occupied after waiting"
+            netstat -tuln | grep ':80'
+            exit 1
+          fi
+        fi
+        echo "Port 80 is available for certbot"
+      register: port_check
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
     - name: Generate SSL certificate with Certbot (standalone)
@@ -267,13 +276,6 @@
         recursive: yes
         mode: push
       when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
-
-    - name: Start nginx after certbot
-      service:
-        name: nginx
-        state: started
-      become: yes
-      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
 
     - name: Build and start services
       shell: |
