@@ -35,6 +35,16 @@ import com.lifebit.coreapi.service.AchievementService;
 import com.lifebit.coreapi.service.ExerciseService;
 import com.lifebit.coreapi.service.MealService;
 import com.lifebit.coreapi.service.NotificationService;
+import com.lifebit.coreapi.entity.UserGoal;
+import com.lifebit.coreapi.service.UserGoalService;
+import com.lifebit.coreapi.entity.MealLog;
+import com.lifebit.coreapi.entity.FoodItem;
+import com.lifebit.coreapi.repository.MealLogRepository;
+
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +60,8 @@ public class RankingService {
     private final ExerciseService exerciseService;
     private final MealService mealService;
     private final NotificationService notificationService;
+    private final UserGoalService userGoalService;
+    private final MealLogRepository mealLogRepository;
 
     @Transactional(readOnly = true)
     public RankingResponseDto getRankingData() {
@@ -453,5 +465,180 @@ public class RankingService {
      */
     public void triggerSeasonClose() {
         closeSeasonAndResetRankings();
+    }
+
+    /**
+     * 목표 달성률 기반 점수 업데이트
+     */
+    @Transactional
+    public void updateGoalAchievementScore(Long userId) {
+        try {
+            log.info("목표 달성률 점수 업데이트 시작 - 사용자 ID: {}", userId);
+            
+            UserRanking userRanking = userRankingRepository.findByUserId(userId)
+                    .orElseGet(() -> {
+                        UserRanking newRanking = new UserRanking();
+                        newRanking.setUserId(userId);
+                        newRanking.setTotalScore(0);
+                        newRanking.setTier(RankingTier.BRONZE);
+                        newRanking.setCreatedAt(LocalDateTime.now());
+                        return userRankingRepository.save(newRanking);
+                    });
+
+            // 운동 목표 점수 계산 (주별 최대 7점)
+            int exerciseScore = calculateExerciseGoalScore(userId);
+            
+            // 식단 목표 점수 계산 (주별 최대 7점)
+            int nutritionScore = calculateNutritionGoalScore(userId);
+            
+            // 기존 점수에 목표 달성 점수 추가
+            int newTotalScore = userRanking.getTotalScore() + exerciseScore + nutritionScore;
+            userRanking.setTotalScore(newTotalScore);
+            userRanking.setLastUpdatedAt(LocalDateTime.now());
+            
+            // 티어 업데이트
+            RankingTier newTier = calculateTier(newTotalScore);
+            userRanking.setTier(newTier);
+            
+            userRankingRepository.save(userRanking);
+            
+            log.info("목표 달성률 점수 업데이트 완료 - 사용자 ID: {}, 운동 점수: {}, 식단 점수: {}, 총 점수: {}", 
+                    userId, exerciseScore, nutritionScore, newTotalScore);
+                    
+        } catch (Exception e) {
+            log.error("목표 달성률 점수 업데이트 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("목표 달성률 점수 업데이트에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 운동 목표 점수 계산 (주별 최대 7점)
+     * weekly_workout_target과 주간 총 세트 수 비교
+     */
+    private int calculateExerciseGoalScore(Long userId) {
+        try {
+            // 사용자 목표 조회
+            UserGoal userGoal = userGoalService.getUserGoalOrDefault(userId);
+            
+            if (userGoal == null || userGoal.getWeeklyWorkoutTarget() == null || userGoal.getWeeklyWorkoutTarget() <= 0) {
+                log.info("운동 목표가 설정되지 않음 - 사용자 ID: {}", userId);
+                return 0;
+            }
+            
+            // 주간 총 운동 세트 수 조회
+            int weeklyTotalSets = exerciseService.getWeeklyTotalSets(userId);
+            int weeklyTarget = userGoal.getWeeklyWorkoutTarget();
+            
+            // 달성률 계산
+            double achievementRate = Math.min((double) weeklyTotalSets / weeklyTarget, 1.0);
+            
+            // 달성률에 따른 점수 계산 (주별 최대 7점)
+            int score = (int) Math.round(achievementRate * 7);
+            
+            log.info("운동 목표 점수 계산 - 사용자 ID: {}, 목표: {}세트, 달성: {}세트, 달성률: {:.1%}, 점수: {}", 
+                    userId, weeklyTarget, weeklyTotalSets, achievementRate, score);
+            
+            return score;
+            
+        } catch (Exception e) {
+            log.error("운동 목표 점수 계산 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            return 0;
+        }
+    }
+
+    /**
+     * 식단 목표 점수 계산 (주별 최대 7점)
+     * 하루 식단 100% 달성 시 1점, 주별 최대 7점
+     */
+    private int calculateNutritionGoalScore(Long userId) {
+        try {
+            // 사용자 목표 조회
+            UserGoal userGoal = userGoalService.getUserGoalOrDefault(userId);
+            
+            if (userGoal == null) {
+                log.info("식단 목표가 설정되지 않음 - 사용자 ID: {}", userId);
+                return 0;
+            }
+            
+            int totalDaysScore = 0;
+            
+            // 지난 7일간 각 날짜별로 식단 목표 달성 여부 확인
+            for (int i = 0; i < 7; i++) {
+                LocalDate checkDate = LocalDate.now().minusDays(i);
+                
+                // 해당 날짜의 영양소 섭취량 조회
+                Map<String, Object> dailyNutrition = getDailyNutritionIntake(userId, checkDate);
+                
+                double carbsIntake = ((Number) dailyNutrition.getOrDefault("totalCarbs", 0)).doubleValue();
+                double proteinIntake = ((Number) dailyNutrition.getOrDefault("totalProtein", 0)).doubleValue();
+                double fatIntake = ((Number) dailyNutrition.getOrDefault("totalFat", 0)).doubleValue();
+                
+                // 목표 대비 달성률 계산
+                double carbsRate = userGoal.getDailyCarbsTarget() != null && userGoal.getDailyCarbsTarget() > 0 
+                    ? carbsIntake / userGoal.getDailyCarbsTarget() : 0;
+                double proteinRate = userGoal.getDailyProteinTarget() != null && userGoal.getDailyProteinTarget() > 0 
+                    ? proteinIntake / userGoal.getDailyProteinTarget() : 0;
+                double fatRate = userGoal.getDailyFatTarget() != null && userGoal.getDailyFatTarget() > 0 
+                    ? fatIntake / userGoal.getDailyFatTarget() : 0;
+                
+                // 모든 영양소가 100% 이상 달성되면 해당 날짜 1점
+                if (carbsRate >= 1.0 && proteinRate >= 1.0 && fatRate >= 1.0) {
+                    totalDaysScore++;
+                    log.info("식단 목표 달성 - 사용자 ID: {}, 날짜: {}, 탄수화물: {:.1%}, 단백질: {:.1%}, 지방: {:.1%}", 
+                            userId, checkDate, carbsRate, proteinRate, fatRate);
+                }
+            }
+            
+            log.info("식단 목표 점수 계산 완료 - 사용자 ID: {}, 달성 일수: {}일, 점수: {}점", 
+                    userId, totalDaysScore, totalDaysScore);
+            
+            return totalDaysScore;
+            
+        } catch (Exception e) {
+            log.error("식단 목표 점수 계산 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            return 0;
+        }
+    }
+    
+    /**
+     * 특정 날짜의 일일 영양소 섭취량 조회
+     */
+    private Map<String, Object> getDailyNutritionIntake(Long userId, LocalDate date) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("totalCarbs", 0.0);
+        result.put("totalProtein", 0.0);
+        result.put("totalFat", 0.0);
+        result.put("totalCalories", 0.0);
+        
+        try {
+            List<MealLog> mealLogs = mealLogRepository.findByUserIdAndLogDateOrderByLogDateDescCreatedAtDesc(userId, date);
+            
+            double totalCarbs = 0.0;
+            double totalProtein = 0.0;
+            double totalFat = 0.0;
+            double totalCalories = 0.0;
+            
+            for (MealLog mealLog : mealLogs) {
+                if (mealLog.getFoodItem() != null) {
+                    FoodItem foodItem = mealLog.getFoodItem();
+                    double quantity = mealLog.getQuantity() != null ? mealLog.getQuantity().doubleValue() : 0.0;
+                    
+                    totalCarbs += foodItem.getCarbs() != null ? foodItem.getCarbs().doubleValue() * quantity / 100 : 0.0;
+                    totalProtein += foodItem.getProtein() != null ? foodItem.getProtein().doubleValue() * quantity / 100 : 0.0;
+                    totalFat += foodItem.getFat() != null ? foodItem.getFat().doubleValue() * quantity / 100 : 0.0;
+                    totalCalories += foodItem.getCalories() != null ? foodItem.getCalories().doubleValue() * quantity / 100 : 0.0;
+                }
+            }
+            
+            result.put("totalCarbs", totalCarbs);
+            result.put("totalProtein", totalProtein);
+            result.put("totalFat", totalFat);
+            result.put("totalCalories", totalCalories);
+            
+        } catch (Exception e) {
+            log.error("일일 영양소 섭취량 조회 실패 - 사용자 ID: {}, 날짜: {}, 오류: {}", userId, date, e.getMessage());
+        }
+        
+        return result;
     }
 } 

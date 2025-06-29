@@ -3,6 +3,7 @@ package com.lifebit.coreapi.controller;
 import com.lifebit.coreapi.entity.UserGoal;
 import com.lifebit.coreapi.service.UserGoalService;
 import com.lifebit.coreapi.security.JwtTokenProvider;
+import com.lifebit.coreapi.service.ranking.RankingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/user-goals")
@@ -18,6 +20,7 @@ import java.util.Map;
 public class UserGoalController {
     private final UserGoalService userGoalService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RankingService rankingService;
 
     @GetMapping("/{userId}")
     public ResponseEntity<UserGoal> getUserGoals(
@@ -31,9 +34,11 @@ public class UserGoalController {
                 if (!tokenUserId.equals(userId)) {
                     return ResponseEntity.status(403).build();
                 }
+                // ✅ 목표가 없으면 기본값을 반환하도록 수정
                 UserGoal userGoal = userGoalService.getLatestUserGoal(userId);
                 if (userGoal == null) {
-                    return ResponseEntity.ok().build(); // or return default if you want
+                    // 목표가 없으면 기본값으로 설정된 목표를 반환 (DB에 저장하지 않음)
+                    userGoal = userGoalService.getUserGoalOrDefault(userId);
                 }
                 return ResponseEntity.ok(userGoal);
             } else {
@@ -193,6 +198,34 @@ public class UserGoalController {
         } catch (Exception e) {
             log.error("사용자 목표 단일 조회 중 오류 발생 - 목표 ID: {}, 오류: {}", goalId, e.getMessage(), e);
             return ResponseEntity.status(500).build();
+        }
+    }
+
+    /**
+     * 목표 달성률에 따른 랭킹 점수 업데이트
+     */
+    @PostMapping("/update-achievement-score")
+    public ResponseEntity<Map<String, Object>> updateAchievementScore(
+            @RequestHeader("Authorization") String token) {
+        try {
+            Long userId = jwtTokenProvider.getUserIdFromToken(token);
+            
+            // 목표 달성률에 따른 점수 업데이트
+            rankingService.updateGoalAchievementScore(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "목표 달성률 점수가 업데이트되었습니다.");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("목표 달성률 점수 업데이트 실패: {}", e.getMessage());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "점수 업데이트 중 오류가 발생했습니다.");
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 } 

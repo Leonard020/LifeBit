@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import com.lifebit.coreapi.entity.TimePeriodType;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @Transactional(readOnly = true)
@@ -155,16 +157,6 @@ public class ExerciseService {
         List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
         return sessions.stream()
                 .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
-                .sum();
-    }
-
-    /**
-     * 최근 7일간 총 운동 시간(분) 조회
-     */
-    public int getWeeklyExerciseMinutes(Long userId) {
-        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
-        return sessions.stream()
-                .mapToInt(session -> session.getDurationMinutes() != null ? session.getDurationMinutes() : 0)
                 .sum();
     }
 
@@ -341,5 +333,162 @@ public class ExerciseService {
         User user = userRepository.getReferenceById(userId);
         return exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
+    }
+
+    /**
+     * 주간 운동 부위별 운동 횟수 조회
+     */
+    public Map<String, Integer> getWeeklyBodyPartCounts(Long userId) {
+        LocalDate startDate = LocalDate.now().minusDays(7);
+        LocalDate endDate = LocalDate.now();
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
+        
+        Map<String, Integer> bodyPartCounts = new HashMap<>();
+        bodyPartCounts.put("CHEST", 0);
+        bodyPartCounts.put("BACK", 0);
+        bodyPartCounts.put("LEGS", 0);
+        bodyPartCounts.put("SHOULDERS", 0);
+        bodyPartCounts.put("ARMS", 0);
+        bodyPartCounts.put("ABS", 0);
+        bodyPartCounts.put("CARDIO", 0);
+        
+        for (ExerciseSession session : sessions) {
+            if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1); // 횟수로 카운트
+            }
+        }
+        
+        return bodyPartCounts;
+    }
+
+    /**
+     * 주간 가슴 운동 횟수 조회
+     */
+    public int getWeeklyChestCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("CHEST", 0);
+    }
+
+    /**
+     * 주간 등 운동 횟수 조회
+     */
+    public int getWeeklyBackCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("BACK", 0);
+    }
+
+    /**
+     * 주간 다리 운동 횟수 조회
+     */
+    public int getWeeklyLegsCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("LEGS", 0);
+    }
+
+    /**
+     * 주간 어깨 운동 횟수 조회
+     */
+    public int getWeeklyShouldersCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("SHOULDERS", 0);
+    }
+
+    /**
+     * 주간 팔 운동 횟수 조회
+     */
+    public int getWeeklyArmsCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("ARMS", 0);
+    }
+
+    /**
+     * 주간 복근 운동 횟수 조회
+     */
+    public int getWeeklyAbsCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("ABS", 0);
+    }
+
+    /**
+     * 주간 유산소 운동 횟수 조회
+     */
+    public int getWeeklyCardioCount(Long userId) {
+        return getWeeklyBodyPartCounts(userId).getOrDefault("CARDIO", 0);
+    }
+
+    /**
+     * 주간 운동 부위별 운동 시간(분) 조회
+     */
+    public Map<String, Integer> getWeeklyBodyPartMinutes(Long userId) {
+        LocalDate startDate = LocalDate.now().minusDays(7);
+        LocalDate endDate = LocalDate.now();
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
+        
+        Map<String, Integer> bodyPartMinutes = new HashMap<>();
+        bodyPartMinutes.put("CHEST", 0);
+        bodyPartMinutes.put("BACK", 0);
+        bodyPartMinutes.put("LEGS", 0);
+        bodyPartMinutes.put("SHOULDERS", 0);
+        bodyPartMinutes.put("ARMS", 0);
+        bodyPartMinutes.put("ABS", 0);
+        bodyPartMinutes.put("CARDIO", 0);
+        
+        for (ExerciseSession session : sessions) {
+            if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
+                bodyPartMinutes.put(bodyPart, bodyPartMinutes.getOrDefault(bodyPart, 0) + duration);
+            }
+        }
+        
+        return bodyPartMinutes;
+    }
+
+    /**
+     * 주간 총 운동 세트 수 계산 (weekly_workout_target 비교용)
+     */
+    public int getWeeklyTotalSets(Long userId) {
+        LocalDate startDate = LocalDate.now().minusDays(7);
+        LocalDate endDate = LocalDate.now();
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
+        
+        return sessions.stream()
+                .mapToInt(session -> session.getSets() != null ? session.getSets() : 0)
+                .sum();
+    }
+
+    /**
+     * 주간 부위별 운동 세트 수 계산
+     */
+    public Map<String, Integer> getWeeklyBodyPartSets(Long userId) {
+        LocalDate startDate = LocalDate.now().minusDays(7);
+        LocalDate endDate = LocalDate.now();
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
+        
+        Map<String, Integer> bodyPartSets = new HashMap<>();
+        bodyPartSets.put("CHEST", 0);
+        bodyPartSets.put("BACK", 0);
+        bodyPartSets.put("LEGS", 0);
+        bodyPartSets.put("SHOULDERS", 0);
+        bodyPartSets.put("ARMS", 0);
+        bodyPartSets.put("ABS", 0);
+        bodyPartSets.put("CARDIO", 0);
+        
+        for (ExerciseSession session : sessions) {
+            if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                int sets = session.getSets() != null ? session.getSets() : 0;
+                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + sets);
+            }
+        }
+        
+        return bodyPartSets;
     }
 }

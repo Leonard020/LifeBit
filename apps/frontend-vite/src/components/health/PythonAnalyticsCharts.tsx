@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
+import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, updateAchievementScore, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
 
 // ✅ 조인된 식단 데이터를 위한 확장 타입
 interface MealLogWithFoodItem extends MealLog {
@@ -609,24 +609,40 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     return displayData;
   }, [healthRecords, exerciseSessions, mealLogs, period, userGoals]);
 
+  // ✅ 목표 데이터 전처리 (컴포넌트 레벨에서 정의)
+  const goalsData = useMemo(() => {
+    // 여러 가지 응답 구조 처리
+    if (userGoals?.success && userGoals?.data) {
+      return userGoals.data;
+    } else if (userGoals && typeof userGoals === 'object' && !userGoals.success) {
+      // 직접 목표 객체인 경우
+      return userGoals;
+    }
+    return null;
+  }, [userGoals]);
+
   // 목표 달성률 계산 (기간별 지원)
   const goalAchievements = useMemo(() => {
-    // 안전한 데이터 접근
-    const goalsData = userGoals?.success && userGoals?.data ? userGoals.data : null;
     const exerciseData = exerciseSessions?.success && exerciseSessions?.data ? exerciseSessions.data : [];
     const mealData = mealLogs?.success && mealLogs?.data ? mealLogs.data : [];
     
     // ✅ 기간별 영양소 통계 데이터 활용
     const actualNutrition = nutritionStats?.data || nutritionStats || null;
     
-    // 🔍 디버깅: nutritionStats 상세 확인
-    console.log('🔍 [goalAchievements] 영양소 통계:', {
-      goalPeriod,
-      hasData: !!nutritionStats,
-      actualNutrition: actualNutrition,
-      loading: isNutritionStatsLoading,
-      error: nutritionStatsError
-    });
+    // 🔍 디버깅: 상세 데이터 구조 확인 (강화)
+    console.group('🔍 [goalAchievements] 상세 디버깅');
+    console.log('📊 Raw userGoals:', userGoals);
+    console.log('📊 Processed goalsData:', goalsData);
+    console.log('📊 userGoals type:', typeof userGoals);
+    console.log('📊 userGoals.success:', userGoals?.success);
+    console.log('📊 userGoals.data:', userGoals?.data);
+    console.log('📊 Has weekly_workout_target?', goalsData?.weekly_workout_target);
+    console.log('📊 Has daily_carbs_target?', goalsData?.daily_carbs_target);
+    console.log('📊 goalPeriod:', goalPeriod);
+    console.log('📊 actualNutrition:', actualNutrition);
+    console.log('📊 exerciseData length:', exerciseData?.length || 0);
+    console.log('📊 mealData length:', mealData?.length || 0);
+    console.groupEnd();
     
     // ✅ 기간별 날짜 범위 계산
     const getDateRange = (period: 'day' | 'week' | 'month') => {
@@ -763,7 +779,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     const fatTarget = getNutritionTarget(fatTargetDaily, goalPeriod);
     const caloriesTarget = getNutritionTarget(caloriesTargetDaily, goalPeriod);
 
-    // ✅ 운동 부위별 주간 목표 및 실제 수행 시간 계산
+    // ✅ 운동 부위별 주간 목표 및 실제 수행 횟수 계산
     const bodyPartTargets = {
       chest: goalsData?.weekly_chest,
       back: goalsData?.weekly_back,
@@ -774,9 +790,9 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       cardio: goalsData?.weekly_cardio
     };
 
-    // 운동 부위별 실제 수행 시간 계산 (주간 데이터만 사용)
-    const calculateBodyPartMinutes = () => {
-      const bodyPartMinutes = {
+    // 운동 부위별 실제 수행 횟수 계산 (주간 데이터에서 가져오기)
+    const calculateBodyPartCounts = () => {
+      const bodyPartCounts = {
         chest: 0,
         back: 0,
         legs: 0,
@@ -786,47 +802,21 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
         cardio: 0
       };
 
-      // 주간 운동 데이터만 사용 (goalPeriod가 week일 때만 의미있음)
-      if (goalPeriod === 'week') {
-        periodExercise.forEach((session: ExerciseSession) => {
-          // 운동 카탈로그 정보를 통해 부위별 분류 (임시로 시간을 균등 배분)
-          // 실제로는 exercise_catalog와 조인하여 target_body_part를 가져와야 함
-          const duration = session.duration_minutes || 0;
-          
-          // 임시 로직: exercise_catalog_id를 기반으로 부위 분류
-          // 실제로는 백엔드에서 exercise_catalog와 조인된 데이터를 받아야 함
-          const catalogId = session.exercise_catalog_id;
-          
-          // 임시 매핑 (실제로는 exercise_catalog 테이블에서 target_body_part 조회 필요)
-          if (catalogId >= 1 && catalogId <= 10) {
-            bodyPartMinutes.chest += duration;
-          } else if (catalogId >= 11 && catalogId <= 20) {
-            bodyPartMinutes.back += duration;
-          } else if (catalogId >= 21 && catalogId <= 30) {
-            bodyPartMinutes.legs += duration;
-          } else if (catalogId >= 31 && catalogId <= 40) {
-            bodyPartMinutes.shoulders += duration;
-          } else if (catalogId >= 41 && catalogId <= 50) {
-            bodyPartMinutes.arms += duration;
-          } else if (catalogId >= 51 && catalogId <= 60) {
-            bodyPartMinutes.abs += duration;
-          } else if (catalogId >= 61 && catalogId <= 70) {
-            bodyPartMinutes.cardio += duration;
-          } else {
-            // 분류되지 않은 운동은 전체 운동에 균등 배분
-            const parts = Object.keys(bodyPartMinutes);
-            const perPart = duration / parts.length;
-            parts.forEach(part => {
-              bodyPartMinutes[part as keyof typeof bodyPartMinutes] += perPart;
-            });
-          }
-        });
+      // 주간 운동 통계에서 운동 횟수 데이터 가져오기
+      if (goalPeriod === 'week' && healthStats?.data) {
+        bodyPartCounts.chest = healthStats.data.weeklyChestCount || 0;
+        bodyPartCounts.back = healthStats.data.weeklyBackCount || 0;
+        bodyPartCounts.legs = healthStats.data.weeklyLegsCount || 0;
+        bodyPartCounts.shoulders = healthStats.data.weeklyShouldersCount || 0;
+        bodyPartCounts.arms = healthStats.data.weeklyArmsCount || 0;
+        bodyPartCounts.abs = healthStats.data.weeklyAbsCount || 0;
+        bodyPartCounts.cardio = healthStats.data.weeklyCardioCount || 0;
       }
 
-      return bodyPartMinutes;
+      return bodyPartCounts;
     };
 
-    const bodyPartActual = calculateBodyPartMinutes();
+    const bodyPartActual = calculateBodyPartCounts();
 
     // 🔍 디버깅: 최종 계산 값 확인
     console.log('🔍 [goalAchievements] 최종 계산:', {
@@ -926,10 +916,55 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
           hasTarget: !!bodyPartTargets.cardio
         }
       } : null,
+      // ✅ 운동 부위별 상세 목표 달성률 (주간 기준)
+      exerciseDetails: goalPeriod === 'week' ? {
+        chest: {
+          current: Math.round(bodyPartActual.chest),
+          target: bodyPartTargets.chest,
+          percentage: bodyPartTargets.chest ? Math.min((bodyPartActual.chest / bodyPartTargets.chest) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.chest
+        },
+        back: {
+          current: Math.round(bodyPartActual.back),
+          target: bodyPartTargets.back,
+          percentage: bodyPartTargets.back ? Math.min((bodyPartActual.back / bodyPartTargets.back) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.back
+        },
+        legs: {
+          current: Math.round(bodyPartActual.legs),
+          target: bodyPartTargets.legs,
+          percentage: bodyPartTargets.legs ? Math.min((bodyPartActual.legs / bodyPartTargets.legs) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.legs
+        },
+        shoulders: {
+          current: Math.round(bodyPartActual.shoulders),
+          target: bodyPartTargets.shoulders,
+          percentage: bodyPartTargets.shoulders ? Math.min((bodyPartActual.shoulders / bodyPartTargets.shoulders) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.shoulders
+        },
+        arms: {
+          current: Math.round(bodyPartActual.arms),
+          target: bodyPartTargets.arms,
+          percentage: bodyPartTargets.arms ? Math.min((bodyPartActual.arms / bodyPartTargets.arms) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.arms
+        },
+        abs: {
+          current: Math.round(bodyPartActual.abs),
+          target: bodyPartTargets.abs,
+          percentage: bodyPartTargets.abs ? Math.min((bodyPartActual.abs / bodyPartTargets.abs) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.abs
+        },
+        cardio: {
+          current: Math.round(bodyPartActual.cardio),
+          target: bodyPartTargets.cardio,
+          percentage: bodyPartTargets.cardio ? Math.min((bodyPartActual.cardio / bodyPartTargets.cardio) * 100, 100) : 0,
+          hasTarget: !!bodyPartTargets.cardio
+        }
+      } : null,
       // ✅ 전체 목표 설정 여부 확인
       hasAnyTargets: !!(exerciseTarget || carbsTarget || proteinTarget || fatTarget || caloriesTarget)
     };
-  }, [exerciseSessions, mealLogs, userGoals, nutritionStats, goalPeriod, isNutritionStatsLoading, nutritionStatsError]);
+  }, [exerciseSessions, mealLogs, goalsData, nutritionStats, goalPeriod, isNutritionStatsLoading, nutritionStatsError]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -940,6 +975,17 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
       refetchGoals(),
       refetchNutritionStats() // ✅ 영양소 통계 새로고침 추가
     ]).finally(() => setIsRefreshing(false));
+  };
+
+  // 목표 달성률 점수 업데이트 핸들러
+  const handleUpdateAchievementScore = async () => {
+    try {
+      await updateAchievementScore();
+      console.log('목표 달성률 점수 업데이트 완료');
+      // 성공 알림 또는 UI 업데이트
+    } catch (error) {
+      console.error('목표 달성률 점수 업데이트 실패:', error);
+    }
   };
 
   // 🔧 디버깅용 테스트 함수
@@ -959,12 +1005,100 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
 
   const getPeriodLabel = () => {
     switch (period) {
-      case 'day': return '일별';
-      case 'week': return '주별';
-      case 'month': return '월별';
-      case 'year': return '연별';
-      default: return '기간별';
+      case 'day': return '일간';
+      case 'week': return '주간';
+      case 'month': return '월간';
+      case 'year': return '연간';
+      default: return '기간';
     }
+  };
+
+  // 운동 점수 계산 함수 (주별 최대 7점)
+  const calculateExerciseScore = () => {
+    if (!goalsData?.weekly_workout_target || !healthStats?.weeklyTotalSets) {
+      return 0;
+    }
+    const achievementRate = Math.min(healthStats.weeklyTotalSets / goalsData.weekly_workout_target, 1.0);
+    return Math.round(achievementRate * 7);
+  };
+
+  // 식단 점수 계산 함수 (주별 최대 7점)
+  const calculateNutritionScore = () => {
+    // 간단한 예시: 현재 일일 영양소 달성률을 기준으로 계산
+    // 실제로는 지난 7일간의 데이터를 확인해야 하지만, 여기서는 현재 일일 달성률로 추정
+    const carbsAchieved = goalAchievements.nutrition.carbs.percentage >= 100;
+    const proteinAchieved = goalAchievements.nutrition.protein.percentage >= 100;
+    const fatAchieved = goalAchievements.nutrition.fat.percentage >= 100;
+    
+    // 모든 영양소가 100% 달성되면 1점 (하루 기준)
+    if (carbsAchieved && proteinAchieved && fatAchieved) {
+      return 1; // 하루 달성 시 1점, 실제로는 주간 누적 점수를 계산해야 함
+    }
+    return 0;
+  };
+
+  // 운동 부위별 세트 수 데이터 계산
+  const calculateDetailedExerciseData = () => {
+    const exerciseDetails = {
+      chest: {
+        current: healthStats?.weeklyChestSets || 0,
+        target: goalsData?.weekly_chest || 0,
+        hasTarget: (goalsData?.weekly_chest || 0) > 0,
+        percentage: (goalsData?.weekly_chest || 0) > 0 
+          ? Math.min(((healthStats?.weeklyChestSets || 0) / goalsData.weekly_chest) * 100, 100)
+          : 0
+      },
+      back: {
+        current: healthStats?.weeklyBackSets || 0,
+        target: goalsData?.weekly_back || 0,
+        hasTarget: (goalsData?.weekly_back || 0) > 0,
+        percentage: (goalsData?.weekly_back || 0) > 0 
+          ? Math.min(((healthStats?.weeklyBackSets || 0) / goalsData.weekly_back) * 100, 100)
+          : 0
+      },
+      legs: {
+        current: healthStats?.weeklyLegsSets || 0,
+        target: goalsData?.weekly_legs || 0,
+        hasTarget: (goalsData?.weekly_legs || 0) > 0,
+        percentage: (goalsData?.weekly_legs || 0) > 0 
+          ? Math.min(((healthStats?.weeklyLegsSets || 0) / goalsData.weekly_legs) * 100, 100)
+          : 0
+      },
+      shoulders: {
+        current: healthStats?.weeklyShouldersSets || 0,
+        target: goalsData?.weekly_shoulders || 0,
+        hasTarget: (goalsData?.weekly_shoulders || 0) > 0,
+        percentage: (goalsData?.weekly_shoulders || 0) > 0 
+          ? Math.min(((healthStats?.weeklyShouldersSets || 0) / goalsData.weekly_shoulders) * 100, 100)
+          : 0
+      },
+      arms: {
+        current: healthStats?.weeklyArmsSets || 0,
+        target: goalsData?.weekly_arms || 0,
+        hasTarget: (goalsData?.weekly_arms || 0) > 0,
+        percentage: (goalsData?.weekly_arms || 0) > 0 
+          ? Math.min(((healthStats?.weeklyArmsSets || 0) / goalsData.weekly_arms) * 100, 100)
+          : 0
+      },
+      abs: {
+        current: healthStats?.weeklyAbsSets || 0,
+        target: goalsData?.weekly_abs || 0,
+        hasTarget: (goalsData?.weekly_abs || 0) > 0,
+        percentage: (goalsData?.weekly_abs || 0) > 0 
+          ? Math.min(((healthStats?.weeklyAbsSets || 0) / goalsData.weekly_abs) * 100, 100)
+          : 0
+      },
+      cardio: {
+        current: healthStats?.weeklyCardioSets || 0,
+        target: goalsData?.weekly_cardio || 0,
+        hasTarget: (goalsData?.weekly_cardio || 0) > 0,
+        percentage: (goalsData?.weekly_cardio || 0) > 0 
+          ? Math.min(((healthStats?.weeklyCardioSets || 0) / goalsData.weekly_cardio) * 100, 100)
+          : 0
+      }
+    };
+
+    return exerciseDetails;
   };
 
   // 로딩 중일 때 표시할 컴포넌트
@@ -1797,181 +1931,196 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
+              
+              {/* 점수 업데이트 버튼 */}
+              <div className="text-center mb-4">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleUpdateAchievementScore}
+                  className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600"
+                >
+                  🏆 랭킹 점수 업데이트
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                {/* 운동 목표 미니 카드 */}
-                <div className="text-center p-4 bg-white rounded-xl shadow-sm border">
-                  <div className="relative w-20 h-20 mx-auto mb-3">
-                    <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 100 100">
-                      {/* 배경 원 */}
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
-                      {/* 진행 원 */}
-                      <circle 
-                        cx="50" cy="50" r="40" fill="none" 
-                        stroke={
-                          !goalAchievements.exercise.hasTarget ? "#d1d5db" : // 목표 없으면 회색
-                          goalAchievements.exercise.percentage >= 100 ? "#10b981" : 
-                          goalAchievements.exercise.percentage >= 50 ? "#f59e0b" : "#ef4444"
-                        }
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 40 * Math.min(goalAchievements.exercise.percentage, 100) / 100} ${2 * Math.PI * 40}`}
-                        className="transition-all duration-1000 ease-out"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 운동 그룹 */}
+                <div className="p-6 bg-white rounded-xl shadow-sm border">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <span className="mr-2">💪</span>
+                    운동 목표 달성률 (주간)
+                  </h3>
+                  
+                  <div className="text-center mb-4">
+                    <div className="relative w-24 h-24 mx-auto mb-3">
+                      <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
+                        <circle 
+                          cx="50" cy="50" r="40" fill="none" 
+                          stroke={
+                            !goalsData?.weekly_workout_target ? "#d1d5db" :
+                            (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "#10b981" : 
+                            (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5 ? "#f59e0b" : "#ef4444"
+                          }
+                          strokeWidth="8"
+                          strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 40 * Math.min(((healthStats?.weeklyTotalSets || 0) / (goalsData?.weekly_workout_target || 1)) * 100, 100) / 100} ${2 * Math.PI * 40}`}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xl font-bold text-gray-800">
+                          {goalsData?.weekly_workout_target 
+                            ? Math.round(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100)
+                            : 0}%
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-gray-600 mb-2">
+                      {goalsData?.weekly_workout_target 
+                        ? `${healthStats?.weeklyTotalSets || 0}세트 / ${goalsData.weekly_workout_target}세트`
+                        : `${healthStats?.weeklyTotalSets || 0}세트 / 목표 미설정`
+                      }
+                    </p>
+                    
+                    <Badge 
+                      variant={
+                        !goalsData?.weekly_workout_target ? "outline" :
+                        (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "default" : "secondary"
+                      }
+                      className="mb-3"
+                    >
+                      {!goalsData?.weekly_workout_target ? "목표 미설정" :
+                       (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "달성!" : "진행중"}
+                    </Badge>
+                  </div>
+                  
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-2">주간 운동 달성 시 최대 7점</p>
+                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${goalsData?.weekly_workout_target 
+                            ? Math.min(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100, 100)
+                            : 0}%` 
+                        }}
                       />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-lg font-bold text-gray-800">
-                        {Math.round(goalAchievements.exercise.percentage)}%
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">현재 획득 점수</span>
+                      <span className="text-sm font-bold text-blue-600">
+                        {calculateExerciseScore()}점 / 7점
                       </span>
                     </div>
                   </div>
-                  <h3 className="font-semibold text-gray-800 mb-1">운동</h3>
-                  <p className="text-sm text-gray-600">
-                    {goalAchievements.exercise.hasTarget 
-                      ? `${goalAchievements.exercise.current}분 / ${goalAchievements.exercise.target}분`
-                      : `${goalAchievements.exercise.current}분 / 목표 미설정`
-                    }
-                  </p>
-                  <Badge 
-                    variant={
-                      !goalAchievements.exercise.hasTarget ? "outline" :
-                      goalAchievements.exercise.percentage >= 100 ? "default" : "secondary"
-                    }
-                    className="mt-2"
-                  >
-                    {!goalAchievements.exercise.hasTarget ? "목표 미설정" :
-                     goalAchievements.exercise.percentage >= 100 ? "달성!" : "진행중"}
-                  </Badge>
                 </div>
 
-                {/* 탄수화물 목표 미니 카드 */}
-                <div className="text-center p-4 bg-white rounded-xl shadow-sm border">
-                  <div className="relative w-20 h-20 mx-auto mb-3">
-                    <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
-                      <circle 
-                        cx="50" cy="50" r="40" fill="none" 
-                        stroke={
-                          !goalAchievements.nutrition.carbs.hasTarget ? "#d1d5db" : // 목표 없으면 회색
-                          goalAchievements.nutrition.carbs.percentage >= 100 ? "#10b981" : 
-                          goalAchievements.nutrition.carbs.percentage >= 50 ? "#3b82f6" : "#f59e0b"
-                        }
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 40 * Math.min(goalAchievements.nutrition.carbs.percentage, 100) / 100} ${2 * Math.PI * 40}`}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-lg font-bold text-gray-800">
-                        {Math.round(goalAchievements.nutrition.carbs.percentage)}%
-                      </span>
+                {/* 식단 그룹 */}
+                <div className="p-6 bg-white rounded-xl shadow-sm border">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <span className="mr-2">🍽️</span>
+                    식단 목표 달성률 (일간)
+                  </h3>
+                  
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {/* 탄수화물 */}
+                    <div className="text-center">
+                      <div className="relative w-16 h-16 mx-auto mb-2">
+                        <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 100 100">
+                          <circle cx="50" cy="50" r="35" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
+                          <circle 
+                            cx="50" cy="50" r="35" fill="none" 
+                            stroke={
+                              !goalAchievements.nutrition.carbs.hasTarget ? "#d1d5db" :
+                              goalAchievements.nutrition.carbs.percentage >= 100 ? "#10b981" : 
+                              goalAchievements.nutrition.carbs.percentage >= 50 ? "#3b82f6" : "#f59e0b"
+                            }
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 35 * Math.min(goalAchievements.nutrition.carbs.percentage, 100) / 100} ${2 * Math.PI * 35}`}
+                            className="transition-all duration-1000 ease-out"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-800">
+                            {Math.round(goalAchievements.nutrition.carbs.percentage)}%
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium">탄수화물</p>
                     </div>
-                  </div>
-                  <h3 className="font-semibold text-gray-800 mb-1">탄수화물</h3>
-                  <p className="text-sm text-gray-600">
-                    {goalAchievements.nutrition.carbs.hasTarget 
-                      ? `${goalAchievements.nutrition.carbs.current}g / ${goalAchievements.nutrition.carbs.target}g`
-                      : `${goalAchievements.nutrition.carbs.current}g / 목표 미설정`
-                    }
-                  </p>
-                  <Badge 
-                    variant={
-                      !goalAchievements.nutrition.carbs.hasTarget ? "outline" :
-                      goalAchievements.nutrition.carbs.percentage >= 100 ? "default" : "secondary"
-                    }
-                    className="mt-2"
-                  >
-                    {!goalAchievements.nutrition.carbs.hasTarget ? "목표 미설정" :
-                     goalAchievements.nutrition.carbs.percentage >= 100 ? "달성!" : "진행중"}
-                  </Badge>
-                </div>
 
-                {/* 단백질 목표 미니 카드 */}
-                <div className="text-center p-4 bg-white rounded-xl shadow-sm border">
-                  <div className="relative w-20 h-20 mx-auto mb-3">
-                    <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
-                      <circle 
-                        cx="50" cy="50" r="40" fill="none" 
-                        stroke={
-                          !goalAchievements.nutrition.protein.hasTarget ? "#d1d5db" : // 목표 없으면 회색
-                          goalAchievements.nutrition.protein.percentage >= 100 ? "#10b981" : 
-                          goalAchievements.nutrition.protein.percentage >= 50 ? "#8b5cf6" : "#f59e0b"
-                        }
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 40 * Math.min(goalAchievements.nutrition.protein.percentage, 100) / 100} ${2 * Math.PI * 40}`}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-lg font-bold text-gray-800">
-                        {Math.round(goalAchievements.nutrition.protein.percentage)}%
-                      </span>
+                    {/* 단백질 */}
+                    <div className="text-center">
+                      <div className="relative w-16 h-16 mx-auto mb-2">
+                        <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 100 100">
+                          <circle cx="50" cy="50" r="35" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
+                          <circle 
+                            cx="50" cy="50" r="35" fill="none" 
+                            stroke={
+                              !goalAchievements.nutrition.protein.hasTarget ? "#d1d5db" :
+                              goalAchievements.nutrition.protein.percentage >= 100 ? "#10b981" : 
+                              goalAchievements.nutrition.protein.percentage >= 50 ? "#8b5cf6" : "#f59e0b"
+                            }
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 35 * Math.min(goalAchievements.nutrition.protein.percentage, 100) / 100} ${2 * Math.PI * 35}`}
+                            className="transition-all duration-1000 ease-out"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-800">
+                            {Math.round(goalAchievements.nutrition.protein.percentage)}%
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium">단백질</p>
                     </div>
-                  </div>
-                  <h3 className="font-semibold text-gray-800 mb-1">단백질</h3>
-                  <p className="text-sm text-gray-600">
-                    {goalAchievements.nutrition.protein.hasTarget 
-                      ? `${goalAchievements.nutrition.protein.current}g / ${goalAchievements.nutrition.protein.target}g`
-                      : `${goalAchievements.nutrition.protein.current}g / 목표 미설정`
-                    }
-                  </p>
-                  <Badge 
-                    variant={
-                      !goalAchievements.nutrition.protein.hasTarget ? "outline" :
-                      goalAchievements.nutrition.protein.percentage >= 100 ? "default" : "secondary"
-                    }
-                    className="mt-2"
-                  >
-                    {!goalAchievements.nutrition.protein.hasTarget ? "목표 미설정" :
-                     goalAchievements.nutrition.protein.percentage >= 100 ? "달성!" : "진행중"}
-                  </Badge>
-                </div>
 
-                {/* 지방 목표 미니 카드 */}
-                <div className="text-center p-4 bg-white rounded-xl shadow-sm border">
-                  <div className="relative w-20 h-20 mx-auto mb-3">
-                    <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
-                      <circle 
-                        cx="50" cy="50" r="40" fill="none" 
-                        stroke={
-                          !goalAchievements.nutrition.fat.hasTarget ? "#d1d5db" : // 목표 없으면 회색
-                          goalAchievements.nutrition.fat.percentage >= 100 ? "#10b981" : 
-                          goalAchievements.nutrition.fat.percentage >= 50 ? "#ec4899" : "#f59e0b"
-                        }
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 40 * Math.min(goalAchievements.nutrition.fat.percentage, 100) / 100} ${2 * Math.PI * 40}`}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-lg font-bold text-gray-800">
-                        {Math.round(goalAchievements.nutrition.fat.percentage)}%
+                    {/* 지방 */}
+                    <div className="text-center">
+                      <div className="relative w-16 h-16 mx-auto mb-2">
+                        <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 100 100">
+                          <circle cx="50" cy="50" r="35" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
+                          <circle 
+                            cx="50" cy="50" r="35" fill="none" 
+                            stroke={
+                              !goalAchievements.nutrition.fat.hasTarget ? "#d1d5db" :
+                              goalAchievements.nutrition.fat.percentage >= 100 ? "#10b981" : 
+                              goalAchievements.nutrition.fat.percentage >= 50 ? "#ec4899" : "#f59e0b"
+                            }
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 35 * Math.min(goalAchievements.nutrition.fat.percentage, 100) / 100} ${2 * Math.PI * 35}`}
+                            className="transition-all duration-1000 ease-out"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-800">
+                            {Math.round(goalAchievements.nutrition.fat.percentage)}%
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium">지방</p>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-2">일일 식단 100% 달성 시 1점 (주간 최대 7점)</p>
+                    <div className="text-sm text-gray-600 mb-3">
+                      모든 영양소 100% 달성 시 해당 날짜 1점 획득
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">오늘 획득 점수</span>
+                      <span className="text-sm font-bold text-green-600">
+                        {calculateNutritionScore()}점 / 1점
                       </span>
                     </div>
                   </div>
-                  <h3 className="font-semibold text-gray-800 mb-1">지방</h3>
-                  <p className="text-sm text-gray-600">
-                    {goalAchievements.nutrition.fat.hasTarget 
-                      ? `${goalAchievements.nutrition.fat.current}g / ${goalAchievements.nutrition.fat.target}g`
-                      : `${goalAchievements.nutrition.fat.current}g / 목표 미설정`
-                    }
-                  </p>
-                  <Badge 
-                    variant={
-                      !goalAchievements.nutrition.fat.hasTarget ? "outline" :
-                      goalAchievements.nutrition.fat.percentage >= 100 ? "default" : "secondary"
-                    }
-                    className="mt-2"
-                  >
-                    {!goalAchievements.nutrition.fat.hasTarget ? "목표 미설정" :
-                     goalAchievements.nutrition.fat.percentage >= 100 ? "달성!" : "진행중"}
-                  </Badge>
                 </div>
               </div>
 
@@ -1984,6 +2133,21 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     {goalPeriod === 'month' && '이번 달'} 
                     전체 목표 달성률
                   </h4>
+                  
+                  {/* ✅ 기본값인지 실제 설정된 목표인지 구분 표시 */}
+                  {goalsData && goalsData.user_goal_id ? (
+                    <div className="mb-3 p-2 bg-green-50 rounded-lg border border-green-200">
+                      <p className="text-xs text-green-700">
+                        ✅ 설정된 목표로 계산 중 (설정일: {new Date(goalsData.created_at).toLocaleDateString('ko-KR')})
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-xs text-blue-700">
+                        📋 기본 목표로 계산 중 (프로필에서 개인 목표를 설정하세요)
+                      </p>
+                    </div>
+                  )}
                   
                   {goalAchievements.hasAnyTargets ? (
                     <>
@@ -2017,10 +2181,10 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   ) : (
                     <>
                       <div className="text-2xl font-bold text-gray-400 mb-2">
-                        목표 미설정
+                        데이터 로딩 중...
                       </div>
                       <p className="text-sm text-gray-500">
-                        건강 목표를 설정하여 진행률을 확인해보세요
+                        목표 정보를 불러오고 있습니다
                       </p>
                     </>
                   )}
@@ -2035,55 +2199,184 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Activity className="h-5 w-5 mr-2 text-green-600" />
-                  상세 운동 목표 달성률
+                  상세 운동 목표 달성률 (주간)
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
-                  {/* 메인 운동 목표 */}
+                  {/* 전체 운동 목표 */}
                   <div className="relative">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">오늘 운동 시간</span>
+                      <span className="font-medium">주간 총 운동 세트 수</span>
                       <span className="text-2xl font-bold text-green-600">
-                        {goalAchievements.exercise.current}분
-                      </span>
-                    </div>
+                        {healthStats?.weeklyTotalSets || 0}세트
+                    </span>
+                  </div>
                     <div className="relative">
-                      <Progress value={goalAchievements.exercise.percentage} className="h-4" />
+                      <Progress value={goalsData?.weekly_workout_target 
+                        ? Math.min(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100, 100)
+                        : 0} className="h-4" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-xs font-semibold text-white drop-shadow">
-                          {Math.round(goalAchievements.exercise.percentage)}%
+                          {goalsData?.weekly_workout_target 
+                            ? Math.round(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100)
+                            : 0}%
                         </span>
                       </div>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600 mt-1">
-                      <span>0분</span>
-                      <span>목표: {goalAchievements.exercise.target}분</span>
+                      <span>0세트</span>
+                      <span>목표: {goalsData?.weekly_workout_target || 0}세트</span>
                     </div>
                   </div>
 
+                  {/* 운동 부위별 목표 달성률 */}
+                  {(() => {
+                    const exerciseDetails = calculateDetailedExerciseData();
+                    const hasAnyTarget = Object.values(exerciseDetails).some(detail => detail.hasTarget);
+                    return hasAnyTarget && (
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">운동 부위별 달성률 (세트 수 기준)</h4>
+                      
+                        {/* 가슴 운동 */}
+                        {exerciseDetails.chest.hasTarget && (
+                          <div className="bg-red-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">💪 가슴 운동</span>
+                              <span className="text-sm font-bold text-red-600">
+                                {exerciseDetails.chest.current}세트 / {exerciseDetails.chest.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.chest.percentage} className="h-2" />
+                            <div className="text-xs text-red-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.chest.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 등 운동 */}
+                        {exerciseDetails.back.hasTarget && (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">🏋️‍♂️ 등 운동</span>
+                              <span className="text-sm font-bold text-green-600">
+                                {exerciseDetails.back.current}세트 / {exerciseDetails.back.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.back.percentage} className="h-2" />
+                            <div className="text-xs text-green-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.back.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 다리 운동 */}
+                        {exerciseDetails.legs.hasTarget && (
+                          <div className="bg-purple-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">🦵 다리 운동</span>
+                              <span className="text-sm font-bold text-purple-600">
+                                {exerciseDetails.legs.current}세트 / {exerciseDetails.legs.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.legs.percentage} className="h-2" />
+                            <div className="text-xs text-purple-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.legs.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 어깨 운동 */}
+                        {exerciseDetails.shoulders.hasTarget && (
+                          <div className="bg-orange-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">🤸‍♂️ 어깨 운동</span>
+                              <span className="text-sm font-bold text-orange-600">
+                                {exerciseDetails.shoulders.current}세트 / {exerciseDetails.shoulders.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.shoulders.percentage} className="h-2" />
+                            <div className="text-xs text-orange-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.shoulders.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 팔 운동 */}
+                        {exerciseDetails.arms.hasTarget && (
+                          <div className="bg-pink-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">💪 팔 운동</span>
+                              <span className="text-sm font-bold text-pink-600">
+                                {exerciseDetails.arms.current}세트 / {exerciseDetails.arms.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.arms.percentage} className="h-2" />
+                            <div className="text-xs text-pink-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.arms.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 복근 운동 */}
+                        {exerciseDetails.abs.hasTarget && (
+                          <div className="bg-yellow-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">🏃‍♀️ 복근 운동</span>
+                              <span className="text-sm font-bold text-yellow-600">
+                                {exerciseDetails.abs.current}세트 / {exerciseDetails.abs.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.abs.percentage} className="h-2" />
+                            <div className="text-xs text-yellow-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.abs.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 유산소 운동 */}
+                        {exerciseDetails.cardio.hasTarget && (
+                          <div className="bg-cyan-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">🏃 유산소 운동</span>
+                              <span className="text-sm font-bold text-cyan-600">
+                                {exerciseDetails.cardio.current}세트 / {exerciseDetails.cardio.target}세트
+                              </span>
+                            </div>
+                            <Progress value={exerciseDetails.cardio.percentage} className="h-2" />
+                            <div className="text-xs text-cyan-600 mt-1 text-center">
+                              {Math.round(exerciseDetails.cardio.percentage)}% 달성
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* 운동 상태 메시지 */}
                   <div className={`p-4 rounded-lg border-l-4 ${
-                    goalAchievements.exercise.percentage >= 100 
+                    goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target
                       ? 'bg-green-50 border-green-500 text-green-700'
-                      : goalAchievements.exercise.percentage >= 50
+                      : goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5
                       ? 'bg-yellow-50 border-yellow-500 text-yellow-700'
                       : 'bg-red-50 border-red-500 text-red-700'
                   }`}>
                     <div className="flex items-center">
-                      {goalAchievements.exercise.percentage >= 100 ? (
+                      {goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? (
                         <CheckCircle className="h-5 w-5 mr-2" />
-                      ) : goalAchievements.exercise.percentage >= 50 ? (
+                      ) : goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5 ? (
                         <AlertTriangle className="h-5 w-5 mr-2" />
                       ) : (
                         <X className="h-5 w-5 mr-2" />
                       )}
                       <span className="font-medium">
-                        {goalAchievements.exercise.percentage >= 100 
-                          ? '🎉 오늘 운동 목표를 달성했습니다!'
-                          : goalAchievements.exercise.percentage >= 50
-                          ? `💪 조금만 더! ${goalAchievements.exercise.target - goalAchievements.exercise.current}분 더 운동하면 목표 달성!`
-                          : `🔥 화이팅! ${goalAchievements.exercise.target - goalAchievements.exercise.current}분 운동으로 목표를 달성해보세요!`
+                        {goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target
+                          ? '🎉 주간 운동 목표를 달성했습니다!'
+                          : goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5
+                          ? `💪 조금만 더! ${goalsData.weekly_workout_target - (healthStats?.weeklyTotalSets || 0)}세트 더 운동하면 목표 달성!`
+                          : goalsData?.weekly_workout_target
+                          ? `🔥 화이팅! ${goalsData.weekly_workout_target - (healthStats?.weeklyTotalSets || 0)}세트 운동으로 목표를 달성해보세요!`
+                          : '🎯 프로필에서 주간 운동 목표를 설정해보세요!'
                         }
                       </span>
                     </div>
@@ -2097,7 +2390,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Utensils className="h-5 w-5 mr-2 text-blue-600" />
-                  상세 영양소 목표 달성률
+                  상세 영양소 목표 달성률 (일간)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -2183,12 +2476,12 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 </div>
               </CardContent>
             </Card>
-          </div>
+        </div>
 
           {/* ✅ 운동 부위별 목표 달성률 (주간만 표시) */}
           {goalPeriod === 'week' && goalAchievements.bodyParts && (
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader>
                 <CardTitle className="flex items-center">
                   <Dumbbell className="h-5 w-5 mr-2 text-orange-600" />
                   주간 운동 부위별 목표 달성률
@@ -2196,8 +2489,8 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 <p className="text-sm text-gray-600">
                   이번 주 각 부위별 운동 목표 진행 현황
                 </p>
-              </CardHeader>
-              <CardContent>
+            </CardHeader>
+            <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   {/* 가슴 */}
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -2613,8 +2906,8 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                       <span className="text-sm text-gray-700">
                         운동 목표까지 {goalAchievements.exercise.target - goalAchievements.exercise.current}분 더 필요합니다
                       </span>
-                    </div>
-                  )}
+                  </div>
+                )}
                   {chartData.filter(item => item.exerciseMinutes > 0).length < chartData.length / 2 && (
                     <div className="flex items-start">
                       <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0" />
@@ -2625,11 +2918,11 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0" />
                     <span className="text-sm text-gray-700">균형 잡힌 식단을 유지하세요</span>
                   </div>
-                    </div>
-                  </div>
                 </div>
               </div>
-            </CardContent>
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       {/* AI 머신러닝 분석 섹션 - 향후 Airflow 파이프라인 연동 */}

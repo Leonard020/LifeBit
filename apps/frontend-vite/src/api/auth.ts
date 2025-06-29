@@ -558,4 +558,15 @@ export const completeAchievement = async (userId: number, achievementTitle: stri
   return response.data;
 };
 
+// 목표 달성률 점수 업데이트
+export const updateAchievementScore = async () => {
+  try {
+    const response = await axios.post('/api/user-goals/update-achievement-score');
+    return response.data;
+  } catch (error) {
+    console.error('목표 달성률 점수 업데이트 실패:', error);
+    throw error;
+  }
+};
+
 

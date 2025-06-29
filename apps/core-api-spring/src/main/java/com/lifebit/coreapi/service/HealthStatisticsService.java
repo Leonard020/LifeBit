@@ -115,6 +115,19 @@ public class HealthStatisticsService {
             statistics.put("dailyProteinTarget", userGoal.getDailyProteinTarget());
             statistics.put("dailyFatTarget", userGoal.getDailyFatTarget());
             
+            // 주간 총 운동 세트 수 (weekly_workout_target 비교용)
+            statistics.put("weeklyTotalSets", exerciseService.getWeeklyTotalSets(userId));
+            
+            // 주간 부위별 운동 세트 수
+            Map<String, Integer> bodyPartSets = exerciseService.getWeeklyBodyPartSets(userId);
+            statistics.put("weeklyChestSets", bodyPartSets.get("CHEST"));
+            statistics.put("weeklyBackSets", bodyPartSets.get("BACK"));
+            statistics.put("weeklyLegsSets", bodyPartSets.get("LEGS"));
+            statistics.put("weeklyShouldersSets", bodyPartSets.get("SHOULDERS"));
+            statistics.put("weeklyArmsSets", bodyPartSets.get("ARMS"));
+            statistics.put("weeklyAbsSets", bodyPartSets.get("ABS"));
+            statistics.put("weeklyCardioSets", bodyPartSets.get("CARDIO"));
+            
             log.info("건강 통계 조회 완료 - 사용자: {}, 데이터 항목: {}", userId, statistics.size());
             
             return statistics;
@@ -172,6 +185,26 @@ public class HealthStatisticsService {
             stats.put("totalWorkoutDays", totalWorkoutDays);
             stats.put("goalAchievementRate", goalAchievementRate);
             stats.put("goalChange", goalChange);
+            
+            // 주간 운동 부위별 운동 횟수 추가 (주간 기준으로만 제공)
+            if ("week".equalsIgnoreCase(period)) {
+                stats.put("weeklyChestCount", exerciseService.getWeeklyChestCount(userId));
+                stats.put("weeklyBackCount", exerciseService.getWeeklyBackCount(userId));
+                stats.put("weeklyLegsCount", exerciseService.getWeeklyLegsCount(userId));
+                stats.put("weeklyShouldersCount", exerciseService.getWeeklyShouldersCount(userId));
+                stats.put("weeklyArmsCount", exerciseService.getWeeklyArmsCount(userId));
+                stats.put("weeklyAbsCount", exerciseService.getWeeklyAbsCount(userId));
+                stats.put("weeklyCardioCount", exerciseService.getWeeklyCardioCount(userId));
+                
+                // 운동 시간 데이터도 함께 제공 (다른 곳에서 사용할 수 있음)
+                stats.put("weeklyChestMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("CHEST", 0));
+                stats.put("weeklyBackMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("BACK", 0));
+                stats.put("weeklyLegsMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("LEGS", 0));
+                stats.put("weeklyShouldersMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("SHOULDERS", 0));
+                stats.put("weeklyArmsMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("ARMS", 0));
+                stats.put("weeklyAbsMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("ABS", 0));
+                stats.put("weeklyCardioMinutes", exerciseService.getWeeklyBodyPartMinutes(userId).getOrDefault("CARDIO", 0));
+            }
             
             log.info("운동 통계 조회 성공 - 사용자: {}, 기간: {}, 횟수: {}, 시간: {}분, 칼로리: {}", 
                     userId, period, periodWorkouts, periodExerciseMinutes, totalCaloriesBurned);
