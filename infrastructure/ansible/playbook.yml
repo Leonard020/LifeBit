@@ -246,7 +246,35 @@
           --email admin@{{ domain_name }} -d {{ domain_name }}
       args:
         creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+      register: certbot_result
       when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Display certbot execution result
+      debug:
+        msg:
+          - "Certbot execution result:"
+          - "Return code: {{ certbot_result.rc | default('N/A') }}"
+          - "Stdout: {{ certbot_result.stdout | default('N/A') }}"
+          - "Stderr: {{ certbot_result.stderr | default('N/A') }}"
+          - "Changed: {{ certbot_result.changed | default('N/A') }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and certbot_result is defined
+
+    - name: Verify certbot created letsencrypt directory
+      shell: |
+        if [ ! -d "/etc/letsencrypt" ]; then
+          echo "ERROR: /etc/letsencrypt directory was not created by certbot"
+          echo "This indicates certbot failed to generate certificates"
+          exit 1
+        fi
+        echo "SUCCESS: /etc/letsencrypt directory exists"
+        ls -la /etc/letsencrypt/
+      register: letsencrypt_verify
+      when: domain_name is defined and domain_name != ansible_host and domain_name != ""
+
+    - name: Display letsencrypt directory verification
+      debug:
+        msg: "{{ letsencrypt_verify.stdout_lines | default(['Verification skipped']) }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and letsencrypt_verify is defined
 
     - name: Check if SSL certificate exists
       stat:
@@ -276,6 +304,16 @@
         recursive: yes
         mode: push
       when: domain_name is defined and domain_name != ansible_host and domain_name != "" and ssl_cert_exists.stat.exists and letsencrypt_dir.stat.exists
+      ignore_errors: yes
+      register: letsencrypt_copy_result
+
+    - name: Display letsencrypt copy result
+      debug:
+        msg:
+          - "Letsencrypt copy result:"
+          - "Success: {{ letsencrypt_copy_result.changed | default(false) }}"
+          - "Error: {{ letsencrypt_copy_result.msg | default('N/A') }}"
+      when: domain_name is defined and domain_name != ansible_host and domain_name != "" and letsencrypt_copy_result is defined
 
     - name: Build and start services
       shell: |
