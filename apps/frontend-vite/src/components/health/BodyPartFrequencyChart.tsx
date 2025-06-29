@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
 import { Activity, TrendingUp } from 'lucide-react';
 
 interface BodyPartData {
@@ -16,6 +16,7 @@ interface BodyPartFrequencyChartProps {
   totalExerciseSessions: number;
   period: 'day' | 'week' | 'month' | 'year';
   chartType?: 'bar' | 'pie';
+  goals?: Record<string, number>;
 }
 
 // 커스텀 툴팁 컴포넌트
@@ -62,13 +63,16 @@ export const BodyPartFrequencyChart: React.FC<BodyPartFrequencyChartProps> = ({
   bodyPartFrequency,
   totalExerciseSessions,
   period,
-  chartType = 'bar'
+  chartType = 'bar',
+  goals
 }) => {
   // 데이터 정렬 및 처리
   const sortedData = useMemo(() => {
-    return bodyPartFrequency
+    const sorted = bodyPartFrequency
       .sort((a, b) => b.count - a.count)
       .slice(0, 8); // 상위 8개만 표시
+    console.log('[BodyPartFrequencyChart] sortedData:', sorted);
+    return sorted;
   }, [bodyPartFrequency]);
 
   // 기간에 따른 제목 설정
@@ -105,6 +109,7 @@ export const BodyPartFrequencyChart: React.FC<BodyPartFrequencyChartProps> = ({
 
   // 바 차트 렌더링
   if (chartType === 'bar') {
+    console.log('[BodyPartFrequencyChart] goals:', goals);
     return (
       <div className="bg-white rounded-xl shadow-sm border p-6 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-6">
@@ -136,6 +141,22 @@ export const BodyPartFrequencyChart: React.FC<BodyPartFrequencyChartProps> = ({
                 tick={{ fontSize: 12, fill: '#666' }}
               />
               <Tooltip content={<CustomTooltip />} />
+              {sortedData.map((entry, idx) => (
+                goals?.[entry.bodyPart] ? (
+                  <ReferenceLine
+                    key={`goal-${entry.bodyPart}`}
+                    y={goals[entry.bodyPart]}
+                    stroke="#EF4444"
+                    strokeDasharray="5 5"
+                    label={{
+                      value: `목표 ${goals[entry.bodyPart]}회`,
+                      position: "right",
+                      fill: "#EF4444",
+                      fontSize: 12
+                    }}
+                  />
+                ) : null
+              ))}
               <Bar 
                 dataKey="count" 
                 fill="#8884d8"

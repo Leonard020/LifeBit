@@ -52,6 +52,14 @@ interface FoodItem {
   servingSize: number;
 }
 
+interface NoteExerciseDTO {
+  workoutDate: string;
+  totalSets: number;
+  totalReps: number;
+  totalWeight: number;
+  exerciseNames: string[];
+}
+
 const Note = () => {
   // 1. 다크모드 감지 state를 최상단에 위치
   const [isDarkMode, setIsDarkMode] = React.useState(false);
@@ -76,7 +84,7 @@ const Note = () => {
 
   // 식단 추가 관련 상태
   const [mealTime, setMealTime] = useState('breakfast');
-  const [weeklySummary, setWeeklySummary] = useState<{ [part: string]: number }>({});
+  const [weeklySummary, setWeeklySummary] = useState<NoteExerciseDTO[]>([]);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
   const navigate = useNavigate();
@@ -242,181 +250,209 @@ const Note = () => {
   // 1. 운동명-부위 매핑에 벤치프레스 포함
   const exerciseNameToBodyPart: Record<string, string> = {
     '벤치프레스': '가슴',
+    '체스트프레스': '가슴',
+    '푸쉬업': '가슴',
+    '풀업': '등',
+    '랫풀다운': '등',
+    '데드리프트': '등',
+    '시티드로우': '등',
+    '스쿼트': '하체',
+    '런지': '하체',
+    '레그프레스': '하체',
+    '레그컬': '하체',
+    '숄더프레스': '어깨',
+    '사이드레터럴레이즈': '어깨',
+    '프론트레이즈': '어깨',
+    '바이셉컬': '팔',
+    '트라이셉스익스텐션': '팔',
+    '덤벨컬': '팔',
+    '크런치': '복근',
+    '레그레이즈': '복근',
+    '플랭크': '복근',
     '사이클링': '유산소',
     '수영': '유산소',
     '조깅': '유산소',
     '러닝': '유산소',
+    '런닝': '유산소',
+    '걷기': '유산소',
     // 필요시 추가
   };
 
-  // 2. todayBodyPartCounts 집계
-  const todayBodyPartCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    todayExercise.forEach((ex) => {
-      // bodyPart가 있으면 한글화, 없으면 매핑
-      const part = ex.bodyPart ? getBodyPartLabel(ex.bodyPart) : (exerciseNameToBodyPart[ex.exerciseName] || ex.bodyPart || '기타');
-      counts[part] = (counts[part] || 0) + 1;
-    });
-    return counts;
-  }, [todayExercise]);
+  // weekStart(일요일) 계산 정확히
+  const day = selectedDate.getDay(); // 0(일) ~ 6(토)
+  const diffToSunday = -day;
+  const weekStartDate = new Date(selectedDate);
+  weekStartDate.setDate(selectedDate.getDate() + diffToSunday);
+  weekStartDate.setHours(0,0,0,0);
 
-  // 3. exerciseData value에 todayBodyPartCounts 반영
+  function getDateRangeArray(start, end) {
+    const arr = [];
+    const dt = new Date(start);
+    while (dt <= end) {
+      arr.push(dt.toISOString().split('T')[0]);
+      dt.setDate(dt.getDate() + 1);
+    }
+    return arr;
+  }
+  const weekStartStr = weekStartDate.toISOString().split("T")[0];
+  const selectedDateStr = selectedDate.toISOString().split("T")[0];
+  const dateArr = getDateRangeArray(weekStartDate, selectedDate);
+
+  // todayExercise를 날짜별로 그룹화 (bodyPart가 cardio/유산소면 유산소로)
+  const todayExerciseByDate = todayExercise.reduce((acc, rec) => {
+    const date = rec.exerciseDate ? rec.exerciseDate.slice(0, 10) : null;
+    if (!date) return acc;
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(rec);
+    return acc;
+  }, {});
+
+  // 누락된 날짜의 운동 기록을 NoteExerciseDTO 형태로 변환 (유산소 보정 포함)
+  const extraRecords = dateArr
+    .filter(date => !weeklySummary.some(item => item.workoutDate.slice(0, 10) === date) && todayExerciseByDate[date])
+    .map(date => {
+      const records = todayExerciseByDate[date];
+      return {
+        workoutDate: date,
+        totalSets: records.reduce((sum, r) => sum + (r.sets || 0), 0),
+        totalReps: records.reduce((sum, r) => sum + (r.reps || 0), 0),
+        totalWeight: records.reduce((sum, r) => sum + (r.weight || 0), 0),
+        exerciseNames: records.map(r => {
+          if (r.bodyPart === 'cardio' || r.bodyPart === '유산소') return '유산소';
+          return r.exerciseName;
+        }),
+      };
+    });
+
+  // weeklySummary + 누락 보정 extraRecords 합치기 (exerciseNames 1개 이상만)
+  const mergedSummary = [
+    ...weeklySummary,
+    ...extraRecords
+  ].filter(item => Array.isArray(item.exerciseNames) && item.exerciseNames.length > 0);
+
+  // Radar Chart 집계는 mergedSummary 기준으로 진행
+  const filteredSummary = mergedSummary.filter(item => {
+    const dateStr = item.workoutDate.slice(0, 10);
+    return dateStr >= weekStartStr && dateStr <= selectedDateStr;
+  });
+
+  // 2. 주간 운동 부위별 누적 집계 (날짜별 부위별 1회만 카운트, 유산소 통합)
+  React.useEffect(() => {
+    console.log('[Radar] weeklySummary:', weeklySummary);
+    console.log('🟢 [Radar] filteredSummary:', filteredSummary);
+    filteredSummary.forEach(item => {
+      console.log('🔵 [Radar] item:', {
+        workoutDate: item.workoutDate,
+        exerciseNames: item.exerciseNames,
+      });
+      if (Array.isArray(item.exerciseNames)) {
+        item.exerciseNames.forEach((name: string) => {
+          const lower = name.toLowerCase();
+          const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(cardio => lower.includes(cardio));
+          const part = isCardio ? '유산소' : (exerciseNameToBodyPart[name] || getBodyPartLabel(name) || '기타');
+          if (!part || part === '기타') {
+            console.warn('[Radar] 매핑되지 않은 운동명:', name);
+          }
+        });
+      }
+    });
+  }, [weeklySummary, filteredSummary]);
+
+  const weeklyBodyPartCounts = React.useMemo(() => {
+    // 날짜별로 부위별 1회만 카운트
+    const datePartSet: Record<string, Set<string>> = {};
+    filteredSummary.forEach((item) => {
+      if (!Array.isArray(item.exerciseNames)) return;
+      const date = item.workoutDate;
+      if (!datePartSet[date]) datePartSet[date] = new Set();
+      item.exerciseNames.forEach((name: string) => {
+        const lower = name.toLowerCase();
+        const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(cardio => lower.includes(cardio));
+        const part = isCardio ? '유산소' : (exerciseNameToBodyPart[name] || getBodyPartLabel(name) || '기타');
+        if (!part || part === '기타') {
+          console.warn('[Radar] 매핑되지 않은 운동명:', name);
+        }
+        datePartSet[date].add(part);
+      });
+    });
+    // 부위별로 날짜별 1회씩만 누적
+    const counts: Record<string, number> = {};
+    Object.values(datePartSet).forEach((partsSet) => {
+      partsSet.forEach((part) => {
+        counts[part] = (counts[part] || 0) + 1;
+      });
+    });
+    console.log('🟡 [Radar] datePartSet:', datePartSet);
+    console.log('🟠 [Radar] counts:', counts);
+    return counts;
+  }, [filteredSummary]);
+
+  // 3. exerciseData: 주간 누적만 사용
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: todayBodyPartCounts[label] || 0,
+    value: weeklyBodyPartCounts[label] || 0,
     goal: exerciseGoals[label] || 0,
   }));
 
   // 운동데이터터 - 저장된 토큰 사용
   useEffect(() => {
     const fetchWeeklySummary = async () => {
-      if (!authToken) return; // 토큰이 없으면 실행하지 않음
+      if (!authToken) return;
       setIsLoadingSummary(true);
       try {
         const userInfo = getUserInfo();
         const userId = userInfo?.userId || 1;
-
-        const today = new Date();
-        const day = today.getDay(); // 0(일) ~ 6(토)
-        const diffToMonday = (day === 0 ? -6 : 1) - day;
-        const monday = new Date(today);
-        monday.setDate(today.getDate() + diffToMonday);
-        const weekStart = monday.toISOString().split("T")[0];
-
-
-      } catch (err) {
+        // selectedDate 기준으로 해당 주의 일요일(weekStart) 계산
+        const day = selectedDate.getDay(); // 0(일) ~ 6(토)
+        const diffToSunday = -day; // 일요일까지의 차이
+        const sunday = new Date(selectedDate);
+        sunday.setDate(selectedDate.getDate() + diffToSunday);
+        const weekStart = sunday.toISOString().split("T")[0];
+        
+        console.log('📅 [Note] 선택된 날짜:', selectedDate.toISOString().split("T")[0]);
+        console.log('📅 [Note] 해당 주의 일요일:', weekStart);
+        
+        // API 호출
+        const res = await axios.get(`/api/note/exercise/summary`, {
+          params: { weekStart },
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        setWeeklySummary(Array.isArray(res.data) ? res.data : []);
+      } catch (err: unknown) {
+        if (isAxiosError(err) && err.response?.status === 403) {
+          alert("운동 요약 데이터를 불러올 권한이 없습니다. 다시 로그인 해주세요.");
+          removeToken();
+          navigate('/login');
+        }
         console.error("주간 운동 집계 불러오기 실패:", err);
+        setWeeklySummary([]);
       } finally {
         setIsLoadingSummary(false);
       }
     };
-
     fetchWeeklySummary();
-  }, [authToken]); // authToken이 변경될 때마다 실행
+  }, [authToken, selectedDate]);
 
-  // ✅ fetchDietData를 useCallback으로 분리
-  const fetchDietData = useCallback(async () => {
-    if (!authToken) return;
-    setIsLoadingDietData(true);
-    setDietError(null);
-    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-    try {
-      const userId = getUserIdFromToken();
-
-      if (!userId) {
-        console.warn('🚨 [fetchDietData] 사용자 ID를 찾을 수 없습니다.');
-        setDietError("사용자 인증이 필요합니다.");
-        return;
-      }
-
-      console.log(`🍽️ [fetchDietData] 식단 데이터 조회 시작: ${formattedDate}, 사용자: ${userId}`);
-
-      // ✅ authApi.ts의 함수 사용 (충돌 방지)
-      const dietRecords = await getDailyDietRecords(formattedDate, userId);
-
-      // DietRecord → DietLogDTO 변환
-      const convertedRecords: DietRecord[] = dietRecords.map(record => ({
-        id: record.id,
-        userId: record.userId,
-        foodItemId: record.foodItemId,
-        foodName: record.foodName,
-        quantity: record.quantity,
-        calories: record.calories,
-        carbs: record.carbs,
-        protein: record.protein,
-        fat: record.fat,
-        logDate: record.logDate,
-        unit: record.unit,
-        mealTime: record.mealTime,
-        inputSource: record.inputSource,
-        confidenceScore: record.confidenceScore,
-        originalAudioPath: record.originalAudioPath,
-        validationStatus: record.validationStatus,
-        validationNotes: record.validationNotes,
-        createdAt: record.createdAt
-      }));
-
-      // 사용자 목표 데이터에서 영양소 목표 가져오기
-      const goals = Array.isArray(userGoalsData)
-        ? userGoalsData.reduce((prev, curr) => (curr.user_goal_id > prev.user_goal_id ? curr : prev), userGoalsData[0])
-        : userGoalsData;
-
-      console.log('🎯 [fetchDietData] 사용자 목표 데이터:', goals);
-
-      // 실제 사용자 목표 사용, 없으면 기본값
-      const nutritionGoals: DietNutritionDTO[] = [
-        {
-          name: '칼로리',
-          target: goals?.daily_calories_target ?? 0,
-          current: dailyDietLogs.reduce((sum, log) => sum + log.calories, 0),
-          unit: 'kcal',
-          percentage: goals?.daily_calories_target ? (dailyDietLogs.reduce((sum, log) => sum + log.calories, 0) / goals.daily_calories_target) * 100 : 0
-        },
-        {
-          name: '탄수화물',
-          target: goals?.daily_carbs_target ?? 0,
-          current: dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0),
-          unit: 'g',
-          percentage: goals?.daily_carbs_target ? (dailyDietLogs.reduce((sum, log) => sum + log.carbs, 0) / goals.daily_carbs_target) * 100 : 0
-        },
-        {
-          name: '단백질',
-          target: goals?.daily_protein_target ?? 0,
-          current: dailyDietLogs.reduce((sum, log) => sum + log.protein, 0),
-          unit: 'g',
-          percentage: goals?.daily_protein_target ? (dailyDietLogs.reduce((sum, log) => sum + log.protein, 0) / goals.daily_protein_target) * 100 : 0
-        },
-        {
-          name: '지방',
-          target: goals?.daily_fat_target ?? 0,
-          current: dailyDietLogs.reduce((sum, log) => sum + log.fat, 0),
-          unit: 'g',
-          percentage: goals?.daily_fat_target ? (dailyDietLogs.reduce((sum, log) => sum + log.fat, 0) / goals.daily_fat_target) * 100 : 0
-        }
-      ];
-
-      console.log('✅ [fetchDietData] 식단 데이터 조회 성공');
-      setDailyDietLogs(convertedRecords);
-
-    } catch (error) {
-      console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
-
-      if (error instanceof Error) {
-        if (error.message.includes('403')) {
-          setDietError("권한이 없습니다. 다시 로그인해주세요.");
-        } else if (error.message.includes('401')) {
-          setDietError("인증이 만료되었습니다. 다시 로그인해주세요.");
-        } else {
-          setDietError(`식단 데이터를 불러오는데 실패했습니다: ${error.message}`);
-        }
-      } else {
-        setDietError("식단 데이터를 불러오는데 실패했습니다.");
-      }
-    } finally {
-      setIsLoadingDietData(false);
-    }
-  }, [authToken, selectedDate, userGoalsData]); // userGoalsData 의존성 추가
-
-  useEffect(() => {
-    fetchDietData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, authToken]);
+  // weeklySummary 콘솔 출력용 useEffect 추가
+  React.useEffect(() => {
+    console.log('🟣 weeklySummary:', weeklySummary);
+    weeklySummary.forEach(day => {
+      console.log('🔍 workoutDate:', day.workoutDate, 'exerciseNames:', day.exerciseNames);
+    });
+  }, [weeklySummary]);
 
   useEffect(() => {
     if (location.state?.refreshDiet) {
-      fetchDietData();
+      fetchCalendarRecords();
       window.history.replaceState({}, document.title);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-
-
   // 식단 기록 삭제
   const handleDeleteDietRecord = async (id: number) => {
     try {
       await deleteDietRecord(id);
-      await fetchDietData();
       await fetchCalendarRecords();
       toast({
         title: "삭제 완료",
@@ -773,11 +809,26 @@ const Note = () => {
   };
 
   // 식단 수정 저장
+  interface DietEditRequest {
+    userId: number | undefined;
+    quantity: number;
+    mealTime: string;
+    unit: string;
+    logDate: string;
+    inputSource: string;
+    foodItemId?: number;
+    foodName?: string;
+    calories?: number;
+    carbs?: number;
+    protein?: number;
+    fat?: number;
+  }
+
   const saveDietEdit = async () => {
     if (!editingDietLog) return;
     setIsUpdatingDiet(true);
     try {
-      const request: any = {
+      const request: DietEditRequest = {
         userId: getUserIdFromToken(), // PUT에는 반드시 포함
         quantity: editFormData.quantity,
         mealTime: editFormData.mealTime,
@@ -950,12 +1001,6 @@ const Note = () => {
 
   // Note.tsx 상단 state 부분에 추가
   const [inputSource, setInputSource] = useState('TYPING'); // 입력 방식(직접입력/음성입력)
-
-  // 오늘의 운동 기록만을 위한 레이더 차트 데이터
-  const todayRadarData = bodyPartMap.map(({ label }) => ({
-    subject: label,
-    value: todayBodyPartCounts[label] || 0,
-  }));
 
   return (
     <Layout>

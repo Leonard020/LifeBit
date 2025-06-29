@@ -30,8 +30,13 @@ public class NoteExerciseService {
     // ✅ 주간 요약 데이터
     public List<NoteExerciseDTO> getWeeklyExerciseSummary(Long userId, LocalDate weekStart) {
         LocalDate weekEnd = weekStart.plusDays(6);
-        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
+        System.out.println("🟣 getWeeklyExerciseSummary called: userId=" + userId + ", weekStart=" + weekStart + ", weekEnd=" + weekEnd);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetweenWithCatalog(
                 userId, weekStart, weekEnd);
+        System.out.println("🟣 sessions.size()=" + sessions.size());
+        for (ExerciseSession s : sessions) {
+            System.out.println("  - session: " + s.getExerciseDate() + ", " + s.getExerciseCatalog().getName());
+        }
 
         Map<LocalDate, NoteExerciseDTO> summaryMap = new TreeMap<>();
         for (ExerciseSession session : sessions) {

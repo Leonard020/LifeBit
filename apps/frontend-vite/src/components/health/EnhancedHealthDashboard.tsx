@@ -375,6 +375,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               totalExerciseSessions={healthStats?.totalExerciseSessions || 0}
               period={period}
               chartType="bar"
+              goals={{ chest: 3, cardio: 4, back: 2, legs: 2, shoulders: 2, arms: 2, abs: 2 }}
             />
             <ExerciseCalendarHeatmap 
               exerciseSessions={exerciseHeatmapData || []}

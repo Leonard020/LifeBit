@@ -56,7 +56,7 @@ public class NoteExerciseController {
             return userId;
             
         } catch (Exception e) {
-            log.error("토큰에서 사용자 ID 추출 실패: {}", e.getMessage(), e);
+            log.error("[extractUserId] 토큰에서 사용자 ID 추출 실패: {}", e.getMessage(), e);
             throw new RuntimeException("Token validation failed: " + e.getMessage(), e);
         }
     }
@@ -89,9 +89,14 @@ public class NoteExerciseController {
     public ResponseEntity<List<NoteExerciseDTO>> getWeeklyExerciseSummary(
             @RequestHeader("Authorization") String token,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStart) {
+        try {
         Long userId = extractUserId(token);
         List<NoteExerciseDTO> summary = noteExerciseService.getWeeklyExerciseSummary(userId, weekStart);
         return ResponseEntity.ok(summary);
+        } catch (Exception e) {
+            log.error("[NoteExerciseController] 주간 운동 요약 조회 실패: {}", e.getMessage(), e);
+            return ResponseEntity.status(403).body(List.of()); // 403 Forbidden 명확히 반환
+        }
     }
 
     // ✅ 3. 운동 기록 추가

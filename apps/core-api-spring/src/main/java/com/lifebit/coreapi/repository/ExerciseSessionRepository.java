@@ -32,4 +32,7 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
 
     @Query("SELECT COUNT(DISTINCT es.exerciseDate) FROM ExerciseSession es WHERE es.user = :user")
     long countDistinctExerciseDateByUser(@Param("user") User user);
+
+    @Query("SELECT es FROM ExerciseSession es JOIN FETCH es.user JOIN FETCH es.exerciseCatalog WHERE es.user.userId = :userId AND es.exerciseDate BETWEEN :start AND :end")
+    List<ExerciseSession> findByUser_UserIdAndExerciseDateBetweenWithCatalog(@Param("userId") Long userId, @Param("start") LocalDate start, @Param("end") LocalDate end);
 }
