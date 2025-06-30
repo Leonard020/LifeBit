@@ -35,30 +35,6 @@ const Settings: React.FC = () => {
       label: '알림',
       icon: Bell,
       hoverIcon: BellIcon
-    },
-    {
-      value: 'account',
-      label: '계정',
-      icon: User,
-      hoverIcon: UserIcon
-    },
-    {
-      value: 'goal',
-      label: '목표',
-      icon: Target,
-      hoverIcon: TargetIcon
-    },
-    {
-      value: 'data',
-      label: '보안',
-      icon: Shield,
-      hoverIcon: ShieldIcon
-    },
-    {
-      value: 'etc',
-      label: '기타',
-      icon: Settings,
-      hoverIcon: Settings2
     }
   ];
 
@@ -90,49 +66,6 @@ const Settings: React.FC = () => {
           
           <TabsContent value="notification" className="mt-6">
             <NotificationSettings />
-          </TabsContent>
-          
-          <TabsContent value="account" className="mt-6">
-            <Card>
-              <CardHeader><CardTitle>계정/개인정보</CardTitle></CardHeader>
-              <CardContent>
-                <div>비밀번호 변경, 이메일/닉네임 변경, 소셜 연동 등 (추후 구현)</div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="goal" className="mt-6">
-            <Card>
-              <CardHeader><CardTitle>건강 목표/리마인더</CardTitle></CardHeader>
-              <CardContent>
-                <div>건강 목표 빠른 설정, 목표 리마인더 등 (추후 구현)</div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="data" className="mt-6">
-            <Card>
-              <CardHeader><CardTitle>데이터/보안</CardTitle></CardHeader>
-              <CardContent>
-                <div>내 데이터 다운로드, 계정 탈퇴, 로그인 이력 등 (추후 구현)</div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="etc" className="mt-6">
-            <Card>
-              <CardHeader><CardTitle>기타</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4 mb-4">
-                  <span>언어</span>
-                  <select value={language} onChange={e => setLanguage(e.target.value)} className="border rounded p-1">
-                    <option value="ko">한국어</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
-                <div>앱 정보, 접근성, 고객센터 등 (추후 구현)</div>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>

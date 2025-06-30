@@ -420,15 +420,6 @@ const NotificationBell = () => {
               onClick={() => setFilterType(null)}
               className="text-xs"
             >전체</Button>
-            {Object.entries(typeMeta).map(([type, meta]) => (
-              <Button
-                key={type}
-                variant={filterType === type ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setFilterType(type)}
-                className={`text-xs ${meta.color}`}
-              >{meta.icon} {meta.label}</Button>
-            ))}
             {unreadCount > 0 && (
               <Button
                 variant="ghost"

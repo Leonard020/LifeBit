@@ -33,9 +33,8 @@ const ThemeSettings: React.FC = () => {
   ];
 
   const fontSizes = [
-    { value: 'small', label: '작게', size: 'text-base' },
-    { value: 'normal', label: '보통', size: 'text-lg' },
-    { value: 'large', label: '크게', size: 'text-xl' },
+    { value: 'small', label: '보통', size: 'text-base' },
+    { value: 'normal', label: '크게', size: 'text-lg' },
   ];
 
   const handleSave = () => {
@@ -64,72 +63,6 @@ const ThemeSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 테마 모드 설정 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Palette className="h-5 w-5" />
-            테마 모드
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button
-              variant={tempSettings.themeMode === 'light' ? 'default' : 'outline'}
-              onClick={() => setThemeMode('light')}
-              className="h-20 flex flex-col items-center justify-center gap-2"
-            >
-              <Sun className="h-6 w-6" />
-              <span>라이트</span>
-            </Button>
-            <Button
-              variant={tempSettings.themeMode === 'dark' ? 'default' : 'outline'}
-              onClick={() => setThemeMode('dark')}
-              className="h-20 flex flex-col items-center justify-center gap-2"
-            >
-              <Moon className="h-6 w-6" />
-              <span>다크</span>
-            </Button>
-            <Button
-              variant={tempSettings.themeMode === 'system' ? 'default' : 'outline'}
-              onClick={() => setThemeMode('system')}
-              className="h-20 flex flex-col items-center justify-center gap-2"
-            >
-              <Monitor className="h-6 w-6" />
-              <span>시스템</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 컬러 스킴 설정 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Palette className="h-5 w-5" />
-            컬러 스킴
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {colorSchemes.map((scheme) => (
-              <Button
-                key={scheme.value}
-                variant={tempSettings.colorScheme === scheme.value ? 'default' : 'outline'}
-                onClick={() => setColorScheme(scheme.value as ColorScheme)}
-                className="h-16 flex flex-col items-center justify-center gap-1 relative"
-              >
-                <div className={`w-6 h-6 rounded-full ${scheme.color}`} />
-                <span className="text-xs">{scheme.label}</span>
-                {tempSettings.colorScheme === scheme.value && (
-                  <div className="absolute top-1 right-1 w-3 h-3 bg-primary rounded-full" />
-                )}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* 폰트 크기 설정 */}
       <Card>
         <CardHeader>
@@ -139,18 +72,16 @@ const ThemeSettings: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex flex-row gap-4 justify-center">
             {fontSizes.map((size) => (
               <Button
                 key={size.value}
                 variant={tempSettings.fontSize === size.value ? 'default' : 'outline'}
                 onClick={() => setFontSize(size.value as FontSize)}
-                className="h-16 flex flex-col items-center justify-center gap-2"
+                className="h-20 w-32 flex flex-col items-center justify-center gap-3 text-xl"
               >
-                <div className={`${size.size} font-medium`}>
-                  Aa
-                </div>
-                <span className="text-xs">{size.label}</span>
+                <div className={`${size.size} font-bold text-2xl`}>Aa</div>
+                <span className="text-base font-semibold">{size.label}</span>
               </Button>
             ))}
           </div>
@@ -194,52 +125,6 @@ const ThemeSettings: React.FC = () => {
               checked={tempSettings.reduceMotion}
               onCheckedChange={setReduceMotion}
             />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 저장/취소 버튼 */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {hasUnsavedChanges && (
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                  변경사항이 있습니다
-                </span>
-              )}
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={handleReset}
-                className="flex items-center gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                기본값
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                disabled={!hasUnsavedChanges}
-                className="flex items-center gap-2"
-              >
-                <X className="h-4 w-4" />
-                취소
-              </Button>
-              
-              <Button
-                onClick={handleSave}
-                disabled={!hasUnsavedChanges}
-                className="flex items-center gap-2"
-              >
-                <Save className="h-4 w-4" />
-                저장
-              </Button>
-            </div>
           </div>
         </CardContent>
       </Card>

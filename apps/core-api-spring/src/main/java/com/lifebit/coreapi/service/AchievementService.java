@@ -39,6 +39,25 @@ public class AchievementService {
         
         List<UserAchievement> userAchievements = userAchievementRepository.findByUserIdWithAchievements(userId);
         
+        // 정렬: 달성된 업적(최신순) → 미달성(진행도 높은 순)
+        userAchievements.sort((a, b) -> {
+            boolean aAchieved = Boolean.TRUE.equals(a.getIsAchieved());
+            boolean bAchieved = Boolean.TRUE.equals(b.getIsAchieved());
+            if (aAchieved && !bAchieved) return -1;
+            if (!aAchieved && bAchieved) return 1;
+            if (aAchieved && bAchieved) {
+                if (a.getAchievedDate() != null && b.getAchievedDate() != null)
+                    return b.getAchievedDate().compareTo(a.getAchievedDate());
+                if (a.getAchievedDate() != null) return -1;
+                if (b.getAchievedDate() != null) return 1;
+                return 0;
+            }
+            // 미달성: 진행도 높은 순
+            double aProgress = a.getProgress() / (a.getAchievement().getTargetDays() == null ? 100.0 : a.getAchievement().getTargetDays());
+            double bProgress = b.getProgress() / (b.getAchievement().getTargetDays() == null ? 100.0 : b.getAchievement().getTargetDays());
+            return Double.compare(bProgress, aProgress);
+        });
+        
         return userAchievements.stream()
             .map(this::convertToAchievementMap)
             .collect(Collectors.toList());
