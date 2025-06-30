@@ -20,6 +20,7 @@ import java.util.UUID;
 import com.lifebit.coreapi.entity.TimePeriodType;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -544,6 +545,141 @@ public class ExerciseService {
 
     // 관리자 페이지에서 운동 카탈로그 조회
     public List<ExerciseCatalog> getAllCatalogs() {
-        return exerciseCatalogRepository.findAll();
+        return exerciseCatalogRepository.findAllOrderByCreatedAtDesc();
+    }
+    
+    // 관리자용: 운동 카탈로그 생성
+    @Transactional
+    public ExerciseCatalog createExerciseCatalog(ExerciseCatalog exerciseCatalog) {
+        exerciseCatalog.setUuid(UUID.randomUUID());
+        exerciseCatalog.setCreatedAt(LocalDateTime.now());
+        return exerciseCatalogRepository.save(exerciseCatalog);
+    }
+    
+    // 관리자용: 운동 카탈로그 수정
+    @Transactional
+    public ExerciseCatalog updateExerciseCatalog(Long id, Map<String, Object> request) {
+        log.info("🔧 [ExerciseService] 운동 카탈로그 수정 요청 - ID: {}, 요청 데이터: {}", id, request);
+        
+        ExerciseCatalog catalog = exerciseCatalogRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("운동 카탈로그를 찾을 수 없습니다: " + id));
+
+        log.info("🔧 [ExerciseService] 기존 카탈로그 - 이름: {}, 부위: {}, 타입: {}, 강도: {}", 
+            catalog.getName(), catalog.getBodyPart(), catalog.getExerciseType(), catalog.getIntensity());
+
+        // 운동명 수정 (기본 중복 검사만)
+        if (request.containsKey("name")) {
+            String newName = (String) request.get("name");
+            if (!newName.equals(catalog.getName())) {
+                Optional<ExerciseCatalog> existing = exerciseCatalogRepository.findByName(newName);
+                if (existing.isPresent() && !existing.get().getExerciseCatalogId().equals(id)) {
+                    throw new RuntimeException("이미 존재하는 운동명입니다: " + newName);
+                }
+                catalog.setName(newName);
+                log.info("🔧 [ExerciseService] 운동명 수정: {} → {}", catalog.getName(), newName);
+            }
+        }
+
+        // 운동 부위 수정 (한글 → 영어 변환)
+        if (request.containsKey("bodyPart")) {
+            String bodyPartKor = (String) request.get("bodyPart");
+            String bodyPartEng = convertBodyPartToEnglishAdmin(bodyPartKor);
+            log.info("🔧 [ExerciseService] 운동 부위 변환: {} → {}", bodyPartKor, bodyPartEng);
+            
+            try {
+                com.lifebit.coreapi.entity.BodyPartType bodyPartType = 
+                    com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPartEng.toLowerCase());
+                
+                com.lifebit.coreapi.entity.BodyPartType oldBodyPart = catalog.getBodyPart();
+                catalog.setBodyPart(bodyPartType);
+                log.info("🔧 [ExerciseService] 운동 부위 설정: {} → {}", oldBodyPart, bodyPartType);
+            } catch (IllegalArgumentException e) {
+                log.error("❌ [ExerciseService] 유효하지 않은 운동 부위: {} → {}", bodyPartKor, bodyPartEng);
+                throw new RuntimeException("유효하지 않은 운동 부위입니다: " + bodyPartKor);
+            }
+        }
+
+        // 운동 타입 수정 (한글 → 영어 변환)
+        if (request.containsKey("exerciseType")) {
+            String exerciseTypeKor = (String) request.get("exerciseType");
+            String exerciseTypeEng = convertExerciseTypeToEnglishAdmin(exerciseTypeKor);
+            catalog.setExerciseType(exerciseTypeEng);
+            log.info("🔧 [ExerciseService] 운동 타입 변환: {} → {}", exerciseTypeKor, exerciseTypeEng);
+        }
+
+        // 강도 수정 (한글 → 영어 변환)
+        if (request.containsKey("intensity")) {
+            Object intensityObj = request.get("intensity");
+            if (intensityObj != null) {
+                String intensityKor = (String) intensityObj;
+                String intensityEng = convertIntensityToEnglishAdmin(intensityKor);
+                catalog.setIntensity(intensityEng);
+                log.info("🔧 [ExerciseService] 강도 변환: {} → {}", intensityKor, intensityEng);
+            } else {
+                catalog.setIntensity(null);
+                log.info("🔧 [ExerciseService] 강도를 null로 설정");
+            }
+        }
+
+        // 설명 수정
+        if (request.containsKey("description")) {
+            catalog.setDescription((String) request.get("description"));
+        }
+
+        log.info("💾 [ExerciseService] 저장 직전 - 부위: {}, 타입: {}, 강도: {}", 
+            catalog.getBodyPart(), catalog.getExerciseType(), catalog.getIntensity());
+
+        ExerciseCatalog savedCatalog = exerciseCatalogRepository.save(catalog);
+        
+        log.info("✅ [ExerciseService] 운동 카탈로그 수정 완료 - ID: {}, 이름: {}, 부위: {}, 타입: {}, 강도: {}", 
+            savedCatalog.getExerciseCatalogId(), savedCatalog.getName(), 
+            savedCatalog.getBodyPart(), savedCatalog.getExerciseType(), savedCatalog.getIntensity());
+        
+        return savedCatalog;
+    }
+
+    // 관리자 전용 변환 함수들 (기존 로직과 분리)
+    private String convertBodyPartToEnglishAdmin(String korean) {
+        return switch (korean) {
+            case "가슴" -> "chest";
+            case "등" -> "back";
+            case "다리" -> "legs";
+            case "어깨" -> "shoulders";
+            case "팔" -> "arms";
+            case "복근" -> "abs";
+            case "유산소" -> "cardio";
+            default -> korean.toLowerCase();
+        };
+    }
+
+    private String convertExerciseTypeToEnglishAdmin(String korean) {
+        return switch (korean) {
+            case "근력" -> "strength";
+            case "유산소" -> "aerobic";
+            default -> korean.toLowerCase();
+        };
+    }
+
+    private String convertIntensityToEnglishAdmin(String korean) {
+        return switch (korean) {
+            case "하" -> "low";
+            case "중" -> "medium";
+            case "상" -> "high";
+            default -> korean.toLowerCase();
+        };
+    }
+    
+    // 관리자용: 운동 카탈로그 삭제
+    @Transactional
+    public void deleteExerciseCatalog(Long id) {
+        if (!exerciseCatalogRepository.existsById(id)) {
+            throw new RuntimeException("운동을 찾을 수 없습니다: " + id);
+        }
+        exerciseCatalogRepository.deleteById(id);
+    }
+    
+    // 강도 미설정 운동만 조회
+    public List<ExerciseCatalog> getUncategorizedExercises() {
+        return exerciseCatalogRepository.findByIntensityIsNull();
     }
 }
