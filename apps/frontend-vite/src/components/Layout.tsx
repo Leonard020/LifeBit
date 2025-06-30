@@ -30,16 +30,20 @@ import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
 import { isAdmin, removeToken } from '@/utils/auth'; // ✅ removeToken 추가
 import { useTheme } from '@/contexts/ThemeContext';
 import NotificationBell from '@/components/NotificationBell';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const WebHeader = () => {
+const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void }) => {
   const { toast } = useToast();
   const { isLoggedIn, nickname, setIsLoggedIn, setNickname } = useAuth();
   const { open: sidebarOpen } = useSidebar();
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const [mailLoading, setMailLoading] = useState(false);
 
   const handleLogout = () => {
     removeToken(); // 모든 토큰과 사용자 정보 삭제
@@ -51,6 +55,15 @@ const WebHeader = () => {
     });
 
     window.location.href = '/login'
+  };
+
+  const handleSendMail = async () => {
+    setMailLoading(true);
+    setTimeout(() => {
+      setMailLoading(false);
+      setContactOpen(false);
+      alert('메일이 전송되었습니다!');
+    }, 1000);
   };
 
   return (
@@ -111,6 +124,9 @@ const WebHeader = () => {
                       </Link>
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem onClick={() => setContactOpen(true)}>
+                    관리자 문의 메일
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     로그아웃
                   </DropdownMenuItem>
@@ -146,6 +162,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { toast } = useToast();
   const { isDarkMode, toggleDarkMode } = useTheme();
 
+  // 메일 모달 상태/핸들러
+  const [contactOpen, setContactOpen] = useState(false);
+
   const toggleNavVisibility = () => {
     setIsNavVisible(!isNavVisible);
   };
@@ -164,7 +183,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="min-h-screen flex w-full">
           <AppSidebar />
           <SidebarInset className="flex-1">
-            <WebHeader />
+            <WebHeader setContactOpen={setContactOpen} />
             <main className="flex-1">{children}</main>
           </SidebarInset>
         </div>
@@ -225,7 +244,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => setIsLoggedIn(false)}>
+                  <DropdownMenuItem onClick={() => setContactOpen(true)}>
+                    관리자 문의 메일
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setIsLoggedIn(false); setNickname(''); window.location.href = '/login'; }}>
                     로그아웃
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -304,6 +326,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </div>
       </nav>
+
+      <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+        <DialogContent className="animate-fade-in bg-background text-foreground shadow-xl border border-border rounded-xl">
+          <div className="flex justify-between items-center mb-2">
+            <DialogTitle className="text-2xl font-bold">문의하기</DialogTitle>
+          </div>
+          <div className="text-base text-muted-foreground mb-4">
+            관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
+            <span className="block mt-3">
+              <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-all duration-200 shadow-sm animate-pulse">
+                <svg xmlns='http://www.w3.org/2000/svg' className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a4 4 0 11-8 0 4 4 0 018 0zm0 0v4m0-4V8" /></svg>
+                admin@lifebit.com
+              </a>
+            </span>
+            이메일로 보내주세요.
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
