@@ -504,9 +504,14 @@ export const AdminPage = () => {
   
   const indexOfLast = currentPage * usersPerPage;
   const indexOfFirst = indexOfLast - usersPerPage;
-  const currentList = activeTab === 'users' ? users.slice(indexOfFirst, indexOfLast) :
-                      activeTab === 'food' ? foodCatalogs.slice(indexOfFirst, indexOfLast) :
-                      filteredCatalogs.slice(indexOfFirst, indexOfLast);
+  let currentList: User[] | FoodCatalogItem[] | CatalogItem[] = [];
+  if (activeTab === 'users') {
+    currentList = users.slice(indexOfFirst, indexOfLast);
+  } else if (activeTab === 'food') {
+    currentList = foodCatalogs.slice(indexOfFirst, indexOfLast);
+  } else {
+    currentList = filteredCatalogs.slice(indexOfFirst, indexOfLast);
+  }
 
   const goToFirstPage = () => setCurrentPage(1);
   const goToLastPage = () => setCurrentPage(totalPages);
@@ -524,14 +529,14 @@ export const AdminPage = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto py-8">
+      <div className="container mx-auto py-8 bg-white text-gray-900 dark:bg-gray-900 dark:text-white transition-colors duration-300">
         <div className="flex gap-4 mb-6">
           <Button variant={activeTab === 'catalog' ? 'default' : 'outline'} onClick={() => setActiveTab('catalog')}>운동 카탈로그</Button>
           <Button variant={activeTab === 'food' ? 'default' : 'outline'} onClick={() => setActiveTab('food')}>음식 카탈로그</Button>
           <Button variant={activeTab === 'users' ? 'default' : 'outline'} onClick={() => setActiveTab('users')}>회원 관리</Button>
         </div>
 
-        <Card>
+        <Card className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white transition-colors duration-300">
           <CardHeader>
             <CardTitle>
               <div className="flex justify-between items-center">
@@ -553,9 +558,9 @@ export const AdminPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="bg-white dark:bg-gray-900">
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-gray-100 dark:bg-gray-800">
                   {activeTab === 'users' ? (
                     <>
                       <TableHead>이메일</TableHead>
@@ -590,8 +595,8 @@ export const AdminPage = () => {
               </TableHeader>
               <TableBody>
                 {currentList.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  <TableRow className="bg-white dark:bg-gray-900">
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900">
                       {activeTab === 'catalog' && showUnsetIntensityOnly 
                         ? '미설정 운동이 없습니다.' 
                         : activeTab === 'catalog' 
@@ -603,32 +608,32 @@ export const AdminPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  currentList.map((item: any) => (
-                    <TableRow key={`${activeTab}-${activeTab === 'users' ? item.id : activeTab === 'food' ? item.foodItemId : item.exerciseCatalogId}`}>
+                  (currentList as (User[] | FoodCatalogItem[] | CatalogItem[])).map((item, idx) => (
+                    <TableRow key={`${activeTab === 'users' ? (item as User).id : activeTab === 'food' ? (item as FoodCatalogItem).foodItemId : (item as CatalogItem).exerciseCatalogId}`} className="bg-white dark:bg-gray-900">
                       {activeTab === 'users' ? (
                         <>
-                          <TableCell>{item.email}</TableCell>
-                          <TableCell>{item.nickname}</TableCell>
-                          <TableCell>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('ko-KR') : '-'}</TableCell>
-                          <TableCell>{item.lastVisited ? new Date(item.lastVisited).toLocaleDateString('ko-KR') : '-'}</TableCell>
-                          <TableCell>{item.role}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).email}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).nickname}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).createdAt ? new Date((item as User).createdAt!).toLocaleDateString('ko-KR') : '-'}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).lastVisited ? new Date((item as User).lastVisited!).toLocaleDateString('ko-KR') : '-'}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).role}</TableCell>
                           <TableCell>
-                            {item.role === 'USER' && (
-                              <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId(item.id); setShowDialog(true); }}>삭제</Button>
+                            {(item as User).role === 'USER' && (
+                              <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId((item as User).id); setShowDialog(true); }}>삭제</Button>
                             )}
                           </TableCell>
                         </>
                       ) : activeTab === 'food' ? (
                         <>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell>{item.servingSize}g</TableCell>
-                          <TableCell>{item.calories.toFixed(1)}</TableCell>
-                          <TableCell>{item.carbs.toFixed(1)}</TableCell>
-                          <TableCell>{item.protein.toFixed(1)}</TableCell>
-                          <TableCell>{item.fat.toFixed(1)}</TableCell>
-                          <TableCell>
-                            {item.createdAt ? 
-                              new Date(item.createdAt).toLocaleString('ko-KR', {
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).name}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).servingSize}g</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).calories.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).carbs.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).protein.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).fat.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">
+                            {(item as FoodCatalogItem).createdAt ? 
+                              new Date((item as FoodCatalogItem).createdAt).toLocaleString('ko-KR', {
                                 year: 'numeric',
                                 month: '2-digit',
                                 day: '2-digit',
@@ -639,12 +644,12 @@ export const AdminPage = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleEditFood(item)}>수정</Button>
+                              <Button variant="outline" size="sm" onClick={() => handleEditFood(item as FoodCatalogItem)}>수정</Button>
                               <Button 
                                 variant="destructive" 
                                 size="sm" 
                                 onClick={() => { 
-                                  setDeleteFoodCatalogId(item.foodItemId); 
+                                  setDeleteFoodCatalogId((item as FoodCatalogItem).foodItemId); 
                                   setShowDeleteFoodDialog(true); 
                                 }}
                               >
@@ -655,31 +660,21 @@ export const AdminPage = () => {
                         </>
                       ) : (
                         <>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell>{convertBodyPartToKorean(item.bodyPart)}</TableCell>
-                          <TableCell>{convertExerciseTypeToKorean(item.exerciseType || 'strength')}</TableCell>
-                          <TableCell>
-                            {item.intensity ? convertIntensityToKorean(item.intensity) : '미설정'}
+                          <TableCell className="text-gray-900 dark:text-white">{(item as CatalogItem).name}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{convertBodyPartToKorean((item as CatalogItem).bodyPart)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{convertExerciseTypeToKorean((item as CatalogItem).exerciseType || 'strength')}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">
+                            {(item as CatalogItem).intensity ? convertIntensityToKorean((item as CatalogItem).intensity) : '미설정'}
                           </TableCell>
-                          <TableCell>
-                            {item.createdAt ? 
-                              new Date(item.createdAt).toLocaleString('ko-KR', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              }) : '-'
-                            }
-                          </TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as CatalogItem).createdAt ? new Date((item as CatalogItem).createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleEdit(item)}>수정</Button>
+                              <Button variant="outline" size="sm" onClick={() => handleEdit(item as CatalogItem)}>수정</Button>
                               <Button 
                                 variant="destructive" 
                                 size="sm" 
                                 onClick={() => { 
-                                  setDeleteCatalogId(item.exerciseCatalogId); 
+                                  setDeleteCatalogId((item as CatalogItem).exerciseCatalogId); 
                                   setShowDeleteDialog(true); 
                                 }}
                               >

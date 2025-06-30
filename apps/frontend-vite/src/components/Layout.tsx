@@ -193,9 +193,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <DialogDescription asChild>
                   <div className="text-base text-muted-foreground mb-4">
                     관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
-                    <span className="block mt-3">
-                      <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-all duration-200 shadow-sm animate-pulse">
-                        <svg xmlns='http://www.w3.org/2000/svg' className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a4 4 0 11-8 0 4 4 0 018 0zm0 0v4m0-4V8" /></svg>
+                    <span className="block my-3">
+                      <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-[#7c3aed] bg-[#ede9fe] hover:bg-[#e0d7fa] transition-all duration-200 shadow-sm animate-pulse">
                         admin@lifebit.com
                       </a>
                     </span>
@@ -354,9 +353,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <DialogDescription asChild>
             <div className="text-base text-muted-foreground mb-4">
               관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
-              <span className="block mt-3">
-                <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-all duration-200 shadow-sm animate-pulse">
-                  <svg xmlns='http://www.w3.org/2000/svg' className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a4 4 0 11-8 0 4 4 0 018 0zm0 0v4m0-4V8" /></svg>
+              <span className="block my-3">
+                <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-[#7c3aed] bg-[#ede9fe] hover:bg-[#e0d7fa] transition-all duration-200 shadow-sm animate-pulse">
                   admin@lifebit.com
                 </a>
               </span>
