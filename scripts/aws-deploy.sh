@@ -46,6 +46,10 @@ export PROJECT_NAME="${PROJECT_NAME:-lifebit}"
 export ENVIRONMENT="${ENVIRONMENT:-production}"
 export INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+cd "$PROJECT_ROOT"
+
 log_info "배포 설정:"
 log_info "  - AWS Region: $AWS_REGION"
 log_info "  - Project Name: $PROJECT_NAME"
@@ -71,7 +75,7 @@ fi
 
 # LifeBit.sql 파일 존재 확인
 log_info "데이터베이스 스키마 파일 확인 중..."
-if [ ! -f "./LifeBit.sql" ]; then
+if [ ! -f "$PROJECT_ROOT/LifeBit.sql" ]; then
     log_error "LifeBit.sql 파일을 찾을 수 없습니다!"
     log_error "데이터베이스 초기화를 위해 LifeBit.sql 파일이 필요합니다."
     log_error "프로젝트 루트에 LifeBit.sql 파일이 있는지 확인해주세요."
@@ -79,7 +83,7 @@ if [ ! -f "./LifeBit.sql" ]; then
 fi
 
 # LifeBit.sql 파일 크기 확인 (최소 10KB 이상이어야 함)
-SQL_SIZE=$(stat -c%s "./LifeBit.sql" 2>/dev/null || echo "0")
+SQL_SIZE=$(stat -c%s "$PROJECT_ROOT/LifeBit.sql" 2>/dev/null || echo "0")
 if [ "$SQL_SIZE" -lt 10240 ]; then
     log_error "LifeBit.sql 파일이 너무 작습니다 (${SQL_SIZE} bytes)"
     log_error "올바른 데이터베이스 스키마 파일인지 확인해주세요."
