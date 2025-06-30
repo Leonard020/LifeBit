@@ -94,10 +94,41 @@ public class ExerciseController {
         return ResponseEntity.ok(catalog);
     }
 
-    // 관리자 페이지에서 운동 카탈로그 조회
-    @GetMapping("/api/exercises/catalog")
-    public ResponseEntity<List<ExerciseCatalog>> getAllCatalogs() {
+    // 관리자 페이지에서 운동 카탈로그 조회 (정렬된 버전)
+    @GetMapping("/admin/catalog")
+    public ResponseEntity<List<ExerciseCatalog>> getAllCatalogsForAdmin(
+            @RequestHeader("Authorization") String token) {
+        // 관리자 권한 확인 (필요시 구현)
         List<ExerciseCatalog> list = exerciseService.getAllCatalogs();
         return ResponseEntity.ok(list);
+    }
+
+    // 관리자 페이지에서 운동 카탈로그 수정
+    @PutMapping("/admin/catalog/{id}")
+    public ResponseEntity<ExerciseCatalog> updateCatalog(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request) {
+        try {
+            // 관리자 권한 확인 (필요시 구현)
+            ExerciseCatalog catalog = exerciseService.updateExerciseCatalog(id, request);
+            return ResponseEntity.ok(catalog);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // 관리자 페이지에서 운동 카탈로그 삭제
+    @DeleteMapping("/admin/catalog/{id}")
+    public ResponseEntity<Void> deleteCatalog(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long id) {
+        try {
+            // 관리자 권한 확인 (필요시 구현)
+            exerciseService.deleteExerciseCatalog(id);
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }
