@@ -554,7 +554,7 @@ const Index = () => {
               setChatInputText('');
               setChatStructuredData(null);
               setConversationHistory([]);
-              setChatAiFeedback({ type: 'initial', message: '안녕하세요! 💪 오늘 어떤 운동을 하셨나요?\n\n운동 이름, 무게, 세트수, 회수, 운동시간을 알려주세요!\n\n예시:\n"조깅 40분 동안 했어요"\n"벤치프레스 30kg 10회 3세트 했어요"' });
+              setChatAiFeedback({ type: 'initial', message: '안녕하세요! 💪 오늘 어떤 운동을 하셨나요?\n\n운동 이름, 무게, 세트 수, 회수를 알려주세요!\n\n예시:\n"조깅 40분 동안 했어요"\n"벤치프레스 30kg 10회 3세트 했어요"' });
               setChatStep('extraction');
             }}
             className={`flex items-center gap-2 ${recordType === 'exercise' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''
@@ -577,7 +577,7 @@ const Index = () => {
               setCurrentMealTime(null);
               setChatAiFeedback({
                 type: 'initial',
-                message: '안녕하세요! 😊 오늘 어떤 음식을 드셨나요?\n\n언제, 무엇을, 얼마나 드셨는지 자유롭게 말씀해 주세요!\n\n예시: "아침에 계란후라이 2개랑 식빵 1개 먹었어요"\n\n📝 음식명, 섭취량, 식사시간 3가지 정보만 수집합니다.\n정보 저장이 필요하면 "저장", "기록해줘", "완료", "끝" 중 하나의 문구를 입력해 주세요.'
+                message: '안녕하세요! 😊 오늘 어떤 음식을 드셨나요?\n\n언제, 무엇을, 얼마나 드셨는지 자유롭게 말씀해 주세요!\n\n예시: "아침에 계란후라이 2개랑 식빵 1개 먹었어요"'
               });
               setChatStep('extraction');
             }}
