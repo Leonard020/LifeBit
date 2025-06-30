@@ -8,19 +8,13 @@ import { WeightTrendChart } from './WeightTrendChart';
 import { BodyPartFrequencyChart } from './BodyPartFrequencyChart';
 import { ExerciseCalendarHeatmap } from './ExerciseCalendarHeatmap';
 import { HealthCharacter } from './HealthCharacter';
-import { MealCard } from './MealCard';
 import { NutritionChart } from './NutritionChart';
 import { AIRecommendations } from './AIRecommendations';
 import { 
   Activity, 
-  Apple, 
-  Utensils, 
-  Coffee, 
-  Cookie,
   TrendingUp,
   Calendar as CalendarIcon,
   Target,
-  Flame,
   Droplets,
   Weight,
   CheckCircle,
@@ -176,31 +170,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     );
   }, [exerciseSessions, mealLogs, userGoals, healthStats, nutritionStats, allLoading]);
 
-  const handleMealAdd = useCallback((mealType: string) => {
-    console.log(`${mealType} 식단 추가`);
-    
-    // 실제 식단 추가를 위해 메인 페이지로 이동 (다른 페이지와 일관성 유지)
-    navigate('/', { 
-      state: { 
-        action: 'diet',
-        mealType: mealType 
-      }
-    });
-    
-    const mealTypeNames = {
-      'breakfast': '아침',
-      'lunch': '점심', 
-      'dinner': '저녁',
-      'midnight': '야식',
-      'snack': '간식'
-    };
-    
-    toast({
-      title: '식단 기록',
-      description: `${mealTypeNames[mealType as keyof typeof mealTypeNames] || '식사'} 식단 기록 페이지로 이동합니다.`,
-    });
-  }, [navigate]);
-
   const handlePrevMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
   };
@@ -268,7 +237,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             대시보드
           </TabsTrigger>
           <TabsTrigger value="nutrition" className="flex items-center gap-2">
-            <Apple className="h-4 w-4" />
+            <Target className="h-4 w-4" />
             영양 분석
           </TabsTrigger>
           <TabsTrigger value="exercise" className="flex items-center gap-2">
@@ -290,60 +259,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             isExercising={todayData.exerciseMinutes > 0}
           />
 
-          {/* 식단 관리 카드들 */}
-          <div className="grid grid-cols-2 gap-4">
-            <MealCard
-              type="breakfast"
-              title="아침"
-              icon={<Coffee className="h-5 w-5 text-orange-600" />}
-              isCompleted={false} // 실제 데이터로 교체 필요
-              calories={Math.round(todayData.nutrition.calories * 0.25)}
-              onAdd={() => handleMealAdd('breakfast')}
-            />
-            <MealCard
-              type="lunch"
-              title="점심"
-              icon={<Utensils className="h-5 w-5 text-green-600" />}
-              isCompleted={false}
-              calories={Math.round(todayData.nutrition.calories * 0.35)}
-              onAdd={() => handleMealAdd('lunch')}
-            />
-            <MealCard
-              type="dinner"
-              title="저녁"
-              icon={<Utensils className="h-5 w-5 text-blue-600" />}
-              isCompleted={false}
-              calories={Math.round(todayData.nutrition.calories * 0.3)}
-              onAdd={() => handleMealAdd('dinner')}
-            />
-            <MealCard
-              type="snack"
-              title="간식"
-              icon={<Cookie className="h-5 w-5 text-purple-600" />}
-              isCompleted={false}
-              calories={Math.round(todayData.nutrition.calories * 0.1)}
-              onAdd={() => handleMealAdd('snack')}
-            />
-          </div>
 
-          {/* 하단 액션 버튼들 */}
-          <div className="flex gap-3">
-            <Button 
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => navigate('/note')}
-            >
-              <Flame className="h-4 w-4 mr-2" />
-              기록 보상
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex-1"
-              onClick={() => navigate('/note')}
-            >
-              <Apple className="h-4 w-4 mr-2" />
-              식단 앨범
-            </Button>
-          </div>
         </TabsContent>
 
         {/* 영양 분석 탭 */}
