@@ -38,12 +38,33 @@ interface CatalogItem {
   createdAt: string;
 }
 
+interface FoodCatalogItem {
+  foodItemId: number;
+  name: string;
+  servingSize: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  createdAt: string;
+}
+
 interface EditingCatalog {
   exerciseCatalogId: number;
   name: string;
   bodyPart: string;
   exerciseType: string;
   intensity: string;
+}
+
+interface EditingFoodCatalog {
+  foodItemId: number;
+  name: string;
+  servingSize: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
 }
 
 export const AdminPage = () => {
@@ -54,9 +75,11 @@ export const AdminPage = () => {
   const usersPerPage = 10;
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'catalog' | 'users'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'food' | 'users'>('catalog');
   const [catalogs, setCatalogs] = useState<CatalogItem[]>([]);
+  const [foodCatalogs, setFoodCatalogs] = useState<FoodCatalogItem[]>([]);
   const [catalogCurrentPage, setCatalogCurrentPage] = useState(1);
+  const [foodCurrentPage, setFoodCurrentPage] = useState(1);
   const [userCurrentPage, setUserCurrentPage] = useState(1);
 
   // 운동 카탈로그 수정 모달 관련 상태
@@ -67,6 +90,15 @@ export const AdminPage = () => {
   // 운동 카탈로그 삭제 관련 상태
   const [deleteCatalogId, setDeleteCatalogId] = useState<number | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  
+  // 음식 카탈로그 수정 모달 관련 상태
+  const [showEditFoodModal, setShowEditFoodModal] = useState(false);
+  const [editingFoodCatalog, setEditingFoodCatalog] = useState<EditingFoodCatalog | null>(null);
+  const [isUpdatingFood, setIsUpdatingFood] = useState(false);
+  
+  // 음식 카탈로그 삭제 관련 상태
+  const [deleteFoodCatalogId, setDeleteFoodCatalogId] = useState<number | null>(null);
+  const [showDeleteFoodDialog, setShowDeleteFoodDialog] = useState(false);
   
   // 필터링 상태
   const [showUnsetIntensityOnly, setShowUnsetIntensityOnly] = useState(false);
@@ -190,9 +222,30 @@ export const AdminPage = () => {
         toast({ title: "오류", description: "운동 카탈로그 로딩 실패", variant: "destructive" });
       }
     };
+
+    const fetchFoodCatalogs = async () => {
+      try {
+        const res = await fetch('http://localhost:8080/api/diet/admin/food-catalog', {
+          headers: {
+            'Authorization': `Bearer ${getToken()}`
+          }
+        });
+        if (!res.ok) throw new Error('Failed to fetch food catalogs');
+        const data = await res.json();
+        console.log('🍽️ [AdminPage] 음식 카탈로그 API 응답:', data);
+        setFoodCatalogs(data);
+      } catch (err) {
+        console.error('❌ [AdminPage] 음식 카탈로그 로딩 실패:', err);
+        toast({ title: "오류", description: "음식 카탈로그 로딩 실패", variant: "destructive" });
+      }
+    };
+
     if (activeTab === 'catalog') {
       fetchCatalogs();
       setCatalogCurrentPage(1);
+    } else if (activeTab === 'food') {
+      fetchFoodCatalogs();
+      setFoodCurrentPage(1);
     } else {
       setUserCurrentPage(1);
     }
@@ -324,21 +377,136 @@ export const AdminPage = () => {
     }
   };
 
+  // 음식 카탈로그 수정 모달 열기
+  const handleEditFood = (food: FoodCatalogItem) => {
+    setEditingFoodCatalog({
+      foodItemId: food.foodItemId,
+      name: food.name,
+      servingSize: food.servingSize,
+      calories: food.calories,
+      carbs: food.carbs,
+      protein: food.protein,
+      fat: food.fat
+    });
+    setShowEditFoodModal(true);
+  };
+
+  // 음식 카탈로그 수정 처리
+  const handleUpdateFoodCatalog = async () => {
+    if (!editingFoodCatalog) return;
+    
+    setIsUpdatingFood(true);
+    try {
+      const requestData = {
+        name: editingFoodCatalog.name,
+        serving_size: editingFoodCatalog.servingSize,
+        calories: editingFoodCatalog.calories,
+        carbs: editingFoodCatalog.carbs,
+        protein: editingFoodCatalog.protein,
+        fat: editingFoodCatalog.fat
+      };
+      
+      console.log('🔧 [음식 수정 요청] 데이터:', requestData);
+      
+      const res = await fetch(`http://localhost:8080/api/diet/admin/food-catalog/${editingFoodCatalog.foodItemId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ [음식 수정 실패] 응답:', errorText);
+        throw new Error(`수정 실패: ${res.status} - ${errorText}`);
+      }
+      
+      const updatedFood = await res.json();
+      console.log('✅ [음식 수정 성공] 응답 데이터:', updatedFood);
+      
+      // 목록을 다시 불러와서 최신 데이터 반영
+      const refreshRes = await fetch('http://localhost:8080/api/diet/admin/food-catalog', {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      if (refreshRes.ok) {
+        const refreshedData = await refreshRes.json();
+        setFoodCatalogs(refreshedData);
+        console.log('🔄 [음식 목록 새로고침] 완료');
+      }
+      
+      toast({ title: '수정 완료', description: '음식 카탈로그가 수정되었습니다.' });
+      setShowEditFoodModal(false);
+      setEditingFoodCatalog(null);
+    } catch (error) {
+      console.error('❌ [AdminPage] 음식 카탈로그 수정 실패:', error);
+      toast({ 
+        title: '수정 실패', 
+        description: error instanceof Error ? error.message : '음식 카탈로그 수정에 실패했습니다.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsUpdatingFood(false);
+    }
+  };
+
+  // 음식 카탈로그 삭제 함수
+  const handleDeleteFoodCatalog = async (foodId: number) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/diet/admin/food-catalog/${foodId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`삭제 실패: ${res.status}`);
+      }
+
+      // 목록에서 삭제된 항목 제거
+      setFoodCatalogs(prev => prev.filter(food => food.foodItemId !== foodId));
+      
+      toast({ 
+        title: '삭제 완료', 
+        description: '음식 카탈로그가 삭제되었습니다.' 
+      });
+      
+    } catch (error) {
+      console.error('❌ [AdminPage] 음식 카탈로그 삭제 실패:', error);
+      toast({ 
+        title: '삭제 실패', 
+        description: '음식 카탈로그 삭제에 실패했습니다.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setShowDeleteFoodDialog(false);
+      setDeleteFoodCatalogId(null);
+    }
+  };
+
   // 필터링된 카탈로그 목록
   const filteredCatalogs = showUnsetIntensityOnly 
     ? catalogs.filter(catalog => !catalog.intensity || catalog.intensity === null)
     : catalogs;
   
-  const totalItems = activeTab === 'users' ? users.length : filteredCatalogs.length;
+  const totalItems = activeTab === 'users' ? users.length : 
+                     activeTab === 'food' ? foodCatalogs.length : 
+                     filteredCatalogs.length;
   const totalPages = Math.ceil(totalItems / usersPerPage);
-  const currentPage = activeTab === 'users' ? userCurrentPage : catalogCurrentPage;
-  const setCurrentPage = activeTab === 'users' ? setUserCurrentPage : setCatalogCurrentPage;
+  const currentPage = activeTab === 'users' ? userCurrentPage : 
+                      activeTab === 'food' ? foodCurrentPage : 
+                      catalogCurrentPage;
+  const setCurrentPage = activeTab === 'users' ? setUserCurrentPage : 
+                         activeTab === 'food' ? setFoodCurrentPage : 
+                         setCatalogCurrentPage;
   
   const indexOfLast = currentPage * usersPerPage;
   const indexOfFirst = indexOfLast - usersPerPage;
-  const currentList = activeTab === 'users'
-    ? users.slice(indexOfFirst, indexOfLast)
-    : filteredCatalogs.slice(indexOfFirst, indexOfLast);
+  const currentList = activeTab === 'users' ? users.slice(indexOfFirst, indexOfLast) :
+                      activeTab === 'food' ? foodCatalogs.slice(indexOfFirst, indexOfLast) :
+                      filteredCatalogs.slice(indexOfFirst, indexOfLast);
 
   const goToFirstPage = () => setCurrentPage(1);
   const goToLastPage = () => setCurrentPage(totalPages);
@@ -359,6 +527,7 @@ export const AdminPage = () => {
       <div className="container mx-auto py-8">
         <div className="flex gap-4 mb-6">
           <Button variant={activeTab === 'catalog' ? 'default' : 'outline'} onClick={() => setActiveTab('catalog')}>운동 카탈로그</Button>
+          <Button variant={activeTab === 'food' ? 'default' : 'outline'} onClick={() => setActiveTab('food')}>음식 카탈로그</Button>
           <Button variant={activeTab === 'users' ? 'default' : 'outline'} onClick={() => setActiveTab('users')}>회원 관리</Button>
         </div>
 
@@ -366,7 +535,11 @@ export const AdminPage = () => {
           <CardHeader>
             <CardTitle>
               <div className="flex justify-between items-center">
-                <span>{activeTab === 'catalog' ? '운동 카탈로그 관리' : '회원 관리'}</span>
+                <span>
+                  {activeTab === 'catalog' ? '운동 카탈로그 관리' : 
+                   activeTab === 'food' ? '음식 카탈로그 관리' : 
+                   '회원 관리'}
+                </span>
                 {activeTab === 'catalog' && (
                   <Button 
                     variant={showUnsetIntensityOnly ? 'default' : 'outline'} 
@@ -392,6 +565,17 @@ export const AdminPage = () => {
                       <TableHead>권한</TableHead>
                       <TableHead></TableHead>
                     </>
+                  ) : activeTab === 'food' ? (
+                    <>
+                      <TableHead>음식명</TableHead>
+                      <TableHead>기준량(g)</TableHead>
+                      <TableHead>칼로리(kcal)</TableHead>
+                      <TableHead>탄수화물(g)</TableHead>
+                      <TableHead>단백질(g)</TableHead>
+                      <TableHead>지방(g)</TableHead>
+                      <TableHead>생성일</TableHead>
+                      <TableHead></TableHead>
+                    </>
                   ) : (
                     <>
                       <TableHead>운동명</TableHead>
@@ -407,18 +591,20 @@ export const AdminPage = () => {
               <TableBody>
                 {currentList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                       {activeTab === 'catalog' && showUnsetIntensityOnly 
                         ? '미설정 운동이 없습니다.' 
                         : activeTab === 'catalog' 
                           ? '등록된 운동이 없습니다.'
-                          : '등록된 사용자가 없습니다.'
+                          : activeTab === 'food'
+                            ? '등록된 음식이 없습니다.'
+                            : '등록된 사용자가 없습니다.'
                       }
                     </TableCell>
                   </TableRow>
                 ) : (
                   currentList.map((item: any) => (
-                    <TableRow key={`${activeTab}-${activeTab === 'users' ? item.id : item.exerciseCatalogId}`}>
+                    <TableRow key={`${activeTab}-${activeTab === 'users' ? item.id : activeTab === 'food' ? item.foodItemId : item.exerciseCatalogId}`}>
                       {activeTab === 'users' ? (
                         <>
                           <TableCell>{item.email}</TableCell>
@@ -430,6 +616,41 @@ export const AdminPage = () => {
                             {item.role === 'USER' && (
                               <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId(item.id); setShowDialog(true); }}>삭제</Button>
                             )}
+                          </TableCell>
+                        </>
+                      ) : activeTab === 'food' ? (
+                        <>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>{item.servingSize}g</TableCell>
+                          <TableCell>{item.calories.toFixed(1)}</TableCell>
+                          <TableCell>{item.carbs.toFixed(1)}</TableCell>
+                          <TableCell>{item.protein.toFixed(1)}</TableCell>
+                          <TableCell>{item.fat.toFixed(1)}</TableCell>
+                          <TableCell>
+                            {item.createdAt ? 
+                              new Date(item.createdAt).toLocaleString('ko-KR', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : '-'
+                            }
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={() => handleEditFood(item)}>수정</Button>
+                              <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                onClick={() => { 
+                                  setDeleteFoodCatalogId(item.foodItemId); 
+                                  setShowDeleteFoodDialog(true); 
+                                }}
+                              >
+                                삭제
+                              </Button>
+                            </div>
                           </TableCell>
                         </>
                       ) : (
@@ -477,7 +698,7 @@ export const AdminPage = () => {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">
                 <div className="text-sm text-gray-600">
-                  {indexOfFirst + 1}-{Math.min(indexOfLast, totalItems)} of {totalItems} {activeTab === 'users' ? 'users' : 'exercises'}
+                  {indexOfFirst + 1}-{Math.min(indexOfLast, totalItems)} of {totalItems} {activeTab === 'users' ? 'users' : activeTab === 'food' ? 'foods' : 'exercises'}
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-4 w-4" /></Button>
@@ -519,6 +740,23 @@ export const AdminPage = () => {
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>취소</Button>
               <Button variant="destructive" onClick={() => handleDeleteCatalog(deleteCatalogId!)}>삭제</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 음식 카탈로그 삭제 확인 다이얼로그 */}
+        <Dialog open={showDeleteFoodDialog} onOpenChange={setShowDeleteFoodDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>음식 카탈로그 삭제 확인</DialogTitle>
+            </DialogHeader>
+            <DialogDescription>
+              정말로 이 음식을 카탈로그에서 삭제하시겠습니까? 
+              이 작업은 되돌릴 수 없으며, 기존 식단 기록에는 영향을 주지 않습니다.
+            </DialogDescription>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteFoodDialog(false)}>취소</Button>
+              <Button variant="destructive" onClick={() => handleDeleteFoodCatalog(deleteFoodCatalogId!)}>삭제</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -625,6 +863,124 @@ export const AdminPage = () => {
                 disabled={isUpdating || !editingCatalog?.name.trim()}
               >
                 {isUpdating ? '수정 중...' : '수정 완료'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 음식 카탈로그 수정 모달 */}
+        <Dialog open={showEditFoodModal} onOpenChange={setShowEditFoodModal}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>음식 카탈로그 수정</DialogTitle>
+              <DialogDescription>음식의 영양 정보를 수정할 수 있습니다.</DialogDescription>
+            </DialogHeader>
+            {editingFoodCatalog && (
+              <div className="grid gap-4 py-4">
+                {/* 음식명 */}
+                <div className="grid gap-2">
+                  <Label htmlFor="foodName">음식명</Label>
+                  <Input
+                    id="foodName"
+                    value={editingFoodCatalog.name}
+                    onChange={(e) => setEditingFoodCatalog(prev => 
+                      prev ? { ...prev, name: e.target.value } : null
+                    )}
+                    placeholder="음식명을 입력하세요"
+                  />
+                </div>
+
+                {/* 기준량 */}
+                <div className="grid gap-2">
+                  <Label htmlFor="servingSize">기준량(g)</Label>
+                  <Input
+                    id="servingSize"
+                    type="number"
+                    value={editingFoodCatalog.servingSize}
+                    onChange={(e) => setEditingFoodCatalog(prev => 
+                      prev ? { ...prev, servingSize: Number(e.target.value) } : null
+                    )}
+                    placeholder="기준량을 입력하세요"
+                  />
+                </div>
+
+                {/* 칼로리 */}
+                <div className="grid gap-2">
+                  <Label htmlFor="calories">칼로리(kcal)</Label>
+                  <Input
+                    id="calories"
+                    type="number"
+                    step="0.1"
+                    value={editingFoodCatalog.calories}
+                    onChange={(e) => setEditingFoodCatalog(prev => 
+                      prev ? { ...prev, calories: Number(e.target.value) } : null
+                    )}
+                    placeholder="칼로리를 입력하세요"
+                  />
+                </div>
+
+                {/* 탄수화물 */}
+                <div className="grid gap-2">
+                  <Label htmlFor="carbs">탄수화물(g)</Label>
+                  <Input
+                    id="carbs"
+                    type="number"
+                    step="0.1"
+                    value={editingFoodCatalog.carbs}
+                    onChange={(e) => setEditingFoodCatalog(prev => 
+                      prev ? { ...prev, carbs: Number(e.target.value) } : null
+                    )}
+                    placeholder="탄수화물을 입력하세요"
+                  />
+                </div>
+
+                {/* 단백질 */}
+                <div className="grid gap-2">
+                  <Label htmlFor="protein">단백질(g)</Label>
+                  <Input
+                    id="protein"
+                    type="number"
+                    step="0.1"
+                    value={editingFoodCatalog.protein}
+                    onChange={(e) => setEditingFoodCatalog(prev => 
+                      prev ? { ...prev, protein: Number(e.target.value) } : null
+                    )}
+                    placeholder="단백질을 입력하세요"
+                  />
+                </div>
+
+                {/* 지방 */}
+                <div className="grid gap-2">
+                  <Label htmlFor="fat">지방(g)</Label>
+                  <Input
+                    id="fat"
+                    type="number"
+                    step="0.1"
+                    value={editingFoodCatalog.fat}
+                    onChange={(e) => setEditingFoodCatalog(prev => 
+                      prev ? { ...prev, fat: Number(e.target.value) } : null
+                    )}
+                    placeholder="지방을 입력하세요"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowEditFoodModal(false);
+                  setEditingFoodCatalog(null);
+                }}
+                disabled={isUpdatingFood}
+              >
+                취소
+              </Button>
+              <Button 
+                onClick={handleUpdateFoodCatalog}
+                disabled={isUpdatingFood || !editingFoodCatalog?.name.trim()}
+              >
+                {isUpdatingFood ? '수정 중...' : '수정 완료'}
               </Button>
             </DialogFooter>
           </DialogContent>
