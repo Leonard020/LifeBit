@@ -75,17 +75,11 @@ const ChatMessage: React.FC<{
         <div
           className={`relative px-4 py-3 rounded-2xl shadow-sm ${isUser
             ? 'bg-purple-500 text-white rounded-br-md'
-            : 'bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-bl-md'
+            : 'bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-bl-md text-gray-900 dark:text-[#b3b8d8]'
           }`}
-          style={
-            !isUser && isDarkMode
-              ? { background: '#232946' }
-              : undefined
-          }
         >
           <div
-            className="whitespace-pre-wrap text-sm leading-relaxed dark:text-[#b3b8d8]"
-            style={{ color: '#C7BFFF', fontWeight: 600 }}
+            className="whitespace-pre-wrap text-sm leading-relaxed font-semibold"
           >
             {message.content}
           </div>
