@@ -1385,7 +1385,7 @@ const Note = () => {
                             />
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-lg font-bold">
+                            <span className="text-lg-dynamic font-bold">
                               {nutrient.name === '칼로리' ? `${Math.round(nutrient.calories)}kcal` : `${Math.round(nutrient.calories)}g`}
                             </span>
                             <span className="text-xs text-muted-foreground">
