@@ -77,28 +77,6 @@ public class NoteExerciseService {
             catalog.setName(dto.getExerciseName());
         }
 
-        // bodyPart 가 비어 있으면 추론하여 설정
-        if (catalog.getBodyPart() == null) {
-            String lowerName = dto.getExerciseName().toLowerCase();
-            com.lifebit.coreapi.entity.BodyPartType inferred = com.lifebit.coreapi.entity.BodyPartType.cardio; // 기본값
-            if (lowerName.contains("chest") || lowerName.contains("벤치")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.chest;
-            } else if (lowerName.contains("back")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.back;
-            } else if (lowerName.contains("leg") || lowerName.contains("스쿼트")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.legs;
-            } else if (lowerName.contains("shoulder")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.shoulders;
-            } else if (lowerName.contains("arm") || lowerName.contains("바이셉스") || lowerName.contains("트라이셉스")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.arms;
-            } else if (lowerName.contains("abs") || lowerName.contains("복근")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.abs;
-            } else if (lowerName.contains("조깅") || lowerName.contains("러닝") || lowerName.contains("cardio") || lowerName.contains("달리기")) {
-                inferred = com.lifebit.coreapi.entity.BodyPartType.cardio;
-            }
-            catalog.setBodyPart(inferred);
-        }
-
         // 새 카탈로그이거나 업데이트가 필요한 경우 저장
         if (catalog.getExerciseCatalogId() == null) {
             catalog = exerciseCatalogRepository.save(catalog);
@@ -110,19 +88,9 @@ public class NoteExerciseService {
 
         // 🔸 기본 필드 설정
         session.setExerciseDate(dto.getExerciseDate());
-        
-        // ✅ 유산소 운동(cardio)인 경우 set=1로 고정
-        if (catalog.getBodyPart() == com.lifebit.coreapi.entity.BodyPartType.cardio) {
-            session.setSets(1); // 유산소 운동은 항상 1 set
-            session.setReps(null); // 유산소 운동은 반복횟수 없음
-            session.setWeight(null); // 유산소 운동은 중량 없음
-            System.out.println("✅ 유산소 운동(" + catalog.getName() + ") - set=1로 자동 설정");
-        } else {
-            session.setSets(dto.getSets());
-            session.setReps(dto.getReps());
-            session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
-        }
-        
+        session.setSets(dto.getSets());
+        session.setReps(dto.getReps());
+        session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
         session.setDurationMinutes(dto.getDurationMinutes());
 
         // ✅ 저장

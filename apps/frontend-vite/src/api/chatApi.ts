@@ -35,7 +35,8 @@ interface ExerciseData {
   weight?: number;
   sets?: number;
   reps?: number;
-  duration_min?: number;
+  duration_minutes?: number;
+  exercise_date?: string;
 }
 
 // 식단 데이터 타입
@@ -164,11 +165,13 @@ export const saveExerciseRecord = async (exerciseData: ExerciseData) => {
     const res = await axiosInstance.post('/api/py/note/exercise', {
       user_id: 1,
       name: exerciseData.exercise,
+      category: exerciseData.category,
+      subcategory: exerciseData.subcategory,
       weight: exerciseData.weight,
       sets: exerciseData.sets,
       reps: exerciseData.reps,
-      time: `${exerciseData.duration_min}분`,
-      exercise_date: new Date().toISOString().split('T')[0]
+      duration_minutes: exerciseData.duration_minutes,
+      exercise_date: exerciseData.exercise_date || new Date().toISOString().split('T')[0]
     });
     return res.data;
   } catch (err) {
