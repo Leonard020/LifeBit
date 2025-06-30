@@ -1047,7 +1047,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
     if (data.category === 'cardio' || data.category === '유산소') {
       // 유산소 운동
       message += `✅ 운동명: ${data.exercise}\n`;
-      message += `🏃 분류: 유산소운동\n`;
+      message += `🏃 분류: 유산소\n`;
       message += `⏰ 시간대: ${timePeriod} (자동설정)\n`;
       message += `⏱️ 운동시간: ${data.duration_min}분\n`;
       message += `🔥 소모 칼로리: ${calculatedCalories}kcal\n\n`;

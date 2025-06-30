@@ -17,7 +17,8 @@ import { getUserIdFromToken, getToken } from '@/utils/auth';
 import { useAuth } from '@/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { estimateGramsWithGPT } from '@/utils/nutritionUtils';
-import axios from 'axios';
+import axios from '@/utils/axios';
+import { createAiAxiosInstance } from '@/utils/axios';
 
 type DietData = {
   food_item_id?: number;
@@ -56,8 +57,9 @@ const bodyPartToEnum = (kor: string): string | null => {
     case '어깨': return 'shoulders';
     case '팔': return 'arms';
     case '복근': return 'abs';
-    case '유산소': return 'cardio';
-    default: return null;
+    case '유산소': case '유산소운동': case 'cardio': return 'cardio';
+    default:
+      return null;
   }
 };
 
@@ -83,24 +85,16 @@ const Index = () => {
 
   const [hasSaved, setHasSaved] = useState(false);
 
+  const aiAxiosInstance = createAiAxiosInstance();
+
   /**
    * 식단 데이터의 완성도를 검증하는 함수
    */
-  const validateDietData = (data: ChatResponse['parsed_data']): { isComplete: boolean; missingInfo: string[] } => {
+  const validateDietData = (data: any): { isComplete: boolean; missingInfo: string[] } => {
     const missing: string[] = [];
-
-    if (!data?.food_name) {
-      missing.push('음식명');
-    }
-
-    if (!data?.amount) {
-      missing.push('섭취량');
-    }
-
-    if (!data?.meal_time) {
-      missing.push('섭취시간');
-    }
-
+    if (!data?.food_name && !data?.name) missing.push('음식명');
+    if (!data?.amount && !data?.quantity && !data?.quantity_g) missing.push('섭취량');
+    if (!data?.meal_time) missing.push('식사시간');
     return {
       isComplete: missing.length === 0,
       missingInfo: missing
@@ -156,15 +150,41 @@ const Index = () => {
     const lowered = messageToSend.toLowerCase();
     const saveKeywords = /^(저장|기록|완료|끝|등록|저장해|저장해줘|기록해|기록해줘|등록해|등록해줘)$/;
 
-    if (saveKeywords.test(lowered) && !hasSaved) {
-      console.log('💾 [Index] 저장 키워드 감지');
+    let structuredData = chatStructuredData;
+    let userId = getUserIdFromToken();
 
-      // 필수 정보 체크
-      const userId = getUserIdFromToken();
-      if (!chatStructuredData) {
-        console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
-        // ... 기존 코드 ...
-        return;
+    if (saveKeywords.test(lowered) && !hasSaved) {
+      console.log('\ud83d\udcbe [Index] \uc800\uc7a5 \ud0a4\uc6cc\ub4dc \uac10\uc9c0');
+
+      // \ud544\uc218 \uc815\ubcf4 \uccb4\ud06c
+      if (!structuredData) {
+        // 직전 AI 응답에서 복구 시도
+        if (chatAiFeedback?.parsed_data) {
+          // ✅ system_message.data 구조도 지원
+          if (chatAiFeedback.parsed_data.system_message && chatAiFeedback.parsed_data.system_message.data) {
+            structuredData = chatAiFeedback.parsed_data.system_message.data;
+            setChatStructuredData(structuredData);
+          }
+          // ✅ 단일 객체(운동) 구조도 지원
+          else if (chatAiFeedback.parsed_data.exercise) {
+            structuredData = chatAiFeedback.parsed_data;
+            setChatStructuredData(chatAiFeedback.parsed_data);
+          } else {
+            structuredData = chatAiFeedback.parsed_data;
+            setChatStructuredData(chatAiFeedback.parsed_data);
+          }
+        } else if (chatAiFeedback?.data) {
+          structuredData = chatAiFeedback.data;
+          setChatStructuredData(chatAiFeedback.data);
+        }
+        if (!structuredData) {
+          console.log('\u26a0\ufe0f [Index] chatStructuredData \uc5c6\uc74c, \ub370\uc774\ud130 \ubd80\uc871 \uba54\uc2dc\uc9c0 \ud45c\uc2dc');
+          return;
+        }
+      }
+      // userId도 복구 시도
+      if (!userId && structuredData?.user_id) {
+        userId = structuredData.user_id;
       }
       if (!userId) {
         const updatedHistory: Message[] = [
@@ -183,10 +203,16 @@ const Index = () => {
       }
       if (recordType === 'exercise') {
         // 운동명, 부위, ENUM 변환 체크
-        const exerciseName = chatStructuredData.exercise || '';
-        const korBodyPart = chatStructuredData.subcategory || chatStructuredData.bodyPart || '';
+        const exerciseName = structuredData.exercise || '';
+        let korBodyPart = structuredData.subcategory || structuredData.bodyPart || structuredData.category || '';
+        // cardio(유산소)면 부위 정보가 없어도 저장 허용
+        if (!korBodyPart && (structuredData.category === 'cardio' || structuredData.subcategory === 'cardio' || structuredData.category === '유산소' || structuredData.subcategory === '유산소')) {
+          korBodyPart = 'cardio';
+        }
         const bodyPartEnum = bodyPartToEnum(korBodyPart);
-        if (!exerciseName || !korBodyPart || !bodyPartEnum) {
+        console.log('[운동 저장] korBodyPart:', korBodyPart, 'bodyPartEnum:', bodyPartEnum);
+        // cardio(유산소)면 부위 정보 없이도 저장 허용
+        if (!exerciseName || (!korBodyPart && bodyPartEnum !== 'cardio') || (!bodyPartEnum && korBodyPart !== 'cardio')) {
           const updatedHistory: Message[] = [
             ...conversationHistory,
             { role: 'user', content: messageToSend }
@@ -194,8 +220,8 @@ const Index = () => {
           setConversationHistory(updatedHistory);
           let msg = '운동명, 운동 부위 정보가 부족합니다. 예시: "벤치프레스 30kg 10회 3세트 했어요"';
           if (!exerciseName) msg = '운동명이 누락되었습니다. 운동명을 포함해 입력해 주세요.';
-          else if (!korBodyPart) msg = '운동 부위 정보가 누락되었습니다. 예시: "벤치프레스(가슴) 30kg 10회 3세트"';
-          else if (!bodyPartEnum) msg = `운동 부위(${korBodyPart})를 저장할 수 없습니다. 정확한 부위를 입력해 주세요.`;
+          else if (!korBodyPart && bodyPartEnum !== 'cardio') msg = '운동 부위 정보가 누락되었습니다. 예시: "벤치프레스(가슴) 30kg 10회 3세트"';
+          else if (!bodyPartEnum && korBodyPart !== 'cardio') msg = `운동 부위(${korBodyPart})를 저장할 수 없습니다. 정확한 부위를 입력해 주세요.`;
           const finalHistory: Message[] = [
             ...updatedHistory,
             { role: 'assistant', content: msg }
@@ -208,7 +234,7 @@ const Index = () => {
       // ... 기존 코드 ...
       setHasSaved(true);
       setChatInputText(''); // 입력창 초기화
-      await handleRecordSubmit(recordType, JSON.stringify(chatStructuredData));
+      await handleRecordSubmit(recordType, JSON.stringify(structuredData));
       return; // 저장 후 함수 종료
     }
 
@@ -231,7 +257,9 @@ const Index = () => {
         messageToSend,
         updatedHistory,
         recordType,
-        chatStep
+        chatStep,
+        structuredData,
+        userId
       );
 
       // ✅ AI 응답이 JSON(객체)로 보이면 콘솔에만 출력, 사용자에겐 자연어만 노출
@@ -240,11 +268,19 @@ const Index = () => {
         // JSON 문자열이거나 객체라면 콘솔에만 출력
         if (typeof response.message === 'string' && response.message.trim().startsWith('{') && response.message.trim().endsWith('}')) {
           console.log('[AI 응답 JSON]', response.message);
-          // user_message.text가 있으면 그걸, 없으면 기본 안내
-          if (response.parsed_data && response.parsed_data.food_name) {
-            displayMessage = `${response.parsed_data.food_name}을(를) 드신 것으로 기록할까요?`; // 예시 프롬프트
-          } else {
-            displayMessage = '식단 정보를 확인해주세요.';
+          // recordType별 안내 분기
+          if (recordType === 'diet') {
+            if (response.parsed_data && response.parsed_data.food_name) {
+              displayMessage = `${response.parsed_data.food_name}을(를) 드신 것으로 기록할까요?`;
+            } else {
+              displayMessage = '식단 정보를 확인해주세요.';
+            }
+          } else if (recordType === 'exercise') {
+            if (response.parsed_data && response.parsed_data.exercise) {
+              displayMessage = `${response.parsed_data.exercise} 운동 정보를 확인할까요?`;
+            } else {
+              displayMessage = '운동 정보를 확인해주세요.';
+            }
           }
         }
       } catch (e) {
@@ -266,6 +302,8 @@ const Index = () => {
         if (recordType === 'diet' && response.parsed_data.meal_time) {
           setCurrentMealTime(response.parsed_data.meal_time as MealTimeType);
         }
+      } else if (response.data) {
+        setChatStructuredData(response.data);
       }
 
       console.log('✅ [Index handleSendMessage] 성공');
@@ -362,7 +400,10 @@ const Index = () => {
     }
     if (type === 'exercise') {
       const exerciseName = chatStructuredData.exercise || '';
-      const korBodyPart = chatStructuredData.subcategory || chatStructuredData.bodyPart || '';
+      let korBodyPart = chatStructuredData.subcategory || chatStructuredData.bodyPart || chatStructuredData.category || '';
+      if (!korBodyPart && chatStructuredData && chatStructuredData.category === 'cardio') {
+        korBodyPart = 'cardio';
+      }
       const bodyPartEnum = bodyPartToEnum(korBodyPart);
       if (!exerciseName || !korBodyPart || !bodyPartEnum) {
         toast({
@@ -417,6 +458,7 @@ const Index = () => {
         setCurrentMealFoods([]);
         setIsAddingMoreFood(false);
         setCurrentMealTime(null);
+        navigate('/note');
       } catch (err) {
         console.error('💪 [Index 운동기록] Spring Boot API 저장 실패:', err);
         toast({
@@ -426,91 +468,108 @@ const Index = () => {
         });
       }
     } else if (type === 'diet') {
-      const foods = Array.isArray(chatStructuredData) ? chatStructuredData : [chatStructuredData];
-      const uniqueFoods = deduplicateFoods(foods);
-      console.log('Foods to save:', uniqueFoods);
-      for (const dietData of uniqueFoods) {
-        if (!dietData.food_name || !dietData.amount || !dietData.meal_time) {
-          toast({ title: '저장 오류', description: '음식명, 섭취량, 식사시간이 필요합니다.', variant: 'destructive' });
-          console.error('[식단기록] 필수 정보 부족:', dietData);
-          continue;
-        }
-        try {
-          // Use GPT to estimate grams for the amount before saving
-          let grams = 100;
-          const amountStr = String(dietData.amount);
-
-          console.log(`[AMOUNT ESTIMATION] Processing: ${dietData.food_name} ${amountStr}`);
-
-          if (!amountStr.includes('g') && !amountStr.includes('그램')) {
-            console.log(`[AMOUNT ESTIMATION] Using GPT for estimation: ${dietData.food_name} ${amountStr}`);
-            grams = await estimateGramsWithGPT(dietData.food_name, amountStr);
-            console.log(`[AMOUNT ESTIMATION] GPT estimated: ${grams}g for ${dietData.food_name} ${amountStr}`);
-          } else {
-            grams = parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 100;
-            console.log(`[AMOUNT ESTIMATION] Direct gram conversion: ${grams}g from ${amountStr}`);
-          }
-
-          // Validate the estimated grams
-          if (grams <= 0 || grams > 5000) {
-            console.warn(`[AMOUNT ESTIMATION] Unrealistic grams detected: ${grams}g, using fallback`);
-            grams = 100;
-          }
-
-          console.log(`[AMOUNT ESTIMATION] Final grams: ${grams}g for ${dietData.food_name}`);
-
-          // Convert meal_time to English format
-          const mealTimeMapping = {
-            "아침": "breakfast",
-            "점심": "lunch",
-            "저녁": "dinner",
-            "야식": "snack",
-            "간식": "snack"
-          };
-          const mealTimeEng = mealTimeMapping[dietData.meal_time] || dietData.meal_time;
-
-          // Save diet record using the correct FastAPI endpoint (note_routes.py)
-          const response = await fetch('/api/py/note/diet', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              user_id: getUserIdFromToken(),
-              food_name: dietData.food_name,
-              quantity: grams,  // Use estimated grams as quantity
-              meal_time: mealTimeEng,  // Use English meal time
-              log_date: new Date().toISOString().split('T')[0]  // Today's date
-            })
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`서버 응답 오류: ${response.status} - ${errorText}`);
-          }
-          const result = await response.json();
-          console.log('[식단기록] FastAPI 저장 성공:', result);
-        } catch (err) {
-          toast({ title: '저장 오류', description: '식단 데이터를 저장하지 못했습니다.', variant: 'destructive' });
-          console.error('[식단기록] FastAPI 저장 실패:', err);
-        }
+      // ✅ chatStructuredData가 배열이 아니고, system_message.data가 배열일 때도 반복 저장
+      let foodsArray = null;
+      if (Array.isArray(chatStructuredData)) {
+        foodsArray = chatStructuredData;
+      } else if (
+        chatStructuredData &&
+        chatStructuredData.system_message &&
+        Array.isArray(chatStructuredData.system_message.data)
+      ) {
+        foodsArray = chatStructuredData.system_message.data;
       }
-      toast({ title: '기록 완료', description: '식단이 성공적으로 저장되었습니다.' });
+      if (foodsArray && foodsArray.length > 0) {
+        let allSuccess = true;
+        for (const item of foodsArray) {
+          const foodName = item.food_name || item.name;
+          const amount = item.amount || item.quantity || item.quantity_g;
+          const mealTime = item.meal_time || '간식';
+          if (!foodName || !amount || !mealTime) {
+            allSuccess = false;
+            toast({ title: '식단 정보 부족', description: `${foodName || '음식'} 정보가 부족합니다.`, variant: 'destructive' });
+            continue;
+          }
+          try {
+            let grams = 100;
+            const amountStr = String(amount);
+            if (!amountStr.includes('g') && !amountStr.includes('그램')) {
+              grams = await estimateGramsWithGPT(foodName, amountStr);
+            } else {
+              grams = parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 100;
+            }
+            const mealTimeMapping = {
+              "아침": "breakfast",
+              "점심": "lunch",
+              "저녁": "dinner",
+              "야식": "snack",
+              "간식": "snack"
+            };
+            const mealTimeEng = mealTimeMapping[mealTime] || mealTime || 'snack';
+            await aiAxiosInstance.post('/api/py/note/diet', {
+              user_id: userId,
+              food_name: foodName,
+              quantity: grams,
+              meal_time: mealTimeEng,
+              log_date: new Date().toISOString().split('T')[0]
+            });
+          } catch (err) {
+            allSuccess = false;
+            toast({ title: '식단 저장 오류', description: `${foodName} 저장 실패`, variant: 'destructive' });
+          }
+        }
+        if (allSuccess) {
+          toast({ title: '식단 저장 완료', description: '모든 음식이 성공적으로 저장되었습니다.' });
+          navigate('/note');
+        }
+        setHasSaved(true);
+        setChatInputText('');
+        return;
+      }
+      // 기존 단일 객체 저장 로직
+      const { isComplete } = validateDietData(chatStructuredData);
+      if (!isComplete) {
+        toast({ title: '식단 정보 부족', description: '음식명, 섭취량, 식사시간이 필요합니다.', variant: 'destructive' });
+        return;
+      }
+      // 단일 객체 저장
+      const foodName = chatStructuredData.food_name || chatStructuredData.name;
+      const amount = chatStructuredData.amount || chatStructuredData.quantity || chatStructuredData.quantity_g;
+      const mealTime = chatStructuredData.meal_time || '간식';
+      if (!foodName || !amount || !mealTime) {
+        toast({ title: '식단 정보 부족', description: '음식명, 섭취량, 식사시간이 필요합니다.', variant: 'destructive' });
+        return;
+      }
+      try {
+        let grams = 100;
+        const amountStr = String(amount);
+        if (!amountStr.includes('g') && !amountStr.includes('그램')) {
+          grams = await estimateGramsWithGPT(foodName, amountStr);
+        } else {
+          grams = parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 100;
+        }
+        const mealTimeMapping = {
+          "아침": "breakfast",
+          "점심": "lunch",
+          "저녁": "dinner",
+          "야식": "snack",
+          "간식": "snack"
+        };
+        const mealTimeEng = mealTimeMapping[mealTime] || mealTime || 'snack';
+        await aiAxiosInstance.post('/api/py/note/diet', {
+          user_id: userId,
+          food_name: foodName,
+          quantity: grams,
+          meal_time: mealTimeEng,
+          log_date: new Date().toISOString().split('T')[0]
+        });
+        toast({ title: '식단 저장 완료', description: `${foodName} 저장 성공` });
+      } catch (err) {
+        toast({ title: '식단 저장 오류', description: `${foodName} 저장 실패`, variant: 'destructive' });
+      }
       setHasSaved(true);
-
-      // ✅ 식단기록 저장 후 초기화
       setChatInputText('');
-      setChatAiFeedback(null);
-      setChatStructuredData(null);
-      setShowChat(false);
-      setRecordType(null);
-      setConversationHistory([]);
-      setChatStep('extraction');
-      setCurrentMealFoods([]);
-      setIsAddingMoreFood(false);
-      setCurrentMealTime(null);
-
-      navigate('/note', { state: { refreshDiet: true } });
+      return;
     } else {
       console.warn('[기록 저장] 알 수 없는 recordType:', type, chatStructuredData);
     }

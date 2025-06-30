@@ -21,6 +21,8 @@ import com.lifebit.coreapi.entity.TimePeriodType;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
 
 @Service
 @Transactional(readOnly = true)
@@ -710,9 +712,9 @@ public class ExerciseService {
     // ==================================================================================
 
     /**
-     * 건강로그용 - 주간 운동 부위별 세트 수 계산 (일요일~토요일 기준)
+     * 건강로그용 - 주간 운동 부위별 횟수 계산 (하루에 부위별 1회씩만 카운트)
      */
-    public Map<String, Integer> getWeeklyBodyPartSets_healthloguse(Long userId) {
+    public Map<String, Integer> getWeeklyBodyPartCounts_healthloguse(Long userId) {
         // 현재 주의 일요일 찾기
         LocalDate today = LocalDate.now();
         int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
@@ -721,23 +723,17 @@ public class ExerciseService {
         LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
         LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
-        log.info("🗓️ [getWeeklyBodyPartSets_healthloguse] 건강로그용 주별 운동 부위별 세트 수 조회 - 사용자: {}, 기간: {} ~ {} (오늘: {})", 
+        log.info("🗓️ [getWeeklyBodyPartCounts_healthloguse] 건강로그용 주별 운동 부위별 횟수 조회 - 사용자: {}, 기간: {} ~ {} (오늘: {})", 
                 userId, startDate, endDate, today);
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
         
-        log.info("📊 [getWeeklyBodyPartSets_healthloguse] 조회된 운동 세션 수: {}", sessions.size());
+        log.info("📊 [getWeeklyBodyPartCounts_healthloguse] 조회된 운동 세션 수: {}", sessions.size());
         
-        Map<String, Integer> bodyPartSets = new HashMap<>();
-        bodyPartSets.put("CHEST", 0);
-        bodyPartSets.put("BACK", 0);
-        bodyPartSets.put("LEGS", 0);
-        bodyPartSets.put("SHOULDERS", 0);
-        bodyPartSets.put("ARMS", 0);
-        bodyPartSets.put("ABS", 0);
-        bodyPartSets.put("CARDIO", 0);
+        // 날짜별 부위별 운동 여부 추적 (하루에 부위별 1회만 카운트)
+        Map<String, Set<String>> dateBodyPartMap = new HashMap<>();
         
         for (ExerciseSession session : sessions) {
             String bodyPart = null;
@@ -751,70 +747,85 @@ public class ExerciseService {
             }
             
             if (bodyPart != null) {
-                Integer sets = session.getSets();
-                int setsToAdd = (sets != null && sets > 0) ? sets : 1; // 세트 수가 없으면 1세트로 간주
-                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + setsToAdd);
+                String dateKey = session.getExerciseDate().toString();
+                dateBodyPartMap.computeIfAbsent(dateKey, k -> new HashSet<>()).add(bodyPart);
             }
         }
         
-        log.info("✅ [getWeeklyBodyPartSets_healthloguse] 결과: {}", bodyPartSets);
-        return bodyPartSets;
+        // 부위별 횟수 집계 (날짜별로 1회씩만 카운트)
+        Map<String, Integer> bodyPartCounts = new HashMap<>();
+        bodyPartCounts.put("CHEST", 0);
+        bodyPartCounts.put("BACK", 0);
+        bodyPartCounts.put("LEGS", 0);
+        bodyPartCounts.put("SHOULDERS", 0);
+        bodyPartCounts.put("ARMS", 0);
+        bodyPartCounts.put("ABS", 0);
+        bodyPartCounts.put("CARDIO", 0);
+        
+        for (Set<String> bodyParts : dateBodyPartMap.values()) {
+            for (String bodyPart : bodyParts) {
+                bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1);
+            }
+        }
+        
+        log.info("✅ [getWeeklyBodyPartCounts_healthloguse] 결과: {}", bodyPartCounts);
+        return bodyPartCounts;
     }
 
     /**
-     * 건강로그용 - 주간 가슴 운동 세트 수 조회
+     * 건강로그용 - 주간 가슴 운동 횟수 조회
      */
-    public int getWeeklyChestSets_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("CHEST", 0);
+    public int getWeeklyChestCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("CHEST", 0);
     }
 
     /**
-     * 건강로그용 - 주간 등 운동 세트 수 조회
+     * 건강로그용 - 주간 등 운동 횟수 조회
      */
-    public int getWeeklyBackSets_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("BACK", 0);
+    public int getWeeklyBackCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("BACK", 0);
     }
 
     /**
-     * 건강로그용 - 주간 다리 운동 세트 수 조회
+     * 건강로그용 - 주간 다리 운동 횟수 조회
      */
-    public int getWeeklyLegsSets_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("LEGS", 0);
+    public int getWeeklyLegsCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("LEGS", 0);
     }
 
     /**
-     * 건강로그용 - 주간 어깨 운동 세트 수 조회
+     * 건강로그용 - 주간 어깨 운동 횟수 조회
      */
-    public int getWeeklyShouldersSet_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("SHOULDERS", 0);
+    public int getWeeklyShouldersCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("SHOULDERS", 0);
     }
 
     /**
-     * 건강로그용 - 주간 팔 운동 세트 수 조회
+     * 건강로그용 - 주간 팔 운동 횟수 조회
      */
-    public int getWeeklyArmsSets_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("ARMS", 0);
+    public int getWeeklyArmsCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("ARMS", 0);
     }
 
     /**
-     * 건강로그용 - 주간 복근 운동 세트 수 조회
+     * 건강로그용 - 주간 복근 운동 횟수 조회
      */
-    public int getWeeklyAbsSets_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("ABS", 0);
+    public int getWeeklyAbsCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("ABS", 0);
     }
 
     /**
-     * 건강로그용 - 주간 유산소 운동 세트 수 조회
+     * 건강로그용 - 주간 유산소 운동 횟수 조회
      */
-    public int getWeeklyCardioSets_healthloguse(Long userId) {
-        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("CARDIO", 0);
+    public int getWeeklyCardioCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("CARDIO", 0);
     }
 
     /**
-     * 건강로그용 - 주간 총 운동 세트 수 계산
+     * 건강로그용 - 주간 총 운동 횟수 계산
      */
-    public int getWeeklyTotalSets_healthloguse(Long userId) {
-        Map<String, Integer> bodyPartSets = getWeeklyBodyPartSets_healthloguse(userId);
-        return bodyPartSets.values().stream().mapToInt(Integer::intValue).sum();
+    public int getWeeklyTotalCounts_healthloguse(Long userId) {
+        Map<String, Integer> bodyPartCounts = getWeeklyBodyPartCounts_healthloguse(userId);
+        return bodyPartCounts.values().stream().mapToInt(Integer::intValue).sum();
     }
 }

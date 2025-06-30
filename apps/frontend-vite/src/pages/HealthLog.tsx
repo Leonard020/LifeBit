@@ -18,7 +18,7 @@ import { BarChart3, MessageSquare, Activity,TrendingUp,
   Smartphone,
   Heart
 } from 'lucide-react';
-import { useHealthStatistics } from '@/api/auth';
+import { useHealthStatistics, useHealthLogStatistics } from '@/api/auth';
 import { getToken, getUserInfo, isLoggedIn, getUserIdFromToken } from '@/utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -129,13 +129,13 @@ const HealthLog: React.FC = () => {
     enabled: true // 폴링 방식으로 활성화
   });
 
-  // ✅ React Query Hook으로 건강 통계 조회
+  // ✅ React Query Hook으로 건강 통계 조회 (건강로그 전용)
   const { 
     data: healthStats, 
     isLoading: healthStatsLoading, 
     error: healthStatsError,
     refetch: refetchHealthStats
-  } = useHealthStatistics(userId?.toString() || '', selectedPeriod);
+  } = useHealthLogStatistics(userId?.toString() || '');
 
   const handleCloseAIFeedback = useCallback(() => {
     setShowAIFeedback(false);
@@ -540,12 +540,13 @@ const HealthLog: React.FC = () => {
               
               {/* 하단: 목표 진행률 */}
               <div>
-                <ErrorBoundary>
-                  <GoalProgress 
-                    userId={userId?.toString() || ''}
-                    period={reactPeriod}
-                  />
-                </ErrorBoundary>
+                              <ErrorBoundary>
+                <GoalProgress 
+                  userId={userId?.toString() || ''}
+                  period={reactPeriod}
+                  useHealthLogData={true}
+                />
+              </ErrorBoundary>
               </div>
             </TabsContent>
 
@@ -570,6 +571,7 @@ const HealthLog: React.FC = () => {
                 <PythonAnalyticsCharts 
                   userId={userId || 0} 
                   period={pythonPeriod}
+                  useHealthLogData={true}
                 />
               </ErrorBoundary>
             </TabsContent>

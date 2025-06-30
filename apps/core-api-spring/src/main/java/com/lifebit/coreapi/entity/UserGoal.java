@@ -32,10 +32,6 @@ public class UserGoal {
     @JsonProperty("weekly_workout_target")
     private Integer weeklyWorkoutTarget;
     
-    @Column(name = "weekly_workout_target_set")
-    @JsonProperty("weekly_workout_target_set")
-    private Integer weeklyWorkoutTargetSet;
-    
     @Column(name = "daily_carbs_target")
     @JsonProperty("daily_carbs_target")
     private Integer dailyCarbsTarget;
@@ -79,34 +75,6 @@ public class UserGoal {
     @Column(name = "weekly_cardio")
     @JsonProperty("weekly_cardio")
     private Integer weeklyCardio;
-    
-    @Column(name = "weekly_chest_set")
-    @JsonProperty("weekly_chest_set")
-    private Integer weeklyChestSet;
-    
-    @Column(name = "weekly_back_set")
-    @JsonProperty("weekly_back_set")
-    private Integer weeklyBackSet;
-    
-    @Column(name = "weekly_legs_set")
-    @JsonProperty("weekly_legs_set")
-    private Integer weeklyLegsSet;
-    
-    @Column(name = "weekly_shoulders_set")
-    @JsonProperty("weekly_shoulders_set")
-    private Integer weeklyShouldersSet;
-    
-    @Column(name = "weekly_arms_set")
-    @JsonProperty("weekly_arms_set")
-    private Integer weeklyArmsSet;
-    
-    @Column(name = "weekly_abs_set")
-    @JsonProperty("weekly_abs_set")
-    private Integer weeklyAbsSet;
-    
-    @Column(name = "weekly_cardio_set")
-    @JsonProperty("weekly_cardio_set")
-    private Integer weeklyCardioSet;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;

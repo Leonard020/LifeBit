@@ -199,8 +199,8 @@ EXERCISE_EXTRACTION_PROMPT = """
 
 [유산소 운동]
 - 운동명 (exercise) ✅ 필수
-- 분류 (category): "유산소운동" ✅ 자체 판단
-- 중분류 (subcategory): "유산소운동" ✅ 자체 판단
+- 분류 (category): "유산소" ✅ 자체 판단
+- 중분류 (subcategory): "유산소" ✅ 자체 판단
 - 운동시간 (duration_min) ✅ 필수
 
 🔍 **운동 분류 자동 판단 규칙:**
@@ -216,19 +216,19 @@ EXERCISE_EXTRACTION_PROMPT = """
 바이셉스컬, 트라이셉스, 해머컬, 딥스, 이두컬, 삼두컬, 킥백, 케이블푸쉬다운, 케이블컬, 컨센트레이션컬, 오버헤드익스텐션
 [근력운동 - 복근]:  
 크런치, 플랭크, 레그레이즈, 싯업, 플라잭, 마운틴클라이머, 행잉레그레이즈, 바이시클크런치, 러시안트위스트, V업, 윈드실드와이퍼
-[유산소운동]:  
+[유산소]:  
 달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀, 런닝머신, 일립티컬, 스피닝, 스텝퍼, 에어로빅, 로잉머신, 스케이트, 스키, 인라인스케이트
 [맨몸운동]:  
 푸시업, 풀업, 플랭크, 크런치, 싯업, 버피, 마운틴클라이머, 딥스, 런지, 스쿼트, 레그레이즈, 바이시클크런치, 브릿지, 슈퍼맨, 점프스쿼트, 점핑잭
 ※ 위에 없는 운동명도 최대한 유사한 부위로 분류해 주세요.
 ※ 새로운 운동이 등장하면, AI가 운동의 동작을 분석해 가장 적합한 부위를 추론해서 분류해 주세요.
-- 만약 운동 부위(subcategory)가 명확하지 않으면, validation 단계에서 "이 운동은 어느 부위 운동인가요? (가슴/등/하체/어깨/팔/복근/유산소운동)"라고 사용자에게 질문하세요.
+- 만약 운동 부위(subcategory)가 명확하지 않으면, validation 단계에서 "이 운동은 어느 부위 운동인가요? (가슴/등/하체/어깨/팔/복근/유산소)"라고 사용자에게 질문하세요.
 
 💬 **응답 형식 (JSON, 반드시 아래 구조와 타입을 지켜서 반환):**
 {
   "exercise": "운동명",                // 예: "스쿼트" (VARCHAR)
-  "category": "근력운동|유산소운동",   // DB의 exercise_type (VARCHAR)
-  "subcategory": "가슴|등|하체|복근|팔|어깨|유산소운동", // DB의 body_part (ENUM, 한글로 반환, 백엔드에서 영문 변환)
+  "category": "근력운동|유산소",   // DB의 exercise_type (VARCHAR)
+  "subcategory": "가슴|등|하체|복근|팔|어깨|유산소", // DB의 body_part (ENUM, 한글로 반환, 백엔드에서 영문 변환)
   "weight": 60,                       // 무게(kg, 숫자), 없으면 null
   "sets": 3,                          // 세트수(숫자), 없으면 null
   "reps": 10,                         // 횟수(숫자), 없으면 null
@@ -241,7 +241,7 @@ EXERCISE_EXTRACTION_PROMPT = """
 // 모든 필드는 누락 없이 반환해야 하며, 값이 없으면 null로 명시하세요.
 // 반드시 user_message.text 필드를 포함하여 사용자에게 친근한 안내 메시지를 제공하세요.
 // subcategory(운동 부위)는 반드시 한글로 반환(예: "가슴"), 백엔드에서 ENUM(body_part_type) 영문으로 변환합니다.
-// 예시: "가슴"→"chest", "등"→"back", "하체"→"legs", "어깨"→"shoulders", "팔"→"arms", "복근"→"abs", "유산소운동"→"cardio"
+// 예시: "가슴"→"chest", "등"→"back", "하체"→"legs", "어깨"→"shoulders", "팔"→"arms", "복근"→"abs", "유산소"→"cardio"
 
 🔄 **진행 조건:**
 - 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
@@ -311,7 +311,7 @@ EXERCISE_CONFIRMATION_PROMPT = """
   "system_message": {
     "data": {
       "exercise": "운동명",
-      "category": "근력운동|유산소운동",
+      "category": "근력운동|유산소",
       "subcategory": "부위|null",
       "weight": 무게|null,
       "sets": 세트|null,
@@ -338,7 +338,7 @@ EXERCISE_CONFIRMATION_PROMPT = """
 
 [유산소 운동]
 "✅ 운동명: 달리기
-🏃 분류: 유산소운동
+🏃 분류: 유산소
 ⏱️ 운동시간: 30분
 
 이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
@@ -968,7 +968,8 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                     response_type = parsed_response.get("response_type", "success")
                     user_message = request.message.strip()
                     if request.record_type == "exercise" and response_type == "confirmation":
-                        if user_message in ["네", "예", "저장", "ㅇ", "y", "yes", "Y", "YES"]:
+                        save_keywords = ["네", "예", "저장", "y", "yes", "Y", "YES", "ㅇ"]
+                        if user_message in save_keywords:
                             data = parsed_response["system_message"]["data"]
                             user_id = request.user_id if request.user_id is not None else data.get("user_id")
                             if user_id is None:
@@ -984,9 +985,10 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                                 calories_burned=data.get("calories_burned"),
                                 exercise_date=request.current_data.get("exercise_date") if request.current_data else None
                             )
-                            category = getattr(record, 'category', None)
-                            subcategory = getattr(record, 'subcategory', None)
-                            catalog = get_or_create_exercise_catalog(db, record.name, category, subcategory, None)
+                            category = data.get("category")
+                            subcategory = data.get("subcategory")
+                            part = subcategory or category
+                            catalog = get_or_create_exercise_catalog(db, record.name, category, part, None)
                             sets = record.sets
                             reps = record.reps
                             weight = record.weight
@@ -1014,6 +1016,69 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                                 "id": exercise.exercise_session_id,
                                 "parsed_data": parsed_response  # 저장 성공 시에도 반환
                             }
+                    elif request.record_type == "diet" and response_type == "confirmation":
+                        save_keywords = ["네", "예", "저장", "y", "yes", "Y", "YES", "ㅇ"]
+                        if user_message in save_keywords:
+                            # 🥗 식단 자동 저장 로직
+                            system_data = parsed_response.get("system_message", {}).get("data")
+                            if not system_data:
+                                system_data = {}
+
+                            # 배열 또는 단일 객체 모두 처리
+                            foods_to_save = system_data if isinstance(system_data, list) else [system_data]
+
+                            from note_routes import estimate_grams_from_korean_amount, save_diet_record
+                            from schemas import MealInput
+
+                            meal_time_map = {
+                                "아침": "breakfast",
+                                "점심": "lunch",
+                                "저녁": "dinner",
+                                "야식": "snack",
+                                "간식": "snack",
+                            }
+
+                            saved_results = []
+                            user_id = request.user_id if request.user_id is not None else 1
+
+                            for food in foods_to_save:
+                                if not food or not food.get("food_name"):
+                                    continue
+
+                                amount_str = food.get("amount", "1개")
+                                grams = estimate_grams_from_korean_amount(food["food_name"], amount_str)
+
+                                meal_time_kor = food.get("meal_time", "간식")
+                                meal_time_eng = meal_time_map.get(meal_time_kor, "snack")
+
+                                meal_input = MealInput(
+                                    user_id=user_id,
+                                    food_name=food["food_name"],
+                                    quantity=grams,
+                                    meal_time=meal_time_eng,
+                                    log_date=date.today(),
+                                )
+
+                                try:
+                                    result = save_diet_record(meal_input, db)
+                                    saved_results.append(result)
+                                    print(f"[✅ 식단 저장] {food['food_name']} 저장 완료")
+                                except Exception as save_err:
+                                    print(f"[❌ 식단 저장 실패] {food.get('food_name')} - {save_err}")
+
+                            if saved_results:
+                                return {
+                                    "type": "save_success",
+                                    "message": f"식단 기록 저장 성공! (총 {len(saved_results)}건)",
+                                    "saved_results": saved_results,
+                                    "parsed_data": parsed_response,
+                                }
+                            else:
+                                return {
+                                    "type": "save_error",
+                                    "message": "저장할 식단 정보가 없습니다.",
+                                    "parsed_data": parsed_response,
+                                }
                     # 일반적인 응답 (저장하지 않는 경우)
                     # user_message.text가 있으면 message로, 없으면 fallback
                     user_message_text = None
@@ -1063,17 +1128,16 @@ def get_or_create_exercise_catalog(db, name, category=None, subcategory=None, de
     (AI 분석 결과만 사용, 하드코딩/키워드 매핑 없음)
     """
     normalized_name = normalize_exercise_name(name)
-    # body_part는 반드시 AI에서 subcategory로 전달, 없으면 에러
-    if not subcategory:
-        raise HTTPException(status_code=400, detail="운동 부위(subcategory)가 누락되었습니다. AI 분석 결과를 확인하세요.")
-    # 한글 → 영문 Enum 변환 (LifeBit.sql body_part_type 참고)
+    # 세트, 횟수, 무게가 모두 없으면 cardio(유산소)로 자동 분류
     mapping = {
         '가슴': 'chest', '등': 'back', '하체': 'legs', '어깨': 'shoulders',
-        '팔': 'arms', '복근': 'abs', '유산소': 'cardio', '전신': 'full_body'
+        '팔': 'arms', '복근': 'abs', '유산소': 'cardio'
     }
-    body_part = mapping.get(subcategory, None)
+    part_key = subcategory or category or 'cardio'
+    body_part = mapping.get(part_key, None)
     if not body_part:
-        raise HTTPException(status_code=400, detail=f"알 수 없는 운동 부위(subcategory): {subcategory}")
+        # 그래도 없으면 cardio로 강제 지정
+        body_part = 'cardio'
     # DB에서 이름+부위로 조회
     catalog = db.query(models.ExerciseCatalog).filter(
         models.ExerciseCatalog.name == normalized_name,
@@ -1108,10 +1172,11 @@ def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
         category = getattr(data, 'category', None)
         subcategory = getattr(data, 'subcategory', None)
         description = getattr(data, 'description', None)
-        if name and subcategory:
-            catalog = get_or_create_exercise_catalog(db, name, category, subcategory, description)
+        if name:
+            part = subcategory or category or 'cardio'
+            catalog = get_or_create_exercise_catalog(db, name, category, part, description)
         else:
-            raise HTTPException(status_code=400, detail="운동명(name) 또는 부위(subcategory)가 누락되었습니다. AI 분석 결과를 확인하세요.")
+            raise HTTPException(status_code=400, detail="운동명(name)이 누락되었습니다. AI 분석 결과를 확인하세요.")
     # 하드코딩 분기 없이 AI가 넘긴 값만 그대로 저장
     exercise = models.ExerciseSession(
         user_id=data.user_id,
@@ -1291,7 +1356,7 @@ def calculate_exercise_calories_from_gpt(exercise_data: dict) -> float:
     GPT를 사용하여 운동 데이터를 기반으로 칼로리 소모량을 계산합니다.
     """
     try:
-        if exercise_data.get('category') == '유산소운동':
+        if exercise_data.get('category') == '유산소':
             # 유산소 운동 칼로리 계산
             duration = exercise_data.get('duration_min', 0)
             exercise_name = exercise_data.get('exercise', '')
@@ -1325,7 +1390,7 @@ def calculate_exercise_calories_from_gpt(exercise_data: dict) -> float:
         print(f"[DEBUG] 칼로리 소모량 계산 완료:")
         print(f"  운동명: {exercise_data.get('exercise', '')}")
         print(f"  분류: {exercise_data.get('category', '')}")
-        if exercise_data.get('category') == '유산소운동':
+        if exercise_data.get('category') == '유산소':
             print(f"  운동시간: {exercise_data.get('duration_min', 0)}분")
         else:
             print(f"  무게: {exercise_data.get('weight', 0)}kg")

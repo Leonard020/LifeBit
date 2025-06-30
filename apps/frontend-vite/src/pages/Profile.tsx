@@ -62,10 +62,11 @@ const Profile = () => {
   const [selectedBodyParts, setSelectedBodyParts] = useState<string[]>([]);
 
   const [goals, setGoals] = useState({
+    weeklyWorkoutTarget: '0',
     dailyCalories: '2000',
-    dailyCarbs: '200',
+    dailyCarbs: '300',
     dailyProtein: '120',
-    dailyFat: '60',
+    dailyFat: '80',
     weeklyChest: '0',
     weeklyBack: '0',
     weeklyLegs: '0',
@@ -73,30 +74,12 @@ const Profile = () => {
     weeklyArms: '0',
     weeklyAbs: '0',
     weeklyCardio: '0',
-    weeklyChestSet: '0',
-    weeklyBackSet: '0',
-    weeklyLegsSet: '0',
-    weeklyShouldersSet: '0',
-    weeklyArmsSet: '0',
-    weeklyAbsSet: '0',
-    weeklyCardioSet: '0',
   });
 
   // Calculate total weekly workout target based on displayStrengthGoals
   const totalWeeklyWorkoutTarget = useMemo(() => {
     return strengthGoals.reduce((sum, goal) => sum + parseInt(goal.weeklyCount), 0) + parseInt(goals.weeklyCardio);
   }, [strengthGoals, goals.weeklyCardio]);
-
-  // Calculate total weekly set target
-  const totalWeeklySetTarget = useMemo(() => {
-    return parseInt(goals.weeklyChestSet || '0') +
-           parseInt(goals.weeklyBackSet || '0') +
-           parseInt(goals.weeklyLegsSet || '0') +
-           parseInt(goals.weeklyShouldersSet || '0') +
-           parseInt(goals.weeklyArmsSet || '0') +
-           parseInt(goals.weeklyAbsSet || '0') +
-           parseInt(goals.weeklyCardioSet || '0');
-  }, [goals]);
 
   // Get current user ID
   const currentUserId = getUserIdFromToken();
@@ -193,10 +176,11 @@ const Profile = () => {
           setSelectedBodyParts([]);
           setSelectedBodyPartsToStorage([]);
           setGoals({
+            weeklyWorkoutTarget: '0',
             dailyCalories: '2000',
-            dailyCarbs: '200',
+            dailyCarbs: '300',
             dailyProtein: '120',
-            dailyFat: '60',
+            dailyFat: '80',
             weeklyChest: '0',
             weeklyBack: '0',
             weeklyLegs: '0',
@@ -204,13 +188,6 @@ const Profile = () => {
             weeklyArms: '0',
             weeklyAbs: '0',
             weeklyCardio: '0',
-            weeklyChestSet: '0',
-            weeklyBackSet: '0',
-            weeklyLegsSet: '0',
-            weeklyShouldersSet: '0',
-            weeklyArmsSet: '0',
-            weeklyAbsSet: '0',
-            weeklyCardioSet: '0',
           });
           return;
         }
@@ -232,32 +209,27 @@ const Profile = () => {
         setSelectedBodyParts([]);
         setSelectedBodyPartsToStorage([]);
         setGoals({
-          dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
-          dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
-          dailyProtein: goalsData.daily_protein_target?.toString() || '120',
-          dailyFat: goalsData.daily_fat_target?.toString() || '60',
+          weeklyWorkoutTarget: '0',
+          dailyCalories: '2000',
+          dailyCarbs: '300',
+          dailyProtein: '120',
+          dailyFat: '80',
           weeklyChest: '0',
           weeklyBack: '0',
           weeklyLegs: '0',
           weeklyShoulders: '0',
           weeklyArms: '0',
           weeklyAbs: '0',
-          weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
-          weeklyChestSet: '0',
-          weeklyBackSet: '0',
-          weeklyLegsSet: '0',
-          weeklyShouldersSet: '0',
-          weeklyArmsSet: '0',
-          weeklyAbsSet: '0',
-          weeklyCardioSet: goalsData.weekly_cardio_set?.toString() || '0',
+          weeklyCardio: '0',
         });
         return;
       }
       setGoals({
+        weeklyWorkoutTarget: goalsData.weekly_workout_target?.toString() || '0',
         dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
-        dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
+        dailyCarbs: goalsData.daily_carbs_target?.toString() || '300',
         dailyProtein: goalsData.daily_protein_target?.toString() || '120',
-        dailyFat: goalsData.daily_fat_target?.toString() || '60',
+        dailyFat: goalsData.daily_fat_target?.toString() || '80',
         weeklyChest: goalsData.weekly_chest?.toString() || '0',
         weeklyBack: goalsData.weekly_back?.toString() || '0',
         weeklyLegs: goalsData.weekly_legs?.toString() || '0',
@@ -265,13 +237,6 @@ const Profile = () => {
         weeklyArms: goalsData.weekly_arms?.toString() || '0',
         weeklyAbs: goalsData.weekly_abs?.toString() || '0',
         weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
-        weeklyChestSet: goalsData.weekly_chest_set?.toString() || '0',
-        weeklyBackSet: goalsData.weekly_back_set?.toString() || '0',
-        weeklyLegsSet: goalsData.weekly_legs_set?.toString() || '0',
-        weeklyShouldersSet: goalsData.weekly_shoulders_set?.toString() || '0',
-        weeklyArmsSet: goalsData.weekly_arms_set?.toString() || '0',
-        weeklyAbsSet: goalsData.weekly_abs_set?.toString() || '0',
-        weeklyCardioSet: goalsData.weekly_cardio_set?.toString() || '0',
       });
       // Only add exercises with value > 0
       const loadedStrengthGoals = [
@@ -417,14 +382,6 @@ const Profile = () => {
         daily_fat_target: parseInt(goals.dailyFat),
         ...strengthGoalMap,
         weekly_cardio: parseInt(goals.weeklyCardio), // Cardio as separate field
-        // 새로운 세트 목표 필드들 추가
-        weekly_chest_set: parseInt(goals.weeklyChestSet) || 0,
-        weekly_back_set: parseInt(goals.weeklyBackSet) || 0,
-        weekly_legs_set: parseInt(goals.weeklyLegsSet) || 0,
-        weekly_shoulders_set: parseInt(goals.weeklyShouldersSet) || 0,
-        weekly_arms_set: parseInt(goals.weeklyArmsSet) || 0,
-        weekly_abs_set: parseInt(goals.weeklyAbsSet) || 0,
-        weekly_cardio_set: parseInt(goals.weeklyCardioSet) || 0,
       };
 
       await createUserGoalMutation.mutateAsync(goalsData);
@@ -543,70 +500,38 @@ const Profile = () => {
                         .filter(o => o.value !== option.value && selectedBodyParts.includes(o.value))
                         .map(o => o.value);
                       const options = bodyPartOptions.filter(opt2 => !selected.includes(opt2.value) || opt2.value === option.value);
-                      const setFieldMap = {
-                        'chest': 'weeklyChestSet',
-                        'back': 'weeklyBackSet',
-                        'legs': 'weeklyLegsSet',
-                        'shoulders': 'weeklyShouldersSet',
-                        'arms': 'weeklyArmsSet',
-                        'abs': 'weeklyAbsSet',
-                      };
-                      const setField = setFieldMap[option.value as keyof typeof setFieldMap];
-                      
                       return (
-                        <div key={goal?.id || option.value} className="space-y-3 p-3 border rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1 flex items-center pl-2 font-medium">{option.label}</div>
-                            <div className="flex-1">
-                              <Select 
-                                value={goal?.weeklyCount || '1'} 
-                                onValueChange={(value) => updateStrengthGoal(goal?.id || '', 'weeklyCount', value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="주간 횟수" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="0">주 0회</SelectItem>
-                                  <SelectItem value="1">주 1회</SelectItem>
-                                  <SelectItem value="2">주 2회</SelectItem>
-                                  <SelectItem value="3">주 3회</SelectItem>
-                                  <SelectItem value="4">주 4회</SelectItem>
-                                  <SelectItem value="5">주 5회</SelectItem>
-                                  <SelectItem value="6">주 6회</SelectItem>
-                                  <SelectItem value="7">매일</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => removeStrengthGoal(goal?.id || '')}
-                              className="h-8 w-8"
+                        <div key={goal?.id || option.value} className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div className="flex-1 flex items-center pl-2 font-medium">{option.label}</div>
+                          <div className="flex-1">
+                            <Select 
+                              value={goal?.weeklyCount || '1'} 
+                              onValueChange={(value) => updateStrengthGoal(goal?.id || '', 'weeklyCount', value)}
                             >
-                              <X className="h-4 w-4" />
-                            </Button>
+                              <SelectTrigger>
+                                <SelectValue placeholder="주간 횟수" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">주 0회</SelectItem>
+                                <SelectItem value="1">주 1회</SelectItem>
+                                <SelectItem value="2">주 2회</SelectItem>
+                                <SelectItem value="3">주 3회</SelectItem>
+                                <SelectItem value="4">주 4회</SelectItem>
+                                <SelectItem value="5">주 5회</SelectItem>
+                                <SelectItem value="6">주 6회</SelectItem>
+                                <SelectItem value="7">매일</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
-                          
-                          {/* 세트 목표 입력 */}
-                          <div className="flex items-center gap-3 pl-4">
-                            <div className="flex-1">
-                              <Label className="text-sm text-muted-foreground">주간 세트 목표</Label>
-                            </div>
-                            <div className="flex-1">
-                              <Input
-                                type="number"
-                                value={goals[setField as keyof typeof goals] || '0'}
-                                onChange={(e) => setGoals({...goals, [setField]: e.target.value})}
-                                placeholder="0"
-                                min="0"
-                                max="100"
-                                className="text-sm"
-                                onWheel={e => e.currentTarget.blur()}
-                              />
-                            </div>
-                            <div className="w-8"></div> {/* 삭제 버튼과 정렬을 맞추기 위한 빈 공간 */}
-                          </div>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => removeStrengthGoal(goal?.id || '')}
+                            className="h-8 w-8"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                       );
                     })}
@@ -614,51 +539,31 @@ const Profile = () => {
                 </div>
 
                 {/* Cardio Training */}
-                <div className="space-y-4 p-3 border rounded-lg">
-                  <div className="space-y-2">
-                    <Label htmlFor="cardioTraining">유산소 운동 (회/주)</Label>
-                    <Select value={goals.weeklyCardio} onValueChange={(value) => setGoals({...goals, weeklyCardio: value})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="유산소 운동 횟수" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">주 0회</SelectItem>
-                        <SelectItem value="1">주 1회</SelectItem>
-                        <SelectItem value="2">주 2회</SelectItem>
-                        <SelectItem value="3">주 3회</SelectItem>
-                        <SelectItem value="4">주 4회</SelectItem>
-                        <SelectItem value="5">주 5회</SelectItem>
-                        <SelectItem value="6">주 6회</SelectItem>
-                        <SelectItem value="7">매일</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* 유산소 세트 목표 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="cardioSets" className="text-sm text-muted-foreground">주간 세트 목표</Label>
-                    <Input
-                      id="cardioSets"
-                      type="number"
-                      value={goals.weeklyCardioSet}
-                      onChange={(e) => setGoals({...goals, weeklyCardioSet: e.target.value})}
-                      placeholder="0"
-                      min="0"
-                      max="100"
-                      className="text-sm"
-                      onWheel={e => e.currentTarget.blur()}
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cardioTraining">유산소 운동 (회/주)</Label>
+                  <Select value={goals.weeklyCardio} onValueChange={(value) => setGoals({...goals, weeklyCardio: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="유산소 운동 횟수" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">주 0회</SelectItem>
+                      <SelectItem value="1">주 1회</SelectItem>
+                      <SelectItem value="2">주 2회</SelectItem>
+                      <SelectItem value="3">주 3회</SelectItem>
+                      <SelectItem value="4">주 4회</SelectItem>
+                      <SelectItem value="5">주 5회</SelectItem>
+                      <SelectItem value="6">주 6회</SelectItem>
+                      <SelectItem value="7">매일</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Total Weekly Workout Target Display */}
-                <div className="space-y-2">
-                  <Label>총 주간 운동 목표</Label>
+                <div className="mt-4">
+                  <Label className="text-sm text-muted-foreground">총 주간 운동 목표</Label>
                   <div className="p-3 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
                     <div className="text-lg font-semibold text-blue-700 dark:text-[#6ca0ff]">
                       {totalWeeklyWorkoutTarget}회 / 주
-                      <span className="mx-2">·</span>
-                      {totalWeeklySetTarget}세트 / 주
                     </div>
                     <div className="text-sm text-blue-600 dark:text-[#b3b8d8]">
                       (근력운동: {totalWeeklyWorkoutTarget - parseInt(goals.weeklyCardio)}회, 유산소: {goals.weeklyCardio}회)

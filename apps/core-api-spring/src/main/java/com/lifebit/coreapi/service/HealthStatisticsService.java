@@ -115,18 +115,18 @@ public class HealthStatisticsService {
             statistics.put("dailyProteinTarget", userGoal.getDailyProteinTarget());
             statistics.put("dailyFatTarget", userGoal.getDailyFatTarget());
             
-            // 주간 총 운동 세트 수 (weekly_workout_target 비교용)
-            statistics.put("weeklyTotalSets", exerciseService.getWeeklyTotalSets(userId));
+            // 주간 총 운동 횟수 (weekly_workout_target 비교용)
+            statistics.put("weeklyTotalWorkouts", exerciseService.getWeeklyExerciseCount(userId));
             
-            // 주간 부위별 운동 세트 수
-            Map<String, Integer> bodyPartSets = exerciseService.getWeeklyBodyPartSets(userId);
-            statistics.put("weeklyChestSets", bodyPartSets.get("CHEST"));
-            statistics.put("weeklyBackSets", bodyPartSets.get("BACK"));
-            statistics.put("weeklyLegsSets", bodyPartSets.get("LEGS"));
-            statistics.put("weeklyShouldersSets", bodyPartSets.get("SHOULDERS"));
-            statistics.put("weeklyArmsSets", bodyPartSets.get("ARMS"));
-            statistics.put("weeklyAbsSets", bodyPartSets.get("ABS"));
-            statistics.put("weeklyCardioSets", bodyPartSets.get("CARDIO"));
+            // 주간 부위별 운동 횟수
+            Map<String, Integer> bodyPartCounts = exerciseService.getWeeklyBodyPartCounts(userId);
+            statistics.put("weeklyChest", bodyPartCounts.get("CHEST"));
+            statistics.put("weeklyBack", bodyPartCounts.get("BACK"));
+            statistics.put("weeklyLegs", bodyPartCounts.get("LEGS"));
+            statistics.put("weeklyShoulders", bodyPartCounts.get("SHOULDERS"));
+            statistics.put("weeklyArms", bodyPartCounts.get("ARMS"));
+            statistics.put("weeklyAbs", bodyPartCounts.get("ABS"));
+            statistics.put("weeklyCardio", bodyPartCounts.get("CARDIO"));
             
             log.info("건강 통계 조회 완료 - 사용자: {}, 데이터 항목: {}", userId, statistics.size());
             
@@ -1024,18 +1024,18 @@ public class HealthStatisticsService {
         Map<String, Object> statistics = new HashMap<>();
         
         try {
-            // 새로운 건강로그용 세트 통계 추가
-            Map<String, Integer> bodyPartSets = exerciseService.getWeeklyBodyPartSets_healthloguse(userId);
-            statistics.put("weeklyChestSets_healthloguse", bodyPartSets.get("CHEST"));
-            statistics.put("weeklyBackSets_healthloguse", bodyPartSets.get("BACK"));
-            statistics.put("weeklyLegsSets_healthloguse", bodyPartSets.get("LEGS"));
-            statistics.put("weeklyShouldersSets_healthloguse", bodyPartSets.get("SHOULDERS"));
-            statistics.put("weeklyArmsSets_healthloguse", bodyPartSets.get("ARMS"));
-            statistics.put("weeklyAbsSets_healthloguse", bodyPartSets.get("ABS"));
-            statistics.put("weeklyCardioSets_healthloguse", bodyPartSets.get("CARDIO"));
+            // 건강로그용 횟수 통계 추가 (세트 -> 횟수로 변경)
+            Map<String, Integer> bodyPartCounts = exerciseService.getWeeklyBodyPartCounts_healthloguse(userId);
+            statistics.put("weeklyChestCounts_healthloguse", bodyPartCounts.get("CHEST"));
+            statistics.put("weeklyBackCounts_healthloguse", bodyPartCounts.get("BACK"));
+            statistics.put("weeklyLegsCounts_healthloguse", bodyPartCounts.get("LEGS"));
+            statistics.put("weeklyShouldersCounts_healthloguse", bodyPartCounts.get("SHOULDERS"));
+            statistics.put("weeklyArmsCounts_healthloguse", bodyPartCounts.get("ARMS"));
+            statistics.put("weeklyAbsCounts_healthloguse", bodyPartCounts.get("ABS"));
+            statistics.put("weeklyCardioCounts_healthloguse", bodyPartCounts.get("CARDIO"));
             
-            // 주간 총 세트 수도 추가
-            statistics.put("weeklyTotalSets_healthloguse", exerciseService.getWeeklyTotalSets_healthloguse(userId));
+            // 주간 총 횟수도 추가
+            statistics.put("weeklyTotalCounts_healthloguse", exerciseService.getWeeklyTotalCounts_healthloguse(userId));
             
             log.info("✅ [getHealthStatistics_healthloguse] 건강로그용 통계 조회 완료 - 사용자: {}, 데이터 항목: {}", 
                     userId, statistics.size());
@@ -1048,14 +1048,14 @@ public class HealthStatisticsService {
             
             // 오류 시 기본값 반환
             Map<String, Object> fallback = new HashMap<>();
-            fallback.put("weeklyChestSets_healthloguse", 0);
-            fallback.put("weeklyBackSets_healthloguse", 0);
-            fallback.put("weeklyLegsSets_healthloguse", 0);
-            fallback.put("weeklyShouldersSets_healthloguse", 0);
-            fallback.put("weeklyArmsSets_healthloguse", 0);
-            fallback.put("weeklyAbsSets_healthloguse", 0);
-            fallback.put("weeklyCardioSets_healthloguse", 0);
-            fallback.put("weeklyTotalSets_healthloguse", 0);
+            fallback.put("weeklyChestCounts_healthloguse", 0);
+            fallback.put("weeklyBackCounts_healthloguse", 0);
+            fallback.put("weeklyLegsCounts_healthloguse", 0);
+            fallback.put("weeklyShouldersCounts_healthloguse", 0);
+            fallback.put("weeklyArmsCounts_healthloguse", 0);
+            fallback.put("weeklyAbsCounts_healthloguse", 0);
+            fallback.put("weeklyCardioCounts_healthloguse", 0);
+            fallback.put("weeklyTotalCounts_healthloguse", 0);
             fallback.put("error", "건강로그용 통계 조회 중 오류가 발생했습니다.");
             
             return fallback;

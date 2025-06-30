@@ -518,13 +518,23 @@ def save_diet_record(data: MealInput, db: Session = Depends(get_db)):
         amount_str = f"{estimated_quantity}g"
         user_nutrition = calculate_nutrition_from_gpt(data.food_name, amount_str, db)
 
+    # === meal_time 한글 → 영어 ENUM 변환 추가 ===
+    meal_time_map = {
+        "아침": "breakfast",
+        "점심": "lunch",
+        "저녁": "dinner",
+        "야식": "snack",
+        "간식": "snack",
+    }
+    meal_time = meal_time_map.get(data.meal_time, data.meal_time)
+
     # 3. meal_logs에 저장 (Spring 구조와 호환)
     meal_log = models.MealLog(
         user_id=data.user_id,
         food_item_id=food_item_id,
         quantity=estimated_quantity,
         log_date=data.log_date,
-        meal_time=data.meal_time,
+        meal_time=meal_time,  # ← 변환된 값 사용
     )
     db.add(meal_log)
     db.commit()
