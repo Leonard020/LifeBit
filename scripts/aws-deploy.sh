@@ -89,15 +89,15 @@ fi
 log_success "LifeBit.sql 파일 확인 완료 (${SQL_SIZE} bytes)"
 
 # 사전 점검 실행
-if [ -f "./pre-deployment-check.sh" ]; then
+if [ -f "./scripts/pre-deployment-check.sh" ]; then
     log_info "사전 점검 실행 중..."
-    if ! ./pre-deployment-check.sh; then
+    if ! ./scripts/pre-deployment-check.sh; then
         log_error "사전 점검에 실패했습니다. 배포를 중단합니다."
         exit 1
     fi
     log_success "사전 점검 완료"
 else
-    log_warning "사전 점검 스크립트를 찾을 수 없습니다. 계속 진행합니다..."
+    log_warning "scripts/pre-deployment-check.sh 스크립트를 찾을 수 없습니다. 계속 진행합니다..."
 fi
 
 # 필수 도구 확인

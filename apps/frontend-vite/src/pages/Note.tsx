@@ -293,9 +293,14 @@ const Note = () => {
     }
     return arr;
   }
+  // 주간 범위: 일요일(weekStartDate) ~ 토요일(weekEndDate)
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setDate(weekStartDate.getDate() + 6);
+
   const weekStartStr = weekStartDate.toISOString().split("T")[0];
-  const selectedDateStr = selectedDate.toISOString().split("T")[0];
-  const dateArr = getDateRangeArray(weekStartDate, selectedDate);
+  const weekEndStr = weekEndDate.toISOString().split("T")[0];
+
+  const dateArr = getDateRangeArray(weekStartDate, weekEndDate);
 
   // todayExercise를 날짜별로 그룹화 (bodyPart가 cardio/유산소면 유산소로)
   const todayExerciseByDate = todayExercise.reduce((acc, rec) => {
@@ -332,7 +337,7 @@ const Note = () => {
   // Radar Chart 집계는 mergedSummary 기준으로 진행
   const filteredSummary = mergedSummary.filter(item => {
     const dateStr = item.workoutDate.slice(0, 10);
-    return dateStr >= weekStartStr && dateStr <= selectedDateStr;
+    return dateStr >= weekStartStr && dateStr <= weekEndStr;
   });
 
   // 2. 주간 운동 부위별 누적 집계 (날짜별 부위별 1회만 카운트, 유산소 통합)
@@ -357,27 +362,79 @@ const Note = () => {
     });
   }, [weeklySummary, filteredSummary]);
 
+  // ✅ 주간 운동 부위별 횟수(세션 단위) 계산 – 같은 날 여러 번 해도 모두 카운트
   const weeklyBodyPartCounts = React.useMemo(() => {
-    // 날짜별로 부위별 1회만 카운트
+    const counts: Record<string, number> = {};
+    filteredSummary.forEach((item) => {
+      if (!Array.isArray(item.exerciseNames) || item.exerciseNames.length === 0) return;
+      item.exerciseNames.forEach((name: string) => {
+        const lower = name.toLowerCase();
+        const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(cardio => lower.includes(cardio));
+        const part = isCardio ? '유산소' : (exerciseNameToBodyPart[name] || getBodyPartLabel(name) || '기타');
+        if (part !== '기타') {
+          counts[part] = (counts[part] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [filteredSummary]);
+
+  // ✅ 주간 Strength-Days / Cardio-Days 계산 (하루에 1회만 인정)
+  const { weeklyStrengthDays, weeklyCardioDays } = React.useMemo(() => {
+    // 날짜별로 strength, cardio 여부 저장
+    const dayMap: Record<string, { strength: boolean; cardio: boolean }> = {};
+
+    filteredSummary.forEach((item) => {
+      if (!Array.isArray(item.exerciseNames) || item.exerciseNames.length === 0) return;
+      const date = item.workoutDate;
+      if (!dayMap[date]) {
+        dayMap[date] = { strength: false, cardio: false };
+      }
+
+      item.exerciseNames.forEach((name: string) => {
+        const lower = name.toLowerCase();
+        const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(c => lower.includes(c));
+        if (isCardio) {
+          dayMap[date].cardio = true;
+        } else {
+          dayMap[date].strength = true; // cardio 아닌 것은 모두 근력으로 취급
+        }
+      });
+    });
+
+    // 주간 Strength/Cardio 일수 합산
+    let strengthDays = 0;
+    let cardioDays = 0;
+    Object.values(dayMap).forEach(({ strength, cardio }) => {
+      if (strength) strengthDays += 1;
+      if (cardio) cardioDays += 1;
+    });
+
+    return { weeklyStrengthDays: strengthDays, weeklyCardioDays: cardioDays };
+  }, [filteredSummary]);
+
+  // ✅ 부위별 일일 1회 기준 주간 집계 (Radar 차트용)
+  const weeklyBodyPartDays = React.useMemo(() => {
+    // 날짜별 부위 Set 저장
     const datePartSet: Record<string, Set<string>> = {};
     filteredSummary.forEach((item) => {
       if (!Array.isArray(item.exerciseNames) || item.exerciseNames.length === 0) return;
       const date = item.workoutDate;
       if (!datePartSet[date]) datePartSet[date] = new Set();
       item.exerciseNames.forEach((name: string) => {
-        // 유산소 판별
         const lower = name.toLowerCase();
-        const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(cardio => lower.includes(cardio));
+        const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(c => lower.includes(c));
         const part = isCardio ? '유산소' : (exerciseNameToBodyPart[name] || getBodyPartLabel(name) || '기타');
         if (part !== '기타') {
           datePartSet[date].add(part);
         }
       });
     });
-    // 부위별로 날짜별 1회씩만 누적
+
+    // 부위별로 날짜별 1회씩 카운트
     const counts: Record<string, number> = {};
-    Object.values(datePartSet).forEach((partsSet) => {
-      partsSet.forEach((part) => {
+    Object.values(datePartSet).forEach(set => {
+      set.forEach(part => {
         counts[part] = (counts[part] || 0) + 1;
       });
     });
@@ -387,7 +444,7 @@ const Note = () => {
   // 3. exerciseData: 주간 누적만 사용
   const exerciseData = bodyPartMap.map(({ label }) => ({
     subject: label,
-    value: weeklyBodyPartCounts[label] || 0,
+    value: weeklyBodyPartDays[label] || 0, // 하루 1회 기준 값
     goal: exerciseGoals[label] || 0,
   }));
 
@@ -562,6 +619,32 @@ const Note = () => {
     targetCalories: nutrient.target,
   }));
 
+  // ✅ 오늘 식단 기록 불러오기 (함수 선언 형태 - 호이스팅)
+  async function fetchDiet() {
+    setIsLoadingDietData(true);
+    setDietError(null);
+
+    const userId = getUserIdFromToken();
+    if (!userId) {
+      setDailyDietLogs([]);
+      setIsLoadingDietData(false);
+      return;
+    }
+
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    try {
+      const data = await getDailyDietRecords(formattedDate, userId);
+      const filtered = data.filter((d: DietRecord) => d.logDate && d.logDate.startsWith(formattedDate));
+      setDailyDietLogs(filtered.sort((a, b) => b.id - a.id));
+    } catch (err) {
+      console.error('식단 기록 불러오기 실패:', err);
+      setDailyDietLogs([]);
+      setDietError('식단 기록을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoadingDietData(false);
+    }
+  }
+
   // ✅ 오늘 운동 기록 불러오기
   const fetchExercise = async () => {
     const userId = getUserIdFromToken();
@@ -592,6 +675,7 @@ const Note = () => {
 
   useEffect(() => {
     if (authToken) {
+      fetchDiet(); // 식단 먼저
       fetchExercise();
     }
   }, [selectedDate, authToken]);
@@ -1072,20 +1156,6 @@ const Note = () => {
                     <p className="text-sm text-muted-foreground">붉은 선은 목표치를 나타냅니다</p>
                   </div>
                   {/* 총 주간 운동 목표 - no box, just text on background */}
-                  <div className="ml-auto text-right">
-                    <div className="text-base font-bold text-blue-700">
-                      {(() => {
-                        // Calculate total weekly workout target
-                        const strength = (exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0);
-                        const cardio = exerciseGoals['유산소'] || 0;
-                        const total = strength + cardio;
-                        return `목표 : ${total}회 / 주`;
-                      })()}
-                    </div>
-                    <div className="text-xs text-blue-600 mt-1">
-                      (근력운동: {(exerciseGoals['가슴'] || 0) + (exerciseGoals['등'] || 0) + (exerciseGoals['하체'] || 0) + (exerciseGoals['어깨'] || 0) + (exerciseGoals['팔'] || 0) + (exerciseGoals['복근'] || 0)}회, 유산소: {exerciseGoals['유산소'] || 0}회)
-                    </div>
-                  </div>
                 </>
               </CardHeader>
               <CardContent>

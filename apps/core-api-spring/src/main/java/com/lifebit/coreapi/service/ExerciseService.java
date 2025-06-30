@@ -357,7 +357,7 @@ public class ExerciseService {
         
         for (ExerciseSession session : sessions) {
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                String bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
                 bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1); // 횟수로 카운트
             }
         }
@@ -436,7 +436,7 @@ public class ExerciseService {
         
         for (ExerciseSession session : sessions) {
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                String bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
                 int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
                 bodyPartMinutes.put(bodyPart, bodyPartMinutes.getOrDefault(bodyPart, 0) + duration);
             }
@@ -483,7 +483,7 @@ public class ExerciseService {
         
         for (ExerciseSession session : sessions) {
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                String bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
                 int sets = session.getSets() != null ? session.getSets() : 0;
                 bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + sets);
             }

@@ -143,20 +143,20 @@ if [ $checks_passed -eq $total_checks ]; then
     echo -e "${GREEN}배포를 진행할 수 있습니다.${NC}"
     echo ""
     echo -e "${BLUE}다음 명령으로 배포를 시작하세요:${NC}"
-    echo -e "   ./aws-deploy.sh"
+    echo -e "   ./scripts/aws-deploy.sh"
     exit 0
 elif [ $checks_passed -ge $((total_checks * 8 / 10)) ]; then
     echo -e "${YELLOW}⚠️  일부 경고가 있지만 배포 가능합니다.${NC}"
     echo -e "${YELLOW}위의 경고사항을 확인하고 필요시 수정하세요.${NC}"
     echo ""
     echo -e "${BLUE}배포를 계속 진행하려면:${NC}"
-    echo -e "   ./aws-deploy.sh"
+    echo -e "   ./scripts/aws-deploy.sh"
     exit 0
 else
     echo -e "${RED}❌ 중요한 점검 항목에서 실패했습니다.${NC}"
     echo -e "${RED}위의 오류들을 수정한 후 다시 시도하세요.${NC}"
     echo ""
     echo -e "${BLUE}문제 해결 후 다시 실행:${NC}"
-    echo -e "   ./pre-deployment-check.sh"
+    echo -e "   ./scripts/pre-deployment-check.sh"
     exit 1
 fi 

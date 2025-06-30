@@ -69,11 +69,43 @@ public class NoteExerciseService {
 
         // 🔸 운동 카탈로그 설정
         ExerciseCatalog catalog = exerciseCatalogRepository.findByName(dto.getExerciseName())
-                .orElseGet(() -> {
-                    ExerciseCatalog newCatalog = new ExerciseCatalog();
-                    newCatalog.setName(dto.getExerciseName());
-                    return exerciseCatalogRepository.save(newCatalog);
-                });
+                .orElseGet(() -> null);
+
+        if (catalog == null) {
+            // 카탈로그가 없으면 새로 생성
+            catalog = new ExerciseCatalog();
+            catalog.setName(dto.getExerciseName());
+        }
+
+        // bodyPart 가 비어 있으면 추론하여 설정
+        if (catalog.getBodyPart() == null) {
+            String lowerName = dto.getExerciseName().toLowerCase();
+            com.lifebit.coreapi.entity.BodyPartType inferred = com.lifebit.coreapi.entity.BodyPartType.cardio; // 기본값
+            if (lowerName.contains("chest") || lowerName.contains("벤치")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.chest;
+            } else if (lowerName.contains("back")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.back;
+            } else if (lowerName.contains("leg") || lowerName.contains("스쿼트")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.legs;
+            } else if (lowerName.contains("shoulder")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.shoulders;
+            } else if (lowerName.contains("arm") || lowerName.contains("바이셉스") || lowerName.contains("트라이셉스")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.arms;
+            } else if (lowerName.contains("abs") || lowerName.contains("복근")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.abs;
+            } else if (lowerName.contains("조깅") || lowerName.contains("러닝") || lowerName.contains("cardio") || lowerName.contains("달리기")) {
+                inferred = com.lifebit.coreapi.entity.BodyPartType.cardio;
+            }
+            catalog.setBodyPart(inferred);
+        }
+
+        // 새 카탈로그이거나 업데이트가 필요한 경우 저장
+        if (catalog.getExerciseCatalogId() == null) {
+            catalog = exerciseCatalogRepository.save(catalog);
+        } else if (catalog.getBodyPart() != null && !exerciseCatalogRepository.existsById(catalog.getExerciseCatalogId())) {
+            // 존재하나 트랜잭션 안에서 영속 상태가 아닐 수 있음 -> merge
+            catalog = exerciseCatalogRepository.save(catalog);
+        }
         session.setExerciseCatalog(catalog);
 
         // 🔸 기본 필드 설정
@@ -150,6 +182,9 @@ public class NoteExerciseService {
     private int calculateCurrentStreak(Long userId) {
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
             userId, LocalDate.now().minusDays(365), LocalDate.now());
+        
+        // 날짜별 내림차순 정렬 (최근 → 과거)
+        sessions.sort(java.util.Comparator.comparing(ExerciseSession::getExerciseDate).reversed());
         
         if (sessions.isEmpty()) {
             return 0;
