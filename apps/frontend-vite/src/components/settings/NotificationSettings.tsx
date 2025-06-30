@@ -18,8 +18,10 @@ import {
   Volume2,
   VolumeX,
   Clock,
-  Zap
+  Zap,
+  Type
 } from 'lucide-react';
+import { useTheme, FontSize } from '@/contexts/ThemeContext';
 
 interface NotificationSettings {
   allNotifications: boolean;
@@ -65,14 +67,16 @@ const NotificationSettings: React.FC = () => {
   const handleSave = () => {
     setSavedSettings(tempSettings);
     localStorage.setItem('notificationSettings', JSON.stringify(tempSettings));
+    saveThemeSettings();
     toast({
-      title: '알림 설정 저장됨',
-      description: '알림 설정이 성공적으로 저장되었습니다.',
+      title: '설정 저장됨',
+      description: '설정이 성공적으로 저장되었습니다.',
     });
   };
 
   const handleCancel = () => {
     setTempSettings(savedSettings);
+    cancelThemeSettings();
     toast({
       title: '설정 취소됨',
       description: '변경사항이 취소되었습니다.',
@@ -92,9 +96,10 @@ const NotificationSettings: React.FC = () => {
       quietHoursEnd: '08:00'
     };
     setTempSettings(defaultSettings);
+    resetThemeDefaults();
     toast({
       title: '기본값으로 초기화',
-      description: '모든 알림 설정이 기본값으로 초기화되었습니다.',
+      description: '모든 설정이 기본값으로 초기화되었습니다.',
     });
   };
 
@@ -122,8 +127,49 @@ const NotificationSettings: React.FC = () => {
     }
   ];
 
+  // 폰트 크기 상태 및 함수
+  const {
+    tempSettings: themeTempSettings,
+    hasUnsavedChanges: themeHasUnsavedChanges,
+    setFontSize,
+    saveSettings: saveThemeSettings,
+    cancelSettings: cancelThemeSettings,
+    resetToDefaults: resetThemeDefaults
+  } = useTheme();
+
+  // 폰트 크기 옵션
+  const fontSizes = [
+    { value: 'small', label: '보통', size: 'text-base' },
+    { value: 'normal', label: '크게', size: 'text-lg' },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* 폰트 크기 설정 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Type className="h-5 w-5" />
+            폰트 크기
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-row gap-4 justify-center">
+            {fontSizes.map((size) => (
+              <Button
+                key={size.value}
+                variant={themeTempSettings.fontSize === size.value ? 'default' : 'outline'}
+                onClick={() => setFontSize(size.value as FontSize)}
+                className="h-20 w-32 flex flex-col items-center justify-center gap-3 text-xl"
+              >
+                <div className={`${size.size} font-bold text-2xl`}>Aa</div>
+                <span className="text-base font-semibold">{size.label}</span>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 전체 알림 설정 */}
       <Card>
         <CardHeader>
