@@ -73,9 +73,6 @@ const Note = () => {
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [todayScore, setTodayScore] = useState(12);
-  const [hasClaimedExerciseScore, setHasClaimedExerciseScore] = useState(false);
-  const [hasClaimedDietScore, setHasClaimedDietScore] = useState(false);
 
   // 식단 관련 상태
   const [dailyDietLogs, setDailyDietLogs] = useState<DietRecord[]>([]);
@@ -784,16 +781,6 @@ const Note = () => {
     );
   };
 
-  const handleClaimExerciseScore = () => {
-    setTodayScore(todayScore + 1);
-    setHasClaimedExerciseScore(true);
-  };
-
-  const handleClaimDietScore = () => {
-    setTodayScore(todayScore + 1);
-    setHasClaimedDietScore(true);
-  };
-
   const isToday = (date: Date) => {
     const today = new Date();
     return date.toDateString() === today.toDateString();
@@ -1123,7 +1110,6 @@ const Note = () => {
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                     <span>식단</span>
                   </div>
-                  <Badge variant="outline" className="text-xs">+{todayScore}점</Badge>
                 </div>
               </div>
 
