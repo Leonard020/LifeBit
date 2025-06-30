@@ -26,6 +26,15 @@ interface User {
   lastVisited?: string;
 }
 
+interface CatalogItem {
+  id: number;
+  name: string;
+  bodyPart: string;
+  exerciseType: string | null;
+  intensity: string;
+  createdAt: string;
+}
+
 export const AdminPage = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
@@ -35,6 +44,8 @@ export const AdminPage = () => {
   const usersPerPage = 10;
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<'catalog' | 'users'>('users');
+  const [catalogs, setCatalogs] = useState<CatalogItem[]>([]);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -47,7 +58,6 @@ export const AdminPage = () => {
         navigate('/login');
         return;
       }
-
       const userInfo = getUserInfo();
       if (userInfo?.role !== 'ADMIN') {
         toast({
@@ -58,19 +68,12 @@ export const AdminPage = () => {
         navigate('/');
         return;
       }
-
       try {
-        const response = await fetch('/api/admin/users', {
-          headers: {
-            'Authorization': `Bearer ${getToken()}`,
-          },
+        const res = await fetch('/api/admin/users', {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
         });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch users');
-        }
-        
-        const data = await response.json();
+        if (!res.ok) throw new Error('Failed to fetch users');
+        const data = await res.json();
         setUsers(data);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -81,80 +84,51 @@ export const AdminPage = () => {
         });
       }
     };
-
     checkAdminAccess();
   }, [navigate, toast]);
 
+  useEffect(() => {
+    const fetchCatalogs = async () => {
+      try {
+        const res = await fetch('/api/exercises/catalog', {
+          headers: {
+            'Authorization': `Bearer ${getToken()}`
+          }
+        });
+        if (!res.ok) throw new Error('Failed to fetch catalogs');
+        const data = await res.json();
+        setCatalogs(data);
+      } catch (err) {
+        toast({ title: "오류", description: "운동 카탈로그 로딩 실패", variant: "destructive" });
+      }
+    };
+    if (activeTab === 'catalog') fetchCatalogs();
+  }, [activeTab, toast]);
+
   const handleDelete = async (userId: string) => {
     try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
+      const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
+        headers: { 'Authorization': `Bearer ${getToken()}` },
       });
-      if (!response.ok) throw new Error('Failed to delete user');
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      if (!res.ok) throw new Error();
+      setUsers(prev => prev.filter(u => u.id !== userId));
       toast({ title: '삭제 성공', description: '사용자가 삭제되었습니다.' });
-    } catch (error) {
-      toast({ title: '오류', description: '사용자 삭제에 실패했습니다.', variant: 'destructive' });
+    } catch {
+      toast({ title: '오류', description: '사용자 삭제 실패', variant: 'destructive' });
     } finally {
       setShowDialog(false);
       setDeleteUserId(null);
     }
   };
 
-  // Always keep admin on top, and sort non-admins by lastVisited desc by default
-  const adminUsers = users.filter(u => u.role === 'ADMIN');
-  const nonAdminUsers = users.filter(u => u.role !== 'ADMIN');
-  let sortedUsers: User[];
-  if (sortConfig) {
-    sortedUsers = [...nonAdminUsers];
-    sortedUsers.sort((a, b) => {
-      const { key, direction } = sortConfig;
-      // For date fields, compare as numbers
-      if (key === 'createdAt' || key === 'lastVisited') {
-        const aTime = a[key] ? new Date(a[key] as string).getTime() : 0;
-        const bTime = b[key] ? new Date(b[key] as string).getTime() : 0;
-        if (aTime < bTime) return direction === 'asc' ? -1 : 1;
-        if (aTime > bTime) return direction === 'asc' ? 1 : -1;
-        return 0;
-      }
-      // For string fields
-      const aValue = a[key] ?? '';
-      const bValue = b[key] ?? '';
-      if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  } else {
-    sortedUsers = [...nonAdminUsers].sort((a, b) => {
-      const aTime = a.lastVisited ? new Date(a.lastVisited).getTime() : 0;
-      const bTime = b.lastVisited ? new Date(b.lastVisited).getTime() : 0;
-      if (aTime === 0 && bTime === 0) return 0;
-      if (aTime === 0) return 1;
-      if (bTime === 0) return -1;
-      return bTime - aTime;
-    });
-  }
-  const finalUsers = [...adminUsers, ...sortedUsers];
-
-  // Pagination logic
-  const totalPages = Math.ceil(finalUsers.length / usersPerPage);
-  const indexOfLastUser = currentPage * usersPerPage;
-  const indexOfFirstUser = indexOfLastUser - usersPerPage;
-  const currentUsers = finalUsers.slice(indexOfFirstUser, indexOfLastUser);
-
-  const handleSort = (key: keyof User) => {
-    setSortConfig((prev) => {
-      if (prev && prev.key === key) {
-        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-      }
-      return { key, direction: 'asc' };
-    });
-    // Reset to first page when sorting
-    setCurrentPage(1);
-  };
+  const totalItems = activeTab === 'users' ? users.length : catalogs.length;
+  const totalPages = Math.ceil(totalItems / usersPerPage);
+  const indexOfLast = currentPage * usersPerPage;
+  const indexOfFirst = indexOfLast - usersPerPage;
+  const currentList = activeTab === 'users'
+    ? users.slice(indexOfFirst, indexOfLast)
+    : catalogs.slice(indexOfFirst, indexOfLast);
 
   const goToFirstPage = () => setCurrentPage(1);
   const goToLastPage = () => setCurrentPage(totalPages);
@@ -163,121 +137,101 @@ export const AdminPage = () => {
   const goToPage = (page: number) => setCurrentPage(page);
 
   const getPageNumbers = () => {
-    if (totalPages <= 5) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    if (currentPage <= 3) {
-      return [1, 2, 3, 4, 5];
-    }
-    if (currentPage > totalPages - 3) {
-      return [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-    }
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (currentPage <= 3) return [1, 2, 3, 4, 5];
+    if (currentPage > totalPages - 3) return [
+      totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages
+    ];
     return [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2];
   };
 
   return (
     <Layout>
       <div className="container mx-auto py-8">
+        <div className="flex gap-4 mb-6">
+          <Button variant={activeTab === 'catalog' ? 'default' : 'outline'} onClick={() => setActiveTab('catalog')}>운동 카탈로그</Button>
+          <Button variant={activeTab === 'users' ? 'default' : 'outline'} onClick={() => setActiveTab('users')}>회원 관리</Button>
+        </div>
+
         <Card>
           <CardHeader>
-            <CardTitle>관리자 페이지</CardTitle>
+            <CardTitle>{activeTab === 'catalog' ? '운동 카탈로그 관리' : '회원 관리'}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead onClick={() => handleSort('email')} style={{ cursor: 'pointer' }}>
-                    사용자 ID{sortConfig?.key === 'email' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </TableHead>
-                  <TableHead onClick={() => handleSort('nickname')} style={{ cursor: 'pointer' }}>
-                    닉네임{sortConfig?.key === 'nickname' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </TableHead>
-                  {/* <TableHead>비밀번호</TableHead> */}
-                  <TableHead onClick={() => handleSort('createdAt')} style={{ cursor: 'pointer' }}>
-                    생성 날짜{sortConfig?.key === 'createdAt' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </TableHead>
-                  <TableHead onClick={() => handleSort('lastVisited')} style={{ cursor: 'pointer' }}>
-                    마지막 접속 일시{sortConfig?.key === 'lastVisited' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </TableHead>
-                  <TableHead>권한</TableHead>
-                  <TableHead></TableHead>
+                  {activeTab === 'users' ? (
+                    <>
+                      <TableHead>이메일</TableHead>
+                      <TableHead>닉네임</TableHead>
+                      <TableHead>가입일</TableHead>
+                      <TableHead>마지막 접속</TableHead>
+                      <TableHead>권한</TableHead>
+                      <TableHead></TableHead>
+                    </>
+                  ) : (
+                    <>
+                      <TableHead>운동명</TableHead>
+                      <TableHead>운동 부위</TableHead>
+                      <TableHead>운동 타입</TableHead>
+                      <TableHead>강도</TableHead>
+                      <TableHead>생성일</TableHead>
+                      <TableHead></TableHead>
+                    </>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {currentUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.nickname}</TableCell>
-                    {/* <TableCell>{user.password}</TableCell> */}
-                    <TableCell>{user.createdAt ? new Date(user.createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
-                    <TableCell>{user.lastVisited ? new Date(user.lastVisited).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
-                    <TableCell>{user.role}</TableCell>
-                    <TableCell>
-                      {user.role === 'USER' && (
-                        <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId(user.id); setShowDialog(true); }}>
-                          X
-                        </Button>
-                      )}
-                    </TableCell>
+                {currentList.map((item: any) => (
+                  <TableRow key={item.id}>
+                    {activeTab === 'users' ? (
+                      <>
+                        <TableCell>{item.email}</TableCell>
+                        <TableCell>{item.nickname}</TableCell>
+                        <TableCell>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('ko-KR') : '-'}</TableCell>
+                        <TableCell>{item.lastVisited ? new Date(item.lastVisited).toLocaleDateString('ko-KR') : '-'}</TableCell>
+                        <TableCell>{item.role}</TableCell>
+                        <TableCell>
+                          {item.role === 'USER' && (
+                            <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId(item.id); setShowDialog(true); }}>삭제</Button>
+                          )}
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.bodyPart}</TableCell>
+                        <TableCell>{item.exerciseType || '-'}</TableCell>
+                        <TableCell>{item.intensity}</TableCell>
+                        <TableCell>{new Date(item.createdAt).toLocaleDateString('ko-KR')}</TableCell>
+                        <TableCell><Button size="sm">수정</Button></TableCell>
+                      </>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
 
-            {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">
                 <div className="text-sm text-gray-600">
-                  {indexOfFirstUser + 1}-{Math.min(indexOfLastUser, finalUsers.length)} of {finalUsers.length} users
+                  {indexOfFirst + 1}-{Math.min(indexOfLast, totalItems)} of {totalItems} {activeTab === 'users' ? 'users' : 'exercises'}
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToFirstPage}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToPreviousPage}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
                   {getPageNumbers().map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => goToPage(page)}
-                    >
-                      {page}
-                    </Button>
+                    <Button key={page} variant={currentPage === page ? 'default' : 'outline'} size="sm" onClick={() => goToPage(page)}>{page}</Button>
                   ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToNextPage}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToLastPage}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={goToLastPage} disabled={currentPage === totalPages}><ChevronsRight className="h-4 w-4" /></Button>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
+
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
           <DialogContent>
             <DialogHeader>
@@ -293,4 +247,4 @@ export const AdminPage = () => {
       </div>
     </Layout>
   );
-}; 
+};
