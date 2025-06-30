@@ -89,17 +89,6 @@ const ChatMessage: React.FC<{
           >
             {message.content}
           </div>
-
-          {/* 카카오톡 스타일 말풍선 꼬리 */}
-          <div className={`absolute bottom-0 ${isUser
-              ? 'right-0 translate-x-0 translate-y-full'
-              : 'left-0 translate-x-0 translate-y-full'
-            }`}>
-            <div className={`w-3 h-3 ${isUser
-                ? 'bg-purple-500 clip-path-tail-right'
-                : 'bg-white border-l border-b border-gray-200 clip-path-tail-left'
-              }`} />
-          </div>
         </div>
 
         {showTime && isLast && (
