@@ -75,16 +75,16 @@ const ChatMessage: React.FC<{
         <div
           className={`relative px-4 py-3 rounded-2xl shadow-sm ${isUser
             ? 'bg-purple-500 text-white rounded-br-md'
-            : 'bg-white border border-gray-200 rounded-bl-md'
+            : 'bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-bl-md'
           }`}
           style={
             !isUser && isDarkMode
-              ? { background: '#23272e' }
+              ? { background: '#232946' }
               : undefined
           }
         >
           <div
-            className="whitespace-pre-wrap text-sm leading-relaxed"
+            className="whitespace-pre-wrap text-sm leading-relaxed dark:text-[#b3b8d8]"
             style={{ color: '#C7BFFF', fontWeight: 600 }}
           >
             {message.content}
@@ -187,6 +187,11 @@ type WebSpeechRecognitionErrorEvent = Event & {
   error: string;
 };
 
+// Cross-browser SpeechRecognition type
+type SpeechRecognitionType = typeof window.SpeechRecognition extends undefined
+  ? typeof window.webkitSpeechRecognition
+  : typeof window.SpeechRecognition;
+
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   recordType,
   inputText,
@@ -211,7 +216,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const [localIsRecording, setLocalIsRecording] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<InstanceType<SpeechRecognitionType> | null>(null);
   const inputTextRef = useRef(inputText);
 
   useEffect(() => {
@@ -273,7 +278,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         console.error('[STT] 에러:', event.error);
         setLocalIsRecording(false);
       };
-      recognitionRef.current.onend = (event: Event) => {
+      recognitionRef.current.onend = () => {
         setLocalIsRecording(false);
       };
     }
@@ -349,22 +354,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-gradient-to-b from-blue-50 to-purple-50 rounded-2xl shadow-lg overflow-hidden">
+    <div className="flex flex-col h-[600px] bg-gradient-to-b from-blue-50 to-purple-50 dark:from-[#181c2b] dark:to-[#232946] rounded-2xl shadow-lg overflow-hidden">
       {/* 카카오톡 스타일 헤더 */}
-      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+      <div className="bg-white dark:bg-[#232946] border-b border-gray-200 dark:border-[#3a3a5a] p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
             <span className="text-white font-bold">AI</span>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">LifeBit AI</h3>
+            <h3 className="font-semibold text-gray-800 dark:text-[#e0e6f8]">LifeBit AI</h3>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full"></span>
               <p className="text-xs text-green-500">온라인</p>
             </div>
           </div>
         </div>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-gray-500 dark:text-[#b3b8d8]">
           {recordType === 'exercise' ? '💪 운동 기록' : '🍽️ 식단 기록'}
         </span>
       </div>
@@ -392,19 +397,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         {/* 현재 식사에 추가된 음식들 표시 */}
         {currentMealFoods.length > 0 && (
-          <div className="my-4 p-4 bg-white rounded-xl border border-purple-200 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <div className="my-4 p-4 bg-white dark:bg-[#232946] rounded-xl border border-purple-200 dark:border-[#3a3a5a] shadow-sm">
+            <h4 className="font-semibold text-gray-800 dark:text-[#e0e6f8] mb-3 flex items-center gap-2">
               <Utensils className="h-4 w-4 text-purple-600" />
               현재 식사 기록
             </h4>
             <div className="space-y-2">
               {currentMealFoods.map((food, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-purple-600">{idx + 1}</span>
+                <div key={idx} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-[#232946] rounded-lg">
+                  <div className="w-6 h-6 bg-purple-100 dark:bg-[#2d1e4a] rounded-full flex items-center justify-center">
+                    <span className="text-xs font-medium text-purple-600 dark:text-[#b3b8d8]">{idx + 1}</span>
                   </div>
-                  <span className="flex-1 text-sm">{food.food_name} {food.amount}</span>
-                  <span className="text-xs text-gray-500">{food.nutrition?.calories}kcal</span>
+                  <span className="flex-1 text-sm dark:text-[#e0e6f8]">{food.food_name} {food.amount}</span>
+                  <span className="text-xs text-gray-500 dark:text-[#b3b8d8]">{food.nutrition?.calories}kcal</span>
                 </div>
               ))}
             </div>
@@ -425,7 +430,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       {/* 카카오톡 스타일 입력창 */}
-      <div className="bg-white border-t border-gray-200 p-4">
+      <div className="bg-white dark:bg-[#232946] border-t border-gray-200 dark:border-[#3a3a5a] p-4">
         <div className="flex items-center gap-3">
           <Input
             ref={inputRef}
@@ -434,7 +439,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             onKeyPress={handleKeyPress}
             placeholder={`메시지를 입력하세요...`}
             disabled={isProcessing}
-            className="flex-1 border-gray-300 rounded-full px-4 py-2 focus:border-purple-500 focus:ring-purple-500"
+            className="flex-1 border-gray-300 dark:border-[#3a3a5a] rounded-full px-4 py-2 focus:border-purple-500 focus:ring-purple-500 bg-white dark:bg-[#232946] text-gray-800 dark:text-[#e0e6f8]"
           />
 
           {inputText.trim() === '' ? (
