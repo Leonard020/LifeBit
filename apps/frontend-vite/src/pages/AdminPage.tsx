@@ -549,9 +549,14 @@ export const AdminPage = () => {
   
   const indexOfLast = currentPage * usersPerPage;
   const indexOfFirst = indexOfLast - usersPerPage;
-  const currentList = activeTab === 'users' ? users.slice(indexOfFirst, indexOfLast) :
-                      activeTab === 'food' ? foodCatalogs.slice(indexOfFirst, indexOfLast) :
-                      filteredCatalogs.slice(indexOfFirst, indexOfLast);
+  let currentList: User[] | FoodCatalogItem[] | CatalogItem[] = [];
+  if (activeTab === 'users') {
+    currentList = users.slice(indexOfFirst, indexOfLast);
+  } else if (activeTab === 'food') {
+    currentList = foodCatalogs.slice(indexOfFirst, indexOfLast);
+  } else {
+    currentList = filteredCatalogs.slice(indexOfFirst, indexOfLast);
+  }
 
   const goToFirstPage = () => setCurrentPage(1);
   const goToLastPage = () => setCurrentPage(totalPages);
@@ -570,85 +575,13 @@ export const AdminPage = () => {
   return (
     <Layout>
       <div className="container mx-auto py-8">
-        <h1 className="text-3xl font-bold mb-8">📊 관리자 대시보드</h1>
-        
-        {/* 대시보드 통계 카드 섹션 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* 총 회원수 카드 */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">총 회원수</p>
-                  <p className="text-3xl font-bold">{dashboardStats.totalUsers.toLocaleString()}명</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-green-600 font-medium">
-                      주간: +{dashboardStats.weeklyNewUsers.toLocaleString()}명
-                    </p>
-                    <p className="text-xs text-green-600 font-medium">
-                      월간: +{dashboardStats.monthlyNewUsers.toLocaleString()}명
-                    </p>
-                  </div>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 일일 접속자 카드 */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">일일 접속자</p>
-                  <p className="text-3xl font-bold">{dashboardStats.dailyActiveUsers.toLocaleString()}명</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-green-600 font-medium">주간: {dashboardStats.weeklyActiveUsers.toLocaleString()}명</p>
-                    <p className="text-xs text-green-600 font-medium">월간: {dashboardStats.monthlyActiveUsers.toLocaleString()}명</p>
-                  </div>
-                </div>
-                <div className="p-3 bg-green-100 rounded-full">
-                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 일일 기록수 카드 */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">일일 기록수</p>
-                  <p className="text-3xl font-bold">{dashboardStats.dailyRecords.toLocaleString()}건</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-green-600 font-medium">주간: {dashboardStats.weeklyRecords.toLocaleString()}건</p>
-                    <p className="text-xs text-green-600 font-medium">월간: {dashboardStats.monthlyRecords.toLocaleString()}건</p>
-                  </div>
-                </div>
-                <div className="p-3 bg-orange-100 rounded-full">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         <div className="flex gap-4 mb-6">
           <Button variant={activeTab === 'catalog' ? 'default' : 'outline'} onClick={() => setActiveTab('catalog')}>운동 카탈로그</Button>
           <Button variant={activeTab === 'food' ? 'default' : 'outline'} onClick={() => setActiveTab('food')}>음식 카탈로그</Button>
           <Button variant={activeTab === 'users' ? 'default' : 'outline'} onClick={() => setActiveTab('users')}>회원 관리</Button>
         </div>
 
-        <Card>
+        <Card className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white transition-colors duration-300">
           <CardHeader>
             <CardTitle>
               <div className="flex justify-between items-center">
@@ -670,9 +603,9 @@ export const AdminPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="bg-white dark:bg-gray-900">
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-gray-100 dark:bg-gray-800">
                   {activeTab === 'users' ? (
                     <>
                       <TableHead>이메일</TableHead>
@@ -707,8 +640,8 @@ export const AdminPage = () => {
               </TableHeader>
               <TableBody>
                 {currentList.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  <TableRow className="bg-white dark:bg-gray-900">
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900">
                       {activeTab === 'catalog' && showUnsetIntensityOnly 
                         ? '미설정 운동이 없습니다.' 
                         : activeTab === 'catalog' 
@@ -720,32 +653,32 @@ export const AdminPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  currentList.map((item: any) => (
-                    <TableRow key={`${activeTab}-${activeTab === 'users' ? item.id : activeTab === 'food' ? item.foodItemId : item.exerciseCatalogId}`}>
+                  (currentList as (User[] | FoodCatalogItem[] | CatalogItem[])).map((item, idx) => (
+                    <TableRow key={`${activeTab === 'users' ? (item as User).id : activeTab === 'food' ? (item as FoodCatalogItem).foodItemId : (item as CatalogItem).exerciseCatalogId}`} className="bg-white dark:bg-gray-900">
                       {activeTab === 'users' ? (
                         <>
-                          <TableCell>{item.email}</TableCell>
-                          <TableCell>{item.nickname}</TableCell>
-                          <TableCell>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('ko-KR') : '-'}</TableCell>
-                          <TableCell>{item.lastVisited ? new Date(item.lastVisited).toLocaleDateString('ko-KR') : '-'}</TableCell>
-                          <TableCell>{item.role}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).email}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).nickname}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).createdAt ? new Date((item as User).createdAt!).toLocaleDateString('ko-KR') : '-'}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).lastVisited ? new Date((item as User).lastVisited!).toLocaleDateString('ko-KR') : '-'}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as User).role}</TableCell>
                           <TableCell>
-                            {item.role === 'USER' && (
-                              <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId(item.id); setShowDialog(true); }}>삭제</Button>
+                            {(item as User).role === 'USER' && (
+                              <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId((item as User).id); setShowDialog(true); }}>삭제</Button>
                             )}
                           </TableCell>
                         </>
                       ) : activeTab === 'food' ? (
                         <>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell>{item.servingSize}g</TableCell>
-                          <TableCell>{item.calories.toFixed(1)}</TableCell>
-                          <TableCell>{item.carbs.toFixed(1)}</TableCell>
-                          <TableCell>{item.protein.toFixed(1)}</TableCell>
-                          <TableCell>{item.fat.toFixed(1)}</TableCell>
-                          <TableCell>
-                            {item.createdAt ? 
-                              new Date(item.createdAt).toLocaleString('ko-KR', {
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).name}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).servingSize}g</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).calories.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).carbs.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).protein.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as FoodCatalogItem).fat.toFixed(1)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">
+                            {(item as FoodCatalogItem).createdAt ? 
+                              new Date((item as FoodCatalogItem).createdAt).toLocaleString('ko-KR', {
                                 year: 'numeric',
                                 month: '2-digit',
                                 day: '2-digit',
@@ -756,12 +689,12 @@ export const AdminPage = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleEditFood(item)}>수정</Button>
+                              <Button variant="outline" size="sm" onClick={() => handleEditFood(item as FoodCatalogItem)}>수정</Button>
                               <Button 
                                 variant="destructive" 
                                 size="sm" 
                                 onClick={() => { 
-                                  setDeleteFoodCatalogId(item.foodItemId); 
+                                  setDeleteFoodCatalogId((item as FoodCatalogItem).foodItemId); 
                                   setShowDeleteFoodDialog(true); 
                                 }}
                               >
@@ -772,31 +705,21 @@ export const AdminPage = () => {
                         </>
                       ) : (
                         <>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell>{convertBodyPartToKorean(item.bodyPart)}</TableCell>
-                          <TableCell>{convertExerciseTypeToKorean(item.exerciseType || 'strength')}</TableCell>
-                          <TableCell>
-                            {item.intensity ? convertIntensityToKorean(item.intensity) : '미설정'}
+                          <TableCell className="text-gray-900 dark:text-white">{(item as CatalogItem).name}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{convertBodyPartToKorean((item as CatalogItem).bodyPart)}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{convertExerciseTypeToKorean((item as CatalogItem).exerciseType || 'strength')}</TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">
+                            {(item as CatalogItem).intensity ? convertIntensityToKorean((item as CatalogItem).intensity) : '미설정'}
                           </TableCell>
-                          <TableCell>
-                            {item.createdAt ? 
-                              new Date(item.createdAt).toLocaleString('ko-KR', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              }) : '-'
-                            }
-                          </TableCell>
+                          <TableCell className="text-gray-900 dark:text-white">{(item as CatalogItem).createdAt ? new Date((item as CatalogItem).createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleEdit(item)}>수정</Button>
+                              <Button variant="outline" size="sm" onClick={() => handleEdit(item as CatalogItem)}>수정</Button>
                               <Button 
                                 variant="destructive" 
                                 size="sm" 
                                 onClick={() => { 
-                                  setDeleteCatalogId(item.exerciseCatalogId); 
+                                  setDeleteCatalogId((item as CatalogItem).exerciseCatalogId); 
                                   setShowDeleteDialog(true); 
                                 }}
                               >
