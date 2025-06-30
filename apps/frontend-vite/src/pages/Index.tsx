@@ -205,14 +205,18 @@ const Index = () => {
         // 운동명, 부위, ENUM 변환 체크
         const exerciseName = structuredData.exercise || '';
         let korBodyPart = structuredData.subcategory || structuredData.bodyPart || structuredData.category || '';
-        // cardio(유산소)면 부위 정보가 없어도 저장 허용
-        if (!korBodyPart && (structuredData.category === 'cardio' || structuredData.subcategory === 'cardio' || structuredData.category === '유산소' || structuredData.subcategory === '유산소')) {
-          korBodyPart = 'cardio';
+        // 유산소 운동인 경우 처리
+        const isCardio = structuredData.category === '유산소' || 
+                         structuredData.subcategory === '유산소' || 
+                         structuredData.category === 'cardio';
+        
+        if (!korBodyPart && isCardio) {
+          korBodyPart = '유산소';
         }
         const bodyPartEnum = bodyPartToEnum(korBodyPart);
         console.log('[운동 저장] korBodyPart:', korBodyPart, 'bodyPartEnum:', bodyPartEnum);
-        // cardio(유산소)면 부위 정보 없이도 저장 허용
-        if (!exerciseName || (!korBodyPart && bodyPartEnum !== 'cardio') || (!bodyPartEnum && korBodyPart !== 'cardio')) {
+        // 유산소 운동은 부위 정보 없이도 저장 가능
+        if (!exerciseName || (!korBodyPart && !isCardio) || (!bodyPartEnum && !isCardio)) {
           const updatedHistory: Message[] = [
             ...conversationHistory,
             { role: 'user', content: messageToSend }
@@ -220,8 +224,8 @@ const Index = () => {
           setConversationHistory(updatedHistory);
           let msg = '운동명, 운동 부위 정보가 부족합니다. 예시: "벤치프레스 30kg 10회 3세트 했어요"';
           if (!exerciseName) msg = '운동명이 누락되었습니다. 운동명을 포함해 입력해 주세요.';
-          else if (!korBodyPart && bodyPartEnum !== 'cardio') msg = '운동 부위 정보가 누락되었습니다. 예시: "벤치프레스(가슴) 30kg 10회 3세트"';
-          else if (!bodyPartEnum && korBodyPart !== 'cardio') msg = `운동 부위(${korBodyPart})를 저장할 수 없습니다. 정확한 부위를 입력해 주세요.`;
+          else if (!korBodyPart && !isCardio) msg = '운동 부위 정보가 누락되었습니다. 예시: "벤치프레스(가슴) 30kg 10회 3세트"';
+          else if (!bodyPartEnum && !isCardio) msg = `운동 부위(${korBodyPart})를 저장할 수 없습니다. 정확한 부위를 입력해 주세요.`;
           const finalHistory: Message[] = [
             ...updatedHistory,
             { role: 'assistant', content: msg }
@@ -283,6 +287,11 @@ const Index = () => {
             }
           }
         }
+        
+        // parsed_data가 있고 user_message.text가 있으면 그것을 사용
+        if (response.parsed_data && response.parsed_data.user_message && response.parsed_data.user_message.text) {
+          displayMessage = response.parsed_data.user_message.text;
+        }
       } catch (e) {
         // 무시
       }
@@ -297,10 +306,16 @@ const Index = () => {
 
       // 파싱된 데이터가 있는 경우 처리
       if (response.parsed_data) {
-        setChatStructuredData(response.parsed_data);
+        // system_message.data 구조를 확인
+        let dataToUse = response.parsed_data;
+        if (response.parsed_data.system_message && response.parsed_data.system_message.data) {
+          dataToUse = response.parsed_data.system_message.data;
+        }
+        
+        setChatStructuredData(dataToUse);
 
-        if (recordType === 'diet' && response.parsed_data.meal_time) {
-          setCurrentMealTime(response.parsed_data.meal_time as MealTimeType);
+        if (recordType === 'diet' && dataToUse.meal_time) {
+          setCurrentMealTime(dataToUse.meal_time as MealTimeType);
         }
       } else if (response.data) {
         setChatStructuredData(response.data);
@@ -401,11 +416,18 @@ const Index = () => {
     if (type === 'exercise') {
       const exerciseName = chatStructuredData.exercise || '';
       let korBodyPart = chatStructuredData.subcategory || chatStructuredData.bodyPart || chatStructuredData.category || '';
-      if (!korBodyPart && chatStructuredData && chatStructuredData.category === 'cardio') {
-        korBodyPart = 'cardio';
+      // 유산소 운동인 경우 처리
+      const isCardio = chatStructuredData.category === '유산소' || 
+                       chatStructuredData.subcategory === '유산소' || 
+                       chatStructuredData.category === 'cardio';
+      
+      if (!korBodyPart && isCardio) {
+        korBodyPart = '유산소';
       }
       const bodyPartEnum = bodyPartToEnum(korBodyPart);
-      if (!exerciseName || !korBodyPart || !bodyPartEnum) {
+      
+      // 유산소 운동은 부위 정보 없이도 저장 가능
+      if (!exerciseName || (!korBodyPart && !isCardio) || (!bodyPartEnum && !isCardio)) {
         toast({
           title: '운동 정보 부족',
           description: !exerciseName ? '운동명이 누락되었습니다.' : !korBodyPart ? '운동 부위 정보가 누락되었습니다.' : `운동 부위(${korBodyPart})를 저장할 수 없습니다.`,
@@ -431,21 +453,37 @@ const Index = () => {
         }
         const catalogId = catalogRes.data.exerciseCatalogId;
         // 2. 운동 기록 저장
-        await axios.post('/api/exercise-sessions', {
+        const sessionData: any = {
           user_id: userId,
           exercise_catalog_id: catalogId,
-          duration_minutes: chatStructuredData.duration_min ?? 30,
-          calories_burned: chatStructuredData.calories_burned ?? 0,
           notes: exerciseName,
-          sets: chatStructuredData.sets ?? 0,
-          reps: chatStructuredData.reps ?? 0,
-          weight: chatStructuredData.weight ?? 0,
           exercise_date: new Date().toISOString().split('T')[0],
           time_period: getCurrentTimePeriod(),
           input_source: 'TYPING',
           confidence_score: 1.0,
           validation_status: 'VALIDATED'
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        };
+
+        // 유산소 운동과 근력 운동 구분 처리
+        if (isCardio) {
+          // 유산소 운동: duration_minutes와 calories_burned만 설정
+          sessionData.duration_minutes = chatStructuredData.duration_min || 30;
+          sessionData.calories_burned = chatStructuredData.calories_burned || 0;
+          sessionData.sets = null;
+          sessionData.reps = null;
+          sessionData.weight = null;
+        } else {
+          // 근력 운동: sets, reps, weight 설정
+          sessionData.sets = chatStructuredData.sets || 0;
+          sessionData.reps = chatStructuredData.reps || 0;
+          sessionData.weight = chatStructuredData.weight || 0;
+          sessionData.duration_minutes = chatStructuredData.duration_min || 0;
+          sessionData.calories_burned = chatStructuredData.calories_burned || 0;
+        }
+
+        await axios.post('/api/exercise-sessions', sessionData, { 
+          headers: { Authorization: `Bearer ${token}` } 
+        });
         toast({ title: '운동 기록 저장 완료', description: '운동이 성공적으로 저장되었습니다.' });
         setHasSaved(true);
         setChatInputText('');

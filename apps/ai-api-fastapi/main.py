@@ -225,19 +225,49 @@ EXERCISE_EXTRACTION_PROMPT = """
 - 만약 운동 부위(subcategory)가 명확하지 않으면, validation 단계에서 "이 운동은 어느 부위 운동인가요? (가슴/등/하체/어깨/팔/복근/유산소)"라고 사용자에게 질문하세요.
 
 💬 **응답 형식 (JSON, 반드시 아래 구조와 타입을 지켜서 반환):**
+
+**중요: 반드시 response_type과 system_message, user_message를 포함한 완전한 JSON 형식으로 응답하세요.**
+
+유산소 운동 예시:
 {
-  "exercise": "운동명",                // 예: "스쿼트" (VARCHAR)
-  "category": "근력운동|유산소",   // DB의 exercise_type (VARCHAR)
-  "subcategory": "가슴|등|하체|복근|팔|어깨|유산소", // DB의 body_part (ENUM, 한글로 반환, 백엔드에서 영문 변환)
-  "weight": 60,                       // 무게(kg, 숫자), 없으면 null
-  "sets": 3,                          // 세트수(숫자), 없으면 null
-  "reps": 10,                         // 횟수(숫자), 없으면 null
-  "duration_min": null,               // 유산소 운동일 때만 사용(숫자), 없으면 null
-  "is_bodyweight": false,             // 맨몸운동 여부(boolean)
+  "response_type": "extraction",
+  "system_message": {
+    "data": {
+      "exercise": "조깅",
+      "category": "유산소",
+      "subcategory": "유산소",
+      "weight": null,
+      "sets": null,
+      "reps": null,
+      "duration_min": 40,
+      "is_bodyweight": false
+    }
+  },
   "user_message": {
-    "text": "스쿼트 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 스쿼트\n💪 분류: 근력운동 (하체)\n🏋️ 무게: 60kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
+
+근력운동 예시:
+{
+  "response_type": "extraction",
+  "system_message": {
+    "data": {
+      "exercise": "벤치프레스",
+      "category": "근력운동",
+      "subcategory": "가슴",
+      "weight": 30,
+      "sets": 3,
+      "reps": 10,
+      "duration_min": null,
+      "is_bodyweight": false
+    }
+  },
+  "user_message": {
+    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 30kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+  }
+}
+
 // 모든 필드는 누락 없이 반환해야 하며, 값이 없으면 null로 명시하세요.
 // 반드시 user_message.text 필드를 포함하여 사용자에게 친근한 안내 메시지를 제공하세요.
 // subcategory(운동 부위)는 반드시 한글로 반환(예: "가슴"), 백엔드에서 ENUM(body_part_type) 영문으로 변환합니다.
@@ -248,21 +278,25 @@ EXERCISE_EXTRACTION_PROMPT = """
 - 일부 정보 누락 → validation 단계로
 
 📝 **대화 예시:**
-사용자: "벤치프레스 30kg 10회 3세트 했어요"
+사용자: "조깅 40분 동안 했어요"
 AI: {
-  "exercise": "벤치프레스",
-  "category": "근력운동",
-  "subcategory": "가슴",
-  "weight": 30,
-  "sets": 3,
-  "reps": 10,
-  "duration_min": null,
-  "is_bodyweight": false,
+  "response_type": "extraction",
+  "system_message": {
+    "data": {
+      "exercise": "조깅",
+      "category": "유산소",
+      "subcategory": "유산소",
+      "weight": null,
+      "sets": null,
+      "reps": null,
+      "duration_min": 40,
+      "is_bodyweight": false
+    }
+  },
   "user_message": {
-    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 30kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
-이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!
 """
 
 # 🚩 [운동 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
