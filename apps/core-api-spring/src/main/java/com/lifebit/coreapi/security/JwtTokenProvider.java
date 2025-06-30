@@ -5,6 +5,8 @@ import com.lifebit.coreapi.entity.User;
 import io.jsonwebtoken.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Date;
 
@@ -12,6 +14,7 @@ import java.util.Date;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
     private final JwtConfig jwtConfig;
+    private static final Logger log = LoggerFactory.getLogger(JwtTokenProvider.class);
 
     public String generateToken(User user) {
         Date now = new Date();
@@ -50,16 +53,28 @@ public class JwtTokenProvider {
         return claims.get("userId", Long.class);
     }
 
-    public boolean validateToken(String token) {
+    public boolean validateToken(String authToken) {
         try {
             Jwts.parserBuilder()
                     .setSigningKey(jwtConfig.secretKey())
                     .build()
-                    .parseClaimsJws(token);
+                    .parseClaimsJws(authToken);
+            log.debug("JWT 토큰 검증 성공");
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
+        } catch (SignatureException ex) {
+            log.error("Invalid JWT signature: {}", ex.getMessage());
+        } catch (MalformedJwtException ex) {
+            log.error("Invalid JWT token: {}", ex.getMessage());
+        } catch (ExpiredJwtException ex) {
+            log.error("JWT token is expired: {}", ex.getMessage());
+        } catch (UnsupportedJwtException ex) {
+            log.error("JWT token is unsupported: {}", ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            log.error("JWT claims string is empty: {}", ex.getMessage());
+        } catch (JwtException ex) {
+            log.error("JWT validation error: {}", ex.getMessage());
         }
+        return false;
     }
 
     public Claims getAllClaimsFromToken(String token) {

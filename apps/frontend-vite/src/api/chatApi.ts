@@ -112,13 +112,8 @@ export const sendChatMessage = async (
       };
     }
 
-    // ✅ AI API 전용 인스턴스 사용 및 Authorization 헤더 추가
-    const response = await aiAxiosInstance.post<ChatResponse>('/api/py/chat', body, {
-      headers: {
-        Authorization: token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json'
-      }
-    });
+    // ✅ AI API 전용 인스턴스 사용 (인터셉터에서 자동으로 Authorization 헤더 추가)
+    const response = await aiAxiosInstance.post<ChatResponse>('/api/py/chat', body);
 
     console.log('✅ [Chat API] 메시지 전송 성공');
     return response.data;

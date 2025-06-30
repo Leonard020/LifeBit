@@ -51,7 +51,7 @@ export const createAiAxiosInstance = () => {
     console.log('🤖 [axios-ai] 개발 환경 - AI API 직접 URL 사용:', baseURL);
   }
 
-  return axios.create({
+  const aiInstance = axios.create({
     baseURL,
     timeout: 60000,  // AI API는 응답 시간이 길 수 있음
     headers: {
@@ -59,6 +59,60 @@ export const createAiAxiosInstance = () => {
     },
     withCredentials: isProduction ? true : false,
   });
+
+  // AI API 인스턴스에도 인터셉터 적용
+  aiInstance.interceptors.request.use(
+    (config) => {
+      const token = getToken();
+      
+      console.log('🤖 [axios-ai] AI API 요청:', {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        fullUrl: `${config.baseURL}${config.url}`,
+        hasToken: !!token,
+        tokenLength: token?.length || 0,
+        환경: config.baseURL?.startsWith('/') ? '프로덕션' : '개발'
+      });
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => {
+      console.error('❌ [axios-ai] Request interceptor error:', error);
+      return Promise.reject(error);
+    }
+  );
+
+  aiInstance.interceptors.response.use(
+    (response) => {
+      console.log('✅ [axios-ai] AI API 응답 성공:', {
+        method: response.config.method?.toUpperCase(),
+        url: response.config.url,
+        status: response.status,
+        statusText: response.statusText,
+        환경: response.config.baseURL?.startsWith('/') ? '프로덕션' : '개발'
+      });
+      return response;
+    },
+    async (error) => {
+      console.error('❌ [axios-ai] AI API Response Error:', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        fullUrl: error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown',
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message,
+        responseData: error.response?.data,
+        환경: error.config?.baseURL?.startsWith('/') ? '프로덕션' : '개발'
+      });
+      
+      return Promise.reject(error);
+    }
+  );
+
+  return aiInstance;
 };
 
 // 요청 인터셉터

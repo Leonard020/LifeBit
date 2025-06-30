@@ -14,6 +14,7 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Responsi
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
+import axiosInstance from '@/utils/axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
 import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -107,14 +108,12 @@ const Note = () => {
     if (!token || !userId) return;
 
     try {
-      const dietPromise = axios.get(`/api/diet/calendar-records/${year}/${month}`, {
-        params: { userId },
-        headers: { 'Authorization': `Bearer ${token}` }
+      const dietPromise = axiosInstance.get(`/api/diet/calendar-records/${year}/${month}`, {
+        params: { userId }
       });
 
-      const exercisePromise = axios.get(`/api/exercise-sessions/${userId}`, {
-        params: { period: 'month' }, // 현재 월의 운동 기록을 가져온다고 가정
-        headers: { 'Authorization': `Bearer ${token}` }
+      const exercisePromise = axiosInstance.get(`/api/exercise-sessions/${userId}`, {
+        params: { period: 'month' } // 현재 월의 운동 기록을 가져온다고 가정
       });
 
       const [dietResponse, exerciseResponse] = await Promise.all([dietPromise, exercisePromise]);
@@ -166,17 +165,15 @@ const Note = () => {
     if (!token) return;
 
     // 식단 기록 날짜
-    axios.get(`/api/diet/calendar-records/${year}/${month}`, {
-      params: { userId },
-      headers: { 'Authorization': `Bearer ${token}` }
+    axiosInstance.get(`/api/diet/calendar-records/${year}/${month}`, {
+      params: { userId }
     }).then(res => {
       setDietRecordedDates(Object.keys(res.data));
     });
 
     // 운동 기록 날짜
-    axios.get(`/api/exercise-sessions/${userId}`, {
-      params: { period: 'month' },
-      headers: { 'Authorization': `Bearer ${token}` }
+    axiosInstance.get(`/api/exercise-sessions/${userId}`, {
+      params: { period: 'month' }
     }).then(res => {
       setExerciseRecordedDates(res.data.map(item => item.exercise_date));
     });
@@ -463,10 +460,9 @@ const Note = () => {
         console.log('📅 [Note] 선택된 날짜:', selectedDate.toISOString().split("T")[0]);
         console.log('📅 [Note] 해당 주의 일요일:', weekStart);
         
-        // API 호출
-        const res = await axios.get(`/api/note/exercise/summary`, {
-          params: { weekStart },
-          headers: { 'Authorization': `Bearer ${authToken}` }
+        // API 호출 - axiosInstance 사용으로 변경
+        const res = await axiosInstance.get(`/api/note/exercise/summary`, {
+          params: { weekStart }
         });
         setWeeklySummary(Array.isArray(res.data) ? res.data : []);
       } catch (err: unknown) {
