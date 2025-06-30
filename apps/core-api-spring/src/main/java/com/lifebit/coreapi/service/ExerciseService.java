@@ -356,8 +356,16 @@ public class ExerciseService {
         bodyPartCounts.put("CARDIO", 0);
         
         for (ExerciseSession session : sessions) {
+            String bodyPart = null;
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            } else if (session.getNotes() != null) {
+                String note = session.getNotes().toLowerCase();
+                if (note.contains("조깅") || note.contains("달리기") || note.contains("런닝") || note.contains("걷기") || note.contains("run")) {
+                    bodyPart = "CARDIO";
+                }
+            }
+            if (bodyPart != null) {
                 bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1); // 횟수로 카운트
             }
         }
@@ -435,8 +443,16 @@ public class ExerciseService {
         bodyPartMinutes.put("CARDIO", 0);
         
         for (ExerciseSession session : sessions) {
+            String bodyPart = null;
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            } else if (session.getNotes() != null) {
+                String note = session.getNotes().toLowerCase();
+                if (note.contains("조깅") || note.contains("달리기") || note.contains("런닝") || note.contains("걷기") || note.contains("run")) {
+                    bodyPart = "CARDIO";
+                }
+            }
+            if (bodyPart != null) {
                 int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
                 bodyPartMinutes.put(bodyPart, bodyPartMinutes.getOrDefault(bodyPart, 0) + duration);
             }
@@ -457,7 +473,12 @@ public class ExerciseService {
                 user, startDate, endDate);
         
         return sessions.stream()
-                .mapToInt(session -> session.getSets() != null ? session.getSets() : 0)
+                .mapToInt(session -> {
+                    Integer s = session.getSets();
+                    if (s != null && s > 0) return s;
+                    // 세트 수가 없는 유산소/플랭크 등은 1세트로 간주
+                    return 1;
+                })
                 .sum();
     }
 
@@ -482,10 +503,23 @@ public class ExerciseService {
         bodyPartSets.put("CARDIO", 0);
         
         for (ExerciseSession session : sessions) {
+            String bodyPart = null;
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
-                int sets = session.getSets() != null ? session.getSets() : 0;
-                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + sets);
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            } else if (session.getNotes() != null) {
+                String note = session.getNotes().toLowerCase();
+                if (note.contains("조깅") || note.contains("달리기") || note.contains("런닝") || note.contains("걷기") || note.contains("run")) {
+                    bodyPart = "CARDIO";
+                }
+            }
+            if (bodyPart != null) {
+                int setsVal;
+                if (session.getSets() != null && session.getSets() > 0) {
+                    setsVal = session.getSets();
+                } else {
+                    setsVal = 1; // 세트 정보 없으면 1로 간주
+                }
+                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + setsVal);
             }
         }
         

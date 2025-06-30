@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Optional;
+import com.lifebit.coreapi.entity.enums.RankingTier;
 
 @RestController
 @RequestMapping("/api/health-statistics")
@@ -197,8 +198,9 @@ public class HealthStatisticsController {
                         rankerMap.put("score", ranking.getTotalScore());
                         rankerMap.put("badge", getBadgeFromScore(ranking.getTotalScore()));
                         rankerMap.put("streakDays", ranking.getStreakDays());
-                        rankerMap.put("tier", ranking.getTier() != null ? ranking.getTier().name() : null);
-                        rankerMap.put("colorCode", ranking.getTier() != null ? ranking.getTier().getColorCode() : null);
+                        RankingTier tier = ranking.getTier() != null ? ranking.getTier() : RankingTier.UNRANK;
+                        rankerMap.put("tier", tier.name());
+                        rankerMap.put("colorCode", tier.getColorCode());
                         return rankerMap;
                     })
                     .toList();
@@ -209,6 +211,7 @@ public class HealthStatisticsController {
                 if (userRankingOpt.isPresent()) {
                     UserRanking userRanking = userRankingOpt.get();
                     String nickname = currentUser != null && currentUser.getNickname() != null ? currentUser.getNickname() : ("사용자" + currentUserId);
+                    RankingTier myTier = userRanking.getTier() != null ? userRanking.getTier() : RankingTier.UNRANK;
                     myRanking = Map.of(
                         "rank", userRanking.getRankPosition(),
                         "score", userRanking.getTotalScore(),
@@ -216,8 +219,8 @@ public class HealthStatisticsController {
                         "totalUsers", userRankingRepository.count(),
                         "userId", currentUserId,
                         "nickname", nickname,
-                        "tier", userRanking.getTier() != null ? userRanking.getTier().name() : null,
-                        "colorCode", userRanking.getTier() != null ? userRanking.getTier().getColorCode() : null
+                        "tier", myTier.name(),
+                        "colorCode", myTier.getColorCode()
                     );
                 } else {
                     myRanking = Map.of(
@@ -227,8 +230,8 @@ public class HealthStatisticsController {
                         "totalUsers", userRankingRepository.count(),
                         "userId", currentUserId,
                         "nickname", "사용자" + currentUserId,
-                        "tier", null,
-                        "colorCode", null
+                        "tier", RankingTier.UNRANK.name(),
+                        "colorCode", RankingTier.UNRANK.getColorCode()
                     );
                 }
                 
@@ -244,8 +247,8 @@ public class HealthStatisticsController {
                     "streakDays", 0,
                     "totalUsers", 0,
                     "userId", currentUserId,
-                    "tier", null,
-                    "colorCode", null
+                    "tier", RankingTier.UNRANK.name(),
+                    "colorCode", RankingTier.UNRANK.getColorCode()
                 );
             }
 

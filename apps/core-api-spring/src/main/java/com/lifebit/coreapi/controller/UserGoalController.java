@@ -206,8 +206,11 @@ public class UserGoalController {
      */
     @PostMapping("/update-achievement-score")
     public ResponseEntity<Map<String, Object>> updateAchievementScore(
-            @RequestHeader("Authorization") String token) {
+            @RequestHeader("Authorization") String tokenHeader) {
         try {
+            String token = tokenHeader != null && tokenHeader.startsWith("Bearer ")
+                    ? tokenHeader.substring(7)
+                    : tokenHeader;
             Long userId = jwtTokenProvider.getUserIdFromToken(token);
             
             // 목표 달성률에 따른 점수 업데이트
