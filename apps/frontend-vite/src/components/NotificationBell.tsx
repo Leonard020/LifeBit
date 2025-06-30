@@ -78,7 +78,18 @@ const NotificationBell = () => {
       
       console.log('✅ [NotificationBell] 알림 조회 성공:', {
         totalCount: notificationList.length,
-        unreadCount: unread
+        unreadCount: unread,
+        notifications: notificationList.map(n => ({ 
+          id: n.id, 
+          isRead: n.isRead, 
+          title: n.title,
+          userId: n.userId 
+        }))
+      });
+      
+      // 각 알림의 상태를 자세히 로깅
+      notificationList.forEach(n => {
+        console.log(`📋 [NotificationBell] 알림 ${n.id}: isRead=${n.isRead}, userId=${n.userId}, title="${n.title}"`);
       });
     } catch (error) {
       console.error('❌ [NotificationBell] 알림을 불러오는데 실패했습니다:', error);
@@ -115,13 +126,43 @@ const NotificationBell = () => {
   // 알림 읽음 처리
   const handleMarkAsRead = async (notificationId: number) => {
     try {
+      console.log('🔄 [NotificationBell] 개별 알림 읽음 처리 시작:', notificationId);
+      console.log('📊 [NotificationBell] 처리 전 상태:', {
+        notificationId: notificationId,
+        currentUnreadCount: unreadCount,
+        notificationExists: notifications.find(n => n.id === notificationId)?.isRead === false
+      });
+      
       await markNotificationAsRead(notificationId);
-      setNotifications(prev =>
-        prev.map(n =>
+      
+      // 해당 알림을 읽음 처리하고 unreadCount 감소
+      setNotifications(prev => {
+        const updated = prev.map(n =>
           n.id === notificationId ? { ...n, isRead: true } : n
-        )
-      );
-      await fetchUnreadCount();
+        );
+        console.log('✅ [NotificationBell] 로컬 상태 업데이트 완료:', {
+          notificationId: notificationId,
+          updatedNotification: updated.find(n => n.id === notificationId),
+          remainingUnread: updated.filter(n => !n.isRead).length
+        });
+        return updated;
+      });
+      
+      // unreadCount 업데이트
+      setUnreadCount(prev => {
+        const newCount = Math.max(0, prev - 1);
+        console.log('📊 [NotificationBell] unreadCount 업데이트:', { prev, newCount });
+        return newCount;
+      });
+      
+      console.log('✅ [NotificationBell] 개별 알림 읽음 처리 완료:', notificationId);
+      
+      // 상태 업데이트 후 잠시 대기 후 알림 목록 다시 가져오기
+      setTimeout(() => {
+        console.log('🔄 [NotificationBell] 알림 목록 재조회 시작 (개별 읽음 처리 후)');
+        fetchNotifications();
+      }, 500);
+      
     } catch (error: unknown) {
       // 이미 읽음 처리된 경우는 에러 토스트를 띄우지 않고 목록에서 제거
       if (
@@ -131,26 +172,65 @@ const NotificationBell = () => {
         hasStringMessage((error as AxiosError).response?.data) &&
         ((error as AxiosError).response?.data as { message: string }).message.includes('이미 읽은 알림')
       ) {
+        console.log('ℹ️ [NotificationBell] 이미 읽은 알림 처리:', notificationId);
         setNotifications(prev => prev.map(n =>
           n.id === notificationId ? { ...n, isRead: true } : n
         ));
-        await fetchUnreadCount();
+        setUnreadCount(prev => Math.max(0, prev - 1));
         return;
       }
+      console.error('❌ [NotificationBell] 개별 알림 읽음 처리 실패:', error);
       toast.error('알림 읽음 처리에 실패했습니다.');
     }
   };
 
-  // 전체 읽음 처리
+  // 전체 읽음 처리 및 삭제
   const handleMarkAllAsRead = async () => {
     try {
+      console.log('🔄 [NotificationBell] 전체 알림 읽음 처리 및 삭제 시작');
+      console.log('📊 [NotificationBell] 처리 전 상태:', {
+        totalNotifications: notifications.length,
+        unreadCount: unreadCount,
+        unreadNotifications: notifications.filter(n => !n.isRead).map(n => ({ id: n.id, title: n.title }))
+      });
+      
       await markAllNotificationsAsRead();
-      // 모든 알림을 읽음 처리만 하고, 목록은 유지
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      
+      // 모든 알림을 읽음 처리하고 unreadCount를 0으로 설정
+      setNotifications(prev => {
+        const updated = prev.map(n => ({ ...n, isRead: true }));
+        console.log('✅ [NotificationBell] 로컬 상태 업데이트 완료:', {
+          totalNotifications: updated.length,
+          allRead: updated.every(n => n.isRead)
+        });
+        return updated;
+      });
       setUnreadCount(0);
+      
+      console.log('✅ [NotificationBell] 전체 알림 읽음 처리 완료');
       toast.success('모든 알림을 읽음 처리했습니다.');
+      
+      // 읽음 처리 후 모든 알림을 자동으로 삭제
+      console.log('🗑️ [NotificationBell] 모든 알림 자동 삭제 시작');
+      const deletePromises = notifications.map(notification => 
+        deleteNotification(notification.id).catch(error => {
+          console.warn(`⚠️ [NotificationBell] 알림 ${notification.id} 삭제 실패:`, error);
+          return null; // 삭제 실패해도 계속 진행
+        })
+      );
+      
+      await Promise.all(deletePromises);
+      console.log('✅ [NotificationBell] 모든 알림 삭제 완료');
+      
+      // 목록을 빈 배열로 설정
+      setNotifications([]);
+      setUnreadCount(0);
+      
+      toast.success('모든 알림을 읽음 처리하고 삭제했습니다.');
+      
     } catch (error) {
-      toast.error('전체 읽음 처리에 실패했습니다.');
+      console.error('❌ [NotificationBell] 전체 읽음 처리 및 삭제 실패:', error);
+      toast.error('전체 읽음 처리 및 삭제에 실패했습니다.');
     }
   };
 
@@ -202,6 +282,10 @@ const NotificationBell = () => {
       
       toast.error('알림 삭제에 실패했습니다.');
     }
+    
+    setTimeout(() => {
+      fetchNotifications();
+    }, 500);
   };
 
   // 날짜 포맷팅
@@ -243,13 +327,25 @@ const NotificationBell = () => {
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.isRead) {
       try {
+        console.log('🔄 [NotificationBell] 알림 클릭 시 읽음 처리 시작:', notification.id);
         await markNotificationAsRead(notification.id);
-        setNotifications((prev) => prev.map((n) => n.id === notification.id ? { ...n, isRead: true } : n));
-        await fetchUnreadCount();
+        
+        // 해당 알림을 읽음 처리하고 unreadCount 감소
+        setNotifications((prev) => {
+          const updated = prev.map((n) => n.id === notification.id ? { ...n, isRead: true } : n);
+          return updated;
+        });
+        
+        // unreadCount 업데이트
+        setUnreadCount(prev => Math.max(0, prev - 1));
+        
+        console.log('✅ [NotificationBell] 알림 클릭 시 읽음 처리 완료:', notification.id);
       } catch (error) {
+        console.error('❌ [NotificationBell] 알림 클릭 시 읽음 처리 실패:', error);
         toast.error('알림 읽음 처리에 실패했습니다.');
       }
     }
+    
     const meta = typeMeta[notification.type];
     if (meta && meta.link) {
       const link = meta.link(notification.refId);
@@ -292,20 +388,6 @@ const NotificationBell = () => {
       </div>
     );
   }
-
-  // 1. fetchUnreadCount 함수 추가
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await fetch('/api/v1/notifications/unread-count', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-      });
-      if (!res.ok) throw new Error('unreadCount fetch 실패');
-      const data = await res.json();
-      setUnreadCount(data.unreadCount ?? 0);
-    } catch (e) {
-      setUnreadCount(0);
-    }
-  };
 
   if (!isLoggedIn) return null;
 
@@ -421,20 +503,18 @@ const NotificationBell = () => {
                           </p>
                         </div>
                         {/* 시스템 공용 알림은 삭제 버튼 숨김 */}
-                        {notification.userId && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={deletingIds.has(notification.id)}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteNotification(notification.id);
-                            }}
-                            className="text-gray-400 hover:text-red-500 h-6 w-6 p-0 disabled:opacity-50"
-                          >
-                            {deletingIds.has(notification.id) ? '⋯' : '×'}
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={deletingIds.has(notification.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNotification(notification.id);
+                          }}
+                          className="text-gray-400 hover:text-red-500 h-6 w-6 p-0 disabled:opacity-50"
+                        >
+                          {deletingIds.has(notification.id) ? '⋯' : '×'}
+                        </Button>
                       </div>
                     </DraggableNotification>
                   );
