@@ -16,10 +16,10 @@ CREATE TYPE user_role AS ENUM ('USER', 'ADMIN');
 CREATE TYPE badge_type AS ENUM ('FIRST_LOGIN', 'STREAK_7', 'STREAK_30', 'STREAK_100', 'WEIGHT_GOAL', 'WORKOUT_GOAL', 'NUTRITION_GOAL', 'SOCIAL_SHARE', 'PERFECT_WEEK', 'MONTHLY_CHAMPION');
 
 -- 신체 부위 타입
-CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio', 'full_body');
+CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio');
 
 -- 운동 부위 타입
-CREATE TYPE exercise_part_type AS ENUM ('strength', 'aerobic', 'flexibility', 'balance');
+CREATE TYPE exercise_part_type AS ENUM ('strength','cardio');
 
 -- 시간대 타입
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');

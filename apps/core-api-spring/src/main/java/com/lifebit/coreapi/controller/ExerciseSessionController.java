@@ -163,18 +163,10 @@ public class ExerciseSessionController {
                 return ResponseEntity.badRequest().build();
             }
 
-            // sets, reps, weight 값 처리 (유산소 운동인 경우 자동 조정)
-            Integer finalSets = request.get("sets") != null ? Integer.valueOf(request.get("sets").toString()) : 0;
-            Integer finalReps = request.get("reps") != null ? Integer.valueOf(request.get("reps").toString()) : 0;
-            Double finalWeight = request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : 0d;
-
-            // ✅ 유산소 운동인 경우 자동으로 set=1로 고정
-            if (catalog.getBodyPart() == com.lifebit.coreapi.entity.BodyPartType.cardio) {
-                finalSets = 1; // 유산소 운동은 항상 1 set
-                finalReps = null; // 유산소 운동은 반복횟수 없음
-                finalWeight = null; // 유산소 운동은 중량 없음
-                log.info("✅ 유산소 운동({}) - set=1로 자동 설정", catalog.getName());
-            }
+            // sets, reps, weight 값 처리 (유산소 운동인 경우 자동 조정) cardio/bodyPart 분기 하드코딩 삭제
+            Integer finalSets = request.get("sets") != null ? Integer.valueOf(request.get("sets").toString()) : null;
+            Integer finalReps = request.get("reps") != null ? Integer.valueOf(request.get("reps").toString()) : null;
+            Double finalWeight = request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : null;
 
             ExerciseSession savedSession = exerciseService.recordExercise(
                     tokenUserId,

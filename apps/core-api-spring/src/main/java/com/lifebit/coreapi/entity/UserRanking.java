@@ -11,7 +11,13 @@ import com.lifebit.coreapi.entity.enums.RankingTier;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user_ranking")
+@Table(name = "user_ranking",
+    indexes = {
+        @Index(name = "idx_user_ranking_user_id", columnList = "user_id"),
+        @Index(name = "idx_user_ranking_total_score", columnList = "total_score DESC"),
+        @Index(name = "idx_user_ranking_rank_position", columnList = "rank_position")
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
