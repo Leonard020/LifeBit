@@ -221,38 +221,35 @@ public class ExerciseService {
      */
     @Transactional
     public ExerciseCatalog findOrCreateExercise(String name, String bodyPart, String description) {
-        // 먼저 기존 운동 검색
+        if (name == null || name.isBlank() || bodyPart == null || bodyPart.isBlank()) {
+            throw new IllegalArgumentException("운동명(name) 또는 운동 부위(bodyPart)가 누락되었습니다. AI 분석 결과를 확인하세요.");
+        }
+        // bodyPart를 LifeBit.sql ENUM(영문)으로 변환
+        String bodyPartEnum = switch (bodyPart.trim().toLowerCase()) {
+            case "가슴", "chest" -> "chest";
+            case "등", "back" -> "back";
+            case "하체", "다리", "legs", "leg" -> "legs";
+            case "어깨", "shoulders", "shoulder" -> "shoulders";
+            case "팔", "arms", "arm" -> "arms";
+            case "복근", "abs", "ab" -> "abs";
+            case "유산소", "cardio" -> "cardio";
+            default -> throw new IllegalArgumentException("알 수 없는 운동 부위(bodyPart): " + bodyPart);
+        };
+        com.lifebit.coreapi.entity.BodyPartType bodyPartType = com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPartEnum);
+        // 기존 운동 검색 (이름+부위)
         List<ExerciseCatalog> existingExercises = exerciseCatalogRepository.findByNameContainingIgnoreCase(name);
-
-        if (!existingExercises.isEmpty()) {
-            // 정확히 일치하는 이름이 있는지 확인
-            for (ExerciseCatalog exercise : existingExercises) {
-                if (exercise.getName().equalsIgnoreCase(name)) {
-                    return exercise;
-                }
+        for (ExerciseCatalog exercise : existingExercises) {
+            if (exercise.getName().equalsIgnoreCase(name) && exercise.getBodyPart() == bodyPartType) {
+                return exercise;
             }
         }
-
-        // 새로운 운동 카탈로그 생성
+        // 새 카탈로그 생성
         ExerciseCatalog newExercise = new ExerciseCatalog();
         newExercise.setUuid(java.util.UUID.randomUUID());
         newExercise.setName(name);
-
-        // bodyPart를 BodyPartType으로 변환 (값이 없거나 변환 실패 시 예외)
-        if (bodyPart == null) {
-            throw new IllegalArgumentException("운동 부위(bodyPart)가 누락되었습니다. AI 분석 결과를 확인하세요.");
-        }
-        try {
-            com.lifebit.coreapi.entity.BodyPartType bodyPartType = com.lifebit.coreapi.entity.BodyPartType
-                    .valueOf(bodyPart.toLowerCase());
-            newExercise.setBodyPart(bodyPartType);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("알 수 없는 운동 부위(bodyPart): " + bodyPart);
-        }
-
+        newExercise.setBodyPart(bodyPartType);
         newExercise.setDescription(description);
         newExercise.setCreatedAt(LocalDateTime.now());
-
         return exerciseCatalogRepository.save(newExercise);
     }
 
@@ -267,7 +264,8 @@ public class ExerciseService {
      * ID로 운동 카탈로그 조회
      */
     public ExerciseCatalog getExerciseCatalogById(Long catalogId) {
-        return exerciseCatalogRepository.findById(catalogId).orElse(null);
+        return exerciseCatalogRepository.findById(catalogId)
+            .orElseThrow(() -> new IllegalArgumentException("운동 카탈로그를 찾을 수 없습니다 - catalogId: " + catalogId));
     }
 
     /**
