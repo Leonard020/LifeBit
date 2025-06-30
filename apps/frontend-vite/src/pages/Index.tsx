@@ -142,26 +142,26 @@ const Index = () => {
     // ✅ 저장 키워드 감지 로직 추가
     const lowered = messageToSend.toLowerCase();
     const saveKeywords = /^(저장|기록|완료|끝|등록|저장해|저장해줘|기록해|기록해줘|등록해|등록해줘)$/;
-    
+
     if (saveKeywords.test(lowered) && !hasSaved) {
       console.log('💾 [Index] 저장 키워드 감지');
-      
+
       // chatStructuredData가 없으면 저장할 데이터가 없다는 메시지 표시
       if (!chatStructuredData) {
         console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
-        
+
         // 사용자 메시지를 대화 기록에 추가
         const updatedHistory: Message[] = [
           ...conversationHistory,
           { role: 'user', content: messageToSend }
         ];
         setConversationHistory(updatedHistory);
-        
+
         // 데이터 부족 메시지 추가
-        const noDataMessage = recordType === 'exercise' ? 
-          '저장할 운동 정보가 없습니다. 먼저 운동 정보를 입력해주세요! 💪\n\n예시: "자전거 120분 탔어요"' : 
+        const noDataMessage = recordType === 'exercise' ?
+          '저장할 운동 정보가 없습니다. 먼저 운동 정보를 입력해주세요! 💪\n\n예시: "자전거 120분 탔어요"' :
           '저장할 식단 정보가 없습니다. 먼저 식단 정보를 입력해주세요! 🍽️\n\n예시: "아침에 계란 2개 먹었어요"';
-        
+
         const finalHistory: Message[] = [
           ...updatedHistory,
           { role: 'assistant', content: noDataMessage }
@@ -170,27 +170,27 @@ const Index = () => {
         setChatInputText('');
         return;
       }
-      
+
       console.log('💾 [Index] handleRecordSubmit 호출');
-      
+
       // 사용자 메시지를 대화 기록에 추가
       const updatedHistory: Message[] = [
         ...conversationHistory,
         { role: 'user', content: messageToSend }
       ];
       setConversationHistory(updatedHistory);
-      
+
       // AI 응답 메시지 추가
-      const saveMessage = recordType === 'exercise' ? 
-        '운동 기록이 저장되었습니다! 💪' : 
+      const saveMessage = recordType === 'exercise' ?
+        '운동 기록이 저장되었습니다! 💪' :
         '식단 기록이 저장되었습니다! 🍽️';
-      
+
       const finalHistory: Message[] = [
         ...updatedHistory,
         { role: 'assistant', content: saveMessage }
       ];
       setConversationHistory(finalHistory);
-      
+
       setHasSaved(true);
       setChatInputText(''); // 입력창 초기화
       await handleRecordSubmit(recordType, JSON.stringify(chatStructuredData));
@@ -258,12 +258,12 @@ const Index = () => {
       // 단계별 처리 로직 수정
       if (response.type === 'incomplete') {
         setChatStep('extraction');
-      } else if (response.type === 'success') {
+      } else if (response.type === 'complete') {
         setChatStep('confirmation');
       }
     } catch (error) {
       console.error(`❌ [Index handleSendMessage] 실패 (시도: ${retryCount + 1}):`, error);
-      
+
       // 재시도 가능한 오류인지 확인
       const isRetryableError = error instanceof Error && (
         error.message.includes('Failed to fetch') ||
@@ -271,21 +271,21 @@ const Index = () => {
         error.message.includes('ERR_CONNECTION_REFUSED') ||
         error.message.includes('서버 연결에 실패')
       );
-      
+
       // 재시도 횟수가 남아있고 재시도 가능한 오류인 경우
       if (retryCount < maxRetries && isRetryableError) {
         console.log(`🔄 [Index handleSendMessage] 재시도 중... (${retryCount + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
         return handleSendMessage(retryCount + 1, transcript);
       }
-      
+
       // 최대 재시도 횟수 초과 또는 재시도 불가능한 오류
       console.log('❌ [Index handleSendMessage] 재시도 중단');
       setChatNetworkError(true);
       setChatAiFeedback({
         type: 'error',
-        message: retryCount >= maxRetries ? 
-          '서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.' : 
+        message: retryCount >= maxRetries ?
+          '서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.' :
           '메시지 전송 중 오류가 발생했습니다.'
       });
     } finally {
@@ -305,7 +305,7 @@ const Index = () => {
         meal_time: chatStructuredData.meal_time,
         nutrition: chatStructuredData.nutrition
       };
-      
+
       setCurrentMealFoods(prev => [...prev, foodToAdd]);
       setChatStructuredData(null);
       setIsAddingMoreFood(true);
@@ -344,16 +344,16 @@ const Index = () => {
     if (type === 'exercise') {
       const isCardio = chatStructuredData.category === '유산소';
       const exerciseName = chatStructuredData.exercise || '운동기록';
-      
+
       console.log('💪 [Index 운동기록] 운동명 확인:', exerciseName);
-      
+
       try {
         // 🔍 1단계: 운동 검색 또는 자동 생성
         let exerciseCatalogId = 1; // 기본값
-        
+
         if (exerciseName && exerciseName !== '운동기록') {
           console.log('🔍 [Index 운동기록] 운동 카탈로그 찾기/생성 시도:', exerciseName);
-          
+
           const findOrCreateResponse = await fetch('/api/exercises/find-or-create', {
             method: 'POST',
             headers: {
@@ -366,7 +366,7 @@ const Index = () => {
               description: `${exerciseName} 운동`
             })
           });
-          
+
           if (findOrCreateResponse.ok) {
             const exerciseCatalog = await findOrCreateResponse.json();
             exerciseCatalogId = exerciseCatalog.exerciseCatalogId;
@@ -375,7 +375,7 @@ const Index = () => {
             console.warn('⚠️ [Index 운동기록] 운동 카탈로그 생성 실패, 기본값 사용');
           }
         }
-        
+
         // ✅ 2단계: Spring Boot API에 맞는 payload 형식
         const payload = {
           exercise_catalog_id: exerciseCatalogId,
@@ -393,7 +393,7 @@ const Index = () => {
           validation_status: 'VALIDATED' // DB ENUM: PENDING, VALIDATED, REJECTED, NEEDS_REVIEW
         };
         console.log('💪 [Index 운동기록] Spring Boot API 저장 시작:', payload);
-        
+
         // ✅ 3단계: 운동 세션 저장
         const response = await fetch('/api/exercise-sessions', {
           method: 'POST',
@@ -410,10 +410,10 @@ const Index = () => {
           title: '기록 완료',
           description: `${exerciseName} 운동이 저장되었습니다.`
         });
-        
+
         // ✅ 운동기록 저장 후 초기화 및 페이지 이동
         setHasSaved(true);
-        
+
         // 상태 초기화
         setChatInputText('');
         setChatAiFeedback(null);
@@ -425,7 +425,7 @@ const Index = () => {
         setCurrentMealFoods([]);
         setIsAddingMoreFood(false);
         setCurrentMealTime(null);
-        
+
       } catch (err) {
         console.error('💪 [Index 운동기록] Spring Boot API 저장 실패:', err);
         toast({
@@ -448,9 +448,9 @@ const Index = () => {
           // Use GPT to estimate grams for the amount before saving
           let grams = 100;
           const amountStr = String(dietData.amount);
-          
+
           console.log(`[AMOUNT ESTIMATION] Processing: ${dietData.food_name} ${amountStr}`);
-          
+
           if (!amountStr.includes('g') && !amountStr.includes('그램')) {
             console.log(`[AMOUNT ESTIMATION] Using GPT for estimation: ${dietData.food_name} ${amountStr}`);
             grams = await estimateGramsWithGPT(dietData.food_name, amountStr);
@@ -459,25 +459,25 @@ const Index = () => {
             grams = parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 100;
             console.log(`[AMOUNT ESTIMATION] Direct gram conversion: ${grams}g from ${amountStr}`);
           }
-          
+
           // Validate the estimated grams
           if (grams <= 0 || grams > 5000) {
             console.warn(`[AMOUNT ESTIMATION] Unrealistic grams detected: ${grams}g, using fallback`);
             grams = 100;
           }
-          
+
           console.log(`[AMOUNT ESTIMATION] Final grams: ${grams}g for ${dietData.food_name}`);
-          
+
           // Convert meal_time to English format
           const mealTimeMapping = {
             "아침": "breakfast",
-            "점심": "lunch", 
+            "점심": "lunch",
             "저녁": "dinner",
             "야식": "snack",
             "간식": "snack"
           };
           const mealTimeEng = mealTimeMapping[dietData.meal_time] || dietData.meal_time;
-          
+
           // Save diet record using the correct FastAPI endpoint (note_routes.py)
           const response = await fetch('/api/py/note/diet', {
             method: 'POST',
@@ -506,7 +506,7 @@ const Index = () => {
       }
       toast({ title: '기록 완료', description: '식단이 성공적으로 저장되었습니다.' });
       setHasSaved(true);
-      
+
       // ✅ 식단기록 저장 후 초기화
       setChatInputText('');
       setChatAiFeedback(null);
@@ -518,7 +518,7 @@ const Index = () => {
       setCurrentMealFoods([]);
       setIsAddingMoreFood(false);
       setCurrentMealTime(null);
-      
+
       navigate('/note', { state: { refreshDiet: true } });
     } else {
       console.warn('[기록 저장] 알 수 없는 recordType:', type, chatStructuredData);

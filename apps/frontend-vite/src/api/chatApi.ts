@@ -54,12 +54,13 @@ type CurrentDataType = ExerciseData | DietData;
 
 // 응답 타입
 export interface ChatResponse {
-  type: 'extraction' | 'validation' | 'confirmation' | 'complete' | 'error' | 'incomplete';
+  type: 'extraction' | 'validation' | 'confirmation' | 'complete' | 'error' | 'incomplete' | 'initial';
   message: string;
   data?: CurrentDataType;
   suggestions?: string[];
   missing_fields?: string[];
   next_step?: string;
+  parsed_data?: any;
 }
 
 /**
