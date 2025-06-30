@@ -491,4 +491,9 @@ public class ExerciseService {
         
         return bodyPartSets;
     }
+
+    // 관리자 페이지에서 운동 카탈로그 조회
+    public List<ExerciseCatalog> getAllCatalogs() {
+        return exerciseCatalogRepository.findAll();
+    }
 }
