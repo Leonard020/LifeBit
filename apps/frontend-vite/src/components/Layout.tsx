@@ -30,7 +30,7 @@ import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
 import { isAdmin, removeToken } from '@/utils/auth'; // ✅ removeToken 추가
 import { useTheme } from '@/contexts/ThemeContext';
 import NotificationBell from '@/components/NotificationBell';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -332,16 +332,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex justify-between items-center mb-2">
             <DialogTitle className="text-2xl font-bold">문의하기</DialogTitle>
           </div>
-          <div className="text-base text-muted-foreground mb-4">
-            관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
-            <span className="block mt-3">
-              <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-all duration-200 shadow-sm animate-pulse">
-                <svg xmlns='http://www.w3.org/2000/svg' className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a4 4 0 11-8 0 4 4 0 018 0zm0 0v4m0-4V8" /></svg>
-                admin@lifebit.com
-              </a>
-            </span>
-            이메일로 보내주세요.
-          </div>
+          <DialogDescription asChild>
+            <div className="text-base text-muted-foreground mb-4">
+              관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
+              <span className="block mt-3">
+                <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-all duration-200 shadow-sm animate-pulse">
+                  <svg xmlns='http://www.w3.org/2000/svg' className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a4 4 0 11-8 0 4 4 0 018 0zm0 0v4m0-4V8" /></svg>
+                  admin@lifebit.com
+                </a>
+              </span>
+              이메일로 보내주세요.
+            </div>
+          </DialogDescription>
         </DialogContent>
       </Dialog>
     </div>
