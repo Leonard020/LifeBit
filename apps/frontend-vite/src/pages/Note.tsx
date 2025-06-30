@@ -999,6 +999,40 @@ const Note = () => {
   // Note.tsx 상단 state 부분에 추가
   const [inputSource, setInputSource] = useState('TYPING'); // 입력 방식(직접입력/음성입력)
 
+  // ✅ 간단하고 명확한 fetchDietData
+  const fetchDietData = useCallback(async () => {
+    if (!authToken) return;
+    
+    setIsLoadingDietData(true);
+    setDietError(null);
+    
+    const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    try {
+      const userId = getUserIdFromToken();
+      if (!userId) {
+        setDietError("사용자 인증이 필요합니다.");
+        return;
+      }
+
+      console.log(`✅ [fetchDietData] 식단 데이터 조회: ${formattedDate}, 사용자: ${userId}`);
+      const dietRecords = await getDailyDietRecords(formattedDate, userId);
+      
+      console.log('✅ [fetchDietData] 식단 데이터 조회 성공:', dietRecords);
+      setDailyDietLogs(dietRecords);
+      
+    } catch (error) {
+      console.error("❌ [fetchDietData] 식단 데이터 조회 실패:", error);
+      setDietError("식단 데이터를 불러오는데 실패했습니다.");
+    } finally {
+      setIsLoadingDietData(false);
+    }
+  }, [authToken, selectedDate]);
+
+  // ✅ useEffect로 호출
+  useEffect(() => {
+    fetchDietData();
+  }, [fetchDietData]);
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
