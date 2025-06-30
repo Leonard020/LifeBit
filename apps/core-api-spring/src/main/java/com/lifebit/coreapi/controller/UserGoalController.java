@@ -231,4 +231,28 @@ public class UserGoalController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
+
+    /**
+     * 랭킹 순위 수동 업데이트 (테스트용)
+     */
+    @PostMapping("/update-ranking-positions")
+    public ResponseEntity<Map<String, Object>> updateRankingPositions() {
+        try {
+            rankingService.updateRankingPositions();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "랭킹 순위가 업데이트되었습니다.");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("랭킹 순위 업데이트 실패: {}", e.getMessage());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "랭킹 순위 업데이트 중 오류가 발생했습니다.");
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
 } 

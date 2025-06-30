@@ -596,4 +596,15 @@ export const updateAchievementScore = async () => {
   }
 };
 
+// 랭킹 순위 업데이트 (테스트용)
+export const updateRankingPositions = async () => {
+  try {
+    const response = await axios.post('/api/user-goals/update-ranking-positions');
+    return response.data;
+  } catch (error) {
+    console.error('랭킹 순위 업데이트 실패:', error);
+    throw error;
+  }
+};
+
 

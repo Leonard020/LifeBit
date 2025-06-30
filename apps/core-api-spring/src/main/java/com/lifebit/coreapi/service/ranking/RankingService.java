@@ -485,29 +485,101 @@ public class RankingService {
                         return userRankingRepository.save(newRanking);
                     });
 
-            // 운동 목표 점수 계산 (주별 최대 7점)
-            int exerciseScore = calculateExerciseGoalScore(userId);
+            // ✅ 전체 점수 재계산 (운동, 식단, 출석, 업적 포함)
+            int totalScore = calculateTotalScore(userId);
             
-            // 식단 목표 점수 계산 (주별 최대 7점)
-            int nutritionScore = calculateNutritionGoalScore(userId);
-            
-            // 기존 점수에 목표 달성 점수 추가
-            int newTotalScore = userRanking.getTotalScore() + exerciseScore + nutritionScore;
-            userRanking.setTotalScore(newTotalScore);
+            // ✅ 점수 교체 (누적 방지)
+            userRanking.setTotalScore(totalScore);
             userRanking.setLastUpdatedAt(LocalDateTime.now());
             
             // 티어 업데이트
-            RankingTier newTier = calculateTier(newTotalScore);
+            RankingTier newTier = calculateTier(totalScore);
             userRanking.setTier(newTier);
             
             userRankingRepository.save(userRanking);
             
-            log.info("목표 달성률 점수 업데이트 완료 - 사용자 ID: {}, 운동 점수: {}, 식단 점수: {}, 총 점수: {}", 
-                    userId, exerciseScore, nutritionScore, newTotalScore);
+            // ✅ 개별 사용자 랭킹 순위 업데이트 (성능 최적화)
+            updateUserRankingPosition(userId);
+            
+            log.info("목표 달성률 점수 업데이트 완료 - 사용자 ID: {}, 총 점수: {}", 
+                    userId, totalScore);
                     
         } catch (Exception e) {
             log.error("목표 달성률 점수 업데이트 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
             throw new RuntimeException("목표 달성률 점수 업데이트에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 개별 사용자의 랭킹 순위만 업데이트 (성능 최적화)
+     */
+    @Transactional
+    public void updateUserRankingPosition(Long userId) {
+        try {
+            log.info("개별 사용자 랭킹 순위 업데이트 시작 - 사용자 ID: {}", userId);
+            
+            // 현재 사용자의 점수 조회
+            UserRanking currentUserRanking = userRankingRepository.findByUserId(userId)
+                    .orElseThrow(() -> new RuntimeException("User ranking not found: " + userId));
+            
+            // 전체 사용자 중 현재 사용자보다 높은 점수를 가진 사용자 수 계산
+            long higherScoreCount = userRankingRepository.findAll()
+                    .stream()
+                    .filter(UserRanking::isActive)
+                    .filter(ranking -> ranking.getTotalScore() > currentUserRanking.getTotalScore())
+                    .count();
+            
+            // 새 순위 = 더 높은 점수 사용자 수 + 1
+            int newRank = (int) higherScoreCount + 1;
+            
+            // 이전 순위 저장
+            currentUserRanking.setPreviousRank(currentUserRanking.getRankPosition());
+            currentUserRanking.setRankPosition(newRank);
+            currentUserRanking.setLastUpdatedAt(LocalDateTime.now());
+            
+            userRankingRepository.save(currentUserRanking);
+            
+            log.info("개별 사용자 랭킹 순위 업데이트 완료 - 사용자 ID: {}, 새 순위: {}", userId, newRank);
+            
+        } catch (Exception e) {
+            log.error("개별 사용자 랭킹 순위 업데이트 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("개별 사용자 랭킹 순위 업데이트에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 전체 사용자의 랭킹 순위 업데이트 (수동 호출용)
+     * 점수 순으로 정렬하여 순위를 재계산
+     */
+    @Transactional
+    public void updateRankingPositions() {
+        try {
+            log.info("전체 랭킹 순위 업데이트 시작");
+            
+            // 모든 활성 사용자 랭킹을 점수 순으로 조회
+            List<UserRanking> allRankings = userRankingRepository.findAll()
+                    .stream()
+                    .filter(UserRanking::isActive)
+                    .sorted((a, b) -> Integer.compare(b.getTotalScore(), a.getTotalScore()))
+                    .collect(java.util.stream.Collectors.toList());
+            
+            int rank = 1;
+            for (UserRanking ranking : allRankings) {
+                // 이전 순위 저장
+                ranking.setPreviousRank(ranking.getRankPosition());
+                // 새 순위 설정
+                ranking.setRankPosition(rank++);
+                ranking.setLastUpdatedAt(LocalDateTime.now());
+            }
+            
+            // 변경사항 저장
+            userRankingRepository.saveAll(allRankings);
+            
+            log.info("전체 랭킹 순위 업데이트 완료 - 총 {}명", allRankings.size());
+            
+        } catch (Exception e) {
+            log.error("전체 랭킹 순위 업데이트 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("전체 랭킹 순위 업데이트에 실패했습니다.", e);
         }
     }
 

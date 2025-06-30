@@ -187,6 +187,11 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     error: aiInsightsError
   } = useAIHealthInsights(userId, period);
   
+  // 🚀 주간 총 운동 횟수/세트 (모드에 따라 분기)
+  const weeklyWorkoutCurrent = useHealthLogData
+    ? (healthStats?.weeklyTotalCounts_healthloguse || 0)
+    : (healthStats?.weeklyTotalSets || 0);
+  
   // 로딩 상태
   const isLoading = isHealthLoading || isMealLoading || isExerciseLoading || isGoalsLoading || isHealthStatsLoading || isNutritionStatsLoading || isPythonAnalyticsLoading || isAIInsightsLoading;
   
@@ -2019,19 +2024,19 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                           cx="50" cy="50" r="40" fill="none" 
                           stroke={
                             !goalsData?.weekly_workout_target ? "#d1d5db" :
-                            (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "#10b981" : 
-                            (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5 ? "#f59e0b" : "#ef4444"
+                            weeklyWorkoutCurrent >= goalsData.weekly_workout_target ? "#10b981" : 
+                            weeklyWorkoutCurrent >= goalsData.weekly_workout_target * 0.5 ? "#f59e0b" : "#ef4444"
                           }
                           strokeWidth="8"
                           strokeLinecap="round"
-                          strokeDasharray={`${2 * Math.PI * 40 * Math.min(((healthStats?.weeklyTotalSets || 0) / (goalsData?.weekly_workout_target || 1)) * 100, 100) / 100} ${2 * Math.PI * 40}`}
+                          strokeDasharray={`${2 * Math.PI * 40 * Math.min(((weeklyWorkoutCurrent) / (goalsData?.weekly_workout_target || 1)) * 100, 100) / 100} ${2 * Math.PI * 40}`}
                           className="transition-all duration-1000 ease-out"
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-xl font-bold text-gray-800">
                           {goalsData?.weekly_workout_target 
-                            ? Math.round(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100)
+                            ? Math.round(((weeklyWorkoutCurrent) / goalsData.weekly_workout_target) * 100)
                             : 0}%
                         </span>
                       </div>
@@ -2051,12 +2056,12 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     <Badge 
                       variant={
                         !goalsData?.weekly_workout_target ? "outline" :
-                        (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "default" : "secondary"
+                        weeklyWorkoutCurrent >= goalsData.weekly_workout_target ? "default" : "secondary"
                       }
                       className="mb-3"
                     >
                       {!goalsData?.weekly_workout_target ? "목표 미설정" :
-                       (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "달성!" : "진행중"}
+                       weeklyWorkoutCurrent >= goalsData.weekly_workout_target ? "달성!" : "진행중"}
                     </Badge>
                   </div>
                   
@@ -2067,7 +2072,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                         className="bg-blue-500 h-2 rounded-full transition-all duration-500"
                         style={{ 
                           width: `${goalsData?.weekly_workout_target 
-                            ? Math.min(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100, 100)
+                            ? Math.min(((weeklyWorkoutCurrent) / goalsData.weekly_workout_target) * 100, 100)
                             : 0}%` 
                         }}
                       />
@@ -2251,6 +2256,22 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     </>
                   )}
                 </div>
+              </div>
+
+              {/* ✅ 테스트 버튼들 */}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handleUpdateAchievementScore}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  점수 업데이트
+                </button>
+                <button
+                  onClick={() => {}} // Removed for clean UI
+                  className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                >
+                  순위 업데이트
+                </button>
               </div>
             </CardContent>
           </Card>
