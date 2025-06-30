@@ -250,17 +250,33 @@ ORDER BY calculated_data.user_id, calculated_data.week_num;
 -- 기록 날짜: 균일하게 분포
 -- ===================================================================
 INSERT INTO health_records (user_id, weight, height, record_date)
-SELECT 
-    u.user_id,
-    65 + (random() * 20) + (random() - 0.5) * 10 AS weight,
-    160 + (random() * 25) AS height,
-    '2025-01-01'::date + ((row_number() OVER (ORDER BY u.user_id) - 1) * 175 / 899)::integer * INTERVAL '1 day' AS record_date
-FROM (
-    SELECT user_id FROM users WHERE role = 'USER' ORDER BY user_id LIMIT 49
-) u
-CROSS JOIN generate_series(1, 900) AS series
+WITH user_records AS (
+    SELECT 
+        u.user_id,
+        series_num,
+        65 + (random() * 20) + (random() - 0.5) * 10 AS weight,
+        160 + (random() * 25) AS height,
+        '2025-02-01'::date + (random() * 149)::integer * INTERVAL '1 day' AS record_date
+    FROM (
+        SELECT user_id FROM users WHERE role = 'USER' ORDER BY user_id LIMIT 49
+    ) u
+    CROSS JOIN generate_series(1, 18) AS series_num -- 49명 × 18개 = 882개
+    
+    UNION ALL
+    
+    -- 나머지 18개 레코드를 랜덤 사용자에게 추가
+    SELECT 
+        (SELECT user_id FROM users WHERE role = 'USER' ORDER BY random() LIMIT 1) AS user_id,
+        series_num,
+        65 + (random() * 20) + (random() - 0.5) * 10 AS weight,
+        160 + (random() * 25) AS height,
+        '2025-02-01'::date + (random() * 149)::integer * INTERVAL '1 day' AS record_date
+    FROM generate_series(1, 18) AS series_num
+)
+SELECT user_id, weight, height, record_date 
+FROM user_records 
+ORDER BY random()
 LIMIT 900;
-
 -- ===================================================================
 -- 6. 업적 시스템 50개 (다양한 배지 타입과 목표)
 -- ===================================================================
