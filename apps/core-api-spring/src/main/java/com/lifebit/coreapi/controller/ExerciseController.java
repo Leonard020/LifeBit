@@ -25,9 +25,12 @@ public class ExerciseController {
 
     // 시간대 자동 분류 함수
     private com.lifebit.coreapi.entity.TimePeriodType getTimePeriodByHour(int hour) {
-        if (hour >= 5 && hour < 12) return com.lifebit.coreapi.entity.TimePeriodType.morning;
-        if (hour >= 12 && hour < 18) return com.lifebit.coreapi.entity.TimePeriodType.afternoon;
-        if (hour >= 18 && hour < 22) return com.lifebit.coreapi.entity.TimePeriodType.evening;
+        if (hour >= 5 && hour < 12)
+            return com.lifebit.coreapi.entity.TimePeriodType.morning;
+        if (hour >= 12 && hour < 18)
+            return com.lifebit.coreapi.entity.TimePeriodType.afternoon;
+        if (hour >= 18 && hour < 22)
+            return com.lifebit.coreapi.entity.TimePeriodType.evening;
         return com.lifebit.coreapi.entity.TimePeriodType.night;
     }
 
@@ -38,17 +41,16 @@ public class ExerciseController {
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
         com.lifebit.coreapi.entity.TimePeriodType timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
         ExerciseSession session = exerciseService.recordExercise(
-            userId,
-            request.getCatalogId(),
-            request.getDurationMinutes(),
-            request.getCaloriesBurned(),
-            request.getNotes(),
-            request.getSets(),
-            request.getReps(),
-            request.getWeight(),
-            request.getExerciseDate(),
-            timePeriod
-        );
+                userId,
+                request.getCatalogId(),
+                request.getDurationMinutes(),
+                request.getCaloriesBurned(),
+                request.getNotes(),
+                request.getSets(),
+                request.getReps(),
+                request.getWeight(),
+                request.getExerciseDate(),
+                timePeriod);
         return ResponseEntity.ok(new ExerciseSessionResponse(session));
     }
 
@@ -59,10 +61,10 @@ public class ExerciseController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
         List<ExerciseSession> history = exerciseService.getExerciseHistory(
-            new User(userId), startDate, endDate);
+                new User(userId), startDate, endDate);
         List<ExerciseSessionResponse> responseList = history.stream()
-            .map(ExerciseSessionResponse::new)
-            .toList();
+                .map(ExerciseSessionResponse::new)
+                .toList();
         return ResponseEntity.ok(responseList);
     }
 
@@ -90,5 +92,12 @@ public class ExerciseController {
     public ResponseEntity<List<ExerciseCatalog>> getExerciseCatalog() {
         List<ExerciseCatalog> catalog = exerciseService.getAllExerciseCatalog();
         return ResponseEntity.ok(catalog);
+    }
+
+    // 관리자 페이지에서 운동 카탈로그 조회
+    @GetMapping("/api/exercises/catalog")
+    public ResponseEntity<List<ExerciseCatalog>> getAllCatalogs() {
+        List<ExerciseCatalog> list = exerciseService.getAllCatalogs();
+        return ResponseEntity.ok(list);
     }
 }

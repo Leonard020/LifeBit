@@ -1210,23 +1210,18 @@ const Note = () => {
                       return (
                         <div
                           key={record.exerciseSessionId}
-                          className="flex items-center justify-between p-3 rounded-lg"
-                          style={{
-                            background: isDarkMode ? '#23272e' : '#fff',
-                            border: isDarkMode ? '2px solid #8B5CF6' : '1px solid #eee',
-                            color: isDarkMode ? '#fff' : '#222',
-                          }}
+                          className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a]"
                         >
                           <div>
-                            <p className="font-medium" style={{ color: isDarkMode ? '#fff' : undefined }}>{record.exerciseName}
+                            <p className="font-medium text-gray-800 dark:text-[#e0e6f8]">{record.exerciseName}
                               {record.bodyPart && (
                                 <span className="ml-2 text-xs text-gray-400">({record.bodyPart})</span>
                               )}
                             </p>
-                            <p className="text-sm text-gray-600 flex items-center flex-wrap gap-x-2">
+                            <p className="text-sm text-gray-600 dark:text-[#b3b8d8] flex items-center flex-wrap gap-x-2">
                               {infoParts.length > 0 ? infoParts.join(' • ') : '기록 없음'}
                               {record.time_period && (
-                                <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 font-medium text-xs">
+                                <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 font-medium text-xs dark:bg-[#2d1e4a] dark:text-[#b3b8d8]">
                                   {timePeriodMap[record.time_period] || record.time_period}
                                 </span>
                               )}
