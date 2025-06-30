@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,4 +35,8 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     
     @Query("SELECT ml FROM MealLog ml WHERE ml.user.userId = :userId AND ml.logDate BETWEEN :startDate AND :endDate ORDER BY ml.logDate DESC, ml.createdAt DESC")
     List<MealLog> findByUserIdAndLogDateBetweenOrderByLogDateDescCreatedAtDesc(@Param("userId") Long userId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    // 대시보드 통계용 메서드
+    @Query("SELECT COUNT(ml) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
+    long countByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 } 

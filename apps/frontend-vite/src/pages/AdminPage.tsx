@@ -103,6 +103,19 @@ export const AdminPage = () => {
   // 필터링 상태
   const [showUnsetIntensityOnly, setShowUnsetIntensityOnly] = useState(false);
 
+  // 대시보드 통계 상태
+  const [dashboardStats, setDashboardStats] = useState({
+    totalUsers: 0,
+    weeklyNewUsers: 0,
+    monthlyNewUsers: 0,
+    dailyActiveUsers: 0,
+    weeklyActiveUsers: 0,
+    monthlyActiveUsers: 0,
+    dailyRecords: 0,
+    weeklyRecords: 0,
+    monthlyRecords: 0
+  });
+
   // 영어 → 한글 변환 함수들
   const convertBodyPartToKorean = (english: string): string => {
     const mapping: Record<string, string> = {
@@ -164,6 +177,38 @@ export const AdminPage = () => {
     };
     return mapping[korean] || korean.toLowerCase();
   };
+
+  // 대시보드 데이터 가져오기
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const res = await fetch('/api/admin/dashboard', {
+          headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        if (!res.ok) {
+          console.error('대시보드 응답 실패:', await res.text());
+          return;
+        }
+        const data = await res.json();
+        
+        setDashboardStats({
+          totalUsers: data.totalUsers || 0,
+          weeklyNewUsers: data.weeklyNewUsers || 0,
+          monthlyNewUsers: data.monthlyNewUsers || 0,
+          dailyActiveUsers: data.dailyActiveUsers || 0,
+          weeklyActiveUsers: data.weeklyActiveUsers || 0,
+          monthlyActiveUsers: data.monthlyActiveUsers || 0,
+          dailyRecords: data.dailyRecords || 0,
+          weeklyRecords: data.weeklyRecords || 0,
+          monthlyRecords: data.monthlyRecords || 0
+        });
+      } catch (err) {
+        console.error('대시보드 데이터 fetch 오류:', err);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -525,6 +570,78 @@ export const AdminPage = () => {
   return (
     <Layout>
       <div className="container mx-auto py-8">
+        <h1 className="text-3xl font-bold mb-8">📊 관리자 대시보드</h1>
+        
+        {/* 대시보드 통계 카드 섹션 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* 총 회원수 카드 */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">총 회원수</p>
+                  <p className="text-3xl font-bold">{dashboardStats.totalUsers.toLocaleString()}명</p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-green-600 font-medium">
+                      주간: +{dashboardStats.weeklyNewUsers.toLocaleString()}명
+                    </p>
+                    <p className="text-xs text-green-600 font-medium">
+                      월간: +{dashboardStats.monthlyNewUsers.toLocaleString()}명
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-full">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 일일 접속자 카드 */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">일일 접속자</p>
+                  <p className="text-3xl font-bold">{dashboardStats.dailyActiveUsers.toLocaleString()}명</p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-green-600 font-medium">주간: {dashboardStats.weeklyActiveUsers.toLocaleString()}명</p>
+                    <p className="text-xs text-green-600 font-medium">월간: {dashboardStats.monthlyActiveUsers.toLocaleString()}명</p>
+                  </div>
+                </div>
+                <div className="p-3 bg-green-100 rounded-full">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 일일 기록수 카드 */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">일일 기록수</p>
+                  <p className="text-3xl font-bold">{dashboardStats.dailyRecords.toLocaleString()}건</p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-green-600 font-medium">주간: {dashboardStats.weeklyRecords.toLocaleString()}건</p>
+                    <p className="text-xs text-green-600 font-medium">월간: {dashboardStats.monthlyRecords.toLocaleString()}건</p>
+                  </div>
+                </div>
+                <div className="p-3 bg-orange-100 rounded-full">
+                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="flex gap-4 mb-6">
           <Button variant={activeTab === 'catalog' ? 'default' : 'outline'} onClick={() => setActiveTab('catalog')}>운동 카탈로그</Button>
           <Button variant={activeTab === 'food' ? 'default' : 'outline'} onClick={() => setActiveTab('food')}>음식 카탈로그</Button>
