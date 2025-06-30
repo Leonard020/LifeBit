@@ -55,7 +55,11 @@ public class NotificationService {
     }
 
     public Page<NotificationDto> getUserNotificationsPageDto(Long userId, Pageable pageable, Boolean isRead) {
+        System.out.println("[DEBUG] getUserNotificationsPageDto 시작: userId=" + userId + ", isRead=" + isRead);
+        
         Page<Notification> notifications = getUserNotificationsPage(userId, pageable, isRead);
+        System.out.println("[DEBUG] getUserNotificationsPageDto: 조회된 알림 개수=" + notifications.getTotalElements());
+        
         return notifications.map(n -> {
             boolean read;
             if (n.getUserId() == null) {
@@ -66,13 +70,16 @@ public class NotificationService {
                     read = false;
                     System.out.println("[DEBUG] SYSTEM 알림 id=" + safeNotificationId + ", userId=" + safeUserId + " (null 체크 실패), isRead=false");
                 } else {
-                    read = notificationReadRepository.existsByUserIdAndNotificationId(safeUserId, safeNotificationId);
-                    System.out.println("[DEBUG] SYSTEM 알림 id=" + safeNotificationId + ", userId=" + safeUserId + ", isRead=" + read);
+                    boolean exists = notificationReadRepository.existsByUserIdAndNotificationId(safeUserId, safeNotificationId);
+                    read = exists;
+                    System.out.println("[DEBUG] SYSTEM 알림 id=" + safeNotificationId + ", userId=" + safeUserId + ", exists=" + exists + ", isRead=" + read);
                 }
             } else {
                 read = n.isRead();
+                System.out.println("[DEBUG] 개인 알림 id=" + n.getId() + ", userId=" + n.getUserId() + ", isRead=" + read);
             }
-            return NotificationDto.builder()
+            
+            NotificationDto dto = NotificationDto.builder()
                 .id(n.getId())
                 .type(n.getType())
                 .refId(n.getRefId())
@@ -81,6 +88,9 @@ public class NotificationService {
                 .isRead(read)
                 .createdAt(n.getCreatedAt())
                 .build();
+                
+            System.out.println("[DEBUG] NotificationDto 생성: id=" + dto.getId() + ", isRead=" + dto.isRead());
+            return dto;
         });
     }
 
@@ -111,12 +121,16 @@ public class NotificationService {
 
     @Transactional
     public void markAllAsRead(Long userId) {
+        System.out.println("[DEBUG] markAllAsRead 시작: userId=" + userId);
+        
         // 개인 알림 일괄 처리
         notificationRepository.markAllAsReadByUserId(userId);
+        System.out.println("[DEBUG] markAllAsRead: 개인 알림 일괄 업데이트 완료");
 
         // 시스템 알림 일괄 처리 (batch insert)
         List<Notification> systemNotifications = notificationRepository.findByUserIdIsNullOrderByCreatedAtDesc();
         List<NotificationRead> toInsert = new ArrayList<>();
+        
         for (Notification n : systemNotifications) {
             if (!notificationReadRepository.existsByUserIdAndNotificationId(userId, n.getId())) {
                 NotificationRead read = new NotificationRead();
@@ -125,9 +139,22 @@ public class NotificationService {
                 toInsert.add(read);
             }
         }
+        
         if (!toInsert.isEmpty()) {
             notificationReadRepository.saveAll(toInsert);
+            System.out.println("[DEBUG] markAllAsRead: 시스템 알림 " + toInsert.size() + "개 읽음 처리");
+        } else {
+            System.out.println("[DEBUG] markAllAsRead: 이미 모든 시스템 알림을 읽음 처리함");
         }
+        
+        // 처리 후 상태 확인
+        System.out.println("[DEBUG] markAllAsRead: 처리 후 상태 확인");
+        for (Notification n : systemNotifications) {
+            boolean exists = notificationReadRepository.existsByUserIdAndNotificationId(userId, n.getId());
+            System.out.println("[DEBUG] 알림 ID " + n.getId() + " 읽음 상태: " + exists);
+        }
+        
+        System.out.println("[DEBUG] markAllAsRead 완료: userId=" + userId);
     }
 
     @Transactional
@@ -142,21 +169,36 @@ public class NotificationService {
     }
 
     public long getUnreadCount(Long userId) {
+        System.out.println("[DEBUG] getUnreadCount 시작: userId=" + userId);
+        
         // 개인 알림: isRead = false
         long personalUnread = notificationRepository.countUnreadByUserIdOrUserIdIsNull(userId) - countUnreadSystemNotifications(userId);
         // 시스템 알림: notification_read에 없는 것만 카운트
         long systemUnread = countUnreadSystemNotifications(userId);
-        return personalUnread + systemUnread;
+        long totalUnread = personalUnread + systemUnread;
+        
+        System.out.println("[DEBUG] getUnreadCount 결과: personalUnread=" + personalUnread + ", systemUnread=" + systemUnread + ", totalUnread=" + totalUnread);
+        
+        return totalUnread;
     }
 
     private long countUnreadSystemNotifications(Long userId) {
+        System.out.println("[DEBUG] countUnreadSystemNotifications 시작: userId=" + userId);
+        
         List<Notification> systemNotifications = notificationRepository.findByUserIdIsNullOrderByCreatedAtDesc();
         long count = 0;
+        
         for (Notification n : systemNotifications) {
-            if (!notificationReadRepository.existsByUserIdAndNotificationId(userId, n.getId())) {
+            boolean exists = notificationReadRepository.existsByUserIdAndNotificationId(userId, n.getId());
+            if (!exists) {
                 count++;
+                System.out.println("[DEBUG] 읽지 않은 시스템 알림: id=" + n.getId());
+            } else {
+                System.out.println("[DEBUG] 읽은 시스템 알림: id=" + n.getId());
             }
         }
+        
+        System.out.println("[DEBUG] countUnreadSystemNotifications 결과: " + count);
         return count;
     }
 } 

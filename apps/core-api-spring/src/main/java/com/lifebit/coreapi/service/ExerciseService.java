@@ -47,9 +47,18 @@ public class ExerciseService {
         session.setExerciseDate(exerciseDate != null ? exerciseDate : LocalDate.now());
         session.setCreatedAt(LocalDateTime.now());
 
-        session.setSets(sets != null ? sets : 0);
-        session.setReps(reps != null ? reps : 0);
-        session.setWeight(weight != null ? BigDecimal.valueOf(weight) : BigDecimal.ZERO);
+        // ✅ 유산소 운동(cardio)인 경우 set=1로 고정
+        if (catalog.getBodyPart() == com.lifebit.coreapi.entity.BodyPartType.cardio) {
+            session.setSets(1); // 유산소 운동은 항상 1 set
+            session.setReps(null); // 유산소 운동은 반복횟수 없음
+            session.setWeight(null); // 유산소 운동은 중량 없음
+            log.info("✅ 유산소 운동({}) - set=1로 자동 설정", catalog.getName());
+        } else {
+            session.setSets(sets != null ? sets : 0);
+            session.setReps(reps != null ? reps : 0);
+            session.setWeight(weight != null ? BigDecimal.valueOf(weight) : BigDecimal.ZERO);
+        }
+        
         session.setTimePeriod(timePeriod);
 
         return exerciseSessionRepository.save(session);
@@ -240,6 +249,13 @@ public class ExerciseService {
 
     /**
      * ID로 운동 카탈로그 조회
+     */
+    public ExerciseCatalog getExerciseCatalogById(Long catalogId) {
+        return exerciseCatalogRepository.findById(catalogId).orElse(null);
+    }
+
+    /**
+     * 운동 세션에 운동 카탈로그 설정
      */
     @Transactional
     public ExerciseSession setExerciseCatalog(ExerciseSession session, Long catalogId) {
@@ -524,5 +540,10 @@ public class ExerciseService {
         }
         
         return bodyPartSets;
+    }
+
+    // 관리자 페이지에서 운동 카탈로그 조회
+    public List<ExerciseCatalog> getAllCatalogs() {
+        return exerciseCatalogRepository.findAll();
     }
 }

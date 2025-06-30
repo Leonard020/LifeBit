@@ -52,6 +52,7 @@ class DailyExerciseRecord(BaseModel):
 class ExerciseRecord(BaseModel):
     user_id: int
     name: str
+    exercise_catalog_id: Optional[int] = None  # 운동 카탈로그 ID 추가
     weight: Optional[float]
     sets: Optional[int]
     reps: Optional[int]

@@ -140,19 +140,40 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     const root = document.documentElement;
     switch (settings.fontSize) {
       case 'small':
+        root.style.setProperty('--font-size-xs', '12px');
+        root.style.setProperty('--font-size-sm', '14px');
         root.style.setProperty('--font-size-base', '16px');
         root.style.setProperty('--font-size-lg', '18px');
         root.style.setProperty('--font-size-xl', '20px');
+        root.style.setProperty('--font-size-2xl', '22px');
+        root.style.setProperty('--font-size-3xl', '24px');
+        root.style.setProperty('--font-size-4xl', '26px');
+        root.style.setProperty('--font-size-5xl', '30px');
+        root.style.setProperty('--font-size-6xl', '36px');
         break;
       case 'normal':
+        root.style.setProperty('--font-size-xs', '14px');
+        root.style.setProperty('--font-size-sm', '16px');
         root.style.setProperty('--font-size-base', '21px');
         root.style.setProperty('--font-size-lg', '24px');
         root.style.setProperty('--font-size-xl', '28px');
+        root.style.setProperty('--font-size-2xl', '32px');
+        root.style.setProperty('--font-size-3xl', '36px');
+        root.style.setProperty('--font-size-4xl', '40px');
+        root.style.setProperty('--font-size-5xl', '48px');
+        root.style.setProperty('--font-size-6xl', '60px');
         break;
       case 'large':
+        root.style.setProperty('--font-size-xs', '18px');
+        root.style.setProperty('--font-size-sm', '20px');
         root.style.setProperty('--font-size-base', '30px');
         root.style.setProperty('--font-size-lg', '34px');
         root.style.setProperty('--font-size-xl', '38px');
+        root.style.setProperty('--font-size-2xl', '42px');
+        root.style.setProperty('--font-size-3xl', '46px');
+        root.style.setProperty('--font-size-4xl', '50px');
+        root.style.setProperty('--font-size-5xl', '58px');
+        root.style.setProperty('--font-size-6xl', '70px');
         break;
     }
 
@@ -184,6 +205,47 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   const setFontSize = (size: FontSize) => {
     setTempSettings(prev => ({ ...prev, fontSize: size }));
+    
+    // 즉시 CSS 변수 업데이트
+    const root = document.documentElement;
+    switch (size) {
+      case 'small':
+        root.style.setProperty('--font-size-xs', '12px');
+        root.style.setProperty('--font-size-sm', '14px');
+        root.style.setProperty('--font-size-base', '16px');
+        root.style.setProperty('--font-size-lg', '18px');
+        root.style.setProperty('--font-size-xl', '20px');
+        root.style.setProperty('--font-size-2xl', '22px');
+        root.style.setProperty('--font-size-3xl', '24px');
+        root.style.setProperty('--font-size-4xl', '26px');
+        root.style.setProperty('--font-size-5xl', '30px');
+        root.style.setProperty('--font-size-6xl', '36px');
+        break;
+      case 'normal':
+        root.style.setProperty('--font-size-xs', '14px');
+        root.style.setProperty('--font-size-sm', '16px');
+        root.style.setProperty('--font-size-base', '21px');
+        root.style.setProperty('--font-size-lg', '24px');
+        root.style.setProperty('--font-size-xl', '28px');
+        root.style.setProperty('--font-size-2xl', '32px');
+        root.style.setProperty('--font-size-3xl', '36px');
+        root.style.setProperty('--font-size-4xl', '40px');
+        root.style.setProperty('--font-size-5xl', '48px');
+        root.style.setProperty('--font-size-6xl', '60px');
+        break;
+      case 'large':
+        root.style.setProperty('--font-size-xs', '18px');
+        root.style.setProperty('--font-size-sm', '20px');
+        root.style.setProperty('--font-size-base', '30px');
+        root.style.setProperty('--font-size-lg', '34px');
+        root.style.setProperty('--font-size-xl', '38px');
+        root.style.setProperty('--font-size-2xl', '42px');
+        root.style.setProperty('--font-size-3xl', '46px');
+        root.style.setProperty('--font-size-4xl', '50px');
+        root.style.setProperty('--font-size-5xl', '58px');
+        root.style.setProperty('--font-size-6xl', '70px');
+        break;
+    }
   };
 
   const setColorScheme = (scheme: ColorScheme) => {

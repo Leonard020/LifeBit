@@ -804,15 +804,8 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                     "suggestions": []
                 }
             else:
-                # 일반 텍스트 응답
-                return {
-                    "type": "incomplete",
-                    "message": f"음성 인식 완료: {user_text}",
-                    "suggestions": []
-                }
-        else:
-            # GPT 비활성화 상태
-            return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
+                # GPT 비활성화 상태
+                return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
 
     except Exception as e:
         print(f"[ERROR] Voice processing error: {e}")
@@ -1107,12 +1100,31 @@ async def chat(request: ChatRequest):
 # 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
 @app.post("/api/py/note/exercise")
 def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
+    # 운동 카탈로그 조회하여 유산소 운동인지 확인
+    catalog = None
+    if hasattr(data, 'exercise_catalog_id') and data.exercise_catalog_id:
+        catalog = db.query(models.ExerciseCatalog).filter(
+            models.ExerciseCatalog.exercise_catalog_id == data.exercise_catalog_id
+        ).first()
+    
+    # ✅ 유산소 운동인 경우 set=1로 고정
+    sets = data.sets
+    reps = data.reps
+    weight = data.weight
+    
+    if catalog and catalog.body_part == 'cardio':
+        sets = 1  # 유산소 운동은 항상 1 set
+        reps = None  # 유산소 운동은 반복횟수 없음
+        weight = None  # 유산소 운동은 중량 없음
+        print(f"✅ 유산소 운동({catalog.name}) - set=1로 자동 설정")
+    
     exercise = models.ExerciseSession(
         user_id=data.user_id,
+        exercise_catalog_id=getattr(data, 'exercise_catalog_id', None),
         notes=data.name,
-        weight=data.weight,
-        sets=data.sets,
-        reps=data.reps,
+        weight=weight,
+        sets=sets,
+        reps=reps,
         duration_minutes=data.duration_minutes,
         calories_burned=data.calories_burned,
         exercise_date=data.exercise_date

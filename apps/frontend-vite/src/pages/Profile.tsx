@@ -449,6 +449,7 @@ const Profile = () => {
             setProfileData={setProfileData}
             loading={loading}
             onSave={handleProfileSave}
+            nicknameEditable={false}
           />
 
           {/* Health Goals */}
@@ -556,11 +557,11 @@ const Profile = () => {
                 {/* Total Weekly Workout Target Display */}
                 <div className="space-y-2">
                   <Label>총 주간 운동 목표</Label>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="text-lg font-semibold text-blue-700">
+                  <div className="p-3 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
+                    <div className="text-lg font-semibold text-blue-700 dark:text-[#6ca0ff]">
                       {totalWeeklyWorkoutTarget}회 / 주
                     </div>
-                    <div className="text-sm text-blue-600">
+                    <div className="text-sm text-blue-600 dark:text-[#b3b8d8]">
                       (근력운동: {totalWeeklyWorkoutTarget - parseInt(goals.weeklyCardio)}회, 유산소: {goals.weeklyCardio}회)
                     </div>
                   </div>
