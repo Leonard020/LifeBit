@@ -107,12 +107,13 @@ public class UserGoalService {
         defaultGoal.setUserId(userId);
         // ✅ 기본 운동 목표 설정 (getUserGoalOrDefault와 동일)
         defaultGoal.setWeeklyWorkoutTarget(180); // 주간 총 180분 (하루 약 25분)
+        defaultGoal.setWeeklyWorkoutTargetSet(15); // 주간 총 15세트
         // ✅ 기본 영양소 목표 설정 (성인 남성 기준)
         defaultGoal.setDailyCarbsTarget(300); // 탄수화물 300g
         defaultGoal.setDailyProteinTarget(120); // 단백질 120g  
         defaultGoal.setDailyFatTarget(80); // 지방 80g
         defaultGoal.setDailyCaloriesTarget(2000); // 칼로리 2000kcal
-        // ✅ 운동 부위별 기본 목표 (주간)
+        // ✅ 운동 부위별 기본 목표 (주간 - 시간)
         defaultGoal.setWeeklyChest(60); // 가슴 60분
         defaultGoal.setWeeklyBack(60); // 등 60분
         defaultGoal.setWeeklyLegs(60); // 다리 60분
@@ -120,6 +121,14 @@ public class UserGoalService {
         defaultGoal.setWeeklyArms(30); // 팔 30분
         defaultGoal.setWeeklyAbs(30); // 복근 30분
         defaultGoal.setWeeklyCardio(60); // 유산소 60분
+        // ✅ 운동 부위별 기본 목표 (주간 - 세트)
+        defaultGoal.setWeeklyChestSet(6); // 가슴 6세트
+        defaultGoal.setWeeklyBackSet(6); // 등 6세트
+        defaultGoal.setWeeklyLegsSet(6); // 다리 6세트
+        defaultGoal.setWeeklyShouldersSet(3); // 어깨 3세트
+        defaultGoal.setWeeklyArmsSet(3); // 팔 3세트
+        defaultGoal.setWeeklyAbsSet(3); // 복근 3세트
+        defaultGoal.setWeeklyCardioSet(6); // 유산소 6세트
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return userGoalRepository.save(defaultGoal);
@@ -139,12 +148,13 @@ public class UserGoalService {
         defaultGoal.setUserId(userId);
         // ✅ 기본 운동 목표 설정 (주 3회, 하루 60분)
         defaultGoal.setWeeklyWorkoutTarget(180); // 주간 총 180분 (하루 약 25분)
+        defaultGoal.setWeeklyWorkoutTargetSet(15); // 주간 총 15세트
         // ✅ 기본 영양소 목표 설정 (성인 남성 기준)
         defaultGoal.setDailyCarbsTarget(300); // 탄수화물 300g
         defaultGoal.setDailyProteinTarget(120); // 단백질 120g  
         defaultGoal.setDailyFatTarget(80); // 지방 80g
         defaultGoal.setDailyCaloriesTarget(2000); // 칼로리 2000kcal
-        // ✅ 운동 부위별 기본 목표 (주간)
+        // ✅ 운동 부위별 기본 목표 (주간 - 시간)
         defaultGoal.setWeeklyChest(60); // 가슴 60분
         defaultGoal.setWeeklyBack(60); // 등 60분
         defaultGoal.setWeeklyLegs(60); // 다리 60분
@@ -152,6 +162,14 @@ public class UserGoalService {
         defaultGoal.setWeeklyArms(30); // 팔 30분
         defaultGoal.setWeeklyAbs(30); // 복근 30분
         defaultGoal.setWeeklyCardio(60); // 유산소 60분
+        // ✅ 운동 부위별 기본 목표 (주간 - 세트)
+        defaultGoal.setWeeklyChestSet(6); // 가슴 6세트
+        defaultGoal.setWeeklyBackSet(6); // 등 6세트
+        defaultGoal.setWeeklyLegsSet(6); // 다리 6세트
+        defaultGoal.setWeeklyShouldersSet(3); // 어깨 3세트
+        defaultGoal.setWeeklyArmsSet(3); // 팔 3세트
+        defaultGoal.setWeeklyAbsSet(3); // 복근 3세트
+        defaultGoal.setWeeklyCardioSet(6); // 유산소 6세트
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         

@@ -653,8 +653,23 @@ public class HealthStatisticsService {
         try {
             log.info("🏋️ 운동 부위별 빈도 데이터 생성 시작 - 사용자: {}, 기간: {}", userId, period);
             
-            // 운동 세션 데이터 조회
-            List<ExerciseSession> sessions = exerciseService.getRecentExerciseSessions(userId, period);
+            // 주별 데이터인 경우 ExerciseService의 주별 메서드를 사용
+            List<ExerciseSession> sessions;
+            if ("week".equals(period)) {
+                // 현재 주의 일요일부터 토요일까지 데이터 조회
+                LocalDate today = LocalDate.now();
+                int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+                int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+                
+                LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+                LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+                
+                sessions = exerciseService.getExerciseSessions(userId, startDate, endDate);
+                log.info("📅 [주별 데이터] 조회 기간: {} ~ {}", startDate, endDate);
+            } else {
+                // 기존 방식 (day, month 등)
+                sessions = exerciseService.getRecentExerciseSessions(userId, period);
+            }
             
             if (sessions.isEmpty()) {
                 log.info("운동 세션 데이터가 없음 - 사용자: {}", userId);
@@ -994,5 +1009,56 @@ public class HealthStatisticsService {
         }
         
         return result;
+    }
+
+    // ==================================================================================
+    // 건강로그 페이지 전용 세트 통계 메서드들 (기존 로직과 분리)
+    // ==================================================================================
+
+    /**
+     * 건강로그용 - 주간 운동 부위별 세트 수 통계 조회 (기존 getHealthStatistics와 분리)
+     */
+    public Map<String, Object> getHealthStatistics_healthloguse(Long userId) {
+        log.info("🏥 [getHealthStatistics_healthloguse] 건강로그용 통계 조회 시작 - 사용자: {}", userId);
+        
+        Map<String, Object> statistics = new HashMap<>();
+        
+        try {
+            // 새로운 건강로그용 세트 통계 추가
+            Map<String, Integer> bodyPartSets = exerciseService.getWeeklyBodyPartSets_healthloguse(userId);
+            statistics.put("weeklyChestSets_healthloguse", bodyPartSets.get("CHEST"));
+            statistics.put("weeklyBackSets_healthloguse", bodyPartSets.get("BACK"));
+            statistics.put("weeklyLegsSets_healthloguse", bodyPartSets.get("LEGS"));
+            statistics.put("weeklyShouldersSets_healthloguse", bodyPartSets.get("SHOULDERS"));
+            statistics.put("weeklyArmsSets_healthloguse", bodyPartSets.get("ARMS"));
+            statistics.put("weeklyAbsSets_healthloguse", bodyPartSets.get("ABS"));
+            statistics.put("weeklyCardioSets_healthloguse", bodyPartSets.get("CARDIO"));
+            
+            // 주간 총 세트 수도 추가
+            statistics.put("weeklyTotalSets_healthloguse", exerciseService.getWeeklyTotalSets_healthloguse(userId));
+            
+            log.info("✅ [getHealthStatistics_healthloguse] 건강로그용 통계 조회 완료 - 사용자: {}, 데이터 항목: {}", 
+                    userId, statistics.size());
+            
+            return statistics;
+            
+        } catch (Exception e) {
+            log.error("❌ [getHealthStatistics_healthloguse] 건강로그용 통계 조회 중 오류 발생 - 사용자: {}, 오류: {}", 
+                    userId, e.getMessage(), e);
+            
+            // 오류 시 기본값 반환
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("weeklyChestSets_healthloguse", 0);
+            fallback.put("weeklyBackSets_healthloguse", 0);
+            fallback.put("weeklyLegsSets_healthloguse", 0);
+            fallback.put("weeklyShouldersSets_healthloguse", 0);
+            fallback.put("weeklyArmsSets_healthloguse", 0);
+            fallback.put("weeklyAbsSets_healthloguse", 0);
+            fallback.put("weeklyCardioSets_healthloguse", 0);
+            fallback.put("weeklyTotalSets_healthloguse", 0);
+            fallback.put("error", "건강로그용 통계 조회 중 오류가 발생했습니다.");
+            
+            return fallback;
+        }
     }
 } 

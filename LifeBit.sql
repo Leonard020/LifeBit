@@ -97,6 +97,14 @@ CREATE TABLE user_goals (
 	weekly_arms INTEGER DEFAULT 0,
 	weekly_abs INTEGER DEFAULT 0,
 	weekly_cardio INTEGER DEFAULT 0,
+    weekly_workout_target_set INTEGER DEFAULT 3,
+	weekly_chest_set INTEGER DEFAULT 0,
+	weekly_back_set INTEGER DEFAULT 0,
+	weekly_legs_set INTEGER DEFAULT 0,
+	weekly_shoulders_set INTEGER DEFAULT 0,
+	weekly_arms_set INTEGER DEFAULT 0,
+	weekly_abs_set INTEGER DEFAULT 0,
+	weekly_cardio_set INTEGER DEFAULT 0,
     daily_carbs_target INTEGER DEFAULT 200,
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
@@ -474,47 +482,3 @@ CREATE TRIGGER user_ranking_tier_trigger
 BEFORE INSERT OR UPDATE ON user_ranking
 FOR EACH ROW
 EXECUTE FUNCTION update_user_tier();
-
--- ===================================================================
--- 트리거: 새 사용자 가입 시 기본 랭킹 레코드 자동 생성 (2025-06-30)
--- ===================================================================
-
--- 사용자 삽입 후 user_ranking 기본 값 생성 함수
-CREATE OR REPLACE FUNCTION create_user_ranking_row()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- 이미 랭킹 레코드가 존재하면 아무 작업 없이 종료
-    IF EXISTS (SELECT 1 FROM user_ranking WHERE user_id = NEW.user_id) THEN
-        RETURN NEW;
-    END IF;
-
-    INSERT INTO user_ranking (
-        user_id,
-        total_score,
-        streak_days,
-        rank_position,
-        previous_rank,
-        season,
-        is_active,
-        tier
-    ) VALUES (
-        NEW.user_id,
-        0,
-        0,
-        0,
-        0,
-        1,
-        TRUE,
-        'UNRANK'
-    );
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- 기존 트리거가 있으면 제거 후 재생성
-DROP TRIGGER IF EXISTS user_ranking_insert_trigger ON users;
-CREATE TRIGGER user_ranking_insert_trigger
-AFTER INSERT ON users
-FOR EACH ROW
-EXECUTE FUNCTION create_user_ranking_row();

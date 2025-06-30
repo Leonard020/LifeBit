@@ -1,10 +1,33 @@
 import React from 'react';
 import { useHealthStatistics, useUserGoals } from '../../api/auth';
+import { useQuery } from '@tanstack/react-query';
+import { API_CONFIG } from '../../config/env';
 
 interface GoalProgressProps {
   userId: string;
   period: 'day' | 'week' | 'month' | 'year';
 }
+
+// 건강로그용 세트 통계 API 호출 함수
+const fetchHealthlogSetsStatistics = async (userId: string) => {
+  const token = localStorage.getItem('accessToken');
+  if (!token) {
+    throw new Error('No token found');
+  }
+
+  const response = await fetch(`${API_CONFIG.BASE_URL}/api/health-statistics/${userId}/healthlog-sets`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch healthlog sets statistics');
+  }
+
+  return response.json();
+};
 
 export const GoalProgress: React.FC<GoalProgressProps> = ({
   userId,
@@ -14,8 +37,15 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
   const { data: userGoals, isLoading: goalsLoading } = useUserGoals(userId);
   const { data: healthStats, isLoading: statsLoading } = useHealthStatistics(userId, period);
   const { data: weeklyHealthStats, isLoading: weeklyStatsLoading } = useHealthStatistics(userId, 'week');
+  
+  // 건강로그용 세트 통계 데이터 가져오기 (기존 API와 분리)
+  const { data: healthlogSetsStats, isLoading: healthlogSetsLoading } = useQuery({
+    queryKey: ['healthlogSetsStatistics', userId],
+    queryFn: () => fetchHealthlogSetsStatistics(userId),
+    enabled: !!userId,
+  });
 
-  if (goalsLoading || statsLoading || weeklyStatsLoading) {
+  if (goalsLoading || statsLoading || weeklyStatsLoading || healthlogSetsLoading) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="animate-pulse">
@@ -132,6 +162,73 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
       color: 'cyan',
     },
   ].filter(goal => goal.target !== null); // 목표가 설정된 항목만 표시
+
+  // 세트 목표 데이터 (주간 기준, 세트 수) - 건강로그용 전용 API 사용
+  const setGoals = [
+    {
+      id: 'chest_set',
+      title: '가슴 운동 세트',
+      current: healthlogSetsStats?.weeklyChestSets_healthloguse || 0,
+      target: goalsData?.weekly_chest_set || null,
+      unit: '세트',
+      icon: '💪',
+      color: 'red',
+    },
+    {
+      id: 'back_set',
+      title: '등 운동 세트',
+      current: healthlogSetsStats?.weeklyBackSets_healthloguse || 0,
+      target: goalsData?.weekly_back_set || null,
+      unit: '세트',
+      icon: '🏋️‍♂️',
+      color: 'green',
+    },
+    {
+      id: 'legs_set',
+      title: '다리 운동 세트',
+      current: healthlogSetsStats?.weeklyLegsSets_healthloguse || 0,
+      target: goalsData?.weekly_legs_set || null,
+      unit: '세트',
+      icon: '🦵',
+      color: 'purple',
+    },
+    {
+      id: 'shoulders_set',
+      title: '어깨 운동 세트',
+      current: healthlogSetsStats?.weeklyShouldersSets_healthloguse || 0,
+      target: goalsData?.weekly_shoulders_set || null,
+      unit: '세트',
+      icon: '🤸‍♂️',
+      color: 'orange',
+    },
+    {
+      id: 'arms_set',
+      title: '팔 운동 세트',
+      current: healthlogSetsStats?.weeklyArmsSets_healthloguse || 0,
+      target: goalsData?.weekly_arms_set || null,
+      unit: '세트',
+      icon: '💪',
+      color: 'pink',
+    },
+    {
+      id: 'abs_set',
+      title: '복근 운동 세트',
+      current: healthlogSetsStats?.weeklyAbsSets_healthloguse || 0,
+      target: goalsData?.weekly_abs_set || null,
+      unit: '세트',
+      icon: '🏃‍♀️',
+      color: 'yellow',
+    },
+    {
+      id: 'cardio_set',
+      title: '유산소 운동 세트',
+      current: healthlogSetsStats?.weeklyCardioSets_healthloguse || 0,
+      target: goalsData?.weekly_cardio_set || null,
+      unit: '세트',
+      icon: '🏃',
+      color: 'cyan',
+    },
+  ].filter(goal => goal.target !== null && goal.target > 0); // 목표가 설정된 항목만 표시
 
   // 식단 목표 데이터 (일간 기준)
   const nutritionGoals = [
@@ -326,6 +423,79 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
         </div>
       )}
 
+      {/* 세트 목표 섹션 */}
+      {setGoals.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center mb-6">
+            <div className="text-2xl mr-3">🔢</div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">세트 목표 달성률</h3>
+              <p className="text-sm text-gray-600">이번 주 운동 세트 목표 달성 현황 (주간 기준)</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {setGoals.map((goal) => {
+              const progress = calculateProgress(goal.current, goal.target);
+              const status = getProgressStatus(progress);
+
+              return (
+                <div key={goal.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center">
+                      <span className="text-xl mr-2">{goal.icon}</span>
+                      <h4 className="font-medium text-gray-900">{goal.title}</h4>
+                    </div>
+                    <span className={`text-sm font-medium ${getProgressTextColor(goal.color)}`}>
+                      {status}
+                    </span>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="flex justify-between text-sm text-gray-600 mb-1">
+                      <span>진행률</span>
+                      <span>{progress.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${getProgressColor(goal.color)} transition-all duration-300`}
+                        style={{ width: `${progress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium text-gray-900">{goal.current}</span>
+                    <span> / {goal.target} {goal.unit}</span>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {goal.current >= (goal.target || 0) ? '목표 달성!' : `${(goal.target || 0) - goal.current} ${goal.unit} 남음`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 세트 목표 전체 달성률 */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium text-gray-900">세트 목표 전체 달성률</h4>
+                <p className="text-sm text-gray-600">설정된 세트 목표의 평균 달성률</p>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-purple-600">
+                  {calculateOverallProgress(setGoals)}%
+                </div>
+                <div className="text-sm text-gray-500">
+                  {getCompletedGoalsCount(setGoals)} / {setGoals.length} 목표 달성
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 식단 목표 섹션 */}
       {nutritionGoals.length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
@@ -400,7 +570,7 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
       )}
 
       {/* 목표가 설정되지 않은 경우 */}
-      {exerciseGoals.length === 0 && nutritionGoals.length === 0 && (
+      {exerciseGoals.length === 0 && setGoals.length === 0 && nutritionGoals.length === 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="text-center py-8 text-gray-500">
             <div className="text-4xl mb-4">🎯</div>

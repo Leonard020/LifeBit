@@ -152,18 +152,38 @@ public class ExerciseService {
     }
 
     /**
-     * 최근 7일간 운동 횟수 조회
+     * 주간 운동 횟수 조회 (일요일~토요일 기준)
      */
     public int getWeeklyExerciseCount(Long userId) {
-        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
         return sessions.size();
     }
 
     /**
-     * 최근 7일간 총 칼로리 소모량 조회
+     * 주간 총 칼로리 소모량 조회 (일요일~토요일 기준)
      */
     public int getWeeklyCaloriesBurned(Long userId) {
-        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
         return sessions.stream()
                 .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
                 .sum();
@@ -352,15 +372,25 @@ public class ExerciseService {
     }
 
     /**
-     * 주간 운동 부위별 운동 횟수 조회
+     * 주간 운동 부위별 운동 횟수 조회 (일요일~토요일 기준)
      */
     public Map<String, Integer> getWeeklyBodyPartCounts(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        log.info("🗓️ [getWeeklyBodyPartCounts] 주별 운동 부위별 빈도 조회 - 사용자: {}, 기간: {} ~ {} (오늘: {})", 
+                userId, startDate, endDate, today);
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
+        
+        log.info("📊 [getWeeklyBodyPartCounts] 조회된 운동 세션 수: {}", sessions.size());
         
         Map<String, Integer> bodyPartCounts = new HashMap<>();
         bodyPartCounts.put("CHEST", 0);
@@ -386,6 +416,7 @@ public class ExerciseService {
             }
         }
         
+        log.info("✅ [getWeeklyBodyPartCounts] 결과: {}", bodyPartCounts);
         return bodyPartCounts;
     }
 
@@ -439,11 +470,16 @@ public class ExerciseService {
     }
 
     /**
-     * 주간 운동 부위별 운동 시간(분) 조회
+     * 주간 운동 부위별 운동 시간(분) 조회 (일요일~토요일 기준)
      */
     public Map<String, Integer> getWeeklyBodyPartMinutes(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
@@ -478,11 +514,16 @@ public class ExerciseService {
     }
 
     /**
-     * 주간 총 운동 세트 수 계산 (weekly_workout_target 비교용)
+     * 주간 총 운동 세트 수 계산 (weekly_workout_target 비교용, 일요일~토요일 기준)
      */
     public int getWeeklyTotalSets(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
@@ -499,11 +540,16 @@ public class ExerciseService {
     }
 
     /**
-     * 주간 부위별 운동 세트 수 계산
+     * 주간 부위별 운동 세트 수 계산 (일요일~토요일 기준)
      */
     public Map<String, Integer> getWeeklyBodyPartSets(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
@@ -545,5 +591,118 @@ public class ExerciseService {
     // 관리자 페이지에서 운동 카탈로그 조회
     public List<ExerciseCatalog> getAllCatalogs() {
         return exerciseCatalogRepository.findAll();
+    }
+
+    // ==================================================================================
+    // 건강로그 페이지 전용 세트 계산 메서드들 (기존 로직과 분리)
+    // ==================================================================================
+
+    /**
+     * 건강로그용 - 주간 운동 부위별 세트 수 계산 (일요일~토요일 기준)
+     */
+    public Map<String, Integer> getWeeklyBodyPartSets_healthloguse(Long userId) {
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        log.info("🗓️ [getWeeklyBodyPartSets_healthloguse] 건강로그용 주별 운동 부위별 세트 수 조회 - 사용자: {}, 기간: {} ~ {} (오늘: {})", 
+                userId, startDate, endDate, today);
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
+        
+        log.info("📊 [getWeeklyBodyPartSets_healthloguse] 조회된 운동 세션 수: {}", sessions.size());
+        
+        Map<String, Integer> bodyPartSets = new HashMap<>();
+        bodyPartSets.put("CHEST", 0);
+        bodyPartSets.put("BACK", 0);
+        bodyPartSets.put("LEGS", 0);
+        bodyPartSets.put("SHOULDERS", 0);
+        bodyPartSets.put("ARMS", 0);
+        bodyPartSets.put("ABS", 0);
+        bodyPartSets.put("CARDIO", 0);
+        
+        for (ExerciseSession session : sessions) {
+            String bodyPart = null;
+            if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            } else if (session.getNotes() != null) {
+                String note = session.getNotes().toLowerCase();
+                if (note.contains("조깅") || note.contains("달리기") || note.contains("런닝") || note.contains("걷기") || note.contains("run")) {
+                    bodyPart = "CARDIO";
+                }
+            }
+            
+            if (bodyPart != null) {
+                Integer sets = session.getSets();
+                int setsToAdd = (sets != null && sets > 0) ? sets : 1; // 세트 수가 없으면 1세트로 간주
+                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + setsToAdd);
+            }
+        }
+        
+        log.info("✅ [getWeeklyBodyPartSets_healthloguse] 결과: {}", bodyPartSets);
+        return bodyPartSets;
+    }
+
+    /**
+     * 건강로그용 - 주간 가슴 운동 세트 수 조회
+     */
+    public int getWeeklyChestSets_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("CHEST", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 등 운동 세트 수 조회
+     */
+    public int getWeeklyBackSets_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("BACK", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 다리 운동 세트 수 조회
+     */
+    public int getWeeklyLegsSets_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("LEGS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 어깨 운동 세트 수 조회
+     */
+    public int getWeeklyShouldersSet_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("SHOULDERS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 팔 운동 세트 수 조회
+     */
+    public int getWeeklyArmsSets_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("ARMS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 복근 운동 세트 수 조회
+     */
+    public int getWeeklyAbsSets_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("ABS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 유산소 운동 세트 수 조회
+     */
+    public int getWeeklyCardioSets_healthloguse(Long userId) {
+        return getWeeklyBodyPartSets_healthloguse(userId).getOrDefault("CARDIO", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 총 운동 세트 수 계산
+     */
+    public int getWeeklyTotalSets_healthloguse(Long userId) {
+        Map<String, Integer> bodyPartSets = getWeeklyBodyPartSets_healthloguse(userId);
+        return bodyPartSets.values().stream().mapToInt(Integer::intValue).sum();
     }
 }

@@ -374,4 +374,66 @@ public class HealthStatisticsController {
     // 프론트엔드에서는 각각의 전용 엔드포인트를 사용하세요.
     // ============================================================================
 
+    /**
+     * 건강로그 페이지 전용 - 주간 운동 부위별 세트 수 통계 조회
+     * 기존 통계 API와 충돌하지 않는 별도 엔드포인트
+     */
+    @GetMapping("/{userId}/healthlog-sets")
+    public ResponseEntity<Map<String, Object>> getHealthlogSetsStatistics(
+            @PathVariable Long userId,
+            HttpServletRequest request) {
+        
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
+            }
+            
+            // ✅ 건강로그용 세트 통계 조회 (기존 API와 분리된 메서드 사용)
+            Map<String, Object> statistics = healthStatisticsService.getHealthStatistics_healthloguse(tokenUserId);
+            
+            log.info("건강로그용 세트 통계 조회 완료 - 사용자: {}, 데이터 항목: {}", tokenUserId, statistics.size());
+            
+            return ResponseEntity.ok(statistics);
+            
+        } catch (RuntimeException e) {
+            log.error("건강로그용 세트 통계 조회 중 오류 발생 - 사용자: {}, 오류: {}", userId, e.getMessage());
+            
+            // 오류 시 기본값 반환
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("weeklyChestSets_healthloguse", 0);
+            fallback.put("weeklyBackSets_healthloguse", 0);
+            fallback.put("weeklyLegsSets_healthloguse", 0);
+            fallback.put("weeklyShouldersSets_healthloguse", 0);
+            fallback.put("weeklyArmsSets_healthloguse", 0);
+            fallback.put("weeklyAbsSets_healthloguse", 0);
+            fallback.put("weeklyCardioSets_healthloguse", 0);
+            fallback.put("weeklyTotalSets_healthloguse", 0);
+            fallback.put("error", "건강로그용 통계 조회 중 오류가 발생했습니다.");
+            
+            return ResponseEntity.ok(fallback);
+            
+        } catch (Exception e) {
+            log.error("건강로그용 세트 통계 조회 중 예상치 못한 오류 발생 - 사용자: {}", userId, e);
+            
+            // 예상치 못한 오류에 대한 안전한 응답
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("weeklyChestSets_healthloguse", 0);
+            fallback.put("weeklyBackSets_healthloguse", 0);
+            fallback.put("weeklyLegsSets_healthloguse", 0);
+            fallback.put("weeklyShouldersSets_healthloguse", 0);
+            fallback.put("weeklyArmsSets_healthloguse", 0);
+            fallback.put("weeklyAbsSets_healthloguse", 0);
+            fallback.put("weeklyCardioSets_healthloguse", 0);
+            fallback.put("weeklyTotalSets_healthloguse", 0);
+            fallback.put("error", "서버 오류가 발생했습니다. 관리자에게 문의해주세요.");
+            
+            return ResponseEntity.ok(fallback);
+        }
+    }
+
 } 
