@@ -128,6 +128,49 @@ const ThemeSettings: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* 저장/취소 버튼 (Card로 감싸기) */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {hasUnsavedChanges && (
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                  변경사항이 있습니다
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                className="flex items-center gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                기본값
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                disabled={!hasUnsavedChanges}
+                className="flex items-center gap-2"
+              >
+                <X className="h-4 w-4" />
+                취소
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={!hasUnsavedChanges}
+                className="flex items-center gap-2"
+              >
+                <Save className="h-4 w-4" />
+                저장
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

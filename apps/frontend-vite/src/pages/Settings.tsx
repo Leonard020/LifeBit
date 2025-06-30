@@ -42,7 +42,7 @@ const Settings: React.FC = () => {
     <Layout>
       <div className="container mx-auto px-4 py-8 pb-24">
         <h1 className="text-2xl font-bold mb-6">환경설정</h1>
-        <Tabs defaultValue="theme" className="w-full max-w-6xl mx-auto">
+        <Tabs defaultValue="notification" className="w-full max-w-6xl mx-auto">
           <TabsList className="flex w-full flex-wrap gap-2 p-2 justify-center bg-background/50 backdrop-blur-sm">
             {tabItems.map((tab) => (
               <TabsTrigger 
@@ -60,6 +60,7 @@ const Settings: React.FC = () => {
             ))}
           </TabsList>
           
+          <div className="mt-10" />
           <TabsContent value="theme" className="mt-6">
             <ThemeSettings />
           </TabsContent>
