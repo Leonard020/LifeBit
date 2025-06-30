@@ -19,6 +19,7 @@ import Ranking from './pages/Ranking';
 import NotFound from './pages/NotFound';
 import SocialRedirect from './pages/SocialRedirect';
 import { AuthProvider } from './AuthContext'; // ← 이 줄 추가
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AdminPage } from './pages/AdminPage';
 import UserInfo from './pages/UserInfo';
 import { API_CONFIG } from './config/env';
@@ -115,37 +116,39 @@ const ServerStatus = () => {
 const queryClient = new QueryClient();
 
 const App = () => (
-  <AuthProvider>
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/note" element={<Note />} />
-          <Route path="/healthlog" element={<HealthLog />} />
-          <Route path="/ranking" element={<Ranking />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/userinfo" element={<UserInfo />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<NotFound />} />
-          <Route path="/auth/social-redirect" element={<SocialRedirect />} />
+  <ThemeProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/note" element={<Note />} />
+              <Route path="/healthlog" element={<HealthLog />} />
+              <Route path="/ranking" element={<Ranking />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/userinfo" element={<UserInfo />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+              <Route path="/auth/social-redirect" element={<SocialRedirect />} />
 
-        </Routes>
-      </BrowserRouter>
+            </Routes>
+          </BrowserRouter>
 
-      {/* ============================================================ */}
-      {/* [개발용 서버 상태 확인] - 추후 이 라인을 삭제하면 됩니다.       */}
-      <ServerStatus />
-      {/* ============================================================ */}
+          {/* ============================================================ */}
+          {/* [개발용 서버 상태 확인] - 추후 이 라인을 삭제하면 됩니다.       */}
+          <ServerStatus />
+          {/* ============================================================ */}
 
-    </TooltipProvider>
-  </QueryClientProvider>
-  </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </AuthProvider>
+  </ThemeProvider>
 );
 
 export default App;

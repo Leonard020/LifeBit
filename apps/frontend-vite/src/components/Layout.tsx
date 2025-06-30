@@ -28,6 +28,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
 import { isAdmin, removeToken } from '@/utils/auth'; // ✅ removeToken 추가
+import { useTheme } from '@/contexts/ThemeContext';
 import NotificationBell from '@/components/NotificationBell';
 
 interface LayoutProps {
@@ -38,7 +39,7 @@ const WebHeader = () => {
   const { toast } = useToast();
   const { isLoggedIn, nickname, setIsLoggedIn, setNickname } = useAuth();
   const { open: sidebarOpen } = useSidebar();
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   const handleLogout = () => {
     removeToken(); // 모든 토큰과 사용자 정보 삭제
@@ -50,11 +51,6 @@ const WebHeader = () => {
     });
 
     window.location.href = '/login'
-  };
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle('dark');
   };
 
   return (
@@ -145,15 +141,10 @@ const WebHeader = () => {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const isMobile = useIsMobile();
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [isNavVisible, setIsNavVisible] = useState(true);
   const { isLoggedIn, setIsLoggedIn, setNickname } = useAuth();
   const { toast } = useToast();
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle('dark');
-  };
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   const toggleNavVisibility = () => {
     setIsNavVisible(!isNavVisible);

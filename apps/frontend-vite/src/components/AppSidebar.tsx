@@ -19,11 +19,11 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Switch } from '@/components/ui/switch';
-import React, { useState } from 'react';
+import React from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export const AppSidebar = () => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const toggleDarkMode = () => setIsDarkMode((prev) => !prev);
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   const navItems = [
     { to: '/note', icon: FileText, label: '노트' },

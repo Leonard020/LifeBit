@@ -54,6 +54,15 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* 폰트 크기 변수 */
+    --font-size-base: 21px;
+    --font-size-lg: 24px;
+    --font-size-xl: 28px;
+
+    /* 컬러 스킴 변수 */
+    --primary-hue: 222.2;
+    --primary-saturation: 47.4%;
   }
 
   .dark {
@@ -102,6 +111,69 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    /* 폰트 크기 변수 */
+    --font-size-base: 21px;
+    --font-size-lg: 24px;
+    --font-size-xl: 28px;
+
+    /* 컬러 스킴 변수 */
+    --primary-hue: 222.2;
+    --primary-saturation: 47.4%;
+  }
+
+  /* 컬러 스킴별 스타일 */
+  [data-color-scheme="blue"] {
+    --primary: hsl(210 100% 50%);
+    --primary-foreground: hsl(210 40% 98%);
+  }
+
+  [data-color-scheme="green"] {
+    --primary: hsl(142 76% 36%);
+    --primary-foreground: hsl(142 40% 98%);
+  }
+
+  [data-color-scheme="purple"] {
+    --primary: hsl(262 83% 58%);
+    --primary-foreground: hsl(262 40% 98%);
+  }
+
+  [data-color-scheme="orange"] {
+    --primary: hsl(25 95% 53%);
+    --primary-foreground: hsl(25 40% 98%);
+  }
+
+  /* 다크모드에서 컬러 스킴 적용 */
+  .dark[data-color-scheme="blue"] {
+    --primary: hsl(210 100% 70%);
+    --primary-foreground: hsl(210 40% 10%);
+  }
+
+  .dark[data-color-scheme="green"] {
+    --primary: hsl(142 76% 60%);
+    --primary-foreground: hsl(142 40% 10%);
+  }
+
+  .dark[data-color-scheme="purple"] {
+    --primary: hsl(262 83% 70%);
+    --primary-foreground: hsl(262 40% 10%);
+  }
+
+  .dark[data-color-scheme="orange"] {
+    --primary: hsl(25 95% 65%);
+    --primary-foreground: hsl(25 40% 10%);
+  }
+
+  /* 접근성 설정 */
+  [data-high-contrast="true"] {
+    --border: 0 0% 0%;
+    --muted-foreground: 0 0% 0%;
+  }
+
+  [data-reduce-motion="true"] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -112,6 +184,19 @@
 
   body {
     @apply bg-background text-foreground;
+    font-size: var(--font-size-base);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-size: var(--font-size-lg);
+  }
+
+  .text-lg {
+    font-size: var(--font-size-lg);
+  }
+
+  .text-xl {
+    font-size: var(--font-size-xl);
   }
 }
 
@@ -180,5 +265,40 @@
   
   .clip-path-tail-left {
     clip-path: polygon(0% 100%, 100% 0%, 100% 100%);
+  }
+
+  /* 탭 호버 효과 */
+  .settings-tab-hover {
+    position: relative;
+    overflow: hidden;
+    min-width: 80px;
+  }
+
+  .settings-tab-hover::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+
+  .settings-tab-hover:hover::before {
+    left: 100%;
+  }
+
+  /* 탭 텍스트 가독성 개선 */
+  .settings-tab-text {
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    z-index: 1;
+  }
+
+  /* 탭 아이콘 정렬 */
+  .settings-tab-icon {
+    z-index: 2;
+    pointer-events: none;
   }
 }
