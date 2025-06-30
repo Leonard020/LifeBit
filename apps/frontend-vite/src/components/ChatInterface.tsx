@@ -291,9 +291,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   if (!recordType) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <p className="text-lg font-medium mb-2">운동 또는 식단 기록을 시작하려면</p>
-        <p>상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</p>
+      <div className="text-center p-8 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
+        <div className="text-lg font-medium text-gray-800 dark:text-[#e0e6f8] mb-2">운동 또는 식단 기록을 시작하려면</div>
+        <div className="text-gray-600 dark:text-[#b3b8d8]">상단의 '운동 기록' 또는 '식단 기록' 버튼을 클릭해주세요.</div>
       </div>
     );
   }
