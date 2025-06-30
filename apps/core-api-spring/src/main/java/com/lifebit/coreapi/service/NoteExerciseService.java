@@ -110,9 +110,19 @@ public class NoteExerciseService {
 
         // 🔸 기본 필드 설정
         session.setExerciseDate(dto.getExerciseDate());
-        session.setSets(dto.getSets());
-        session.setReps(dto.getReps());
-        session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
+        
+        // ✅ 유산소 운동(cardio)인 경우 set=1로 고정
+        if (catalog.getBodyPart() == com.lifebit.coreapi.entity.BodyPartType.cardio) {
+            session.setSets(1); // 유산소 운동은 항상 1 set
+            session.setReps(null); // 유산소 운동은 반복횟수 없음
+            session.setWeight(null); // 유산소 운동은 중량 없음
+            System.out.println("✅ 유산소 운동(" + catalog.getName() + ") - set=1로 자동 설정");
+        } else {
+            session.setSets(dto.getSets());
+            session.setReps(dto.getReps());
+            session.setWeight(dto.getWeight() != null ? BigDecimal.valueOf(dto.getWeight()) : null);
+        }
+        
         session.setDurationMinutes(dto.getDurationMinutes());
 
         // ✅ 저장
