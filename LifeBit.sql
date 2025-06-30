@@ -482,3 +482,223 @@ CREATE TRIGGER user_ranking_tier_trigger
 BEFORE INSERT OR UPDATE ON user_ranking
 FOR EACH ROW
 EXECUTE FUNCTION update_user_tier();
+
+-- ranking_notifications
+CREATE TABLE ranking_notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ranking_notifications_user ON ranking_notifications(user_id);
+
+-- ===================================================================
+-- INITIAL DATA INSERTIONS
+-- ===================================================================
+
+-- 기본 업적 데이터 삽입 (50개 - 체계적인 업적 시스템)
+INSERT INTO achievements (title, description, badge_type, target_days, is_active, created_at, uuid) VALUES
+-- 브론즈 업적 (15개) - 초급자용
+('첫 걸음', '첫 번째 운동 기록', 'FIRST_LOGIN', 1, true, NOW(), gen_random_uuid()),
+('주간 전사', '연속 7일 운동', 'STREAK_7', 7, true, NOW(), gen_random_uuid()),
+('운동 초보자', '10번 운동 완료', 'WORKOUT_GOAL', 10, true, NOW(), gen_random_uuid()),
+('식단 시작', '첫 번째 식단 기록', 'NUTRITION_GOAL', 1, true, NOW(), gen_random_uuid()),
+('꾸준함의 시작', '연속 3일 운동', 'STREAK_7', 3, true, NOW(), gen_random_uuid()),
+('아침 운동러', '아침 운동 5회 완료', 'WORKOUT_GOAL', 5, true, NOW(), gen_random_uuid()),
+('저녁 운동러', '저녁 운동 5회 완료', 'WORKOUT_GOAL', 5, true, NOW(), gen_random_uuid()),
+('주말 전사', '주말 운동 3회 완료', 'WORKOUT_GOAL', 3, true, NOW(), gen_random_uuid()),
+('유산소 초보자', '유산소 운동 5회 완료', 'WORKOUT_GOAL', 5, true, NOW(), gen_random_uuid()),
+('근력 초보자', '근력 운동 5회 완료', 'WORKOUT_GOAL', 5, true, NOW(), gen_random_uuid()),
+('식단 기록자', '식단 기록 7일 완료', 'NUTRITION_GOAL', 7, true, NOW(), gen_random_uuid()),
+('목표 설정자', '운동 목표 설정 완료', 'WORKOUT_GOAL', 1, true, NOW(), gen_random_uuid()),
+('체중 관리자', '체중 기록 5회 완료', 'WEIGHT_GOAL', 5, true, NOW(), gen_random_uuid()),
+('운동 다양성', '3가지 다른 운동 완료', 'WORKOUT_GOAL', 3, true, NOW(), gen_random_uuid()),
+('건강한 하루', '하루 운동+식단 기록', 'PERFECT_WEEK', 1, true, NOW(), gen_random_uuid()),
+
+-- 실버 업적 (15개) - 중급자용
+('2주 챌린지', '연속 14일 운동', 'STREAK_30', 14, true, NOW(), gen_random_uuid()),
+('월간 마스터', '연속 30일 운동', 'STREAK_30', 30, true, NOW(), gen_random_uuid()),
+('운동 애호가', '총 50회 운동 완료', 'WORKOUT_GOAL', 50, true, NOW(), gen_random_uuid()),
+('식단 전문가', '연속 14일 식단 기록', 'NUTRITION_GOAL', 14, true, NOW(), gen_random_uuid()),
+('체중 감량 성공', '체중 3kg 감량 달성', 'WEIGHT_GOAL', 30, true, NOW(), gen_random_uuid()),
+('근력 향상자', '근력 운동 30회 완료', 'WORKOUT_GOAL', 30, true, NOW(), gen_random_uuid()),
+('유산소 매니아', '유산소 운동 30회 완료', 'WORKOUT_GOAL', 30, true, NOW(), gen_random_uuid()),
+('아침형 인간', '아침 운동 20회 완료', 'WORKOUT_GOAL', 20, true, NOW(), gen_random_uuid()),
+('저녁 루틴 마스터', '저녁 운동 20회 완료', 'WORKOUT_GOAL', 20, true, NOW(), gen_random_uuid()),
+('주말 활동가', '주말 운동 10회 완료', 'WORKOUT_GOAL', 10, true, NOW(), gen_random_uuid()),
+('균형 식단', '균형 식단 14일 유지', 'NUTRITION_GOAL', 14, true, NOW(), gen_random_uuid()),
+('칼로리 버너', '총 10000kcal 소모', 'WORKOUT_GOAL', 30, true, NOW(), gen_random_uuid()),
+('체중 관리 전문가', '체중 기록 30회 완료', 'WEIGHT_GOAL', 30, true, NOW(), gen_random_uuid()),
+('운동 전문가', '5가지 다른 운동 완료', 'WORKOUT_GOAL', 5, true, NOW(), gen_random_uuid()),
+('건강한 생활', '30일 연속 건강관리', 'PERFECT_WEEK', 30, true, NOW(), gen_random_uuid()),
+
+-- 골드 업적 (15개) - 고급자용
+('3개월 챌린지', '연속 90일 운동', 'STREAK_100', 90, true, NOW(), gen_random_uuid()),
+('100회 돌파', '총 100회 운동 완료', 'WORKOUT_GOAL', 100, true, NOW(), gen_random_uuid()),
+('체중 관리 마스터', '목표 체중 달성', 'WEIGHT_GOAL', 60, true, NOW(), gen_random_uuid()),
+('근력 킹', '근력 운동 60회 완료', 'WORKOUT_GOAL', 60, true, NOW(), gen_random_uuid()),
+('유산소 킹', '유산소 운동 60회 완료', 'WORKOUT_GOAL', 60, true, NOW(), gen_random_uuid()),
+('식단 완벽주의자', '연속 60일 식단 기록', 'NUTRITION_GOAL', 60, true, NOW(), gen_random_uuid()),
+('아침 운동 마스터', '아침 운동 50회 완료', 'WORKOUT_GOAL', 50, true, NOW(), gen_random_uuid()),
+('저녁 운동 전문가', '저녁 운동 50회 완료', 'WORKOUT_GOAL', 50, true, NOW(), gen_random_uuid()),
+('주말 운동 킹', '주말 운동 30회 완료', 'WORKOUT_GOAL', 30, true, NOW(), gen_random_uuid()),
+('칼로리 소모 킹', '총 30000kcal 소모', 'WORKOUT_GOAL', 90, true, NOW(), gen_random_uuid()),
+('운동 올라운더', '10가지 다른 운동 완료', 'WORKOUT_GOAL', 10, true, NOW(), gen_random_uuid()),
+('체중 변화 추적자', '체중 기록 90회 완료', 'WEIGHT_GOAL', 90, true, NOW(), gen_random_uuid()),
+('건강 생활 마스터', '90일 연속 건강관리', 'PERFECT_WEEK', 90, true, NOW(), gen_random_uuid()),
+('목표 달성자', '모든 목표 달성', 'WORKOUT_GOAL', 90, true, NOW(), gen_random_uuid()),
+('피트니스 구루', '총 50시간 운동 완료', 'WORKOUT_GOAL', 90, true, NOW(), gen_random_uuid()),
+
+-- 플래티넘 업적 (5개) - 최고급자용
+('6개월 레전드', '연속 180일 운동', 'STREAK_100', 180, true, NOW(), gen_random_uuid()),
+('운동 매니아', '총 500회 운동 완료', 'WORKOUT_GOAL', 500, true, NOW(), gen_random_uuid()),
+('완벽한 변화', '목표 체중 6개월 유지', 'WEIGHT_GOAL', 180, true, NOW(), gen_random_uuid()),
+('칼로리 소모 레전드', '총 100000kcal 소모', 'WORKOUT_GOAL', 180, true, NOW(), gen_random_uuid()),
+('건강 생활 레전드', '180일 연속 완벽 관리', 'PERFECT_WEEK', 180, true, NOW(), gen_random_uuid())
+ON CONFLICT DO NOTHING;
+
+-- 기본 운동 카탈로그 데이터 삽입 (50개 - 다양한 운동 종류)
+INSERT INTO exercise_catalog (name, exercise_type, body_part, description, intensity, created_at, uuid) VALUES
+-- 가슴 운동 (8개)
+('벤치프레스', 'strength', 'chest', '가슴 운동의 대표적인 기본 운동', 'high', NOW(), gen_random_uuid()),
+('인클라인 벤치프레스', 'strength', 'chest', '상부 가슴을 집중적으로 단련하는 운동', 'high', NOW(), gen_random_uuid()),
+('디클라인 벤치프레스', 'strength', 'chest', '하부 가슴을 집중적으로 단련하는 운동', 'high', NOW(), gen_random_uuid()),
+('덤벨 플라이', 'strength', 'chest', '가슴 근육 확장을 위한 운동', 'medium', NOW(), gen_random_uuid()),
+('딥스', 'strength', 'chest', '자체 체중을 이용한 가슴 운동', 'medium', NOW(), gen_random_uuid()),
+('푸시업', 'strength', 'chest', '기본적인 자체 체중 가슴 운동', 'low', NOW(), gen_random_uuid()),
+('케이블 크로스오버', 'strength', 'chest', '케이블을 이용한 가슴 운동', 'medium', NOW(), gen_random_uuid()),
+('펙 덱 플라이', 'strength', 'chest', '머신을 이용한 가슴 운동', 'medium', NOW(), gen_random_uuid()),
+
+-- 등 운동 (8개)
+('데드리프트', 'strength', 'back', '전신 근력 향상을 위한 복합 운동', 'high', NOW(), gen_random_uuid()),
+('풀업', 'strength', 'back', '자체 체중을 이용한 등 운동', 'high', NOW(), gen_random_uuid()),
+('랫 풀다운', 'strength', 'back', '머신을 이용한 등 운동', 'medium', NOW(), gen_random_uuid()),
+('시티드 로우', 'strength', 'back', '앉은 자세에서 하는 등 운동', 'medium', NOW(), gen_random_uuid()),
+('바벨 로우', 'strength', 'back', '바벨을 이용한 등 운동', 'high', NOW(), gen_random_uuid()),
+('티바 로우', 'strength', 'back', '티바를 이용한 등 운동', 'medium', NOW(), gen_random_uuid()),
+('원암 덤벨 로우', 'strength', 'back', '한 팔씩 하는 덤벨 등 운동', 'medium', NOW(), gen_random_uuid()),
+('케이블 로우', 'strength', 'back', '케이블을 이용한 등 운동', 'medium', NOW(), gen_random_uuid()),
+
+-- 하체 운동 (12개)
+('스쿼트', 'strength', 'legs', '하체 운동의 기본이 되는 복합 운동', 'high', NOW(), gen_random_uuid()),
+('프론트 스쿼트', 'strength', 'legs', '앞쪽에 무게를 두고 하는 스쿼트', 'high', NOW(), gen_random_uuid()),
+('레그 프레스', 'strength', 'legs', '머신을 이용한 하체 운동', 'high', NOW(), gen_random_uuid()),
+('런지', 'strength', 'legs', '한 다리씩 하는 하체 운동', 'medium', NOW(), gen_random_uuid()),
+('불가리안 스플릿 스쿼트', 'strength', 'legs', '한 다리 집중 하체 운동', 'medium', NOW(), gen_random_uuid()),
+('레그 컬', 'strength', 'legs', '햄스트링 집중 운동', 'medium', NOW(), gen_random_uuid()),
+('레그 익스텐션', 'strength', 'legs', '대퇴사두근 집중 운동', 'medium', NOW(), gen_random_uuid()),
+('카프 레이즈', 'strength', 'legs', '종아리 근육 운동', 'low', NOW(), gen_random_uuid()),
+('힙 쓰러스트', 'strength', 'legs', '둔근 집중 운동', 'medium', NOW(), gen_random_uuid()),
+('워킹 런지', 'strength', 'legs', '이동하면서 하는 런지 운동', 'medium', NOW(), gen_random_uuid()),
+('점프 스쿼트', 'cardio', 'legs', '하체 근력과 심폐기능을 기르는 운동', 'high', NOW(), gen_random_uuid()),
+('사이드 런지', 'strength', 'legs', '측면으로 하는 런지 운동', 'medium', NOW(), gen_random_uuid()),
+
+-- 어깨 운동 (8개)
+('숄더 프레스', 'strength', 'shoulders', '전체 어깨 근육을 위한 운동', 'medium', NOW(), gen_random_uuid()),
+('사이드 레터럴 레이즈', 'strength', 'shoulders', '어깨 측면 근육 운동', 'low', NOW(), gen_random_uuid()),
+('프론트 레이즈', 'strength', 'shoulders', '어깨 앞쪽 근육 운동', 'low', NOW(), gen_random_uuid()),
+('리어 델트 플라이', 'strength', 'shoulders', '어깨 뒷쪽 근육 운동', 'low', NOW(), gen_random_uuid()),
+('업라이트 로우', 'strength', 'shoulders', '수직으로 당기는 어깨 운동', 'medium', NOW(), gen_random_uuid()),
+('아놀드 프레스', 'strength', 'shoulders', '아놀드 스타일 어깨 운동', 'medium', NOW(), gen_random_uuid()),
+('케이블 사이드 레터럴', 'strength', 'shoulders', '케이블을 이용한 어깨 측면 운동', 'low', NOW(), gen_random_uuid()),
+('밀리터리 프레스', 'strength', 'shoulders', '서서 하는 어깨 프레스', 'high', NOW(), gen_random_uuid()),
+
+-- 팔 운동 (6개)
+('바이셉 컬', 'strength', 'arms', '이두근 집중 운동', 'low', NOW(), gen_random_uuid()),
+('해머 컬', 'strength', 'arms', '해머 그립으로 하는 이두근 운동', 'low', NOW(), gen_random_uuid()),
+('트라이셉 익스텐션', 'strength', 'arms', '삼두근 집중 운동', 'low', NOW(), gen_random_uuid()),
+('트라이셉 딥스', 'strength', 'arms', '자체 체중을 이용한 삼두근 운동', 'medium', NOW(), gen_random_uuid()),
+('클로즈 그립 벤치프레스', 'strength', 'arms', '좁은 손 간격으로 하는 삼두근 운동', 'medium', NOW(), gen_random_uuid()),
+('케이블 트라이셉 푸시다운', 'strength', 'arms', '케이블을 이용한 삼두근 운동', 'low', NOW(), gen_random_uuid()),
+
+-- 복근 운동 (5개)
+('플랭크', 'strength', 'abs', '코어 강화를 위한 기본 운동', 'medium', NOW(), gen_random_uuid()),
+('크런치', 'strength', 'abs', '복직근 집중 운동', 'low', NOW(), gen_random_uuid()),
+('레그 레이즈', 'strength', 'abs', '하복부 집중 운동', 'medium', NOW(), gen_random_uuid()),
+('러시안 트위스트', 'strength', 'abs', '복사근 집중 운동', 'medium', NOW(), gen_random_uuid()),
+('마운틴 클라이머', 'strength', 'abs', '전신 코어 운동', 'high', NOW(), gen_random_uuid()),
+
+-- 유산소 운동 (5개)
+('러닝', 'aerobic', 'cardio', '달리기 유산소 운동', 'high', NOW(), gen_random_uuid()),
+('사이클링', 'aerobic', 'cardio', '자전거 유산소 운동', 'medium', NOW(), gen_random_uuid()),
+('로잉', 'aerobic', 'cardio', '로잉 머신 유산소 운동', 'high', NOW(), gen_random_uuid()),
+('일립티컬', 'aerobic', 'cardio', '일립티컬 머신 유산소 운동', 'medium', NOW(), gen_random_uuid()),
+('스테어 클라이머', 'aerobic', 'cardio', '계단 오르기 유산소 운동', 'high', NOW(), gen_random_uuid())
+ON CONFLICT DO NOTHING;
+
+-- 기본 음식 데이터 삽입 (50개 - 한국 음식 중심, 영양소 정보 포함)
+INSERT INTO food_items (food_code, name, serving_size, calories, carbs, protein, fat, created_at, uuid) VALUES
+-- 주식류 (10개)
+('F001', '현미밥', 100.0, 350.0, 73.0, 7.0, 2.5, NOW(), gen_random_uuid()),
+('F002', '백미밥', 100.0, 365.0, 80.0, 6.5, 1.0, NOW(), gen_random_uuid()),
+('F003', '잡곡밥', 100.0, 340.0, 70.0, 8.0, 3.0, NOW(), gen_random_uuid()),
+('F004', '귀리밥', 100.0, 380.0, 66.0, 12.0, 6.0, NOW(), gen_random_uuid()),
+('F005', '보리밥', 100.0, 325.0, 69.0, 8.5, 2.0, NOW(), gen_random_uuid()),
+('F006', '김밥', 150.0, 280.0, 45.0, 8.0, 7.0, NOW(), gen_random_uuid()),
+('F007', '볶음밥', 200.0, 420.0, 55.0, 12.0, 15.0, NOW(), gen_random_uuid()),
+('F008', '비빔밥', 300.0, 480.0, 65.0, 18.0, 12.0, NOW(), gen_random_uuid()),
+('F009', '덮밥', 250.0, 450.0, 60.0, 20.0, 10.0, NOW(), gen_random_uuid()),
+('F010', '주먹밥', 120.0, 320.0, 58.0, 7.0, 5.0, NOW(), gen_random_uuid()),
+
+-- 단백질류 (12개)
+('F011', '닭가슴살', 100.0, 165.0, 0.0, 31.0, 3.6, NOW(), gen_random_uuid()),
+('F012', '닭다리살', 100.0, 205.0, 0.0, 26.0, 11.0, NOW(), gen_random_uuid()),
+('F013', '소고기 등심', 100.0, 250.0, 0.0, 26.0, 15.0, NOW(), gen_random_uuid()),
+('F014', '돼지고기 등심', 100.0, 280.0, 0.0, 22.0, 20.0, NOW(), gen_random_uuid()),
+('F015', '연어', 100.0, 208.0, 0.0, 25.0, 12.0, NOW(), gen_random_uuid()),
+('F016', '고등어', 100.0, 190.0, 0.0, 25.0, 12.0, NOW(), gen_random_uuid()),
+('F017', '계란', 50.0, 78.0, 0.6, 6.3, 5.3, NOW(), gen_random_uuid()),
+('F018', '두부', 100.0, 84.0, 2.0, 8.0, 5.0, NOW(), gen_random_uuid()),
+('F019', '콩', 100.0, 350.0, 30.0, 35.0, 18.0, NOW(), gen_random_uuid()),
+('F020', '아몬드', 30.0, 174.0, 6.1, 6.4, 15.0, NOW(), gen_random_uuid()),
+('F021', '호두', 30.0, 196.0, 4.1, 4.6, 19.6, NOW(), gen_random_uuid()),
+('F022', '참치캔', 100.0, 132.0, 0.0, 29.0, 1.0, NOW(), gen_random_uuid()),
+
+-- 채소류 (15개)
+('F023', '시금치', 100.0, 23.0, 3.6, 2.9, 0.4, NOW(), gen_random_uuid()),
+('F024', '브로콜리', 100.0, 34.0, 7.0, 2.8, 0.4, NOW(), gen_random_uuid()),
+('F025', '양배추', 100.0, 25.0, 6.0, 1.3, 0.1, NOW(), gen_random_uuid()),
+('F026', '당근', 100.0, 41.0, 10.0, 0.9, 0.2, NOW(), gen_random_uuid()),
+('F027', '오이', 100.0, 16.0, 4.0, 0.7, 0.1, NOW(), gen_random_uuid()),
+('F028', '토마토', 100.0, 18.0, 3.9, 0.9, 0.2, NOW(), gen_random_uuid()),
+('F029', '상추', 100.0, 15.0, 2.9, 1.4, 0.1, NOW(), gen_random_uuid()),
+('F030', '무', 100.0, 18.0, 4.1, 0.6, 0.1, NOW(), gen_random_uuid()),
+('F031', '고구마', 100.0, 86.0, 20.0, 1.6, 0.1, NOW(), gen_random_uuid()),
+('F032', '감자', 100.0, 77.0, 17.0, 2.0, 0.1, NOW(), gen_random_uuid()),
+('F033', '양파', 100.0, 40.0, 9.3, 1.1, 0.1, NOW(), gen_random_uuid()),
+('F034', '마늘', 10.0, 42.0, 9.9, 1.8, 0.1, NOW(), gen_random_uuid()),
+('F035', '생강', 10.0, 8.0, 1.8, 0.2, 0.1, NOW(), gen_random_uuid()),
+('F036', '피망', 100.0, 26.0, 6.0, 1.0, 0.3, NOW(), gen_random_uuid()),
+('F037', '버섯', 100.0, 22.0, 3.3, 3.1, 0.3, NOW(), gen_random_uuid()),
+
+-- 과일류 (8개)
+('F038', '사과', 150.0, 78.0, 20.6, 0.4, 0.3, NOW(), gen_random_uuid()),
+('F039', '바나나', 120.0, 105.0, 27.0, 1.3, 0.4, NOW(), gen_random_uuid()),
+('F040', '오렌지', 150.0, 62.0, 15.4, 1.2, 0.2, NOW(), gen_random_uuid()),
+('F041', '포도', 100.0, 69.0, 18.1, 0.7, 0.2, NOW(), gen_random_uuid()),
+('F042', '딸기', 100.0, 32.0, 7.7, 0.7, 0.3, NOW(), gen_random_uuid()),
+('F043', '블루베리', 100.0, 57.0, 14.5, 0.7, 0.3, NOW(), gen_random_uuid()),
+('F044', '키위', 100.0, 61.0, 14.7, 1.1, 0.5, NOW(), gen_random_uuid()),
+('F045', '수박', 100.0, 30.0, 7.6, 0.6, 0.2, NOW(), gen_random_uuid()),
+
+-- 음료 및 기타 (5개)
+('F046', '우유', 200.0, 134.0, 9.6, 6.6, 7.6, NOW(), gen_random_uuid()),
+('F047', '요거트', 100.0, 59.0, 4.7, 10.0, 0.4, NOW(), gen_random_uuid()),
+('F048', '아보카도', 100.0, 160.0, 8.5, 2.0, 14.7, NOW(), gen_random_uuid()),
+('F049', '올리브오일', 10.0, 90.0, 0.0, 0.0, 10.0, NOW(), gen_random_uuid()),
+('F050', '견과류 믹스', 30.0, 180.0, 5.0, 6.0, 16.0, NOW(), gen_random_uuid())
+ON CONFLICT DO NOTHING;
+
+-- 기본 시스템 알림 데이터 삽입
+INSERT INTO notification (user_id, type, ref_id, title, message, created_at, uuid) VALUES
+-- 시스템 공용 알림 데이터 (user_id = NULL)
+(NULL, 'SYSTEM', NULL, '앱 사용 팁', '앱의 다양한 기능을 활용해보세요. 더욱 효율적인 건강 관리가 가능합니다.', NOW(), gen_random_uuid()),
+(NULL, 'SYSTEM', NULL, '단축키 안내', '앱 사용을 더욱 편리하게 해주는 단축키를 확인해보세요. 빠른 접근이 가능합니다.', NOW(), gen_random_uuid()),
+(NULL, 'SYSTEM', NULL, '음성 인식 기능', '음성으로 운동 기록을 남길 수 있는 기능이 추가되었습니다. 편리하게 이용해보세요.', NOW(), gen_random_uuid()),
+(NULL, 'SYSTEM', NULL, 'AI 운동 추천', 'AI 운동 추천 기능을 활용해보세요. 개인 맞춤형 운동을 추천받을 수 있습니다.', NOW(), gen_random_uuid()),
+(NULL, 'SYSTEM', NULL, '데이터 동기화', '여러 기기에서 사용하실 때는 데이터 동기화를 확인해주세요. 모든 기기에서 동일한 정보를 확인할 수 있습니다.', NOW(), gen_random_uuid())
+ON CONFLICT DO NOTHING;

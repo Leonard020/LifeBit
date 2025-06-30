@@ -205,9 +205,17 @@ public class HealthStatisticsController {
                     })
                     .toList();
                 
-                // 현재 사용자의 랭킹 정보 조회
+                // 현재 사용자의 랭킹 정보 조회 (없으면 자동 생성)
                 User currentUser = userService.getUserById(currentUserId);
                 Optional<UserRanking> userRankingOpt = userRankingRepository.findByUserId(currentUserId);
+                
+                // 사용자 랭킹이 없으면 자동 생성
+                if (userRankingOpt.isEmpty()) {
+                    log.info("🏅 사용자 {}의 랭킹 데이터가 없어서 자동 생성합니다", currentUserId);
+                    UserRanking newRanking = createDefaultUserRanking(currentUserId);
+                    userRankingOpt = Optional.of(userRankingRepository.save(newRanking));
+                }
+                
                 if (userRankingOpt.isPresent()) {
                     UserRanking userRanking = userRankingOpt.get();
                     String nickname = currentUser != null && currentUser.getNickname() != null ? currentUser.getNickname() : ("사용자" + currentUserId);
@@ -294,6 +302,30 @@ public class HealthStatisticsController {
         else if (score >= 2500) return "gold";
         else if (score >= 2000) return "silver";
         else return "bronze";
+    }
+
+    /**
+     * 기본 사용자 랭킹 생성
+     */
+    private UserRanking createDefaultUserRanking(Long userId) {
+        UserRanking ranking = new UserRanking();
+        ranking.setUserId(userId);
+        ranking.setTotalScore(0);
+        ranking.setStreakDays(0);
+        ranking.setRankPosition(0);
+        ranking.setSeason(getCurrentSeason());
+        ranking.setActive(true);
+        ranking.setTier(RankingTier.UNRANK);
+        ranking.setCreatedAt(java.time.LocalDateTime.now());
+        ranking.setLastUpdatedAt(java.time.LocalDateTime.now());
+        return ranking;
+    }
+
+    /**
+     * 현재 시즌 계산
+     */
+    private int getCurrentSeason() {
+        return java.time.LocalDateTime.now().getYear();
     }
 
     /**

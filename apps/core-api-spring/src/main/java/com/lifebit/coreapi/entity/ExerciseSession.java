@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import com.lifebit.coreapi.entity.TimePeriodType;
 
 @Entity
 @Table(name = "exercise_sessions",
