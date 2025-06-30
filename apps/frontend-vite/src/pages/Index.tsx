@@ -17,8 +17,7 @@ import { getUserIdFromToken, getToken } from '@/utils/auth';
 import { useAuth } from '@/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { estimateGramsWithGPT } from '@/utils/nutritionUtils';
-
-
+import axios from 'axios';
 
 type DietData = {
   food_item_id?: number;
@@ -46,6 +45,20 @@ const getCurrentTimePeriod = (): string => {
   if (hour >= 12 && hour < 18) return 'afternoon'; // 오후 12-18시
   if (hour >= 18 && hour < 22) return 'evening';   // 저녁 18-22시
   return 'night'; // 밤 22-4시
+};
+
+// 운동 부위 한글→영문 ENUM 변환 함수 추가
+const bodyPartToEnum = (kor: string): string | null => {
+  switch (kor.trim()) {
+    case '가슴': return 'chest';
+    case '등': return 'back';
+    case '하체': case '다리': return 'legs';
+    case '어깨': return 'shoulders';
+    case '팔': return 'arms';
+    case '복근': return 'abs';
+    case '유산소': return 'cardio';
+    default: return null;
+  }
 };
 
 const Index = () => {
@@ -146,51 +159,53 @@ const Index = () => {
     if (saveKeywords.test(lowered) && !hasSaved) {
       console.log('💾 [Index] 저장 키워드 감지');
 
-      // chatStructuredData가 없으면 저장할 데이터가 없다는 메시지 표시
+      // 필수 정보 체크
+      const userId = getUserIdFromToken();
       if (!chatStructuredData) {
         console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
-
-        // 사용자 메시지를 대화 기록에 추가
+        // ... 기존 코드 ...
+        return;
+      }
+      if (!userId) {
         const updatedHistory: Message[] = [
           ...conversationHistory,
           { role: 'user', content: messageToSend }
         ];
         setConversationHistory(updatedHistory);
-
-        // 데이터 부족 메시지 추가
-        const noDataMessage = recordType === 'exercise' ?
-          '저장할 운동 정보가 없습니다. 먼저 운동 정보를 입력해주세요! 💪\n\n예시: "자전거 120분 탔어요"' :
-          '저장할 식단 정보가 없습니다. 먼저 식단 정보를 입력해주세요! 🍽️\n\n예시: "아침에 계란 2개 먹었어요"';
-
+        const noUserMsg = '사용자 정보가 확인되지 않습니다. 다시 로그인해 주세요.';
         const finalHistory: Message[] = [
           ...updatedHistory,
-          { role: 'assistant', content: noDataMessage }
+          { role: 'assistant', content: noUserMsg }
         ];
         setConversationHistory(finalHistory);
         setChatInputText('');
         return;
       }
-
-      console.log('💾 [Index] handleRecordSubmit 호출');
-
-      // 사용자 메시지를 대화 기록에 추가
-      const updatedHistory: Message[] = [
-        ...conversationHistory,
-        { role: 'user', content: messageToSend }
-      ];
-      setConversationHistory(updatedHistory);
-
-      // AI 응답 메시지 추가
-      const saveMessage = recordType === 'exercise' ?
-        '운동 기록이 저장되었습니다! 💪' :
-        '식단 기록이 저장되었습니다! 🍽️';
-
-      const finalHistory: Message[] = [
-        ...updatedHistory,
-        { role: 'assistant', content: saveMessage }
-      ];
-      setConversationHistory(finalHistory);
-
+      if (recordType === 'exercise') {
+        // 운동명, 부위, ENUM 변환 체크
+        const exerciseName = chatStructuredData.exercise || '';
+        const korBodyPart = chatStructuredData.subcategory || chatStructuredData.bodyPart || '';
+        const bodyPartEnum = bodyPartToEnum(korBodyPart);
+        if (!exerciseName || !korBodyPart || !bodyPartEnum) {
+          const updatedHistory: Message[] = [
+            ...conversationHistory,
+            { role: 'user', content: messageToSend }
+          ];
+          setConversationHistory(updatedHistory);
+          let msg = '운동명, 운동 부위 정보가 부족합니다. 예시: "벤치프레스 30kg 10회 3세트 했어요"';
+          if (!exerciseName) msg = '운동명이 누락되었습니다. 운동명을 포함해 입력해 주세요.';
+          else if (!korBodyPart) msg = '운동 부위 정보가 누락되었습니다. 예시: "벤치프레스(가슴) 30kg 10회 3세트"';
+          else if (!bodyPartEnum) msg = `운동 부위(${korBodyPart})를 저장할 수 없습니다. 정확한 부위를 입력해 주세요.`;
+          const finalHistory: Message[] = [
+            ...updatedHistory,
+            { role: 'assistant', content: msg }
+          ];
+          setConversationHistory(finalHistory);
+          setChatInputText('');
+          return;
+        }
+      }
+      // ... 기존 코드 ...
       setHasSaved(true);
       setChatInputText(''); // 입력창 초기화
       await handleRecordSubmit(recordType, JSON.stringify(chatStructuredData));
@@ -338,47 +353,46 @@ const Index = () => {
     const userId = getUserIdFromToken();
     const token = getToken();
     if (!userId) {
-      console.warn('[⚠️ 유저 ID 없음] 토큰에서 사용자 정보를 가져올 수 없습니다.');
+      toast({
+        title: '사용자 정보 없음',
+        description: '로그인 정보가 없습니다. 다시 로그인해 주세요.',
+        variant: 'destructive'
+      });
       return;
     }
     if (type === 'exercise') {
-      const isCardio = chatStructuredData.category === '유산소';
-      const exerciseName = chatStructuredData.exercise || '운동기록';
-
-      console.log('💪 [Index 운동기록] 운동명 확인:', exerciseName);
-
+      const exerciseName = chatStructuredData.exercise || '';
+      const korBodyPart = chatStructuredData.subcategory || chatStructuredData.bodyPart || '';
+      const bodyPartEnum = bodyPartToEnum(korBodyPart);
+      if (!exerciseName || !korBodyPart || !bodyPartEnum) {
+        toast({
+          title: '운동 정보 부족',
+          description: !exerciseName ? '운동명이 누락되었습니다.' : !korBodyPart ? '운동 부위 정보가 누락되었습니다.' : `운동 부위(${korBodyPart})를 저장할 수 없습니다.`,
+          variant: 'destructive'
+        });
+        return;
+      }
+      const exerciseDescription = `${exerciseName} 운동`;
       try {
-        // 🔍 1단계: 운동 검색 또는 자동 생성
-        let exerciseCatalogId = 1; // 기본값
-
-        if (exerciseName && exerciseName !== '운동기록') {
-          console.log('🔍 [Index 운동기록] 운동 카탈로그 찾기/생성 시도:', exerciseName);
-
-          const findOrCreateResponse = await fetch('/api/exercises/find-or-create', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              name: exerciseName,
-              bodyPart: isCardio ? 'cardio' : 'muscle',
-              description: `${exerciseName} 운동`
-            })
+        // 1. 카탈로그 찾기/생성
+        const catalogRes = await axios.post('/api/exercises/find-or-create', {
+          name: exerciseName,
+          bodyPart: bodyPartEnum, // 반드시 ENUM(영문) 값
+          description: exerciseDescription
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        if (!catalogRes.data || !catalogRes.data.exerciseCatalogId) {
+          toast({
+            title: '운동 카탈로그 생성 실패',
+            description: '운동명/부위를 다시 확인해 주세요.',
+            variant: 'destructive'
           });
-
-          if (findOrCreateResponse.ok) {
-            const exerciseCatalog = await findOrCreateResponse.json();
-            exerciseCatalogId = exerciseCatalog.exerciseCatalogId;
-            console.log('✅ [Index 운동기록] 운동 카탈로그 ID 확인:', exerciseCatalogId, exerciseCatalog.name);
-          } else {
-            console.warn('⚠️ [Index 운동기록] 운동 카탈로그 생성 실패, 기본값 사용');
-          }
+          return;
         }
-
-        // ✅ 2단계: Spring Boot API에 맞는 payload 형식
-        const payload = {
-          exercise_catalog_id: exerciseCatalogId,
+        const catalogId = catalogRes.data.exerciseCatalogId;
+        // 2. 운동 기록 저장
+        await axios.post('/api/exercise-sessions', {
+          user_id: userId,
+          exercise_catalog_id: catalogId,
           duration_minutes: chatStructuredData.duration_min ?? 30,
           calories_burned: chatStructuredData.calories_burned ?? 0,
           notes: exerciseName,
@@ -386,35 +400,13 @@ const Index = () => {
           reps: chatStructuredData.reps ?? 0,
           weight: chatStructuredData.weight ?? 0,
           exercise_date: new Date().toISOString().split('T')[0],
-          // 🔧 DB 스키마에 맞는 필수 필드들 추가
-          time_period: getCurrentTimePeriod(), // 현재 시간대 자동 판단
-          input_source: 'TYPING', // DB ENUM: VOICE, TYPING
-          confidence_score: 1.0,  // 1.0 = 100% 확신
-          validation_status: 'VALIDATED' // DB ENUM: PENDING, VALIDATED, REJECTED, NEEDS_REVIEW
-        };
-        console.log('💪 [Index 운동기록] Spring Boot API 저장 시작:', payload);
-
-        // ✅ 3단계: 운동 세션 저장
-        const response = await fetch('/api/exercise-sessions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) throw new Error('운동 저장 실패');
-        const result = await response.json();
-        console.log('💪 [Index 운동기록] Spring Boot API 저장 성공:', result);
-        toast({
-          title: '기록 완료',
-          description: `${exerciseName} 운동이 저장되었습니다.`
-        });
-
-        // ✅ 운동기록 저장 후 초기화 및 페이지 이동
+          time_period: getCurrentTimePeriod(),
+          input_source: 'TYPING',
+          confidence_score: 1.0,
+          validation_status: 'VALIDATED'
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        toast({ title: '운동 기록 저장 완료', description: '운동이 성공적으로 저장되었습니다.' });
         setHasSaved(true);
-
-        // 상태 초기화
         setChatInputText('');
         setChatAiFeedback(null);
         setChatStructuredData(null);
@@ -425,12 +417,11 @@ const Index = () => {
         setCurrentMealFoods([]);
         setIsAddingMoreFood(false);
         setCurrentMealTime(null);
-
       } catch (err) {
         console.error('💪 [Index 운동기록] Spring Boot API 저장 실패:', err);
         toast({
-          title: '저장 오류',
-          description: '운동 데이터를 저장하지 못했습니다.',
+          title: '운동 저장 실패',
+          description: '운동 저장 중 오류가 발생했습니다.',
           variant: 'destructive'
         });
       }

@@ -204,52 +204,65 @@ EXERCISE_EXTRACTION_PROMPT = """
 - 운동시간 (duration_min) ✅ 필수
 
 🔍 **운동 분류 자동 판단 규칙:**
-[근력운동 - 가슴]: 벤치프레스, 푸시업, 체스트프레스, 딥스, 플라이, 체스트플라이
-[근력운동 - 등]: 풀업, 랫풀다운, 바벨로우, 시티드로우, 데드리프트, 철봉
-[근력운동 - 하체]: 스쿼트, 레그프레스, 런지, 레그컬, 레그익스텐션, 칼프레이즈
-[근력운동 - 어깨]: 숄더프레스, 사이드레이즈, 프론트레이즈, 리어델트플라이
-[근력운동 - 팔]: 바이셉스컬, 트라이셉스, 해머컬, 딥스, 이두컬, 삼두컬
-[근력운동 - 복근]: 크런치, 플랭크, 레그레이즈, 싯업, 플라잭
+[근력운동 - 가슴]:  
+벤치프레스, 푸시업, 체스트프레스, 딥스, 플라이, 체스트플라이, 인클라인벤치프레스, 디클라인벤치프레스, 케이블크로스오버, 펙덱플라이
+[근력운동 - 등]:  
+풀업, 랫풀다운, 바벨로우, 시티드로우, 데드리프트, 철봉, 원암로우, 티바로우, 시티드케이블로우, 슈러그
+[근력운동 - 하체]:  
+스쿼트, 레그프레스, 런지, 레그컬, 레그익스텐션, 칼프레이즈, 스모스쿼트, 불가리안스플릿스쿼트, 힙쓰러스트, 데드리프트(루마니안, 스티프레그드), 마운틴클라이머, 버피
+[근력운동 - 어깨]:  
+숄더프레스, 사이드레이즈, 프론트레이즈, 리어델트플라이, 업라이트로우, 아놀드프레스, 페이스풀, 숄더프론트레이즈
+[근력운동 - 팔]:  
+바이셉스컬, 트라이셉스, 해머컬, 딥스, 이두컬, 삼두컬, 킥백, 케이블푸쉬다운, 케이블컬, 컨센트레이션컬, 오버헤드익스텐션
+[근력운동 - 복근]:  
+크런치, 플랭크, 레그레이즈, 싯업, 플라잭, 마운틴클라이머, 행잉레그레이즈, 바이시클크런치, 러시안트위스트, V업, 윈드실드와이퍼
+[유산소운동]:  
+달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀, 런닝머신, 일립티컬, 스피닝, 스텝퍼, 에어로빅, 로잉머신, 스케이트, 스키, 인라인스케이트
+[맨몸운동]:  
+푸시업, 풀업, 플랭크, 크런치, 싯업, 버피, 마운틴클라이머, 딥스, 런지, 스쿼트, 레그레이즈, 바이시클크런치, 브릿지, 슈퍼맨, 점프스쿼트, 점핑잭
+※ 위에 없는 운동명도 최대한 유사한 부위로 분류해 주세요.
+※ 새로운 운동이 등장하면, AI가 운동의 동작을 분석해 가장 적합한 부위를 추론해서 분류해 주세요.
+- 만약 운동 부위(subcategory)가 명확하지 않으면, validation 단계에서 "이 운동은 어느 부위 운동인가요? (가슴/등/하체/어깨/팔/복근/유산소운동)"라고 사용자에게 질문하세요.
 
-[유산소운동]: 달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀, 런닝머신, 일립티컬
-
-💬 **응답 형식 (JSON):**
+💬 **응답 형식 (JSON, 반드시 아래 구조와 타입을 지켜서 반환):**
 {
-  "response_type": "extraction|validation|confirmation",
-  "system_message": {
-    "data": {
-      "exercise": "운동명",
-      "category": "근력운동|유산소운동",
-      "subcategory": "가슴|등|하체|복근|팔|어깨|유산소운동|null",
-      "weight": 무게|null,
-      "sets": 세트수|null,
-      "reps": 횟수|null,
-      "duration_min": 시간|null,
-      "is_bodyweight": true|false
-    },
-    "missing_fields": ["누락된_필드들"],
-    "next_step": "validation|confirmation"
-  },
+  "exercise": "운동명",                // 예: "스쿼트" (VARCHAR)
+  "category": "근력운동|유산소운동",   // DB의 exercise_type (VARCHAR)
+  "subcategory": "가슴|등|하체|복근|팔|어깨|유산소운동", // DB의 body_part (ENUM, 한글로 반환, 백엔드에서 영문 변환)
+  "weight": 60,                       // 무게(kg, 숫자), 없으면 null
+  "sets": 3,                          // 세트수(숫자), 없으면 null
+  "reps": 10,                         // 횟수(숫자), 없으면 null
+  "duration_min": null,               // 유산소 운동일 때만 사용(숫자), 없으면 null
+  "is_bodyweight": false,             // 맨몸운동 여부(boolean)
   "user_message": {
-    "text": "사용자에게 보여줄 친근한 메시지"
+    "text": "스쿼트 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 스쿼트\n💪 분류: 근력운동 (하체)\n🏋️ 무게: 60kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
+// 모든 필드는 누락 없이 반환해야 하며, 값이 없으면 null로 명시하세요.
+// 반드시 user_message.text 필드를 포함하여 사용자에게 친근한 안내 메시지를 제공하세요.
+// subcategory(운동 부위)는 반드시 한글로 반환(예: "가슴"), 백엔드에서 ENUM(body_part_type) 영문으로 변환합니다.
+// 예시: "가슴"→"chest", "등"→"back", "하체"→"legs", "어깨"→"shoulders", "팔"→"arms", "복근"→"abs", "유산소운동"→"cardio"
 
 🔄 **진행 조건:**
 - 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
 - 일부 정보 누락 → validation 단계로
 
 📝 **대화 예시:**
-사용자: "벤치프레스 60kg 3세트 10회 했어요"
-AI: "벤치프레스 운동 기록이 완료되었습니다! 💪
-
-✅ 운동명: 벤치프레스
-💪 분류: 근력운동 (가슴)
-🏋️ 무게: 60kg
-🔢 세트: 3세트
-🔄 횟수: 10회
-
-이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+사용자: "벤치프레스 30kg 10회 3세트 했어요"
+AI: {
+  "exercise": "벤치프레스",
+  "category": "근력운동",
+  "subcategory": "가슴",
+  "weight": 30,
+  "sets": 3,
+  "reps": 10,
+  "duration_min": null,
+  "is_bodyweight": false,
+  "user_message": {
+    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 30kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+  }
+}
+이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!
 """
 
 # 🚩 [운동 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -943,31 +956,24 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             
             try:
                 # JSON 응답인지 확인하고 파싱
-                if raw.strip().startswith('{') and raw.strip().endswith('}'):
+                if raw.strip().startswith('{') and raw.strip().endswith('}'): 
                     parsed_response = json.loads(raw)
-                    
                     # 운동 기록인 경우 칼로리 소모량 자동 계산 적용
                     if request.record_type == "exercise" and parsed_response.get("system_message", {}).get("data"):
                         data = parsed_response["system_message"]["data"]
-                        
-                        # 운동 정보가 충분하면 칼로리 소모량 계산
                         if data.get("exercise"):
                             calories_burned = calculate_exercise_calories_from_gpt(data)
                             data["calories_burned"] = calories_burned
-                    
                     # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
                     response_type = parsed_response.get("response_type", "success")
                     user_message = request.message.strip()
                     if request.record_type == "exercise" and response_type == "confirmation":
-                        # 사용자가 "네"라고 답하면 저장
                         if user_message in ["네", "예", "저장", "ㅇ", "y", "yes", "Y", "YES"]:
                             data = parsed_response["system_message"]["data"]
-                            # user_id가 None일 경우 예외 처리
                             user_id = request.user_id if request.user_id is not None else data.get("user_id")
                             if user_id is None:
                                 raise HTTPException(status_code=400, detail="user_id가 필요합니다.")
                             user_id = int(user_id)
-                            # ExerciseRecord로 변환
                             record = ExerciseRecord(
                                 user_id=user_id,
                                 name=data.get("exercise"),
@@ -978,7 +984,6 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                                 calories_burned=data.get("calories_burned"),
                                 exercise_date=request.current_data.get("exercise_date") if request.current_data else None
                             )
-                            # 카탈로그 자동 생성/조회 및 저장
                             category = getattr(record, 'category', None)
                             subcategory = getattr(record, 'subcategory', None)
                             catalog = get_or_create_exercise_catalog(db, record.name, category, subcategory, None)
@@ -1006,14 +1011,21 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                             return {
                                 "type": "save_success",
                                 "message": f"운동 기록 저장 성공! (ID: {exercise.exercise_session_id})",
-                                "id": exercise.exercise_session_id
+                                "id": exercise.exercise_session_id,
+                                "parsed_data": parsed_response  # 저장 성공 시에도 반환
                             }
-                    
                     # 일반적인 응답 (저장하지 않는 경우)
+                    # user_message.text가 있으면 message로, 없으면 fallback
+                    user_message_text = None
+                    if isinstance(parsed_response, dict):
+                        user_message_text = parsed_response.get("user_message", {}).get("text")
+                        # 혹시 system_message.user_message.text 구조도 지원
+                        if not user_message_text and parsed_response.get("system_message", {}).get("user_message", {}).get("text"):
+                            user_message_text = parsed_response["system_message"]["user_message"]["text"]
                     return {
                         "type": parsed_response.get("response_type", "success"),
-                        "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
-                        "parsed_data": parsed_response.get("system_message", {}).get("data"),
+                        "message": user_message_text or "응답을 처리했습니다.",
+                        "parsed_data": parsed_response,
                         "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
                         "suggestions": []
                     }
@@ -1022,6 +1034,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                     return {
                         "type": "incomplete",
                         "message": raw,
+                        "parsed_data": None,
                         "suggestions": []
                     }
             except json.JSONDecodeError:
@@ -1029,6 +1042,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                 return {
                     "type": "incomplete",
                     "message": raw,
+                    "parsed_data": None,
                     "suggestions": []
                 }
         else:
