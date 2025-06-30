@@ -366,14 +366,7 @@
     }
   }
 
-  /* 카카오톡 스타일 말풍선 꼬리 */
-  .clip-path-tail-right {
-    clip-path: polygon(0% 0%, 100% 100%, 0% 100%);
-  }
-  
-  .clip-path-tail-left {
-    clip-path: polygon(0% 100%, 100% 0%, 100% 100%);
-  }
+
 
   /* 탭 호버 효과 */
   .settings-tab-hover {

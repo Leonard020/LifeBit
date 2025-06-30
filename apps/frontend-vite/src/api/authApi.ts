@@ -212,6 +212,7 @@ export interface UserGoal {
   uuid: string;
   user_id: number;
   weekly_workout_target: number;
+  weekly_workout_target_set: number;
   weekly_chest: number;
   weekly_back: number;
   weekly_legs: number;
@@ -219,6 +220,13 @@ export interface UserGoal {
   weekly_arms: number;
   weekly_abs: number;
   weekly_cardio: number;
+  weekly_chest_set: number;
+  weekly_back_set: number;
+  weekly_legs_set: number;
+  weekly_shoulders_set: number;
+  weekly_arms_set: number;
+  weekly_abs_set: number;
+  weekly_cardio_set: number;
   daily_carbs_target: number;
   daily_protein_target: number;
   daily_fat_target: number;

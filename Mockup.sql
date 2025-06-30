@@ -127,6 +127,14 @@ INSERT INTO user_goals (
     weekly_arms,
     weekly_abs,
     weekly_cardio,
+    weekly_workout_target_set,
+    weekly_chest_set,
+    weekly_back_set,
+    weekly_legs_set,
+    weekly_shoulders_set,
+    weekly_arms_set,
+    weekly_abs_set,
+    weekly_cardio_set,
     daily_carbs_target,
     daily_protein_target,
     daily_fat_target,
@@ -154,6 +162,24 @@ SELECT
     calculated_data.weekly_arms,
     calculated_data.weekly_abs,
     calculated_data.weekly_cardio,
+
+    -- 각 운동 부위별 설정값의 합계로 weekly_workout_target_set 계산
+    calculated_data.weekly_chest_set + 
+    calculated_data.weekly_back_set + 
+    calculated_data.weekly_legs_set + 
+    calculated_data.weekly_shoulders_set + 
+    calculated_data.weekly_arms_set + 
+    calculated_data.weekly_abs_set + 
+    calculated_data.weekly_cardio_set AS weekly_workout_target_set,
+    
+    -- 개별 운동 부위별 설정값
+    calculated_data.weekly_chest_set,
+    calculated_data.weekly_back_set,
+    calculated_data.weekly_legs_set,
+    calculated_data.weekly_shoulders_set,
+    calculated_data.weekly_arms_set,
+    calculated_data.weekly_abs_set,
+    calculated_data.weekly_cardio_set,
 
     -- 일일 영양소 목표 (이미 계산됨)
     calculated_data.daily_carbs_target,
@@ -184,6 +210,14 @@ FROM (
         (random() * 2)::integer AS weekly_arms,
         (random() * 3)::integer AS weekly_abs,
         (random() * 5)::integer AS weekly_cardio,
+        -- 운동 부위별 설정값 (목표와 동일하거나 약간 다르게)
+        (random() * 3)::integer AS weekly_chest_set,
+        (random() * 3)::integer AS weekly_back_set,
+        (random() * 3)::integer AS weekly_legs_set,
+        (random() * 2)::integer AS weekly_shoulders_set,
+        (random() * 2)::integer AS weekly_arms_set,
+        (random() * 3)::integer AS weekly_abs_set,
+        (random() * 5)::integer AS weekly_cardio_set,
         -- 일일 영양소 목표 (NULL 값 처리)
         CASE 
             WHEN COALESCE(u.gender, 'male') = 'male' THEN (COALESCE(u.weight, 70) * 4 + random() * 50)::integer
@@ -203,6 +237,7 @@ FROM (
     LIMIT 500  -- 최대 500개로 제한
 ) calculated_data
 ORDER BY calculated_data.user_id, calculated_data.week_num;
+
 
 
 
@@ -312,8 +347,9 @@ INSERT INTO exercise_sessions (
     notes
 )
 SELECT 
-    u.user_id,
-    ec.exercise_catalog_id,
+    -- 사용자 ID: 2~50 사이 (49명)
+    2 + (row_number() OVER () - 1) % 49 AS user_id,
+    1 + (random() * 49)::integer, -- 운동 카탈로그 ID (1-50)
     45 + (random() * 45)::integer, -- 운동 시간: 45-90분
     200 + (random() * 400)::integer, -- 칼로리: 200-600
     CASE 
@@ -328,7 +364,8 @@ SELECT
         WHEN random() > 0.5 THEN 2 + (random() * 4)::integer -- 세트수: 2-6세트
         ELSE NULL 
     END,
-    ('2025-02-01'::date + ((row_number() OVER (ORDER BY u.user_id) - 1) * 143 / 899)::integer * INTERVAL '1 day')::date AS exercise_date,
+    -- 기록 날짜: 2025년 1월 1일부터 6월 29일까지 균등하게 분포 (179일간)
+    ('2025-01-01'::date + ((row_number() OVER () - 1) * 178 / 1599)::integer * INTERVAL '1 day')::date AS exercise_date,
     (ARRAY['dawn', 'morning', 'afternoon', 'night'])[1 + (random() * 3)::integer]::time_period_type,
     (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
     CASE 
@@ -344,14 +381,7 @@ SELECT
         '완벽한 자세로 운동 완료',
         '집중력이 좋았던 운동'
     ])[1 + (random() * 5)::integer]
-FROM (
-    SELECT user_id FROM users WHERE role = 'USER' ORDER BY user_id LIMIT 49
-) u
-JOIN LATERAL (
-    SELECT exercise_catalog_id FROM exercise_catalog ORDER BY random() LIMIT 1
-) ec ON TRUE
-CROSS JOIN generate_series(1, 900) AS series
-LIMIT 900;
+FROM generate_series(1, 1600) AS series;
 
 -- ===================================================================
 -- 8. 식단 로그 900개+ (현실적인 식사 패턴)
