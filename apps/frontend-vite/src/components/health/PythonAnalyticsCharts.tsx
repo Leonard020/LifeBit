@@ -1498,7 +1498,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                 </RechartsLineChart>
               </ResponsiveContainer>
             </CardContent>
-          </Card>      
+          </Card>
         </TabsContent>
 
         {/* 체중 & BMI 분석 탭 */}
