@@ -1,5 +1,5 @@
 # note_routes.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from database import get_db
 import models
@@ -14,8 +14,50 @@ import re
 from datetime import date as dt_date
 from korean_amount_normalizer import normalize_korean_amount
 import logging
+from auth_utils import verify_access_token
 
 router = APIRouter(tags=["note"])  # 태그 설정 중요
+
+# 🔧 JWT 토큰 검증 의존성 함수
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """
+    JWT 토큰을 검증하고 현재 사용자 정보를 반환합니다.
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization 헤더가 필요합니다"
+        )
+    
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Bearer 토큰 형식이 올바르지 않습니다"
+        )
+    
+    token = authorization.replace("Bearer ", "")
+    
+    try:
+        payload = verify_access_token(token)
+        return payload
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"토큰 검증 실패: {str(e)}"
+        )
+
+# 🔧 사용자 ID 추출 의존성 함수
+async def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
+    """
+    현재 사용자의 ID를 반환합니다.
+    """
+    user_id = current_user.get("userId")
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="토큰에서 사용자 ID를 추출할 수 없습니다"
+        )
+    return user_id
 
 # Import nutrition calculation functions from main.py
 print("[ENV DEBUG] FOOD_STD_API_ENDPOINT:", os.getenv("FOOD_STD_API_ENDPOINT"))
@@ -462,7 +504,7 @@ def estimate_grams_from_korean_amount(food_name: str, amount: str) -> float:
 
 # 🍽️ 식단 기록 저장 API
 @router.post("/diet")
-def save_diet_record(data: MealInput, db: Session = Depends(get_db)):
+def save_diet_record(data: MealInput, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     # 1. food_item_id가 없으면 food_items에 자동 생성
     food_item_id = data.food_item_id  # type: ignore
     debug_info = {}
@@ -565,7 +607,7 @@ def save_diet_record(data: MealInput, db: Session = Depends(get_db)):
     }
 
 @router.get("/diet/daily")
-def get_today_diet(user_id: int, date: Optional[str] = None, db: Session = Depends(get_db)):
+def get_today_diet(current_user_id: int = Depends(get_current_user_id), date: Optional[str] = None, db: Session = Depends(get_db)):
     target_date: Union[str, dt_date]
     if date is None:
         target_date = dt_date.today()
@@ -591,7 +633,7 @@ def get_today_diet(user_id: int, date: Optional[str] = None, db: Session = Depen
     ]
 
 @router.delete("/diet/{meal_log_id}")
-def delete_diet_record(meal_log_id: int, db: Session = Depends(get_db)):
+def delete_diet_record(meal_log_id: int, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     record = db.query(models.MealLog).filter(models.MealLog.meal_log_id == meal_log_id).first()
     if not record:
         return {"message": "해당 식단 기록이 존재하지 않습니다."}

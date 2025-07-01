@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
@@ -7,6 +7,7 @@ import openai, os, json
 from dotenv import load_dotenv
 import tempfile
 from auth_routes import router as auth_router
+from auth_utils import verify_access_token
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
@@ -16,6 +17,47 @@ import models
 from note_routes import router as note_router, estimate_grams_from_korean_amount
 import requests
 from normalize_utils import normalize_exercise_name
+
+# 🔧 JWT 토큰 검증 의존성 함수
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """
+    JWT 토큰을 검증하고 현재 사용자 정보를 반환합니다.
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization 헤더가 필요합니다"
+        )
+    
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Bearer 토큰 형식이 올바르지 않습니다"
+        )
+    
+    token = authorization.replace("Bearer ", "")
+    
+    try:
+        payload = verify_access_token(token)
+        return payload
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"토큰 검증 실패: {str(e)}"
+        )
+
+# 🔧 사용자 ID 추출 의존성 함수
+async def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
+    """
+    현재 사용자의 ID를 반환합니다.
+    """
+    user_id = current_user.get("userId")
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="토큰에서 사용자 ID를 추출할 수 없습니다"
+        )
+    return user_id
 
 # 🔧 환경 감지 및 데이터베이스 설정 오버라이드
 def setup_database():
@@ -926,7 +968,7 @@ def is_bodyweight_exercise(exercise_name: str) -> bool:
     return any(ex in exercise_name.lower() for ex in bodyweight_exercises)
 
 @app.post("/api/py/chat")
-async def chat(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     try:
         if not request.message:
             raise HTTPException(status_code=400, detail="메시지가 비어있습니다.")
@@ -1096,7 +1138,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                                 )
 
                                 try:
-                                    result = save_diet_record(meal_input, db)
+                                    result = save_diet_record(meal_input, current_user_id, db)
                                     saved_results.append(result)
                                     print(f"[✅ 식단 저장] {food['food_name']} 저장 완료")
                                 except Exception as save_err:
@@ -1195,7 +1237,7 @@ def get_or_create_exercise_catalog(db, name, category=None, subcategory=None, de
 
 # 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
 @app.post("/api/py/note/exercise")
-def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
+def save_exercise_record(data: ExerciseRecord, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     # AI에서 운동명, 분류, 부위 등 전달받음 (하드코딩/키워드 매핑 없음)
     catalog = None
     if hasattr(data, 'exercise_catalog_id') and data.exercise_catalog_id:
@@ -1241,9 +1283,9 @@ def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
 
 # ✅ 오늘 날짜 운동 기록 조회
 @app.get("/api/py/note/exercise/daily", response_model=list[DailyExerciseRecord])
-def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Session = Depends(get_db)):
+def get_today_exercise(current_user_id: int = Depends(get_current_user_id), date: Optional[date] = date.today(), db: Session = Depends(get_db)):
     records = db.query(models.ExerciseSession).filter(
-        models.ExerciseSession.user_id == user_id,
+        models.ExerciseSession.user_id == current_user_id,
         models.ExerciseSession.exercise_date == date
     ).all()
 
@@ -1276,7 +1318,7 @@ def test_diet_save(db: Session = Depends(get_db)):
     
     try:
         from note_routes import save_diet_record
-        result = save_diet_record(test_data, db)
+        result = save_diet_record(test_data, test_data.user_id, db)
         return {
             "test_status": "SUCCESS",
             "message": "식단 저장 로직 테스트 완료",
@@ -1290,7 +1332,7 @@ def test_diet_save(db: Session = Depends(get_db)):
 
 # 📋 오늘 식단 기록 조회 API  
 @app.get("/api/py/note/diet/daily")
-def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session = Depends(get_db)):
+def get_today_diet(current_user_id: int = Depends(get_current_user_id), target_date: Optional[str] = None, db: Session = Depends(get_db)):
     """사용자의 오늘 식단 기록을 조회합니다."""
     if target_date:
         query_date = date.fromisoformat(target_date)
@@ -1298,7 +1340,7 @@ def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session 
         query_date = date.today()
     
     records = db.query(models.MealLog).filter(
-        models.MealLog.user_id == user_id,
+        models.MealLog.user_id == current_user_id,
         models.MealLog.log_date == query_date
     ).all()
     
@@ -1326,7 +1368,7 @@ def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session 
         })
     
     return {
-        "user_id": user_id,
+        "user_id": current_user_id,
         "date": str(query_date),
         "total_records": len(results),
         "records": results
