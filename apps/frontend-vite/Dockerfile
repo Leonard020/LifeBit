@@ -15,12 +15,18 @@ ARG VITE_CORE_API_URL
 ARG VITE_AI_API_URL
 ARG VITE_GOOGLE_CLIENT_ID
 ARG VITE_KAKAO_CLIENT_ID
+ARG VITE_JWT_SECRET_KEY
+ARG VITE_OPENAI_API_KEY
+ARG NODE_ENV=production
 
 # 환경 변수 설정
 ENV VITE_CORE_API_URL=$VITE_CORE_API_URL
 ENV VITE_AI_API_URL=$VITE_AI_API_URL
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ENV VITE_KAKAO_CLIENT_ID=$VITE_KAKAO_CLIENT_ID
+ENV VITE_JWT_SECRET_KEY=$VITE_JWT_SECRET_KEY
+ENV VITE_OPENAI_API_KEY=$VITE_OPENAI_API_KEY
+ENV NODE_ENV=$NODE_ENV
 
 # 소스 코드 복사
 COPY . .
@@ -44,6 +50,9 @@ RUN echo '#!/bin/sh' > /docker-entrypoint.d/30-inject-runtime-env.sh && \
     echo 'echo "window.__VITE_AI_API_URL__ = \"${VITE_AI_API_URL:-http://localhost:8001}\";" >> /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
     echo 'echo "window.__VITE_GOOGLE_CLIENT_ID__ = \"${VITE_GOOGLE_CLIENT_ID:-}\";" >> /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
     echo 'echo "window.__VITE_KAKAO_CLIENT_ID__ = \"${VITE_KAKAO_CLIENT_ID:-}\";" >> /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
+    echo 'echo "window.__VITE_JWT_SECRET_KEY__ = \"${VITE_JWT_SECRET_KEY:-}\";" >> /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
+    echo 'echo "window.__VITE_OPENAI_API_KEY__ = \"${VITE_OPENAI_API_KEY:-}\";" >> /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
+    echo 'echo "window.__NODE_ENV__ = \"production\";" >> /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
     echo 'echo "Generated env.js:"' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
     echo 'cat /usr/share/nginx/html/env.js' >> /docker-entrypoint.d/30-inject-runtime-env.sh && \
     chmod +x /docker-entrypoint.d/30-inject-runtime-env.sh
@@ -53,4 +62,4 @@ EXPOSE 80
 
 # 헬스체크 추가
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost/ || exit 1 
+  CMD wget -q --spider http://localhost/ || exit 1 

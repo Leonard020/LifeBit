@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - postgres_data_prod:/var/lib/postgresql/data/
       - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
       - ./scripts/db-health-check.sh:/usr/local/bin/db-health-check.sh:ro
     environment:
@@ -21,7 +21,7 @@ services:
       - PGDATABASE=${POSTGRES_DB:-lifebit_db}
     restart: unless-stopped
     networks:
-      - lifebit-network
+      - lifebit-network-prod
     healthcheck:
       test: ["CMD-SHELL", "/usr/local/bin/db-health-check.sh"]
       interval: 15s
@@ -48,16 +48,25 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/${POSTGRES_DB:-lifebit_db}?stringtype=unspecified&connectTimeout=30&socketTimeout=60&loginTimeout=30&prepareThreshold=0&ApplicationName=LifeBit-Core-API
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-lifebit_user}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-lifebit_password}
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=update # 초기 배포 시 테이블 생성을 위해 update 사용
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
       - SPRING_JPA_SHOW_SQL=false
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
       - SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=Asia/Seoul
       - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
-      - CORS_ORIGINS=http://${DOMAIN_NAME:-localhost},http://${DOMAIN_NAME:-localhost}:80,http://${DOMAIN_NAME:-localhost}:3000
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
       - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - JAVA_OPTS=-Xmx512m -Xms256m -XX:+UseG1GC -XX:+UseStringDeduplication
+      # JWT 설정 추가
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      # 소셜 로그인 설정 추가
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      - KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -65,7 +74,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - lifebit-network
+      - lifebit-network-prod
     volumes:
       - ./uploads:/app/uploads
       - ./scripts/wait-for-db.sh:/usr/local/bin/wait-for-db.sh:ro
@@ -99,12 +108,26 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD:-lifebit_password}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - USE_GPT=${USE_GPT:-False}
-      - CORS_ALLOWED_ORIGINS=http://${DOMAIN_NAME:-localhost},http://${DOMAIN_NAME:-localhost}:80,http://${DOMAIN_NAME:-localhost}:3000,https://${DOMAIN_NAME:-localhost}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost}
       - PORT=8001
       - HOST=0.0.0.0
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - TZ=Asia/Seoul
+      # JWT 설정 추가
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-60}
+      # 소셜 로그인 설정 추가
+      - KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      # 이메일 설정 추가
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
     ports:
       - "8001:8001"
     depends_on:
@@ -114,7 +137,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - lifebit-network
+      - lifebit-network-prod
     volumes:
       - ./scripts/wait-for-db.sh:/usr/local/bin/wait-for-db.sh:ro
     healthcheck:
@@ -136,10 +159,13 @@ services:
       context: ./apps/frontend-vite
       dockerfile: Dockerfile
       args:
-        - VITE_CORE_API_URL=http://${DOMAIN_NAME:-localhost}/api
-        - VITE_AI_API_URL=http://${DOMAIN_NAME:-localhost}/ai-api
+        - VITE_CORE_API_URL=${VITE_CORE_API_URL:-http://localhost/api}
+        - VITE_AI_API_URL=${VITE_AI_API_URL:-http://localhost/ai-api}
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
         - VITE_KAKAO_CLIENT_ID=${VITE_KAKAO_CLIENT_ID:-}
+        - VITE_JWT_SECRET_KEY=${VITE_JWT_SECRET_KEY:-}
+        - VITE_OPENAI_API_KEY=${VITE_OPENAI_API_KEY:-}
+        - NODE_ENV=production
     container_name: lifebit_frontend_prod
     ports:
       - "3000:80"
@@ -148,7 +174,7 @@ services:
       - ai-api
     restart: unless-stopped
     networks:
-      - lifebit-network
+      - lifebit-network-prod
     deploy:
       resources:
         limits:
@@ -156,7 +182,7 @@ services:
         reservations:
           memory: 128M
 
-  # Nginx 리버스 프록시 (선택사항)
+  # Nginx 리버스 프록시
   nginx:
     image: nginx:alpine
     container_name: lifebit_nginx_prod
@@ -166,6 +192,7 @@ services:
     volumes:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./letsencrypt:/etc/letsencrypt:ro
+      - ./scripts/nginx-health-check.sh:/usr/local/bin/nginx-health-check.sh:ro
     depends_on:
       frontend:
         condition: service_started
@@ -175,9 +202,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - lifebit-network
+      - lifebit-network-prod
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -190,12 +217,12 @@ services:
           memory: 64M
 
 networks:
-  lifebit-network:
+  lifebit-network-prod:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.21.0.0/16  # 개발 환경과 다른 서브넷 사용
 
 volumes:
-  postgres_data:
+  postgres_data_prod:  # 프로덕션용 별도 볼륨
     driver: local 
