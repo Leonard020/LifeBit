@@ -154,31 +154,38 @@ const Index = () => {
     let userId = getUserIdFromToken();
 
     if (saveKeywords.test(lowered) && !hasSaved) {
-      console.log('\ud83d\udcbe [Index] \uc800\uc7a5 \ud0a4\uc6cc\ub4dc \uac10\uc9c0');
+      console.log('💾 [Index] 저장 키워드 감지');
+      console.log('  chatStructuredData:', chatStructuredData);
+      console.log('  chatAiFeedback:', chatAiFeedback);
 
-      // \ud544\uc218 \uc815\ubcf4 \uccb4\ud06c
+      // 필수 정보 체크
       if (!structuredData) {
         // 직전 AI 응답에서 복구 시도
         if (chatAiFeedback?.parsed_data) {
+          console.log('  chatAiFeedback.parsed_data 존재:', chatAiFeedback.parsed_data);
           // ✅ system_message.data 구조도 지원
           if (chatAiFeedback.parsed_data.system_message && chatAiFeedback.parsed_data.system_message.data) {
             structuredData = chatAiFeedback.parsed_data.system_message.data;
             setChatStructuredData(structuredData);
+            console.log('  system_message.data에서 복구:', structuredData);
           }
           // ✅ 단일 객체(운동) 구조도 지원
           else if (chatAiFeedback.parsed_data.exercise) {
             structuredData = chatAiFeedback.parsed_data;
             setChatStructuredData(chatAiFeedback.parsed_data);
+            console.log('  parsed_data에서 복구:', structuredData);
           } else {
             structuredData = chatAiFeedback.parsed_data;
             setChatStructuredData(chatAiFeedback.parsed_data);
+            console.log('  parsed_data에서 복구 (기본):', structuredData);
           }
         } else if (chatAiFeedback?.data) {
           structuredData = chatAiFeedback.data;
           setChatStructuredData(chatAiFeedback.data);
+          console.log('  chatAiFeedback.data에서 복구:', structuredData);
         }
         if (!structuredData) {
-          console.log('\u26a0\ufe0f [Index] chatStructuredData \uc5c6\uc74c, \ub370\uc774\ud130 \ubd80\uc871 \uba54\uc2dc\uc9c0 \ud45c\uc2dc');
+          console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
           return;
         }
       }
@@ -266,34 +273,35 @@ const Index = () => {
         userId
       );
 
-      // ✅ AI 응답이 JSON(객체)로 보이면 콘솔에만 출력, 사용자에겐 자연어만 노출
+      // ✅ AI 응답 처리 - parsed_data의 user_message.text를 우선 사용
       let displayMessage = response.message;
+      
+      console.log('[DEBUG] AI 응답 원본:', response);
+      
+      // response.message가 JSON 문자열인지 확인하고 파싱
       try {
-        // JSON 문자열이거나 객체라면 콘솔에만 출력
-        if (typeof response.message === 'string' && response.message.trim().startsWith('{') && response.message.trim().endsWith('}')) {
-          console.log('[AI 응답 JSON]', response.message);
-          // recordType별 안내 분기
-          if (recordType === 'diet') {
-            if (response.parsed_data && response.parsed_data.food_name) {
-              displayMessage = `${response.parsed_data.food_name}을(를) 드신 것으로 기록할까요?`;
-            } else {
-              displayMessage = '식단 정보를 확인해주세요.';
-            }
-          } else if (recordType === 'exercise') {
-            if (response.parsed_data && response.parsed_data.exercise) {
-              displayMessage = `${response.parsed_data.exercise} 운동 정보를 확인할까요?`;
-            } else {
-              displayMessage = '운동 정보를 확인해주세요.';
-            }
+        if (typeof response.message === 'string' && response.message.trim().startsWith('{')) {
+          const parsedMessage = JSON.parse(response.message);
+          console.log('[DEBUG] JSON 파싱 성공:', parsedMessage);
+          if (parsedMessage.user_message && parsedMessage.user_message.text) {
+            displayMessage = parsedMessage.user_message.text;
+            console.log('[AI 응답 JSON]', parsedMessage);
+            // parsed_data도 업데이트
+            response.parsed_data = parsedMessage;
           }
         }
-        
-        // parsed_data가 있고 user_message.text가 있으면 그것을 사용
-        if (response.parsed_data && response.parsed_data.user_message && response.parsed_data.user_message.text) {
-          displayMessage = response.parsed_data.user_message.text;
-        }
       } catch (e) {
-        // 무시
+        console.log('[DEBUG] JSON 파싱 실패:', e);
+        // JSON 파싱 실패 시 기존 로직 사용
+      }
+      
+      // parsed_data가 있고 user_message.text가 있으면 그것을 사용 (AI가 보낸 자연어 메시지)
+      if (response.parsed_data && response.parsed_data.user_message && response.parsed_data.user_message.text) {
+        displayMessage = response.parsed_data.user_message.text;
+        console.log('[AI 응답 JSON]', response.parsed_data);
+      } else if (response.parsed_data) {
+        // parsed_data는 있지만 user_message.text가 없는 경우
+        console.log('[AI 응답 JSON]', response.parsed_data);
       }
 
       // AI 응답을 히스토리에 추가 (자연어만)
@@ -454,14 +462,9 @@ const Index = () => {
         const catalogId = catalogRes.data.exerciseCatalogId;
         // 2. 운동 기록 저장
         const sessionData: any = {
-          user_id: userId,
           exercise_catalog_id: catalogId,
           notes: exerciseName,
-          exercise_date: new Date().toISOString().split('T')[0],
-          time_period: getCurrentTimePeriod(),
-          input_source: 'TYPING',
-          confidence_score: 1.0,
-          validation_status: 'VALIDATED'
+          exercise_date: new Date().toISOString().split('T')[0]
         };
 
         // 유산소 운동과 근력 운동 구분 처리

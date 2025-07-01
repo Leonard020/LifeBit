@@ -213,14 +213,19 @@ CHAT_SYSTEM_PROMPT = """
 2. 운동/식단 버튼이 눌린 상태에서만 정보 수집을 시작합니다.
 3. 운동과 식단 외의 질문에는 아래 문구로 안내합니다:
    👉 "LifeBit은 현재 운동과 식단에 대한 정보만 기록하고 있어요. 그 외의 질문에는 답변이 어려운 점 양해 부탁드립니다!"
-4. 모든 답변은 친절하고 간결하게, 하지만 보기 좋게 정리합니다.
-5. 오류나 이상이 발생하면 자체 판단 후 적절한 문구를 안내합니다.
+4. 모든 답변은 친절하고 자연스럽게, 마치 친구와 대화하는 것처럼 편안하게 응답합니다.
+5. 이모지를 적절히 사용하여 친근감을 표현합니다.
+6. 사용자의 말투와 어조에 맞춰 자연스럽게 대화를 이어갑니다.
+7. 오류나 이상이 발생하면 자체 판단 후 적절한 문구를 안내합니다.
 """
 
 # 🚩 [운동 기록 추출 프롬프트] - 사용자 요구사항에 맞게 수정
 EXERCISE_EXTRACTION_PROMPT = """
 당신은 LifeBit의 운동 기록 AI 어시스턴트입니다.
 사용자와 친근하고 자연스러운 대화를 통해 운동 정보를 정확히 수집하고 정리하는 역할을 합니다.
+
+🚨 **가장 중요한 규칙: 모든 응답은 반드시 JSON 형식이어야 합니다!**
+🚨 **절대로 일반 텍스트로 응답하지 마세요!**
 
 🎯 **진행 순서: extraction → validation → confirmation**
 
@@ -279,11 +284,17 @@ EXERCISE_EXTRACTION_PROMPT = """
 
 💬 **응답 형식 (JSON, 반드시 아래 구조와 타입을 지켜서 반환):**
 
-**중요: 반드시 response_type과 system_message, user_message를 포함한 완전한 JSON 형식으로 응답하세요.**
+**🚨 절대적으로 중요한 규칙: 모든 응답은 반드시 JSON 형식으로만 해야 합니다!**
+**🚨 절대 일반 텍스트로 응답하지 마세요!**
+**🚨 항상 response_type과 system_message, user_message를 포함한 완전한 JSON 형식으로 응답하세요!**
 
-유산소 운동 예시:
+**🚨 핵심 규칙: 사용자가 한 번에 모든 필수 정보를 제공한 경우, 바로 confirmation 단계로 넘어가세요!**
+
+**💡 대화 스타일: 친근하고 자연스럽게, 마치 친구와 대화하는 것처럼 편안하게 응답하세요.**
+
+유산소 운동 예시 (모든 정보 제공 시):
 {
-  "response_type": "extraction",
+  "response_type": "confirmation",
   "system_message": {
     "data": {
       "exercise": "조깅",
@@ -297,13 +308,13 @@ EXERCISE_EXTRACTION_PROMPT = """
     }
   },
   "user_message": {
-    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+    "text": "와! 조깅 40분 하셨군요! 🏃‍♂️ 정말 대단해요!\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장'이라고 해주세요! 😊"
   }
 }
 
-근력 운동 예시:
+근력 운동 예시 (모든 정보 제공 시):
 {
-  "response_type": "extraction",
+  "response_type": "confirmation",
   "system_message": {
     "data": {
       "exercise": "벤치프레스",
@@ -317,9 +328,40 @@ EXERCISE_EXTRACTION_PROMPT = """
     }
   },
   "user_message": {
-    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 80kg\n🔢 세트: 4세트\n🔄 횟수: 10회\n⏱️ 운동시간: 15분 (휴식시간 포함)\n\n맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+    "text": "오! 벤치프레스 80kg 4세트 하셨네요! 💪 정말 강하시군요!\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 80kg\n🔢 세트: 4세트\n🔄 횟수: 10회\n⏱️ 운동시간: 15분 (휴식시간 포함)\n\n이 정보가 맞나요? 맞으면 '저장'이라고 해주세요! 😊"
   }
 }
+
+정보가 부족한 경우 validation 예시:
+{
+  "response_type": "validation",
+  "system_message": {
+    "data": {
+      "exercise": "벤치프레스",
+      "category": "근력운동",
+      "subcategory": "가슴",
+      "weight": null,
+      "sets": null,
+      "reps": null,
+      "duration_min": null,
+      "is_bodyweight": false
+    },
+    "missing_fields": ["weight", "sets", "reps", "duration_min"],
+    "next_step": "validation"
+  },
+  "user_message": {
+    "text": "벤치프레스 하셨군요! 💪 몇 kg으로 하셨나요?"
+  }
+}
+
+**🚨 마지막 경고: 모든 응답은 반드시 위의 JSON 형식으로만 해야 합니다! 일반 텍스트 응답은 절대 금지입니다!**
+
+**⚠️ 추가 규칙:**
+1. 모든 응답은 반드시 JSON 형식이어야 합니다.
+2. 일반 텍스트로 응답하면 안 됩니다.
+3. 사용자가 모든 정보를 제공했을 때도 JSON 형식으로 응답해야 합니다.
+4. confirmation 단계에서도 JSON 형식으로 응답해야 합니다.
+5. 절대로 일반 텍스트로 응답하지 마세요!
 """
 
 # 🚩 [운동 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -355,6 +397,7 @@ EXERCISE_VALIDATION_PROMPT = """
 - 한 번에 하나의 필드만 질문
 - 모든 필수 정보 수집 완료 시 confirmation 단계로 이동
 - 유산소 운동에서는 무게/세트/횟수/ 중분류를 묻지 않음
+- 친근하고 자연스러운 말투로 질문하세요
 """
 
 # 🚩 [운동 기록 확인 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -447,18 +490,34 @@ DIET_EXTRACTION_PROMPT = """
 - 간식: 위에 해당하지 않는 경우 또는 "간식" 언급
 
 💬 **응답 형식 (JSON):**
+
+**🚨 핵심 규칙: 사용자가 한 번에 모든 필수 정보를 제공한 경우, 바로 confirmation 단계로 넘어가세요!**
+
+모든 정보 제공 시 (confirmation):
 {
-  "response_type": "extraction|validation|confirmation",
+  "response_type": "confirmation",
   "system_message": {
     "data": [
-      { "food_name": "음식명", "amount": "섭취량", "meal_time": "아침|점심|저녁|야식|간식" },
-      ...
-    ],
-    "missing_fields": ["누락된_필드들"],
-    "next_step": "validation|confirmation"
+      { "food_name": "계란", "amount": "2개", "meal_time": "아침" }
+    ]
   },
   "user_message": {
-    "text": "사용자에게 보여줄 친근한 메시지"
+    "text": "아침에 계란 2개 드셨군요! 🥚 건강한 아침 식사네요!\n\n✅ 음식명: 계란\n📏 섭취량: 2개\n⏰ 식사시간: 아침\n\n이 정보가 맞나요? 맞으면 '저장'이라고 해주세요! 😊"
+  }
+}
+
+정보가 부족한 경우 (validation):
+{
+  "response_type": "validation",
+  "system_message": {
+    "data": [
+      { "food_name": "계란", "amount": null, "meal_time": null }
+    ],
+    "missing_fields": ["amount", "meal_time"],
+    "next_step": "validation"
+  },
+  "user_message": {
+    "text": "계란을 드셨군요! 🥚 몇 개 드셨나요?"
   }
 }
 
@@ -470,16 +529,6 @@ DIET_EXTRACTION_PROMPT = """
 🔄 **진행 조건:**
 - 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
 - 일부 정보 누락 → validation 단계로
-
-📝 **대화 예시:**
-사용자: "아침에 계란 2개 먹었어요"
-AI: "아침 식사 기록이 완료되었습니다! 🥚
-
-✅ 음식명: 계란
-📏 섭취량: 2개
-⏰ 식사시간: 아침
-
-이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
 """
 
 # 🚩 [식단 기록 확인 프롬프트] - 사용자 요구사항에 맞게 수정 (영양성분 표시 포함)
@@ -550,6 +599,7 @@ DIET_VALIDATION_PROMPT = """
 - 모든 필수 정보 수집 완료 시 confirmation 단계로 이동
 - 3가지 정보가 모두 충족될 때까지 반복 질문
 - 영양 정보는 자동으로 계산되므로 사용자에게 묻지 않습니다
+- 친근하고 자연스러운 말투로 질문하세요
 """
 
 # 채팅 요청을 위한 스키마
@@ -893,12 +943,12 @@ def determine_chat_step_automatically(message: str, current_data: dict, record_t
     사용자 요구사항에 맞게 extraction → validation → confirmation 단계를 자동 판단합니다.
     """
     # 확인 키워드가 있으면 저장 또는 완료
-    confirmation_keywords = ["네", "맞아요", "저장", "기록", "완료", "끝", "ok", "yes"]
+    confirmation_keywords = ["네", "맞아요", "저장", "기록", "완료", "끝", "ok", "yes", "ㅇ", "예"]
     if any(keyword in message.lower() for keyword in confirmation_keywords):
         return "confirmation"
     
     # 수정 키워드가 있으면 validation으로 돌아감
-    modification_keywords = ["아니오", "수정", "바꿔", "아니야", "틀려", "no"]
+    modification_keywords = ["아니오", "수정", "바꿔", "아니야", "틀려", "no", "ㄴ"]
     if any(keyword in message.lower() for keyword in modification_keywords):
         return "validation"
     
@@ -961,32 +1011,15 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                     "message": "안녕하세요! 운동이나 식단을 기록하시려면 먼저 상단의 '운동 기록' 또는 '식단 기록' 버튼을 선택해 주세요."
                 }
 
-            # 자동으로 단계 판단
-            auto_step = determine_chat_step_automatically(
-                request.message, 
-                request.current_data or {}, 
-                request.record_type
-            )
-            
-            # 자동 판단된 단계로 프롬프트 선택
+            # 항상 extraction 프롬프트로 시작 (AI가 자체적으로 단계 판단)
             if request.record_type == "exercise":
-                if auto_step == "validation":
-                    system_prompt = EXERCISE_VALIDATION_PROMPT
-                elif auto_step == "confirmation":
-                    system_prompt = EXERCISE_CONFIRMATION_PROMPT
-                else:
-                    system_prompt = EXERCISE_EXTRACTION_PROMPT
+                system_prompt = EXERCISE_EXTRACTION_PROMPT
             else:
-                if auto_step == "validation":
-                    system_prompt = DIET_VALIDATION_PROMPT
-                elif auto_step == "confirmation":
-                    system_prompt = DIET_CONFIRMATION_PROMPT
-                else:
-                    system_prompt = DIET_EXTRACTION_PROMPT
+                system_prompt = DIET_EXTRACTION_PROMPT
             
             # 디버깅 로그 추가
             print(f"[DEBUG] 받은 current_data: {request.current_data}")
-            print(f"[DEBUG] 자동 판단된 단계: {auto_step}")
+            print(f"[DEBUG] 사용된 프롬프트: {'운동' if request.record_type == 'exercise' else '식단'} extraction")
             
             # 현재 데이터를 프롬프트에 포함
             if request.current_data and request.current_data != {}:
@@ -1010,11 +1043,40 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
 
             # 응답 JSON 파싱
             raw = response.choices[0].message["content"]  # type: ignore
+            print(f"[DEBUG] GPT 원본 응답: {raw}")
             
             try:
                 # JSON 응답인지 확인하고 파싱
                 if raw.strip().startswith('{') and raw.strip().endswith('}'): 
-                    parsed_response = json.loads(raw)
+                    # 더 안전한 JSON 파싱 방법
+                    try:
+                        # 먼저 원본으로 파싱 시도
+                        parsed_response = json.loads(raw)
+                        print(f"[DEBUG] JSON 파싱 성공 (원본): {parsed_response}")
+                    except json.JSONDecodeError as e:
+                        print(f"[DEBUG] 원본 파싱 실패: {e}")
+                        # 실패하면 정규식을 사용해 줄바꿈 문자를 올바르게 이스케이프 처리
+                        import re
+                        # JSON 문자열 내부의 줄바꿈만 이스케이프 (키-값 쌍 내부의 텍스트)
+                        def replace_newlines(match):
+                            text = match.group(1)
+                            text = text.replace(chr(10), "\\n").replace(chr(13), "\\r")
+                            return f': "{text}"'
+                        cleaned_raw = re.sub(r':\s*"([^"]*)"', replace_newlines, raw)
+                        print(f"[DEBUG] 정리된 JSON: {cleaned_raw}")
+                        try:
+                            parsed_response = json.loads(cleaned_raw)
+                            print(f"[DEBUG] JSON 파싱 성공 (정리됨): {parsed_response}")
+                        except json.JSONDecodeError as e2:
+                            print(f"[DEBUG] 정리된 JSON도 파싱 실패: {e2}")
+                            # 마지막 시도: eval을 사용한 안전한 파싱 (주의: 보안상 위험할 수 있음)
+                            try:
+                                import ast
+                                parsed_response = ast.literal_eval(raw)
+                                print(f"[DEBUG] JSON 파싱 성공 (ast): {parsed_response}")
+                            except:
+                                print(f"[DEBUG] 모든 파싱 방법 실패")
+                                raise e2
                     # 운동 기록인 경우 칼로리 소모량 자동 계산 적용
                     if request.record_type == "exercise" and parsed_response.get("system_message", {}).get("data"):
                         data = parsed_response["system_message"]["data"]
@@ -1024,8 +1086,15 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                     # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
                     response_type = parsed_response.get("response_type", "success")
                     user_message = request.message.strip()
+                    print(f"[DEBUG] 저장 조건 확인:")
+                    print(f"  record_type: {request.record_type}")
+                    print(f"  response_type: {response_type}")
+                    print(f"  user_message: '{user_message}'")
+                    
                     if request.record_type == "exercise" and response_type == "confirmation":
                         save_keywords = ["네", "예", "저장", "y", "yes", "Y", "YES", "ㅇ"]
+                        print(f"  save_keywords: {save_keywords}")
+                        print(f"  user_message in save_keywords: {user_message in save_keywords}")
                         if user_message in save_keywords:
                             data = parsed_response["system_message"]["data"]
                             user_id = request.user_id if request.user_id is not None else data.get("user_id")
@@ -1144,6 +1213,12 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                         # 혹시 system_message.user_message.text 구조도 지원
                         if not user_message_text and parsed_response.get("system_message", {}).get("user_message", {}).get("text"):
                             user_message_text = parsed_response["system_message"]["user_message"]["text"]
+                    
+                    print(f"[DEBUG] 응답 전송:")
+                    print(f"  type: {parsed_response.get('response_type', 'success')}")
+                    print(f"  message: {user_message_text or '응답을 처리했습니다.'}")
+                    print(f"  parsed_data: {parsed_response}")
+                    
                     return {
                         "type": parsed_response.get("response_type", "success"),
                         "message": user_message_text or "응답을 처리했습니다.",
@@ -1159,8 +1234,10 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                         "parsed_data": None,
                         "suggestions": []
                     }
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
                 # JSON 파싱 실패 시 텍스트로 처리
+                print(f"[DEBUG] JSON 파싱 실패: {e}")
+                print(f"[DEBUG] 파싱 실패한 원본: {raw}")
                 return {
                     "type": "incomplete",
                     "message": raw,
