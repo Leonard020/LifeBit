@@ -482,7 +482,7 @@ const HealthLog: React.FC = () => {
               </TabsTrigger>
               <TabsTrigger value="python" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
-                AI분석
+                기간별차트
               </TabsTrigger>
             </TabsList>
 
