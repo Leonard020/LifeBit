@@ -515,6 +515,90 @@ public class RankingService {
     }
 
     /**
+     * 운동 점수만 업데이트 (주간 기준)
+     */
+    @Transactional
+    public void updateExerciseScore(Long userId) {
+        try {
+            log.info("운동 점수 업데이트 시작 - 사용자 ID: {}", userId);
+            
+            UserRanking userRanking = userRankingRepository.findByUserId(userId)
+                    .orElseGet(() -> {
+                        UserRanking newRanking = new UserRanking();
+                        newRanking.setUserId(userId);
+                        newRanking.setTotalScore(0);
+                        newRanking.setTier(RankingTier.BRONZE);
+                        newRanking.setCreatedAt(LocalDateTime.now());
+                        return userRankingRepository.save(newRanking);
+                    });
+
+            // 전체 점수 재계산 (운동 점수만 업데이트하지만 전체 점수로 랭킹을 매기므로)
+            int totalScore = calculateTotalScore(userId);
+            
+            userRanking.setTotalScore(totalScore);
+            userRanking.setLastUpdatedAt(LocalDateTime.now());
+            
+            // 티어 업데이트
+            RankingTier newTier = calculateTier(totalScore);
+            userRanking.setTier(newTier);
+            
+            userRankingRepository.save(userRanking);
+            
+            // 개별 사용자 랭킹 순위 업데이트
+            updateUserRankingPosition(userId);
+            
+            log.info("운동 점수 업데이트 완료 - 사용자 ID: {}, 총 점수: {}", 
+                    userId, totalScore);
+                    
+        } catch (Exception e) {
+            log.error("운동 점수 업데이트 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("운동 점수 업데이트에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 식단 점수만 업데이트 (일간 기준)
+     */
+    @Transactional
+    public void updateNutritionScore(Long userId) {
+        try {
+            log.info("식단 점수 업데이트 시작 - 사용자 ID: {}", userId);
+            
+            UserRanking userRanking = userRankingRepository.findByUserId(userId)
+                    .orElseGet(() -> {
+                        UserRanking newRanking = new UserRanking();
+                        newRanking.setUserId(userId);
+                        newRanking.setTotalScore(0);
+                        newRanking.setTier(RankingTier.BRONZE);
+                        newRanking.setCreatedAt(LocalDateTime.now());
+                        return userRankingRepository.save(newRanking);
+                    });
+
+            // 전체 점수 재계산 (식단 점수만 업데이트하지만 전체 점수로 랭킹을 매기므로)
+            int totalScore = calculateTotalScore(userId);
+            
+            userRanking.setTotalScore(totalScore);
+            userRanking.setLastUpdatedAt(LocalDateTime.now());
+            
+            // 티어 업데이트
+            RankingTier newTier = calculateTier(totalScore);
+            userRanking.setTier(newTier);
+            
+            userRankingRepository.save(userRanking);
+            
+            // 개별 사용자 랭킹 순위 업데이트
+            updateUserRankingPosition(userId);
+            
+            log.info("식단 점수 업데이트 완료 - 사용자 ID: {}, 총 점수: {}", 
+                    userId, totalScore);
+                    
+        } catch (Exception e) {
+            log.error("식단 점수 업데이트 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("식단 점수 업데이트에 실패했습니다.", e);
+        }
+    }
+
+    /**
      * 개별 사용자의 랭킹 순위만 업데이트 (성능 최적화)
      */
     @Transactional

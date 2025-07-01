@@ -7,7 +7,7 @@
  * - AI 기반 개인화된 인사이트
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, useHealthLogStatistics, updateAchievementScore, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
 
 // ✅ 조인된 식단 데이터를 위한 확장 타입
@@ -91,6 +91,16 @@ const COLORS = {
 };
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
+
+interface NutritionData {
+  carbs: { percentage: number };
+  protein: { percentage: number };
+  fat: { percentage: number };
+}
+
+interface GoalAchievements {
+  nutrition: NutritionData;
+}
 
 export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
   userId,
@@ -1051,19 +1061,26 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
   };
 
   // 식단 점수 계산 함수 (주별 최대 7점)
-  const calculateNutritionScore = () => {
-    // 간단한 예시: 현재 일일 영양소 달성률을 기준으로 계산
-    // 실제로는 지난 7일간의 데이터를 확인해야 하지만, 여기서는 현재 일일 달성률로 추정
+  const calculateNutritionScore = useCallback(() => {
+    // 현재 일일 영양소 달성률을 기준으로 계산
     const carbsAchieved = goalAchievements.nutrition.carbs.percentage >= 100;
     const proteinAchieved = goalAchievements.nutrition.protein.percentage >= 100;
     const fatAchieved = goalAchievements.nutrition.fat.percentage >= 100;
     
-    // 모든 영양소가 100% 달성되면 1점 (하루 기준)
-    if (carbsAchieved && proteinAchieved && fatAchieved) {
-      return 1; // 하루 달성 시 1점, 실제로는 주간 누적 점수를 계산해야 함
+    // 모든 영양소가 100% 이상 달성되면 1점 부여
+    const todayScore = (carbsAchieved && proteinAchieved && fatAchieved) ? 1 : 0;
+    
+    return todayScore;
+  }, [goalAchievements]);
+
+  // 점수 상태 업데이트
+  useEffect(() => {
+    const score = calculateNutritionScore();
+    // 점수가 1점이면 실시간으로 백엔드에 반영
+    if (score === 1) {
+      void updateAchievementScore();
     }
-    return 0;
-  };
+  }, [calculateNutritionScore]);
 
   // 운동 부위별 데이터 계산 (건강로그 모드에서는 횟수, 일반 모드에서는 세트)
   const calculateDetailedExerciseData = () => {
