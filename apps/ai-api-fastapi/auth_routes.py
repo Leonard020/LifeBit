@@ -4,13 +4,14 @@ from database import get_db
 import models
 import requests, os
 from dotenv import load_dotenv
-from auth_utils import create_access_token
+from auth_utils import create_access_token, create_reset_token, verify_reset_token, send_reset_email
 from models import UserRole, get_kst_now
 from pathlib import Path
 from passlib.hash import bcrypt
 from sqlalchemy import text
 from datetime import datetime
 from typing import Optional
+from pydantic import BaseModel, EmailStr
 
 
 # Load .env
@@ -370,3 +371,35 @@ def login_user(data: dict, db: Session = Depends(get_db)):
         "role": user.role.value,
         "provider": str(user.provider or "local")
     }
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == data.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="등록된 이메일이 없습니다.")
+    token = create_reset_token(user.email)
+    send_reset_email(user.email, token)
+    return {"message": "비밀번호 재설정 링크가 이메일로 전송되었습니다."}
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+@router.post("/reset-password")
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    email = verify_reset_token(data.token)
+    if not email:
+        raise HTTPException(status_code=400, detail="유효하지 않은 토큰입니다.")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    # Hash password using PostgreSQL crypt for consistency
+    sql = text("""
+        UPDATE users SET password_hash = crypt(:password, gen_salt('bf')) WHERE email = :email
+    """)
+    db.execute(sql, {"password": data.password, "email": email})
+    db.commit()
+    return {"message": "비밀번호가 성공적으로 변경되었습니다."}
