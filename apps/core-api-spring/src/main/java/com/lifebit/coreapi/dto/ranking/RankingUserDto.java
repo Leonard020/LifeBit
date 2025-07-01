@@ -14,4 +14,5 @@ public class RankingUserDto {
     private final int streakDays;
     private final String tier;
     private final String colorCode;
+    private final String profileImageUrl;
 } 
