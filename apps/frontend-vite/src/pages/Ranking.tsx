@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar } from '@/components/ui/avatar';
 import { Trophy, Medal, Award, TrendingUp, Calendar, Target, Loader2, Check } from 'lucide-react';
-import { getRanking, initializeAchievements, completeAchievement } from '@/api/auth';
+import { getRanking, initializeAchievements, completeAchievement, getUserProfile } from '@/api/auth';
 import { getToken, getUserInfo } from '@/utils/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Drawer, DrawerContent, DrawerTrigger, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 import { getTierMeta } from '@/constants/rankingTierMeta';
 import { Button } from '@/components/ui/button';
+import { API_CONFIG } from '@/config/env';
 
 interface RankingUser {
   rank: number;
@@ -22,6 +23,7 @@ interface RankingUser {
   streakDays: number;
   tier: string;
   colorCode?: string;
+  profileImageUrl?: string;
 }
 
 interface MyRanking {
@@ -61,6 +63,7 @@ const Ranking = () => {
   const [completingAchievement, setCompletingAchievement] = useState<string | null>(null);
   const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [myProfileImageUrl, setMyProfileImageUrl] = useState<string | undefined>(undefined);
 
   // 업적 완료 상태 체크 헬퍼 함수
   const isAchievementCompleted = (achievement: Achievement) => {
@@ -277,6 +280,15 @@ const Ranking = () => {
     return <span className="text-lg font-bold text-muted-foreground">#{rank}</span>;
   };
 
+  useEffect(() => {
+    // Fetch current user's profile image for top ranker display
+    getUserProfile().then(profile => {
+      if (profile && profile.profileImageUrl) {
+        setMyProfileImageUrl(profile.profileImageUrl);
+      }
+    });
+  }, []);
+
   if (loading) {
     return (
       <Layout>
@@ -382,7 +394,7 @@ const Ranking = () => {
             </CardHeader>
             <CardContent>
               <div className="text-center space-y-4">
-                {/* 등급명/색상 표시 + 툴팁 */}
+                {/* 등급명/색상 표시 + 툴클 */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
@@ -438,6 +450,9 @@ const Ranking = () => {
               <div className="space-y-4">
                 {topRankers.map((user: RankingUser) => {
                   const tierMeta = getTierMeta(String(user.tier));
+                  const profileImageUrl = user.rank === 1 && myProfileImageUrl && user.userId === rankingData.myRanking.userId
+                    ? myProfileImageUrl
+                    : user.profileImageUrl;
                   return (
                     <div key={`${user.userId}-${user.rank}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
                       <div className="flex items-center space-x-3">
@@ -445,12 +460,19 @@ const Ranking = () => {
                           {getRankIcon(user.rank)}
                         </div>
                         <Avatar>
-                          <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
-                            <span className="text-white text-sm font-bold">
-                              {user.nickname.charAt(0)}
-                            </span>
-                          </div>
-                          <AvatarFallback>{user.nickname.charAt(0)}</AvatarFallback>
+                          {profileImageUrl ? (
+                            <img
+                              src={`${API_CONFIG.BASE_URL}${profileImageUrl}`}
+                              alt={user.nickname}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
+                              <span className="text-white text-sm font-bold">
+                                {user.nickname.charAt(0)}
+                              </span>
+                            </div>
+                          )}
                         </Avatar>
                         <div>
                           <div className="font-medium">{user.nickname}</div>
