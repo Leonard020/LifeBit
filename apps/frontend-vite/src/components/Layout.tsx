@@ -69,24 +69,23 @@ const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center justify-between px-4">
-          <div className="flex items-center space-x-2">
-            <Link to="/" className="flex items-center space-x-2">
-              <img
-                src=".././public/LifeBitLogo2.png"
-                alt="LifeBit 로고"
-                style={{
-                  height: '38px',
-                  width: 'auto',
-                  objectFit: 'contain',
-                  display: 'block',
-                  margin: '0px',
-                  borderRadius: '8px',
-                  background: 'transparent'
-                }}
-              />
-            </Link>
-          </div>
+        <div className="container flex h-16 items-center justify-between px-4">
+          <Link to="/" className="flex items-center space-x-2">
+            <img
+              src="/LifeBitLogo2.png"
+              alt="LifeBit 로고"
+              style={{
+                height: '38px',
+                minWidth: '2px',
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+                margin: '0px',
+                borderRadius: '8px',
+                background: 'transparent'
+              }}
+            />
+          </Link>
 
           <div className="flex items-center space-x-2">
             <Button
@@ -224,16 +223,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="container flex h-16 items-center justify-between px-4">
           <Link to="/" className="flex items-center space-x-2">
             <img
-              src="/LifeBitLogo.png"
+              src="/LifeBitLogo2.png"
               alt="LifeBit 로고"
               style={{
-                height: '44px',
+                height: '38px',
+                minWidth: '180px',
                 width: 'auto',
                 objectFit: 'contain',
                 display: 'block',
-                margin: '0 8px',
+                margin: '0px',
                 borderRadius: '8px',
-                background: 'black'
+                background: 'transparent'
               }}
             />
           </Link>
