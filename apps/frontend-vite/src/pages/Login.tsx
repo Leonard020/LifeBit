@@ -159,9 +159,12 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
         <div className="text-center">
-          <div className="gradient-bg w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-3xl">L</span>
-          </div>
+          <img
+            src="/LifeBitLogo1.png"
+            alt="LifeBit 로고"
+            className="h-32 w-auto mx-auto mb-4"
+            style={{ objectFit: 'contain' }}
+          />
           <h2 className="text-2xl font-bold tracking-tight">
             LifeBit에 오신 것을 환영합니다
           </h2>
