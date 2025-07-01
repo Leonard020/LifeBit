@@ -39,4 +39,8 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     // 대시보드 통계용 메서드
     @Query("SELECT COUNT(ml) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
     long countByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    
+    // 기간별 활동 사용자 수 통계용 메서드
+    @Query("SELECT COUNT(DISTINCT ml.user.userId) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
+    long countDistinctUsersByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 } 
