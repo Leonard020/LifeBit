@@ -1,27 +1,17 @@
 # LifeBit Frontend Startup Script
 Write-Host "🚀 Starting LifeBit Frontend (React + Vite)" -ForegroundColor Green
 
-$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$rootPath = Split-Path -Parent $scriptPath
-Set-Location "$rootPath/apps/frontend-vite"
+# Set UTF-8 encoding for proper Korean character handling
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
-# pnpm 설치 확인
-try {
-    $pnpmVersion = pnpm --version
-    Write-Host "📦 pnpm version: $pnpmVersion" -ForegroundColor Green
-} catch {
-    Write-Host "❌ pnpm is not installed or not in PATH" -ForegroundColor Red
-    Write-Host "Please install pnpm: npm install -g pnpm" -ForegroundColor Yellow
-    exit 1
-}
+# Determine project root
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ROOT_DIR   = Split-Path -Parent $SCRIPT_DIR
 
-# node_modules 확인
-if (-not (Test-Path "node_modules")) {
-    Write-Host "📦 Installing dependencies..." -ForegroundColor Yellow
-    pnpm install
-}
+# Move to frontend source directory
+Set-Location "$ROOT_DIR/apps/frontend-vite"
 
+# Launch Vite development server
 Write-Host "🚀 Starting development server..." -ForegroundColor Yellow
-pnpm dev
-
-Write-Host "✅ Frontend server is running at http://localhost:5173" -ForegroundColor Green 
+& pnpm dev 
