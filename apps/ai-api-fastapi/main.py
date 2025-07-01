@@ -1254,9 +1254,40 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                 # JSON 파싱 실패 시 텍스트로 처리
                 print(f"[DEBUG] JSON 파싱 실패: {e}")
                 print(f"[DEBUG] 파싱 실패한 원본: {raw}")
+                
+                # AI에게 JSON 형식으로 다시 응답하도록 요청
+                try:
+                    retry_messages = [
+                        {"role": "system", "content": "당신은 반드시 JSON 형식으로만 응답해야 합니다. 일반 텍스트 응답은 금지입니다."},
+                        {"role": "user", "content": f"다음 응답을 JSON 형식으로 다시 작성해주세요: {raw}"}
+                    ]
+                    
+                    retry_response = openai.ChatCompletion.create(  # type: ignore
+                        model="gpt-4o-mini",
+                        messages=retry_messages,
+                        temperature=0.1
+                    )
+                    
+                    retry_raw = retry_response.choices[0].message["content"]  # type: ignore
+                    print(f"[DEBUG] 재시도 응답: {retry_raw}")
+                    
+                    # 재시도 응답 파싱
+                    if retry_raw.strip().startswith('{') and retry_raw.strip().endswith('}'):
+                        parsed_response = json.loads(retry_raw)
+                        return {
+                            "type": parsed_response.get("response_type", "success"),
+                            "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
+                            "parsed_data": parsed_response,
+                            "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
+                            "suggestions": []
+                        }
+                except Exception as retry_error:
+                    print(f"[DEBUG] 재시도 실패: {retry_error}")
+                
+                # 모든 시도 실패 시 안전한 응답
                 return {
                     "type": "incomplete",
-                    "message": raw,
+                    "message": "AI 응답을 처리할 수 없습니다. 다시 시도해주세요.",
                     "parsed_data": None,
                     "suggestions": []
                 }
@@ -1266,10 +1297,16 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
 
     except Exception as e:
         print(f"[ERROR] Chat error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
-        )
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        
+        # 더 안전한 오류 응답
+        return {
+            "type": "error",
+            "message": "AI 응답 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
+            "parsed_data": None,
+            "suggestions": []
+        }
 
 # --- ExerciseCatalog 자동 조회/생성 함수 ---
 def get_or_create_exercise_catalog(db, name, category=None, subcategory=None, description=None):
