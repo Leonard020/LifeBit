@@ -435,26 +435,6 @@ const HealthLog: React.FC = () => {
                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
                   {isConnected ? '자동 새로고침 활성' : '비활성'}
                 </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowChat(!showChat)}
-                  className="flex items-center gap-1"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  AI 채팅
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    // [DEPRECATED] 건강 상태 모니터링 등 알림 관련 API는 NotificationBell 및 getNotifications 등 통합 API를 사용하세요.
-                    // healthNotificationApi.monitorHealth 등은 더 이상 사용하지 않습니다.
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  🏥 건강 체크
-                </Button>
               </div>
             </div>
           </div>

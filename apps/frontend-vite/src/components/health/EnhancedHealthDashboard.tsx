@@ -666,23 +666,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                 {goalPeriod === 'month' && `이번 달 (${new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })})`}
               </div>
               
-              {/* 일/주/월 선택 탭 */}
-              <Tabs value={goalPeriod} onValueChange={(value) => setGoalPeriod(value as 'day' | 'week' | 'month')} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-6">
-                  <TabsTrigger value="day" className="flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4" />
-                    일
-                  </TabsTrigger>
-                  <TabsTrigger value="week" className="flex items-center gap-2">
-                    <Activity className="h-4 w-4" />
-                    주
-                  </TabsTrigger>
-                  <TabsTrigger value="month" className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    월
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
               
               {/* 점수 업데이트 버튼 */}
               <div className="text-center mb-4">
