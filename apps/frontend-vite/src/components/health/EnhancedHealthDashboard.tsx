@@ -426,10 +426,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             <Dumbbell className="h-4 w-4" />
             운동 분석
           </TabsTrigger>
-          <TabsTrigger value="goal" className="flex items-center gap-2">
+          {/* <TabsTrigger value="goal" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             목표
-          </TabsTrigger>
+          </TabsTrigger> */}
         </TabsList>
 
         {/* 대시보드 탭 */}
@@ -439,6 +439,14 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             exerciseMinutes={todayData.exerciseMinutes}
             targetMinutes={todayData.targetMinutes}
             isExercising={todayData.exerciseMinutes > 0}
+          />
+          {/* 목표 달성률 분석/상세 목표 등 GoalsTab 주요 내용 추가 */}
+          <GoalsTab
+            goalAchievements={todayData?.goalAchievements as GoalAchievements}
+            goalsData={userGoals?.data || userGoals || null}
+            healthStats={healthStats?.data || healthStats || null}
+            chartData={[]}
+            nutritionStats={todayData?.nutritionStatsForGoal || {}}
           />
         </TabsContent>
 
@@ -468,17 +476,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               period={period}
             />
           </div>
-        </TabsContent>
-
-        {/* 목표 탭 */}
-        <TabsContent value="goal" className="space-y-6">
-          <GoalsTab
-            goalAchievements={todayData?.goalAchievements as GoalAchievements}
-            goalsData={userGoals?.data || userGoals || null}
-            healthStats={healthStats?.data || healthStats || null}
-            chartData={[]}
-            nutritionStats={todayData?.nutritionStatsForGoal || {}}
-          />
         </TabsContent>
       </Tabs>
     </div>
