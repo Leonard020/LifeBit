@@ -72,10 +72,19 @@ const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void
         <div className="flex h-16 items-center justify-between px-4">
           <div className="flex items-center space-x-2">
             <Link to="/" className="flex items-center space-x-2">
-              <div className="gradient-bg w-8 h-8 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">L</span>
-              </div>
-              <span className="gradient-text text-2xl font-bold">LifeBit</span>
+              <img
+                src=".././public/LifeBitLogo2.png"
+                alt="LifeBit 로고"
+                style={{
+                  height: '38px',
+                  width: 'auto',
+                  objectFit: 'contain',
+                  display: 'block',
+                  margin: '0px',
+                  borderRadius: '8px',
+                  background: 'transparent'
+                }}
+              />
             </Link>
           </div>
 
@@ -214,10 +223,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between px-4">
           <Link to="/" className="flex items-center space-x-2">
-            <div className="gradient-bg w-8 h-8 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">L</span>
-            </div>
-            <span className="gradient-text text-2xl font-bold">LifeBit</span>
+            <img
+              src="/LifeBitLogo.png"
+              alt="LifeBit 로고"
+              style={{
+                height: '44px',
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+                margin: '0 8px',
+                borderRadius: '8px',
+                background: 'black'
+              }}
+            />
           </Link>
 
           <div className="flex items-center space-x-2">
