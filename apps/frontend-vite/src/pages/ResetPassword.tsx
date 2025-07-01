@@ -24,7 +24,7 @@ export default function ResetPassword() {
       return;
     }
     try {
-      await axios.post('/api/auth/reset-password', { token, password });
+      await axios.post('/api/py/auth/reset-password', { token, password });
       toast({
         title: '비밀번호 변경 완료',
         description: '새 비밀번호로 로그인해주세요.',

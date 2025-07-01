@@ -1068,6 +1068,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ onRecordSubmit }) => {
       
       message += `🔢 세트: ${data.sets}세트\n`;
       message += `🔄 횟수: ${data.reps}회\n`;
+      // 근력운동에도 시간 정보 추가
+      if (data.duration_min && data.duration_min > 0) {
+        message += `⏱️ 운동시간: ${data.duration_min}분\n`;
+      }
       message += `🔥 소모 칼로리: ${calculatedCalories}kcal\n\n`;
     }
     

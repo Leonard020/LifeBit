@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
@@ -7,6 +7,7 @@ import openai, os, json
 from dotenv import load_dotenv
 import tempfile
 from auth_routes import router as auth_router
+from auth_utils import verify_access_token
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
@@ -16,6 +17,47 @@ import models
 from note_routes import router as note_router, estimate_grams_from_korean_amount
 import requests
 from normalize_utils import normalize_exercise_name
+
+# 🔧 JWT 토큰 검증 의존성 함수
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """
+    JWT 토큰을 검증하고 현재 사용자 정보를 반환합니다.
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization 헤더가 필요합니다"
+        )
+    
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Bearer 토큰 형식이 올바르지 않습니다"
+        )
+    
+    token = authorization.replace("Bearer ", "")
+    
+    try:
+        payload = verify_access_token(token)
+        return payload
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"토큰 검증 실패: {str(e)}"
+        )
+
+# 🔧 사용자 ID 추출 의존성 함수
+async def get_current_user_id(current_user: dict = Depends(get_current_user)) -> int:
+    """
+    현재 사용자의 ID를 반환합니다.
+    """
+    user_id = current_user.get("userId")
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="토큰에서 사용자 ID를 추출할 수 없습니다"
+        )
+    return user_id
 
 # 🔧 환경 감지 및 데이터베이스 설정 오버라이드
 def setup_database():
@@ -101,7 +143,6 @@ print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
-app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 
 # =======================
 # CORS 설정 (동적/배포 대응)
@@ -136,8 +177,11 @@ else:
         max_age=3600,
     )
 
+# =======================
 # 라우터 등록
-app.include_router(auth_router, prefix="/api/py/auth")
+# =======================
+app.include_router(auth_router, prefix="/api/py/auth")  # 인증 관련 라우터
+app.include_router(note_router, prefix="/api/py/note")  # 노트 관련 라우터
 
 # DB 테이블 생성 (지연 초기화)
 def init_database():
@@ -188,6 +232,7 @@ EXERCISE_EXTRACTION_PROMPT = """
 - 무게 (weight) ✅ 필수
 - 세트 (sets) ✅ 필수
 - 횟수 (reps) ✅ 필수
+- 운동시간 (duration_min) ✅ 필수 (휴식시간 포함한 총 시간)
 
 [맨몸 근력운동]
 - 운동명 (exercise) ✅ 필수
@@ -195,6 +240,7 @@ EXERCISE_EXTRACTION_PROMPT = """
 - 중분류 (subcategory): "가슴", "등", "하체", "복근", "팔", "어깨" ✅ 자체 판단
 - 세트 (sets) ✅ 필수
 - 횟수 (reps) ✅ 필수
+- 운동시간 (duration_min) ✅ 필수 (휴식시간 포함한 총 시간)
 - 무게: 사용자 프로필의 몸무게 자동 적용 (사용자가 수정 가능)
 
 [유산소 운동]
@@ -224,6 +270,13 @@ EXERCISE_EXTRACTION_PROMPT = """
 ※ 새로운 운동이 등장하면, AI가 운동의 동작을 분석해 가장 적합한 부위를 추론해서 분류해 주세요.
 - 만약 운동 부위(subcategory)가 명확하지 않으면, validation 단계에서 "이 운동은 어느 부위 운동인가요? (가슴/등/하체/어깨/팔/복근/유산소)"라고 사용자에게 질문하세요.
 
+⏱️ **운동시간 수집 가이드:**
+- 모든 운동(유산소, 근력)에서 시간 정보를 반드시 수집합니다.
+- 근력운동의 경우: "총 몇 분 동안 운동하셨나요? (휴식시간 포함)"
+- 유산소운동의 경우: "몇 분 동안 하셨나요?"
+- 사용자가 시간을 명시하지 않은 경우, validation 단계에서 반드시 질문하세요.
+- 근력운동 시간 추정: 일반적으로 세트 × 3-4분 (운동시간 + 휴식시간)
+
 💬 **응답 형식 (JSON, 반드시 아래 구조와 타입을 지켜서 반환):**
 
 **중요: 반드시 response_type과 system_message, user_message를 포함한 완전한 JSON 형식으로 응답하세요.**
@@ -244,11 +297,11 @@ EXERCISE_EXTRACTION_PROMPT = """
     }
   },
   "user_message": {
-    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
 
-근력운동 예시:
+근력 운동 예시:
 {
   "response_type": "extraction",
   "system_message": {
@@ -256,45 +309,15 @@ EXERCISE_EXTRACTION_PROMPT = """
       "exercise": "벤치프레스",
       "category": "근력운동",
       "subcategory": "가슴",
-      "weight": 30,
-      "sets": 3,
+      "weight": 80,
+      "sets": 4,
       "reps": 10,
-      "duration_min": null,
+      "duration_min": 15,
       "is_bodyweight": false
     }
   },
   "user_message": {
-    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 30kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
-  }
-}
-
-// 모든 필드는 누락 없이 반환해야 하며, 값이 없으면 null로 명시하세요.
-// 반드시 user_message.text 필드를 포함하여 사용자에게 친근한 안내 메시지를 제공하세요.
-// subcategory(운동 부위)는 반드시 한글로 반환(예: "가슴"), 백엔드에서 ENUM(body_part_type) 영문으로 변환합니다.
-// 예시: "가슴"→"chest", "등"→"back", "하체"→"legs", "어깨"→"shoulders", "팔"→"arms", "복근"→"abs", "유산소"→"cardio"
-
-🔄 **진행 조건:**
-- 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
-- 일부 정보 누락 → validation 단계로
-
-📝 **대화 예시:**
-사용자: "조깅 40분 동안 했어요"
-AI: {
-  "response_type": "extraction",
-  "system_message": {
-    "data": {
-      "exercise": "조깅",
-      "category": "유산소",
-      "subcategory": "유산소",
-      "weight": null,
-      "sets": null,
-      "reps": null,
-      "duration_min": 40,
-      "is_bodyweight": false
-    }
-  },
-  "user_message": {
-    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 80kg\n🔢 세트: 4세트\n🔄 횟수: 10회\n⏱️ 운동시간: 15분 (휴식시간 포함)\n\n맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
 """
@@ -924,7 +947,7 @@ def is_bodyweight_exercise(exercise_name: str) -> bool:
     return any(ex in exercise_name.lower() for ex in bodyweight_exercises)
 
 @app.post("/api/py/chat")
-async def chat(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     try:
         if not request.message:
             raise HTTPException(status_code=400, detail="메시지가 비어있습니다.")
@@ -1094,7 +1117,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                                 )
 
                                 try:
-                                    result = save_diet_record(meal_input, db)
+                                    result = save_diet_record(meal_input, current_user_id, db)
                                     saved_results.append(result)
                                     print(f"[✅ 식단 저장] {food['food_name']} 저장 완료")
                                 except Exception as save_err:
@@ -1193,7 +1216,7 @@ def get_or_create_exercise_catalog(db, name, category=None, subcategory=None, de
 
 # 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
 @app.post("/api/py/note/exercise")
-def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
+def save_exercise_record(data: ExerciseRecord, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
     # AI에서 운동명, 분류, 부위 등 전달받음 (하드코딩/키워드 매핑 없음)
     catalog = None
     if hasattr(data, 'exercise_catalog_id') and data.exercise_catalog_id:
@@ -1239,9 +1262,9 @@ def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
 
 # ✅ 오늘 날짜 운동 기록 조회
 @app.get("/api/py/note/exercise/daily", response_model=list[DailyExerciseRecord])
-def get_today_exercise(user_id: int, date: Optional[date] = date.today(), db: Session = Depends(get_db)):
+def get_today_exercise(current_user_id: int = Depends(get_current_user_id), date: Optional[date] = date.today(), db: Session = Depends(get_db)):
     records = db.query(models.ExerciseSession).filter(
-        models.ExerciseSession.user_id == user_id,
+        models.ExerciseSession.user_id == current_user_id,
         models.ExerciseSession.exercise_date == date
     ).all()
 
@@ -1274,7 +1297,7 @@ def test_diet_save(db: Session = Depends(get_db)):
     
     try:
         from note_routes import save_diet_record
-        result = save_diet_record(test_data, db)
+        result = save_diet_record(test_data, test_data.user_id, db)
         return {
             "test_status": "SUCCESS",
             "message": "식단 저장 로직 테스트 완료",
@@ -1288,7 +1311,7 @@ def test_diet_save(db: Session = Depends(get_db)):
 
 # 📋 오늘 식단 기록 조회 API  
 @app.get("/api/py/note/diet/daily")
-def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session = Depends(get_db)):
+def get_today_diet(current_user_id: int = Depends(get_current_user_id), target_date: Optional[str] = None, db: Session = Depends(get_db)):
     """사용자의 오늘 식단 기록을 조회합니다."""
     if target_date:
         query_date = date.fromisoformat(target_date)
@@ -1296,7 +1319,7 @@ def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session 
         query_date = date.today()
     
     records = db.query(models.MealLog).filter(
-        models.MealLog.user_id == user_id,
+        models.MealLog.user_id == current_user_id,
         models.MealLog.log_date == query_date
     ).all()
     
@@ -1324,7 +1347,7 @@ def get_today_diet(user_id: int, target_date: Optional[str] = None, db: Session 
         })
     
     return {
-        "user_id": user_id,
+        "user_id": current_user_id,
         "date": str(query_date),
         "total_records": len(results),
         "records": results
@@ -1414,9 +1437,11 @@ def calculate_exercise_calories_from_gpt(exercise_data: dict) -> float:
             reps = exercise_data.get('reps', 1)
             
             # 기본 공식: (무게 × 세트 × 횟수 × 0.05) + (운동시간 × 5)
-            # 근력운동 시간 추정: 세트 × 2분
-            estimated_duration = sets * 2
-            calories = (weight * sets * reps * 0.05) + (estimated_duration * 5)
+            # 근력운동 시간 추정: 세트 × 2-3분 (휴식시간 포함)
+            estimated_duration = sets * 3 if sets > 0 else 30  # 최소 30분
+            # 사용자가 시간을 직접 입력했다면 그 값을 우선 사용
+            actual_duration = exercise_data.get('duration_min', estimated_duration)
+            calories = (weight * sets * reps * 0.05) + (actual_duration * 5)
         
         calories = round(calories, 1)
         

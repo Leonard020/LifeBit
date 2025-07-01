@@ -12,7 +12,7 @@ export default function FindPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/auth/forgot-password', { email });
+      await axios.post('/api/py/auth/forgot-password', { email });
       setSent(true);
       toast({
         title: '이메일 전송 완료',
