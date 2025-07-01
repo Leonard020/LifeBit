@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -1043,6 +1044,16 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
 
             # 응답 JSON 파싱
             raw = response.choices[0].message["content"]  # type: ignore
+            
+            # 윈도우 환경에서 인코딩 문제 해결
+            if isinstance(raw, str):
+                # UTF-8로 명시적 인코딩 처리
+                try:
+                    raw = raw.encode('utf-8', errors='ignore').decode('utf-8')
+                except:
+                    # 인코딩 실패 시 원본 사용
+                    pass
+            
             print(f"[DEBUG] GPT 원본 응답: {raw}")
             
             try:
@@ -1060,6 +1071,11 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                         # JSON 문자열 내부의 줄바꿈만 이스케이프 (키-값 쌍 내부의 텍스트)
                         def replace_newlines(match):
                             text = match.group(1)
+                            # 윈도우 환경에서 인코딩 문제 해결
+                            try:
+                                text = text.encode('utf-8', errors='ignore').decode('utf-8')
+                            except:
+                                pass
                             text = text.replace(chr(10), "\\n").replace(chr(13), "\\r")
                             return f': "{text}"'
                         cleaned_raw = re.sub(r':\s*"([^"]*)"', replace_newlines, raw)
