@@ -101,7 +101,6 @@ print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
-app.include_router(note_router, prefix="/api/py/note")  # ✅ 라우터 등록
 
 # =======================
 # CORS 설정 (동적/배포 대응)
@@ -136,8 +135,11 @@ else:
         max_age=3600,
     )
 
+# =======================
 # 라우터 등록
-app.include_router(auth_router, prefix="/api/py/auth")
+# =======================
+app.include_router(auth_router, prefix="/api/py/auth")  # 인증 관련 라우터
+app.include_router(note_router, prefix="/api/py/note")  # 노트 관련 라우터
 
 # DB 테이블 생성 (지연 초기화)
 def init_database():
