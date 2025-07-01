@@ -114,6 +114,18 @@ else
     fi
     log_success "사용자 정의 도메인으로 설정합니다: $USER_DOMAIN_NAME"
     DOMAIN_NAME_VAR="domain_name=$USER_DOMAIN_NAME"
+    
+    # SSL 인증서 설정
+    echo ""
+    read -p "SSL 인증서를 테스트 모드(staging)로 발급하시겠습니까? (yes/no, 기본값: yes): " SSL_STAGING
+    SSL_STAGING=${SSL_STAGING:-yes}
+    if [[ "$SSL_STAGING" =~ ^[Yy][Ee][Ss]$ ]]; then
+        log_info "SSL 인증서를 테스트 모드로 발급합니다."
+        CERTBOT_STAGING="true"
+    else
+        log_warning "SSL 인증서를 실제 모드로 발급합니다. (Let's Encrypt 한도 제한 주의)"
+        CERTBOT_STAGING="false"
+    fi
 fi
 
 # 환경 변수 요약 출력
@@ -365,6 +377,9 @@ if [ -n "$POSTGRES_USER" ]; then
 fi
 if [ -n "$POSTGRES_PASSWORD" ]; then
     ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS postgres_password='$POSTGRES_PASSWORD'"
+fi
+if [ -n "$CERTBOT_STAGING" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS certbot_staging='$CERTBOT_STAGING'"
 fi
 
 log_info "Ansible 변수: $ANSIBLE_EXTRA_VARS"

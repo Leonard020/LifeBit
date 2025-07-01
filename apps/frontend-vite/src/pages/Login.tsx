@@ -218,7 +218,7 @@ export default function Login() {
                   </FormItem>
                 )}
               />
-              <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+              <Link to="/find-password" className="text-sm font-medium text-primary hover:underline">
                 비밀번호 찾기
               </Link>
             </div>

@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    active: development
   datasource:
     url: jdbc:postgresql://localhost:5432/lifebit_db?stringtype=unspecified&connectTimeout=30&socketTimeout=60&ApplicationName=LifeBit-Core-API-Dev
     username: lifebit_user
@@ -18,7 +20,7 @@ spring:
       validation-timeout: 5000
   jpa:
     hibernate:
-      ddl-auto: validate  # 프로덕션에서는 validate 사용 권장
+      ddl-auto: update  # 개발환경에서는 update 사용
     show-sql: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
@@ -78,6 +80,74 @@ management:
   health:
     defaults:
       enabled: true
+
+logging:
+  level:
+    com.lifebit: DEBUG
+    com.lifebit.coreapi.controller.MealLogController: DEBUG
+    com.lifebit.coreapi.security: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    root: INFO
+
+---
+# 개발환경 설정 (로컬 개발용)
+spring:
+  config:
+    activate:
+      on-profile: development
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/lifebit_db?stringtype=unspecified&connectTimeout=30&socketTimeout=60&ApplicationName=LifeBit-Core-API-Dev
+    username: lifebit_user
+    password: lifebit_password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 300000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
+      
+  jpa:
+    hibernate:
+      ddl-auto: update  # 개발환경에서는 스키마 자동 업데이트
+    show-sql: true  # 개발환경에서는 SQL 로그 표시
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            '[non_contextual_creation]': true
+          time_zone: Asia/Seoul
+        '[globally_quoted_identifiers]': true
+        '[globally_quoted_identifiers_skip_column_definitions]': true
+        connection:
+          '[provider_disables_autocommit]': false
+        '[order_inserts]': true
+        '[order_updates]': true
+        '[batch_versioned_data]': true
+        format_sql: true  # 개발환경에서는 SQL 포맷팅
+        use_sql_comments: true
+    open-in-view: false
+
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics
+      cors:
+        allowed-origins: "http://localhost:5173"
+        allowed-methods: "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+        allowed-headers: "*"
+        allow-credentials: true
+        max-age: 3600
 
 logging:
   level:

@@ -13,150 +13,188 @@ NC='\033[0m' # No Color
 
 # 로그 함수
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "${BLUE}[CHECK]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}[PASS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[FAIL]${NC} $1"
 }
-
-echo -e "${BLUE}"
-cat << "EOF"
- _      _  __      ____  _ _   
-| |    (_)/ _|    |  _ \(_) |  
-| |     _| |_ ___ | |_) |_| |_ 
-| |    | |  _/ _ \|  _ <| | __|
-| |____| | ||  __/| |_) | | |_ 
-|______|_|_| \___||____/|_|\__|
-                               
-배포 전 사전 점검...
-EOF
-echo -e "${NC}"
 
 # 체크 결과 저장
-checks_passed=0
-total_checks=0
+ERRORS=0
+WARNINGS=0
 
-# 체크 함수
-check_item() {
-    local description="$1"
-    local command="$2"
-    local is_critical="${3:-false}"
-    
-    total_checks=$((total_checks + 1))
-    log_info "점검 중: $description"
-    
-    if eval "$command" >/dev/null 2>&1; then
-        log_success "$description"
-        checks_passed=$((checks_passed + 1))
-        return 0
-    else
-        if [ "$is_critical" = "true" ]; then
-            log_error "$description (중요)"
-        else
-            log_warning "$description (경고)"
-            checks_passed=$((checks_passed + 1))  # 경고는 통과로 처리
-        fi
-        return 1
-    fi
-}
-
-log_info "=== 필수 도구 확인 ==="
-
-# 필수 도구들 확인
-check_item "Terraform 설치 확인" "command -v terraform" true
-check_item "Ansible 설치 확인" "command -v ansible" true
-check_item "AWS CLI 설치 확인" "command -v aws" true
-check_item "Docker 설치 확인" "command -v docker" false
-check_item "SSH 키 존재 확인" "test -f ~/.ssh/lifebit_key" true
-
-log_info "=== AWS 설정 확인 ==="
-
-# AWS 설정 확인
-check_item "AWS 자격 증명 확인" "aws sts get-caller-identity" true
-
-log_info "=== 프로젝트 파일 확인 ==="
-
-# 필수 파일들 확인
-check_item "Docker Compose 프로덕션 파일" "test -f docker-compose.prod.yml" true
-check_item "Ansible 플레이북 파일" "test -f infrastructure/ansible/playbook.yml" true
-check_item "Ansible 환경 템플릿" "test -f infrastructure/ansible/templates/prod.env.j2" true
-check_item "Terraform 메인 파일" "test -f infrastructure/terraform/main.tf" true
-check_item "Terraform user_data 스크립트" "test -f infrastructure/terraform/user_data.sh" true
-check_item "Nginx 설정 파일" "test -f infrastructure/nginx/nginx.conf" true
-check_item "데이터베이스 스키마 파일" "test -f LifeBit.sql" true
-
-log_info "=== Docker 설정 확인 ==="
-
-# Docker 관련 파일 확인
-check_item "Core API Dockerfile" "test -f apps/core-api-spring/Dockerfile" true
-check_item "AI API Dockerfile" "test -f apps/ai-api-fastapi/Dockerfile" true
-check_item "Frontend Dockerfile" "test -f apps/frontend-vite/Dockerfile" true
-
-log_info "=== 로컬 환경 확인 ==="
-
-# 로컬 환경 확인
-check_item "현재 디렉토리가 프로젝트 루트인지 확인" "test -f package.json && test -d apps" true
-check_item "Git 상태 확인 (커밋되지 않은 변경사항)" "git diff --quiet" false
-
-# 디스크 공간 확인 (로컬)
-if [ "$(df -h . | awk 'NR==2 {print $4}' | sed 's/G//' | cut -d. -f1)" -lt 5 ]; then
-    log_warning "로컬 디스크 공간이 부족할 수 있습니다"
-else
-    log_success "로컬 디스크 공간 충분"
-    checks_passed=$((checks_passed + 1))
-fi
-total_checks=$((total_checks + 1))
-
-log_info "=== Terraform 상태 확인 ==="
-
-# Terraform 상태 확인
-if [ -f "infrastructure/terraform/terraform.tfstate" ]; then
-    check_item "기존 Terraform 상태 확인" "cd infrastructure/terraform && terraform show" false
-else
-    log_info "새로운 배포 (기존 상태 없음)"
-fi
-
-log_info "=== 네트워크 연결 확인 ==="
-
-# 네트워크 연결 확인
-check_item "Docker Hub 연결 확인" "curl -s --connect-timeout 5 https://hub.docker.com" false
-check_item "GitHub 연결 확인" "curl -s --connect-timeout 5 https://github.com" false
-check_item "AWS 서비스 연결 확인" "aws ec2 describe-regions --region us-east-1" false
-
+echo -e "${BLUE}=== LifeBit 배포 전 체크 시작 ===${NC}"
 echo ""
-echo -e "${GREEN}═══════════════════════════════════════${NC}"
-echo -e "${GREEN}         사전 점검 결과${NC}"
-echo -e "${GREEN}═══════════════════════════════════════${NC}"
-echo -e "${BLUE}통과한 점검:${NC} $checks_passed/$total_checks"
 
-if [ $checks_passed -eq $total_checks ]; then
-    echo -e "${GREEN}🎉 모든 사전 점검을 통과했습니다!${NC}"
-    echo -e "${GREEN}배포를 진행할 수 있습니다.${NC}"
-    echo ""
-    echo -e "${BLUE}다음 명령으로 배포를 시작하세요:${NC}"
-    echo -e "   ./scripts/aws-deploy.sh"
-    exit 0
-elif [ $checks_passed -ge $((total_checks * 8 / 10)) ]; then
-    echo -e "${YELLOW}⚠️  일부 경고가 있지만 배포 가능합니다.${NC}"
-    echo -e "${YELLOW}위의 경고사항을 확인하고 필요시 수정하세요.${NC}"
-    echo ""
-    echo -e "${BLUE}배포를 계속 진행하려면:${NC}"
-    echo -e "   ./scripts/aws-deploy.sh"
+# 1. 로컬 개발 환경 실행 여부 확인
+log_info "로컬 개발 환경 실행 상태 확인 중..."
+
+# Docker 컨테이너 확인
+if command -v docker >/dev/null 2>&1; then
+    LOCAL_CONTAINERS=$(docker ps --format "table {{.Names}}" | grep -E "lifebit_.*" | grep -v "prod" || true)
+    if [ -n "$LOCAL_CONTAINERS" ]; then
+        log_warning "로컬 개발 환경 컨테이너가 실행 중입니다:"
+        echo "$LOCAL_CONTAINERS"
+        log_warning "배포 시 포트 충돌을 방지하려면 'docker-compose -f docker-compose.local.yml down' 실행을 권장합니다."
+        WARNINGS=$((WARNINGS + 1))
+    else
+        log_success "로컬 개발 환경 컨테이너가 실행되지 않고 있습니다."
+    fi
+else
+    log_warning "Docker가 설치되지 않았습니다. 체크를 건너뜁니다."
+fi
+
+# 2. 로컬 포트 사용 확인
+log_info "포트 사용 상태 확인 중..."
+
+PORTS_TO_CHECK=(5432 8080 8001 3000 80 443)
+PORTS_IN_USE=()
+
+for port in "${PORTS_TO_CHECK[@]}"; do
+    if lsof -i :$port >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":$port "; then
+        PORTS_IN_USE+=($port)
+    fi
+done
+
+if [ ${#PORTS_IN_USE[@]} -gt 0 ]; then
+    log_warning "다음 포트가 사용 중입니다: ${PORTS_IN_USE[*]}"
+    log_warning "AWS EC2에서는 문제없지만, 로컬 테스트 시 충돌할 수 있습니다."
+    WARNINGS=$((WARNINGS + 1))
+else
+    log_success "모든 필수 포트가 사용 가능합니다."
+fi
+
+# 3. 필수 파일 존재 확인
+log_info "필수 파일 존재 여부 확인 중..."
+
+REQUIRED_FILES=(
+    "LifeBit.sql"
+    "docker-compose.prod.yml"
+    "infrastructure/ansible/playbook.yml"
+    "infrastructure/terraform/main.tf"
+    "infrastructure/nginx/nginx.conf"
+)
+
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -f "$file" ]; then
+        log_error "$file 파일이 없습니다!"
+        ERRORS=$((ERRORS + 1))
+    fi
+done
+
+if [ $ERRORS -eq 0 ]; then
+    log_success "모든 필수 파일이 존재합니다."
+fi
+
+# 4. .env 파일 확인
+log_info "환경 변수 파일 확인 중..."
+
+if [ -f ".env" ]; then
+    log_warning ".env 파일이 존재합니다. 배포 스크립트가 새로운 환경 변수를 생성합니다."
+    log_warning "기존 .env 파일은 백업을 권장합니다."
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+# 5. Git 상태 확인
+log_info "Git 저장소 상태 확인 중..."
+
+if command -v git >/dev/null 2>&1; then
+    if [ -d ".git" ]; then
+        UNCOMMITTED=$(git status --porcelain | wc -l)
+        if [ $UNCOMMITTED -gt 0 ]; then
+            log_warning "커밋되지 않은 변경사항이 $UNCOMMITTED개 있습니다."
+            log_warning "배포 전 모든 변경사항을 커밋하는 것을 권장합니다."
+            WARNINGS=$((WARNINGS + 1))
+        else
+            log_success "모든 변경사항이 커밋되었습니다."
+        fi
+    fi
+fi
+
+# 6. 디스크 공간 확인
+log_info "디스크 공간 확인 중..."
+
+AVAILABLE_SPACE=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+if [ "$AVAILABLE_SPACE" -lt 5 ]; then
+    log_error "디스크 공간이 부족합니다 (${AVAILABLE_SPACE}GB 사용 가능)"
+    log_error "최소 5GB 이상의 여유 공간이 필요합니다."
+    ERRORS=$((ERRORS + 1))
+else
+    log_success "충분한 디스크 공간이 있습니다 (${AVAILABLE_SPACE}GB 사용 가능)"
+fi
+
+# 7. AWS CLI 설치 확인
+log_info "AWS CLI 설치 확인 중..."
+
+if ! command -v aws >/dev/null 2>&1; then
+    log_error "AWS CLI가 설치되지 않았습니다."
+    log_error "https://aws.amazon.com/cli/ 에서 설치해주세요."
+    ERRORS=$((ERRORS + 1))
+else
+    log_success "AWS CLI가 설치되어 있습니다."
+fi
+
+# 8. AWS 자격 증명 확인
+log_info "AWS 자격 증명 확인 중..."
+
+if command -v aws >/dev/null 2>&1; then
+    if ! aws sts get-caller-identity >/dev/null 2>&1; then
+        log_error "AWS 자격 증명이 설정되지 않았습니다."
+        log_error "'aws configure'를 실행하여 자격 증명을 설정해주세요."
+        ERRORS=$((ERRORS + 1))
+    else
+        AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+        log_success "AWS 계정 확인됨: $AWS_ACCOUNT"
+    fi
+fi
+
+# 9. Terraform 설치 확인
+log_info "Terraform 설치 확인 중..."
+
+if ! command -v terraform >/dev/null 2>&1; then
+    log_error "Terraform이 설치되지 않았습니다."
+    log_error "https://terraform.io/downloads 에서 설치해주세요."
+    ERRORS=$((ERRORS + 1))
+else
+    TERRAFORM_VERSION=$(terraform version | head -n1)
+    log_success "Terraform 설치됨: $TERRAFORM_VERSION"
+fi
+
+# 10. Ansible 설치 확인
+log_info "Ansible 설치 확인 중..."
+
+if ! command -v ansible >/dev/null 2>&1; then
+    log_error "Ansible이 설치되지 않았습니다."
+    log_error "'pip install ansible' 또는 패키지 매니저로 설치해주세요."
+    ERRORS=$((ERRORS + 1))
+else
+    ANSIBLE_VERSION=$(ansible --version | head -n1)
+    log_success "Ansible 설치됨: $ANSIBLE_VERSION"
+fi
+
+# 결과 출력
+echo ""
+echo -e "${BLUE}=== 체크 결과 ===${NC}"
+
+if [ $ERRORS -gt 0 ]; then
+    log_error "총 $ERRORS개의 오류가 발견되었습니다."
+    log_error "배포를 진행하기 전에 위의 오류를 해결해주세요."
+    exit 1
+elif [ $WARNINGS -gt 0 ]; then
+    log_warning "총 $WARNINGS개의 경고가 발견되었습니다."
+    log_info "경고 사항을 확인하고 필요시 조치 후 배포를 진행해주세요."
     exit 0
 else
-    echo -e "${RED}❌ 중요한 점검 항목에서 실패했습니다.${NC}"
-    echo -e "${RED}위의 오류들을 수정한 후 다시 시도하세요.${NC}"
-    echo ""
-    echo -e "${BLUE}문제 해결 후 다시 실행:${NC}"
-    echo -e "   ./scripts/pre-deployment-check.sh"
-    exit 1
+    log_success "모든 체크를 통과했습니다!"
+    log_success "배포를 진행할 준비가 되었습니다."
+    exit 0
 fi 

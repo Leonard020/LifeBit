@@ -241,9 +241,15 @@
 
     - name: Generate SSL certificate with Certbot (standalone)
       shell: |
-        # [주의] 실제 운영 배포 시 --staging 옵션을 반드시 삭제하세요!
+        # 테스트 환경에서는 --staging 옵션 사용을 권장합니다
+        # 프로덕션 배포 시에는 아래 명령어에서 --staging을 제거하세요
+        {% if certbot_staging is defined and certbot_staging == 'true' %}
         certbot certonly --staging --standalone --non-interactive --agree-tos \
           --email admin@{{ domain_name }} -d {{ domain_name }}
+        {% else %}
+        certbot certonly --standalone --non-interactive --agree-tos \
+          --email admin@{{ domain_name }} -d {{ domain_name }}
+        {% endif %}
       args:
         creates: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
       register: certbot_result

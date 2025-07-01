@@ -84,20 +84,24 @@ public class AdminService {
             long monthlyActiveUsers = userRepository.countByLastVisitedAfter(monthStart.atStartOfDay());
             stats.put("monthlyActiveUsers", monthlyActiveUsers);
             
-            // 일일 기록수 (오늘 작성된 운동 + 식단 기록)
-            long dailyExerciseRecords = exerciseSessionRepository.countByDateBetween(today.atStartOfDay(), today.plusDays(1).atStartOfDay());
-            long dailyMealRecords = mealLogRepository.countByDateBetween(today.atStartOfDay(), today.plusDays(1).atStartOfDay());
-            stats.put("dailyRecords", dailyExerciseRecords + dailyMealRecords);
+            // 일일 활동자 (오늘 기록을 작성한 사용자 수)
+            long dailyExerciseUsers = exerciseSessionRepository.countDistinctUsersByDateBetween(today, today);
+            long dailyMealUsers = mealLogRepository.countDistinctUsersByDateBetween(today, today);
+            // 실제 활동자 수 계산 (운동 또는 식단 기록 중 하나라도 한 사용자)
+            long dailyActiveRecorders = userRepository.countDistinctActiveUsersByDate(today.atStartOfDay(), today.plusDays(1).atStartOfDay());
+            stats.put("dailyActiveRecorders", dailyActiveRecorders > 0 ? dailyActiveRecorders : Math.max(dailyExerciseUsers, dailyMealUsers));
             
-            // 주간 기록수
-            long weeklyExerciseRecords = exerciseSessionRepository.countByDateBetween(weekStart.atStartOfDay(), now);
-            long weeklyMealRecords = mealLogRepository.countByDateBetween(weekStart.atStartOfDay(), now);
-            stats.put("weeklyRecords", weeklyExerciseRecords + weeklyMealRecords);
+            // 주간 활동자
+            long weeklyExerciseUsers = exerciseSessionRepository.countDistinctUsersByDateBetween(weekStart, today);
+            long weeklyMealUsers = mealLogRepository.countDistinctUsersByDateBetween(weekStart, today);
+            long weeklyActiveRecorders = userRepository.countDistinctActiveUsersByDate(weekStart.atStartOfDay(), now);
+            stats.put("weeklyActiveRecorders", weeklyActiveRecorders > 0 ? weeklyActiveRecorders : Math.max(weeklyExerciseUsers, weeklyMealUsers));
             
-            // 월간 기록수
-            long monthlyExerciseRecords = exerciseSessionRepository.countByDateBetween(monthStart.atStartOfDay(), now);
-            long monthlyMealRecords = mealLogRepository.countByDateBetween(monthStart.atStartOfDay(), now);
-            stats.put("monthlyRecords", monthlyExerciseRecords + monthlyMealRecords);
+            // 월간 활동자
+            long monthlyExerciseUsers = exerciseSessionRepository.countDistinctUsersByDateBetween(monthStart, today);
+            long monthlyMealUsers = mealLogRepository.countDistinctUsersByDateBetween(monthStart, today);
+            long monthlyActiveRecorders = userRepository.countDistinctActiveUsersByDate(monthStart.atStartOfDay(), now);
+            stats.put("monthlyActiveRecorders", monthlyActiveRecorders > 0 ? monthlyActiveRecorders : Math.max(monthlyExerciseUsers, monthlyMealUsers));
             
         } catch (Exception e) {
             // 오류 발생 시 기본값 설정
@@ -107,9 +111,9 @@ public class AdminService {
             stats.put("dailyActiveUsers", 0L);
             stats.put("weeklyActiveUsers", 0L);
             stats.put("monthlyActiveUsers", 0L);
-            stats.put("dailyRecords", 0L);
-            stats.put("weeklyRecords", 0L);
-            stats.put("monthlyRecords", 0L);
+            stats.put("dailyActiveRecorders", 0L);
+            stats.put("weeklyActiveRecorders", 0L);
+            stats.put("monthlyActiveRecorders", 0L);
         }
         
         return stats;

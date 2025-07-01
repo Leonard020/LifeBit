@@ -24,6 +24,8 @@ import { AdminPage } from './pages/AdminPage';
 import UserInfo from './pages/UserInfo';
 import { API_CONFIG } from './config/env';
 import Settings from './pages/Settings';
+import FindPassword from './pages/FindPassword';
+import ResetPassword from './pages/ResetPassword';
 
 
 // ===================================================================
@@ -134,9 +136,10 @@ const App = () => (
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/userinfo" element={<UserInfo />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="/find-password" element={<FindPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/auth/social-redirect" element={<SocialRedirect />} />
-
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
 
