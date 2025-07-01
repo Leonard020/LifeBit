@@ -651,7 +651,16 @@ INSERT INTO notification (user_id, type, ref_id, title, message, created_at, uui
 (NULL, 'SYSTEM', NULL, '데이터 동기화', '여러 기기에서 사용하실 때는 데이터 동기화를 확인해주세요. 모든 기기에서 동일한 정보를 확인할 수 있습니다.', NOW(), gen_random_uuid())
 ON CONFLICT DO NOTHING;
 
-
+-- 신규가입자 전용 db
+INSERT INTO notification_read (user_id, notification_id)
+SELECT u.user_id, n.id
+FROM users u
+CROSS JOIN notification n
+WHERE n.user_id IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM notification_read nr
+    WHERE nr.user_id = u.user_id AND nr.notification_id = n.id
+  );
 
 
 
