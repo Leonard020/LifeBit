@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,6 +27,8 @@ public class NotificationService {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     public void saveNotification(Long userId, String type, String title, String message) {
         saveNotification(userId, type, title, message, null);
@@ -200,5 +204,27 @@ public class NotificationService {
         
         System.out.println("[DEBUG] countUnreadSystemNotifications 결과: " + count);
         return count;
+    }
+
+    /**
+     * 회원가입 시 기존 시스템 알림(Notification.userId == null)에 대해 NotificationRead(userId, notificationId)를 생성
+     */
+    @Transactional
+    public void markAllSystemNotificationsAsUnreadForUser(Long userId) {
+        List<Notification> systemNotifications = notificationRepository.findByUserIdIsNullOrderByCreatedAtDesc();
+        log.info("시스템 알림 개수: {}", systemNotifications.size());
+        List<NotificationRead> toInsert = new ArrayList<>();
+        for (Notification n : systemNotifications) {
+            if (!notificationReadRepository.existsByUserIdAndNotificationId(userId, n.getId())) {
+                NotificationRead read = new NotificationRead();
+                read.setUserId(userId);
+                read.setNotificationId(n.getId());
+                toInsert.add(read);
+            }
+        }
+        log.info("NotificationRead 생성 개수: {}", toInsert.size());
+        if (!toInsert.isEmpty()) {
+            notificationReadRepository.saveAll(toInsert);
+        }
     }
 } 
