@@ -7,6 +7,8 @@ import com.lifebit.coreapi.entity.User;
 import com.lifebit.coreapi.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,8 +28,10 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final NotificationService notificationService;
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -59,7 +63,13 @@ public class UserService {
             user.setCreatedAt(java.time.LocalDateTime.now());
             user.setUpdatedAt(java.time.LocalDateTime.now());
             
-            return userRepository.save(user);
+            User savedUser = userRepository.save(user);
+
+            log.info("회원가입 후 시스템 알림 처리 시작: userId={}", savedUser.getUserId());
+            notificationService.markAllSystemNotificationsAsUnreadForUser(savedUser.getUserId());
+            log.info("회원가입 후 시스템 알림 처리 완료: userId={}", savedUser.getUserId());
+
+            return savedUser;
         } catch (Exception e) {
             throw new RuntimeException("회원가입 처리 중 오류가 발생했습니다: " + e.getMessage());
         }
