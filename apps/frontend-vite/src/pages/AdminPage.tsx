@@ -111,9 +111,9 @@ export const AdminPage = () => {
     dailyActiveUsers: 0,
     weeklyActiveUsers: 0,
     monthlyActiveUsers: 0,
-    dailyRecords: 0,
-    weeklyRecords: 0,
-    monthlyRecords: 0
+    dailyActiveRecorders: 0,
+    weeklyActiveRecorders: 0,
+    monthlyActiveRecorders: 0
   });
 
   // 영어 → 한글 변환 함수들
@@ -179,36 +179,88 @@ export const AdminPage = () => {
   };
 
   // 대시보드 데이터 가져오기
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const res = await fetch('/api/admin/dashboard', {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        });
-        if (!res.ok) {
-          console.error('대시보드 응답 실패:', await res.text());
-          return;
-        }
-        const data = await res.json();
-        
-        setDashboardStats({
-          totalUsers: data.totalUsers || 0,
-          weeklyNewUsers: data.weeklyNewUsers || 0,
-          monthlyNewUsers: data.monthlyNewUsers || 0,
-          dailyActiveUsers: data.dailyActiveUsers || 0,
-          weeklyActiveUsers: data.weeklyActiveUsers || 0,
-          monthlyActiveUsers: data.monthlyActiveUsers || 0,
-          dailyRecords: data.dailyRecords || 0,
-          weeklyRecords: data.weeklyRecords || 0,
-          monthlyRecords: data.monthlyRecords || 0
-        });
-      } catch (err) {
-        console.error('대시보드 데이터 fetch 오류:', err);
-      }
-    };
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
 
+  // 기간별 레이블 생성 함수
+  const getPeriodLabel = () => {
+    switch (selectedPeriod) {
+      case 'daily': return '일일';
+      case 'weekly': return '주간';
+      case 'monthly': return '월간';
+      case 'yearly': return '년간';
+      default: return '일일';
+    }
+  };
+
+  // 기간별 데이터 선택 함수
+  const getPeriodData = (type: 'users' | 'activeUsers' | 'activeRecorders') => {
+    switch (selectedPeriod) {
+      case 'daily':
+        return type === 'users' ? dashboardStats.totalUsers :
+               type === 'activeUsers' ? dashboardStats.dailyActiveUsers :
+               dashboardStats.dailyActiveRecorders;
+      case 'weekly':
+        return type === 'users' ? dashboardStats.totalUsers :
+               type === 'activeUsers' ? dashboardStats.weeklyActiveUsers :
+               dashboardStats.weeklyActiveRecorders;
+      case 'monthly':
+        return type === 'users' ? dashboardStats.totalUsers :
+               type === 'activeUsers' ? dashboardStats.monthlyActiveUsers :
+               dashboardStats.monthlyActiveRecorders;
+      case 'yearly':
+        return type === 'users' ? dashboardStats.totalUsers :
+               type === 'activeUsers' ? dashboardStats.monthlyActiveUsers :
+               dashboardStats.monthlyActiveRecorders;
+      default:
+        return type === 'users' ? dashboardStats.totalUsers :
+               type === 'activeUsers' ? dashboardStats.dailyActiveUsers :
+               dashboardStats.dailyActiveRecorders;
+    }
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      const res = await fetch('/api/admin/dashboard', {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      if (!res.ok) {
+        console.error('대시보드 응답 실패:', await res.text());
+        return;
+      }
+      const data = await res.json();
+      
+      setDashboardStats({
+        totalUsers: data.totalUsers || 0,
+        weeklyNewUsers: data.weeklyNewUsers || 0,
+        monthlyNewUsers: data.monthlyNewUsers || 0,
+        dailyActiveUsers: data.dailyActiveUsers || 0,
+        weeklyActiveUsers: data.weeklyActiveUsers || 0,
+        monthlyActiveUsers: data.monthlyActiveUsers || 0,
+        dailyActiveRecorders: data.dailyActiveRecorders || 0,
+        weeklyActiveRecorders: data.weeklyActiveRecorders || 0,
+        monthlyActiveRecorders: data.monthlyActiveRecorders || 0
+      });
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error('대시보드 데이터 fetch 오류:', err);
+    }
+  };
+
+  useEffect(() => {
+    // 초기 데이터 로드
     fetchDashboardData();
+    
+    // 1분마다 자동 새로고침
+    const interval = setInterval(fetchDashboardData, 60000);
+    
+    return () => clearInterval(interval);
   }, []);
+
+  // 기간 변경 시 데이터 새로고침
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedPeriod]);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -575,29 +627,73 @@ export const AdminPage = () => {
   return (
     <Layout>
       <div className="container mx-auto py-8">
-        <h1 className="text-3xl font-bold mb-8">📊 관리자 대시보드</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+          <h1 className="text-3xl font-bold">관리자 대시보드</h1>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-gray-500">
+            <span>마지막 업데이트: {lastUpdated.toLocaleTimeString('ko-KR')}</span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={fetchDashboardData}
+              className="w-fit"
+            >
+              🔄 새로고침
+            </Button>
+          </div>
+        </div>
+
+        {/* 기간 선택 버튼 */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          <Button 
+            variant={selectedPeriod === 'daily' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setSelectedPeriod('daily')}
+          >
+            일간
+          </Button>
+          <Button 
+            variant={selectedPeriod === 'weekly' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setSelectedPeriod('weekly')}
+          >
+            주간
+          </Button>
+          <Button 
+            variant={selectedPeriod === 'monthly' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setSelectedPeriod('monthly')}
+          >
+            월간
+          </Button>
+          <Button 
+            variant={selectedPeriod === 'yearly' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setSelectedPeriod('yearly')}
+          >
+            년간
+          </Button>
+        </div>
         
         {/* 대시보드 통계 카드 섹션 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
           {/* 총 회원수 카드 */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-muted-foreground">총 회원수</p>
-                  <p className="text-3xl font-bold">{dashboardStats.totalUsers.toLocaleString()}명</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-green-600 font-medium">
-                      주간: +{dashboardStats.weeklyNewUsers.toLocaleString()}명
-                    </p>
-                    <p className="text-xs text-green-600 font-medium">
-                      월간: +{dashboardStats.monthlyNewUsers.toLocaleString()}명
-                    </p>
-                  </div>
+                  <p className="text-2xl sm:text-3xl font-bold truncate">{getPeriodData('users').toLocaleString()}명</p>
+                  {selectedPeriod !== 'daily' && (
+                    <div className="mt-2">
+                      <p className="text-xs text-blue-600 font-medium">
+                        {selectedPeriod === 'weekly' ? '이번 주' : selectedPeriod === 'monthly' ? '이번 달' : '올해'} 신규 가입: +{selectedPeriod === 'weekly' ? dashboardStats.weeklyNewUsers : dashboardStats.monthlyNewUsers}명
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="p-3 bg-blue-100 rounded-full">
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
               </div>
@@ -606,36 +702,28 @@ export const AdminPage = () => {
 
           {/* 일일 접속자 카드 */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">일일 접속자</p>
-                  <p className="text-3xl font-bold">{dashboardStats.dailyActiveUsers.toLocaleString()}명</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-green-600 font-medium">주간: +{dashboardStats.weeklyActiveUsers.toLocaleString()}명</p>
-                    <p className="text-xs text-green-600 font-medium">월간: +{dashboardStats.monthlyActiveUsers.toLocaleString()}명</p>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-muted-foreground">{getPeriodLabel()} 접속자</p>
+                  <p className="text-2xl sm:text-3xl font-bold truncate">{getPeriodData('activeUsers').toLocaleString()}명</p>
                 </div>
                 <div className="p-3 bg-green-100 rounded-full">
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 일일 기록수 카드 */}
+          {/* 일일 활동자 카드 */}
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">일일 기록수</p>
-                  <p className="text-3xl font-bold">{dashboardStats.dailyRecords.toLocaleString()}건</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-green-600 font-medium">주간: +{dashboardStats.weeklyRecords.toLocaleString()}건</p>
-                    <p className="text-xs text-green-600 font-medium">월간: +{dashboardStats.monthlyRecords.toLocaleString()}건</p>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-muted-foreground">{getPeriodLabel()} 활동자</p>
+                  <p className="text-2xl sm:text-3xl font-bold truncate">{getPeriodData('activeRecorders').toLocaleString()}명</p>
                 </div>
                 <div className="p-3 bg-orange-100 rounded-full">
                   <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -647,10 +735,28 @@ export const AdminPage = () => {
           </Card>
         </div>
 
-        <div className="flex gap-4 mb-6">
-          <Button variant={activeTab === 'catalog' ? 'default' : 'outline'} onClick={() => setActiveTab('catalog')}>운동 카탈로그</Button>
-          <Button variant={activeTab === 'food' ? 'default' : 'outline'} onClick={() => setActiveTab('food')}>음식 카탈로그</Button>
-          <Button variant={activeTab === 'users' ? 'default' : 'outline'} onClick={() => setActiveTab('users')}>회원 관리</Button>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-6">
+          <Button 
+            variant={activeTab === 'catalog' ? 'default' : 'outline'} 
+            onClick={() => setActiveTab('catalog')}
+            className="w-full sm:w-auto"
+          >
+            운동 카탈로그
+          </Button>
+          <Button 
+            variant={activeTab === 'food' ? 'default' : 'outline'} 
+            onClick={() => setActiveTab('food')}
+            className="w-full sm:w-auto"
+          >
+            음식 카탈로그
+          </Button>
+          <Button 
+            variant={activeTab === 'users' ? 'default' : 'outline'} 
+            onClick={() => setActiveTab('users')}
+            className="w-full sm:w-auto"
+          >
+            회원 관리
+          </Button>
         </div>
 
         <Card className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white transition-colors duration-300">
@@ -674,8 +780,9 @@ export const AdminPage = () => {
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <Table className="bg-white dark:bg-gray-900">
+          <CardContent className="p-0 sm:p-6">
+            <div className="overflow-x-auto">
+              <Table className="bg-white dark:bg-gray-900">
               <TableHeader>
                 <TableRow className="bg-gray-100 dark:bg-gray-800">
                   {activeTab === 'users' ? (
@@ -736,7 +843,7 @@ export const AdminPage = () => {
                           <TableCell className="text-gray-900 dark:text-white">{(item as User).role}</TableCell>
                           <TableCell>
                             {(item as User).role === 'USER' && (
-                              <Button variant="destructive" size="sm" onClick={() => { setDeleteUserId((item as User).id); setShowDialog(true); }}>삭제</Button>
+                              <Button className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200" size="sm" onClick={() => { setDeleteUserId((item as User).id); setShowDialog(true); }}>삭제</Button>
                             )}
                           </TableCell>
                         </>
@@ -761,9 +868,9 @@ export const AdminPage = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleEditFood(item as FoodCatalogItem)}>수정</Button>
+                              <Button className="bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200" size="sm" onClick={() => handleEditFood(item as FoodCatalogItem)}>수정</Button>
                               <Button 
-                                variant="destructive" 
+                                className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200" 
                                 size="sm" 
                                 onClick={() => { 
                                   setDeleteFoodCatalogId((item as FoodCatalogItem).foodItemId); 
@@ -786,9 +893,9 @@ export const AdminPage = () => {
                           <TableCell className="text-gray-900 dark:text-white">{(item as CatalogItem).createdAt ? new Date((item as CatalogItem).createdAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleEdit(item as CatalogItem)}>수정</Button>
+                              <Button className="bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200" size="sm" onClick={() => handleEdit(item as CatalogItem)}>수정</Button>
                               <Button 
-                                variant="destructive" 
+                                className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200" 
                                 size="sm" 
                                 onClick={() => { 
                                   setDeleteCatalogId((item as CatalogItem).exerciseCatalogId); 
@@ -806,13 +913,14 @@ export const AdminPage = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-gray-600">
-                  {indexOfFirst + 1}-{Math.min(indexOfLast, totalItems)} of {totalItems} {activeTab === 'users' ? 'users' : activeTab === 'food' ? 'foods' : 'exercises'}
+              <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-2 p-4 sm:p-0">
+                <div className="text-sm text-gray-600 order-2 sm:order-1">
+                  {indexOfFirst + 1}-{Math.min(indexOfLast, totalItems)} / {totalItems} {activeTab === 'users' ? '사용자' : activeTab === 'food' ? '음식' : '운동'}
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1 sm:space-x-2 order-1 sm:order-2">
                   <Button variant="outline" size="sm" onClick={goToFirstPage} disabled={currentPage === 1}><ChevronsLeft className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" onClick={goToPreviousPage} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
                   {getPageNumbers().map((page) => (
@@ -833,7 +941,7 @@ export const AdminPage = () => {
             </DialogHeader>
             <DialogDescription>정말로 이 사용자를 삭제하시겠습니까?</DialogDescription>
             <DialogFooter>
-              <Button variant="destructive" onClick={() => handleDelete(deleteUserId!)}>삭제</Button>
+              <Button className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200" onClick={() => handleDelete(deleteUserId!)}>삭제</Button>
               <Button variant="outline" onClick={() => setShowDialog(false)}>취소</Button>
             </DialogFooter>
           </DialogContent>
@@ -851,7 +959,7 @@ export const AdminPage = () => {
             </DialogDescription>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>취소</Button>
-              <Button variant="destructive" onClick={() => handleDeleteCatalog(deleteCatalogId!)}>삭제</Button>
+              <Button className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200" onClick={() => handleDeleteCatalog(deleteCatalogId!)}>삭제</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -868,7 +976,7 @@ export const AdminPage = () => {
             </DialogDescription>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowDeleteFoodDialog(false)}>취소</Button>
-              <Button variant="destructive" onClick={() => handleDeleteFoodCatalog(deleteFoodCatalogId!)}>삭제</Button>
+              <Button className="bg-red-100 hover:bg-red-200 text-red-700 border-red-200" onClick={() => handleDeleteFoodCatalog(deleteFoodCatalogId!)}>삭제</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
