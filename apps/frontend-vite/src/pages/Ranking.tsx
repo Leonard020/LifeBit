@@ -31,6 +31,7 @@ interface MyRanking {
   totalUsers: number;
   tier: string;
   colorCode?: string;
+  userId?: number;
 }
 
 interface Achievement {
@@ -70,21 +71,21 @@ const Ranking = () => {
   const getAchievementStatusClass = (achievement: Achievement) => {
     if (achievement.achieved) {
       return {
-        container: 'border-green-200 bg-green-50',
-        title: 'text-green-800',
-        description: 'text-green-600'
+        container: 'border-green-200 bg-green-50 dark:bg-[#181c2b] dark:border-green-900',
+        title: 'text-green-800 dark:text-green-300',
+        description: 'text-green-600 dark:text-green-400'
       };
     } else if (isAchievementCompleted(achievement)) {
       return {
-        container: 'border-yellow-200 bg-yellow-50',
-        title: 'text-yellow-800',
-        description: 'text-yellow-600'
+        container: 'border-yellow-200 bg-yellow-50 dark:bg-[#232946] dark:border-yellow-900',
+        title: 'text-yellow-800 dark:text-yellow-200',
+        description: 'text-yellow-600 dark:text-yellow-300'
       };
     } else {
       return {
-        container: 'border-gray-200 bg-gray-50',
-        title: 'text-gray-700',
-        description: 'text-gray-500'
+        container: 'border-gray-200 bg-gray-50 dark:bg-[#232946] dark:border-gray-700',
+        title: 'text-gray-700 dark:text-gray-200',
+        description: 'text-gray-500 dark:text-gray-400'
       };
     }
   };
@@ -323,8 +324,8 @@ const Ranking = () => {
 
   const { topRankers, myRanking, achievements } = rankingData;
 
-  // 데이터가 없을 때 안내 메시지 표시
-  const hasNoData = topRankers.length === 0 && myRanking.rank === 0 && achievements.length === 0;
+  // 데이터가 없을 때 안내 메시지 표시 - 사용자 ID가 있으면 데이터가 있는 것으로 간주
+  const hasNoData = !myRanking?.userId && topRankers.length === 0 && achievements.length === 0;
 
   // 내 랭킹 등급 정보
   const myTierMeta = getTierMeta(String(myRanking.tier));
@@ -438,7 +439,7 @@ const Ranking = () => {
                 {topRankers.map((user: RankingUser) => {
                   const tierMeta = getTierMeta(String(user.tier));
                   return (
-                    <div key={user.rank} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
+                    <div key={`${user.userId}-${user.rank}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 flex items-center justify-center">
                           {getRankIcon(user.rank)}
@@ -508,7 +509,7 @@ const Ranking = () => {
                 {achievements.map((achievement: Achievement, index: number) => {
                   const statusClass = getAchievementStatusClass(achievement);
                   return (
-                    <div key={index} className="relative">
+                    <div key={achievement.title} className="relative">
                       <Tooltip>
                     <TooltipTrigger asChild>
                       <div

@@ -3,6 +3,7 @@ package com.lifebit.coreapi.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -17,7 +18,7 @@ public class ExerciseCatalog {
     
     private UUID uuid;
     
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String name;
     
     @Convert(converter = BodyPartTypeConverter.class)
@@ -29,5 +30,23 @@ public class ExerciseCatalog {
     
     private String intensity;
     
+    @JsonProperty("exerciseType")
+    private String exerciseType;
+    
     private LocalDateTime createdAt;
+    
+    // exerciseType을 위한 getter 메서드 (JSON 직렬화용)
+    public String getExerciseType() {
+        return exerciseType != null ? exerciseType : "미지정";
+    }
+    
+    @PrePersist
+    public void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (uuid == null) {
+            uuid = UUID.randomUUID();
+        }
+    }
 } 

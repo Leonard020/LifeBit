@@ -35,7 +35,8 @@ interface ExerciseData {
   weight?: number;
   sets?: number;
   reps?: number;
-  duration_min?: number;
+  duration_minutes?: number;
+  exercise_date?: string;
 }
 
 // 식단 데이터 타입
@@ -54,12 +55,13 @@ type CurrentDataType = ExerciseData | DietData;
 
 // 응답 타입
 export interface ChatResponse {
-  type: 'extraction' | 'validation' | 'confirmation' | 'complete' | 'error' | 'incomplete';
+  type: 'extraction' | 'validation' | 'confirmation' | 'complete' | 'error' | 'incomplete' | 'initial';
   message: string;
   data?: CurrentDataType;
   suggestions?: string[];
   missing_fields?: string[];
   next_step?: string;
+  parsed_data?: any;
 }
 
 /**
@@ -110,13 +112,8 @@ export const sendChatMessage = async (
       };
     }
 
-    // ✅ AI API 전용 인스턴스 사용 및 Authorization 헤더 추가
-    const response = await aiAxiosInstance.post<ChatResponse>('/api/py/chat', body, {
-      headers: {
-        Authorization: token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json'
-      }
-    });
+    // ✅ AI API 전용 인스턴스 사용 (인터셉터에서 자동으로 Authorization 헤더 추가)
+    const response = await aiAxiosInstance.post<ChatResponse>('/api/py/chat', body);
 
     console.log('✅ [Chat API] 메시지 전송 성공');
     return response.data;
@@ -163,11 +160,13 @@ export const saveExerciseRecord = async (exerciseData: ExerciseData) => {
     const res = await axiosInstance.post('/api/py/note/exercise', {
       user_id: 1,
       name: exerciseData.exercise,
+      category: exerciseData.category,
+      subcategory: exerciseData.subcategory,
       weight: exerciseData.weight,
       sets: exerciseData.sets,
       reps: exerciseData.reps,
-      time: `${exerciseData.duration_min}분`,
-      exercise_date: new Date().toISOString().split('T')[0]
+      duration_minutes: exerciseData.duration_minutes,
+      exercise_date: exerciseData.exercise_date || new Date().toISOString().split('T')[0]
     });
     return res.data;
   } catch (err) {

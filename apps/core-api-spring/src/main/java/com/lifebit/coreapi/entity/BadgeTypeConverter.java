@@ -22,6 +22,7 @@ public class BadgeTypeConverter implements AttributeConverter<BadgeType, String>
         try {
             return BadgeType.valueOf(dbData);
         } catch (IllegalArgumentException e) {
+            // 알 수 없는 값은 LEGACY bronze 로 매핑
             return BadgeType.bronze;
         }
     }

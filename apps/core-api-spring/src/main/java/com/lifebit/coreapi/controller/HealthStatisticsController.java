@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Optional;
+import com.lifebit.coreapi.entity.enums.RankingTier;
 
 @RestController
 @RequestMapping("/api/health-statistics")
@@ -197,18 +198,28 @@ public class HealthStatisticsController {
                         rankerMap.put("score", ranking.getTotalScore());
                         rankerMap.put("badge", getBadgeFromScore(ranking.getTotalScore()));
                         rankerMap.put("streakDays", ranking.getStreakDays());
-                        rankerMap.put("tier", ranking.getTier() != null ? ranking.getTier().name() : null);
-                        rankerMap.put("colorCode", ranking.getTier() != null ? ranking.getTier().getColorCode() : null);
+                        RankingTier tier = ranking.getTier() != null ? ranking.getTier() : RankingTier.UNRANK;
+                        rankerMap.put("tier", tier.name());
+                        rankerMap.put("colorCode", tier.getColorCode());
                         return rankerMap;
                     })
                     .toList();
                 
-                // 현재 사용자의 랭킹 정보 조회
+                // 현재 사용자의 랭킹 정보 조회 (없으면 자동 생성)
                 User currentUser = userService.getUserById(currentUserId);
                 Optional<UserRanking> userRankingOpt = userRankingRepository.findByUserId(currentUserId);
+                
+                // 사용자 랭킹이 없으면 자동 생성
+                if (userRankingOpt.isEmpty()) {
+                    log.info("🏅 사용자 {}의 랭킹 데이터가 없어서 자동 생성합니다", currentUserId);
+                    UserRanking newRanking = createDefaultUserRanking(currentUserId);
+                    userRankingOpt = Optional.of(userRankingRepository.save(newRanking));
+                }
+                
                 if (userRankingOpt.isPresent()) {
                     UserRanking userRanking = userRankingOpt.get();
                     String nickname = currentUser != null && currentUser.getNickname() != null ? currentUser.getNickname() : ("사용자" + currentUserId);
+                    RankingTier myTier = userRanking.getTier() != null ? userRanking.getTier() : RankingTier.UNRANK;
                     myRanking = Map.of(
                         "rank", userRanking.getRankPosition(),
                         "score", userRanking.getTotalScore(),
@@ -216,8 +227,8 @@ public class HealthStatisticsController {
                         "totalUsers", userRankingRepository.count(),
                         "userId", currentUserId,
                         "nickname", nickname,
-                        "tier", userRanking.getTier() != null ? userRanking.getTier().name() : null,
-                        "colorCode", userRanking.getTier() != null ? userRanking.getTier().getColorCode() : null
+                        "tier", myTier.name(),
+                        "colorCode", myTier.getColorCode()
                     );
                 } else {
                     myRanking = Map.of(
@@ -227,8 +238,8 @@ public class HealthStatisticsController {
                         "totalUsers", userRankingRepository.count(),
                         "userId", currentUserId,
                         "nickname", "사용자" + currentUserId,
-                        "tier", null,
-                        "colorCode", null
+                        "tier", RankingTier.UNRANK.name(),
+                        "colorCode", RankingTier.UNRANK.getColorCode()
                     );
                 }
                 
@@ -244,8 +255,8 @@ public class HealthStatisticsController {
                     "streakDays", 0,
                     "totalUsers", 0,
                     "userId", currentUserId,
-                    "tier", null,
-                    "colorCode", null
+                    "tier", RankingTier.UNRANK.name(),
+                    "colorCode", RankingTier.UNRANK.getColorCode()
                 );
             }
 
@@ -291,6 +302,30 @@ public class HealthStatisticsController {
         else if (score >= 2500) return "gold";
         else if (score >= 2000) return "silver";
         else return "bronze";
+    }
+
+    /**
+     * 기본 사용자 랭킹 생성
+     */
+    private UserRanking createDefaultUserRanking(Long userId) {
+        UserRanking ranking = new UserRanking();
+        ranking.setUserId(userId);
+        ranking.setTotalScore(0);
+        ranking.setStreakDays(0);
+        ranking.setRankPosition(0);
+        ranking.setSeason(getCurrentSeason());
+        ranking.setActive(true);
+        ranking.setTier(RankingTier.UNRANK);
+        ranking.setCreatedAt(java.time.LocalDateTime.now());
+        ranking.setLastUpdatedAt(java.time.LocalDateTime.now());
+        return ranking;
+    }
+
+    /**
+     * 현재 시즌 계산
+     */
+    private int getCurrentSeason() {
+        return java.time.LocalDateTime.now().getYear();
     }
 
     /**
@@ -370,5 +405,67 @@ public class HealthStatisticsController {
     //
     // 프론트엔드에서는 각각의 전용 엔드포인트를 사용하세요.
     // ============================================================================
+
+    /**
+     * 건강로그 페이지 전용 - 주간 운동 부위별 세트 수 통계 조회
+     * 기존 통계 API와 충돌하지 않는 별도 엔드포인트
+     */
+    @GetMapping("/{userId}/healthlog-counts")
+    public ResponseEntity<Map<String, Object>> getHealthlogCountsStatistics(
+            @PathVariable Long userId,
+            HttpServletRequest request) {
+        
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
+            }
+            
+            // ✅ 건강로그용 횟수 통계 조회 (기존 API와 분리된 메서드 사용)
+            Map<String, Object> statistics = healthStatisticsService.getHealthStatistics_healthloguse(tokenUserId);
+            
+            log.info("건강로그용 횟수 통계 조회 완료 - 사용자: {}, 데이터 항목: {}", tokenUserId, statistics.size());
+            
+            return ResponseEntity.ok(statistics);
+            
+        } catch (RuntimeException e) {
+            log.error("건강로그용 세트 통계 조회 중 오류 발생 - 사용자: {}, 오류: {}", userId, e.getMessage());
+            
+            // 오류 시 기본값 반환
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("weeklyChestCounts_healthloguse", 0);
+            fallback.put("weeklyBackCounts_healthloguse", 0);
+            fallback.put("weeklyLegsCounts_healthloguse", 0);
+            fallback.put("weeklyShouldersCounts_healthloguse", 0);
+            fallback.put("weeklyArmsCounts_healthloguse", 0);
+            fallback.put("weeklyAbsCounts_healthloguse", 0);
+            fallback.put("weeklyCardioCounts_healthloguse", 0);
+            fallback.put("weeklyTotalCounts_healthloguse", 0);
+            fallback.put("error", "건강로그용 통계 조회 중 오류가 발생했습니다.");
+            
+            return ResponseEntity.ok(fallback);
+            
+        } catch (Exception e) {
+            log.error("건강로그용 횟수 통계 조회 중 예상치 못한 오류 발생 - 사용자: {}", userId, e);
+            
+            // 예상치 못한 오류에 대한 안전한 응답
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("weeklyChestCounts_healthloguse", 0);
+            fallback.put("weeklyBackCounts_healthloguse", 0);
+            fallback.put("weeklyLegsCounts_healthloguse", 0);
+            fallback.put("weeklyShouldersCounts_healthloguse", 0);
+            fallback.put("weeklyArmsCounts_healthloguse", 0);
+            fallback.put("weeklyAbsCounts_healthloguse", 0);
+            fallback.put("weeklyCardioCounts_healthloguse", 0);
+            fallback.put("weeklyTotalCounts_healthloguse", 0);
+            fallback.put("error", "서버 오류가 발생했습니다. 관리자에게 문의해주세요.");
+            
+            return ResponseEntity.ok(fallback);
+        }
+    }
 
 } 

@@ -424,7 +424,7 @@ export const useCreateHealthRecord = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['health-records'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 건강 기록 생성 실패:', error);
@@ -447,7 +447,7 @@ export const useUpdateHealthRecord = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['health-records'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 건강 기록 수정 실패:', error);
@@ -469,7 +469,7 @@ export const useDeleteHealthRecord = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['health-records'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 건강 기록 삭제 실패:', error);
@@ -658,7 +658,7 @@ export const useCreateDietRecord = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['diet-records'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
     },
     onError: (error) => {
@@ -682,7 +682,7 @@ export const useUpdateDietRecord = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['diet-records'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
     },
     onError: (error) => {
@@ -705,7 +705,7 @@ export const useDeleteDietRecord = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['diet-records'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
     },
     onError: (error) => {
@@ -915,7 +915,7 @@ export const useCreateExerciseSession = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['exercise-sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 운동 세션 생성 실패:', error);
@@ -938,7 +938,7 @@ export const useUpdateExerciseSession = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['exercise-sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 운동 세션 수정 실패:', error);
@@ -960,7 +960,7 @@ export const useDeleteExerciseSession = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['exercise-sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 운동 세션 삭제 실패:', error);
@@ -1099,7 +1099,7 @@ export const useCreateUserGoal = () => {
       if (data && data.user_id) {
         queryClient.invalidateQueries({ queryKey: ['userGoals', String(data.user_id)] });
       }
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 사용자 목표 생성 실패:', error);
@@ -1123,7 +1123,7 @@ export const useUpdateUserGoal = () => {
       if (data && data.user_id) {
         queryClient.invalidateQueries({ queryKey: ['userGoals', String(data.user_id)] });
       }
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 사용자 목표 수정 실패:', error);
@@ -1145,7 +1145,7 @@ export const useDeleteUserGoal = () => {
       
       // 관련 캐시 무효화하여 최신 데이터 반영
       queryClient.invalidateQueries({ queryKey: ['userGoals'] });
-      queryClient.invalidateQueries({ queryKey: ['health-statistics'] });
+      queryClient.invalidateQueries({ queryKey: ['healthStatistics'], exact: false });
     },
     onError: (error) => {
       console.error('💥 사용자 목표 삭제 실패:', error);

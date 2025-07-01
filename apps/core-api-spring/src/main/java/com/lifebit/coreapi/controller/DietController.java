@@ -260,4 +260,48 @@ public class DietController {
         Map<String, Object> updatedFoodItem = dietService.updateFoodItem(id, calories, carbs, protein, fat);
         return ResponseEntity.ok(updatedFoodItem);
     }
+
+    // ===== 관리자 페이지 음식 카탈로그 관리 API =====
+    
+    @GetMapping("/admin/food-catalog")
+    public ResponseEntity<List<Map<String, Object>>> getAllFoodCatalogForAdmin(
+            @RequestHeader("Authorization") String token) {
+        // 관리자 권한 확인 (필요시 구현)
+        List<Map<String, Object>> foodCatalog = dietService.getAllFoodCatalog();
+        return ResponseEntity.ok(foodCatalog);
+    }
+
+    @PutMapping("/admin/food-catalog/{id}")
+    public ResponseEntity<Map<String, Object>> updateFoodCatalog(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request) {
+        try {
+            // 관리자 권한 확인 (필요시 구현)
+            String name = (String) request.get("name");
+            Double calories = request.get("calories") != null ? Double.valueOf(request.get("calories").toString()) : null;
+            Double carbs = request.get("carbs") != null ? Double.valueOf(request.get("carbs").toString()) : null;
+            Double protein = request.get("protein") != null ? Double.valueOf(request.get("protein").toString()) : null;
+            Double fat = request.get("fat") != null ? Double.valueOf(request.get("fat").toString()) : null;
+            Double servingSize = request.get("serving_size") != null ? Double.valueOf(request.get("serving_size").toString()) : null;
+            
+            Map<String, Object> updatedFood = dietService.updateFoodCatalog(id, name, calories, carbs, protein, fat, servingSize);
+            return ResponseEntity.ok(updatedFood);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/admin/food-catalog/{id}")
+    public ResponseEntity<Void> deleteFoodCatalog(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long id) {
+        try {
+            // 관리자 권한 확인 (필요시 구현)
+            dietService.deleteFoodCatalog(id);
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
 } 

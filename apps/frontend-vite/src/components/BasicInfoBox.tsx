@@ -68,8 +68,9 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
               id="nickname"
               value={profileData.nickname}
               readOnly={!nicknameEditable}
+              aria-readonly={!nicknameEditable}
               onChange={nicknameEditable ? (e) => setProfileData({ ...profileData, nickname: e.target.value }) : undefined}
-              className={`pl-10 ${nicknameEditable ? '' : 'bg-gray-50 cursor-not-allowed'}`}
+              className={`pl-10 ${nicknameEditable ? '' : 'bg-gray-50 dark:bg-[#232946] text-gray-500 dark:text-[#b3b8d8] border border-gray-200 dark:border-[#3a3a5a] cursor-not-allowed'}`}
             />
           </div>
         </div>
@@ -82,7 +83,8 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
               type="email"
               value={profileData.email}
               readOnly
-              className="pl-10 bg-gray-50 cursor-not-allowed"
+              aria-readonly
+              className="pl-10 bg-gray-50 dark:bg-[#232946] text-gray-500 dark:text-[#b3b8d8] border border-gray-200 dark:border-[#3a3a5a] cursor-not-allowed"
             />
           </div>
         </div>

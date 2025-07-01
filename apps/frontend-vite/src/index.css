@@ -56,9 +56,16 @@
     --chart-5: 27 87% 67%;
 
     /* 폰트 크기 변수 */
+    --font-size-xs: 14px;
+    --font-size-sm: 16px;
     --font-size-base: 21px;
     --font-size-lg: 24px;
     --font-size-xl: 28px;
+    --font-size-2xl: 32px;
+    --font-size-3xl: 36px;
+    --font-size-4xl: 40px;
+    --font-size-5xl: 48px;
+    --font-size-6xl: 60px;
 
     /* 컬러 스킴 변수 */
     --primary-hue: 222.2;
@@ -68,31 +75,24 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
+    --card: 222.2 84% 8%;
     --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 84% 10%;
     --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
+    --primary: 265 90% 70%;
     --primary-foreground: 222.2 47.4% 11.2%;
-
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 265 90% 60%;
     --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
+    --border: 265 90% 50%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 265 90% 70%;
+
+    --radius: 0.5rem;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -113,9 +113,16 @@
     --chart-5: 340 75% 55%;
 
     /* 폰트 크기 변수 */
+    --font-size-xs: 14px;
+    --font-size-sm: 16px;
     --font-size-base: 21px;
     --font-size-lg: 24px;
     --font-size-xl: 28px;
+    --font-size-2xl: 32px;
+    --font-size-3xl: 36px;
+    --font-size-4xl: 40px;
+    --font-size-5xl: 48px;
+    --font-size-6xl: 60px;
 
     /* 컬러 스킴 변수 */
     --primary-hue: 222.2;
@@ -166,8 +173,25 @@
 
   /* 접근성 설정 */
   [data-high-contrast="true"] {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 10%;
+    --accent: 0 0% 90%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
     --border: 0 0% 0%;
-    --muted-foreground: 0 0% 0%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 0%;
   }
 
   [data-reduce-motion="true"] * {
@@ -184,23 +208,107 @@
 
   body {
     @apply bg-background text-foreground;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-base) !important;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-lg) !important;
   }
 
-  .text-lg {
-    font-size: var(--font-size-lg);
+  /* 모든 폰트 크기 클래스를 CSS 변수로 재정의 (높은 우선순위) */
+  .text-xs,
+  .text-xs * {
+    font-size: var(--font-size-xs) !important;
   }
 
-  .text-xl {
-    font-size: var(--font-size-xl);
+  .text-sm,
+  .text-sm * {
+    font-size: var(--font-size-sm) !important;
+  }
+
+  .text-base,
+  .text-base * {
+    font-size: var(--font-size-base) !important;
+  }
+
+  .text-lg,
+  .text-lg * {
+    font-size: var(--font-size-lg) !important;
+  }
+
+  .text-xl,
+  .text-xl * {
+    font-size: var(--font-size-xl) !important;
+  }
+
+  .text-2xl,
+  .text-2xl * {
+    font-size: var(--font-size-2xl) !important;
+  }
+
+  .text-3xl,
+  .text-3xl * {
+    font-size: var(--font-size-3xl) !important;
+  }
+
+  .text-4xl,
+  .text-4xl * {
+    font-size: var(--font-size-4xl) !important;
+  }
+
+  .text-5xl,
+  .text-5xl * {
+    font-size: var(--font-size-5xl) !important;
+  }
+
+  .text-6xl,
+  .text-6xl * {
+    font-size: var(--font-size-6xl) !important;
   }
 }
 
 @layer utilities {
+  /* Tailwind 기본 폰트 크기 클래스들을 완전히 덮어쓰기 */
+  [class*="text-xs"] {
+    font-size: var(--font-size-xs) !important;
+  }
+
+  [class*="text-sm"] {
+    font-size: var(--font-size-sm) !important;
+  }
+
+  [class*="text-base"] {
+    font-size: var(--font-size-base) !important;
+  }
+
+  [class*="text-lg"] {
+    font-size: var(--font-size-lg) !important;
+  }
+
+  [class*="text-xl"] {
+    font-size: var(--font-size-xl) !important;
+  }
+
+  [class*="text-2xl"] {
+    font-size: var(--font-size-2xl) !important;
+  }
+
+  [class*="text-3xl"] {
+    font-size: var(--font-size-3xl) !important;
+  }
+
+  [class*="text-4xl"] {
+    font-size: var(--font-size-4xl) !important;
+  }
+
+  [class*="text-5xl"] {
+    font-size: var(--font-size-5xl) !important;
+  }
+
+  [class*="text-6xl"] {
+    font-size: var(--font-size-6xl) !important;
+  }
+
   .gradient-bg {
     background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
   }
@@ -258,14 +366,7 @@
     }
   }
 
-  /* 카카오톡 스타일 말풍선 꼬리 */
-  .clip-path-tail-right {
-    clip-path: polygon(0% 0%, 100% 100%, 0% 100%);
-  }
-  
-  .clip-path-tail-left {
-    clip-path: polygon(0% 100%, 100% 0%, 100% 100%);
-  }
+
 
   /* 탭 호버 효과 */
   .settings-tab-hover {
@@ -300,5 +401,26 @@
   .settings-tab-icon {
     z-index: 2;
     pointer-events: none;
+  }
+
+  .glass-card-dark {
+    background: rgba(34, 34, 60, 0.55);
+    border-radius: 18px;
+    box-shadow: 0 4px 32px rgba(80,0,120,0.25), 0 0 0 1.5px rgba(130,80,255,0.25);
+    border: 1.5px solid rgba(130,80,255,0.25);
+    backdrop-filter: blur(16px) saturate(140%);
+    border-top: 1.5px solid rgba(255,255,255,0.08);
+    border-left: 1.5px solid rgba(255,255,255,0.04);
+  }
+  .neon-glow {
+    box-shadow: 0 0 8px #a78bfa, 0 0 24px #7f5fff, 0 0 32px #00e6f6;
+    border: 1.5px solid #7f5fff;
+    background: linear-gradient(135deg, rgba(127,95,255,0.18) 0%, rgba(0,230,246,0.12) 100%);
+    color: #fff;
+    transition: box-shadow 0.2s, border 0.2s;
+  }
+  .neon-glow:hover {
+    box-shadow: 0 0 24px #a78bfa, 0 0 48px #00e6f6;
+    border: 1.5px solid #00e6f6;
   }
 }

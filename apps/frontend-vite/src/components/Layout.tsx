@@ -30,16 +30,20 @@ import { useAuth } from '@/AuthContext'; // ✅ 전역 상태 기반
 import { isAdmin, removeToken } from '@/utils/auth'; // ✅ removeToken 추가
 import { useTheme } from '@/contexts/ThemeContext';
 import NotificationBell from '@/components/NotificationBell';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const WebHeader = () => {
+const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void }) => {
   const { toast } = useToast();
   const { isLoggedIn, nickname, setIsLoggedIn, setNickname } = useAuth();
   const { open: sidebarOpen } = useSidebar();
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const [mailLoading, setMailLoading] = useState(false);
 
   const handleLogout = () => {
     removeToken(); // 모든 토큰과 사용자 정보 삭제
@@ -51,6 +55,15 @@ const WebHeader = () => {
     });
 
     window.location.href = '/login'
+  };
+
+  const handleSendMail = async () => {
+    setMailLoading(true);
+    setTimeout(() => {
+      setMailLoading(false);
+      setContactOpen(false);
+      alert('메일이 전송되었습니다!');
+    }, 1000);
   };
 
   return (
@@ -111,6 +124,9 @@ const WebHeader = () => {
                       </Link>
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem onClick={() => setContactOpen(true)}>
+                    관리자 문의 메일
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     로그아웃
                   </DropdownMenuItem>
@@ -146,6 +162,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { toast } = useToast();
   const { isDarkMode, toggleDarkMode } = useTheme();
 
+  // 메일 모달 상태/핸들러
+  const [contactOpen, setContactOpen] = useState(false);
+
   const toggleNavVisibility = () => {
     setIsNavVisible(!isNavVisible);
   };
@@ -164,8 +183,26 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="min-h-screen flex w-full">
           <AppSidebar />
           <SidebarInset className="flex-1">
-            <WebHeader />
+            <WebHeader setContactOpen={setContactOpen} />
             <main className="flex-1">{children}</main>
+            <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+              <DialogContent className="animate-fade-in bg-background text-foreground shadow-xl border border-border rounded-xl">
+                <div className="flex justify-between items-center mb-2">
+                  <DialogTitle className="text-2xl font-bold">문의하기</DialogTitle>
+                </div>
+                <DialogDescription asChild>
+                  <div className="text-base text-muted-foreground mb-4">
+                    관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
+                    <span className="block my-3">
+                      <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-[#7c3aed] bg-[#ede9fe] hover:bg-[#e0d7fa] transition-all duration-200 shadow-sm animate-pulse">
+                        admin@lifebit.com
+                      </a>
+                    </span>
+                    이메일로 보내주세요.
+                  </div>
+                </DialogDescription>
+              </DialogContent>
+            </Dialog>
           </SidebarInset>
         </div>
       </SidebarProvider>
@@ -225,7 +262,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => setIsLoggedIn(false)}>
+                  <DropdownMenuItem onClick={() => setContactOpen(true)}>
+                    관리자 문의 메일
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setIsLoggedIn(false); setNickname(''); window.location.href = '/login'; }}>
                     로그아웃
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -304,6 +344,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </div>
       </nav>
+
+      <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+        <DialogContent className="animate-fade-in bg-background text-foreground shadow-xl border border-border rounded-xl">
+          <div className="flex justify-between items-center mb-2">
+            <DialogTitle className="text-2xl font-bold">문의하기</DialogTitle>
+          </div>
+          <DialogDescription asChild>
+            <div className="text-base text-muted-foreground mb-4">
+              관련 문제, 일반적인 지원 요청 등 모든 고객 지원 문의는
+              <span className="block my-3">
+                <a href="mailto:admin@lifebit.com" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-[#7c3aed] bg-[#ede9fe] hover:bg-[#e0d7fa] transition-all duration-200 shadow-sm animate-pulse">
+                  admin@lifebit.com
+                </a>
+              </span>
+              이메일로 보내주세요.
+            </div>
+          </DialogDescription>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

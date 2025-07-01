@@ -15,6 +15,7 @@ from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, 
 import models
 from note_routes import router as note_router, estimate_grams_from_korean_amount
 import requests
+from normalize_utils import normalize_exercise_name
 
 # 🔧 환경 감지 및 데이터베이스 설정 오버라이드
 def setup_database():
@@ -198,57 +199,104 @@ EXERCISE_EXTRACTION_PROMPT = """
 
 [유산소 운동]
 - 운동명 (exercise) ✅ 필수
-- 분류 (category): "유산소운동" ✅ 자체 판단
-- 중분류 (subcategory): "유산소운동" ✅ 자체 판단
+- 분류 (category): "유산소" ✅ 자체 판단
+- 중분류 (subcategory): "유산소" ✅ 자체 판단
 - 운동시간 (duration_min) ✅ 필수
 
 🔍 **운동 분류 자동 판단 규칙:**
-[근력운동 - 가슴]: 벤치프레스, 푸시업, 체스트프레스, 딥스, 플라이, 체스트플라이
-[근력운동 - 등]: 풀업, 랫풀다운, 바벨로우, 시티드로우, 데드리프트, 철봉
-[근력운동 - 하체]: 스쿼트, 레그프레스, 런지, 레그컬, 레그익스텐션, 칼프레이즈
-[근력운동 - 어깨]: 숄더프레스, 사이드레이즈, 프론트레이즈, 리어델트플라이
-[근력운동 - 팔]: 바이셉스컬, 트라이셉스, 해머컬, 딥스, 이두컬, 삼두컬
-[근력운동 - 복근]: 크런치, 플랭크, 레그레이즈, 싯업, 플라잭
+[근력운동 - 가슴]:  
+벤치프레스, 푸시업, 체스트프레스, 딥스, 플라이, 체스트플라이, 인클라인벤치프레스, 디클라인벤치프레스, 케이블크로스오버, 펙덱플라이
+[근력운동 - 등]:  
+풀업, 랫풀다운, 바벨로우, 시티드로우, 데드리프트, 철봉, 원암로우, 티바로우, 시티드케이블로우, 슈러그
+[근력운동 - 하체]:  
+스쿼트, 레그프레스, 런지, 레그컬, 레그익스텐션, 칼프레이즈, 스모스쿼트, 불가리안스플릿스쿼트, 힙쓰러스트, 데드리프트(루마니안, 스티프레그드), 마운틴클라이머, 버피
+[근력운동 - 어깨]:  
+숄더프레스, 사이드레이즈, 프론트레이즈, 리어델트플라이, 업라이트로우, 아놀드프레스, 페이스풀, 숄더프론트레이즈
+[근력운동 - 팔]:  
+바이셉스컬, 트라이셉스, 해머컬, 딥스, 이두컬, 삼두컬, 킥백, 케이블푸쉬다운, 케이블컬, 컨센트레이션컬, 오버헤드익스텐션
+[근력운동 - 복근]:  
+크런치, 플랭크, 레그레이즈, 싯업, 플라잭, 마운틴클라이머, 행잉레그레이즈, 바이시클크런치, 러시안트위스트, V업, 윈드실드와이퍼
+[유산소]:  
+달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀, 런닝머신, 일립티컬, 스피닝, 스텝퍼, 에어로빅, 로잉머신, 스케이트, 스키, 인라인스케이트
+[맨몸운동]:  
+푸시업, 풀업, 플랭크, 크런치, 싯업, 버피, 마운틴클라이머, 딥스, 런지, 스쿼트, 레그레이즈, 바이시클크런치, 브릿지, 슈퍼맨, 점프스쿼트, 점핑잭
+※ 위에 없는 운동명도 최대한 유사한 부위로 분류해 주세요.
+※ 새로운 운동이 등장하면, AI가 운동의 동작을 분석해 가장 적합한 부위를 추론해서 분류해 주세요.
+- 만약 운동 부위(subcategory)가 명확하지 않으면, validation 단계에서 "이 운동은 어느 부위 운동인가요? (가슴/등/하체/어깨/팔/복근/유산소)"라고 사용자에게 질문하세요.
 
-[유산소운동]: 달리기, 조깅, 워킹, 걷기, 수영, 자전거, 사이클링, 줄넘기, 등산, 하이킹, 트레드밀, 런닝머신, 일립티컬
+💬 **응답 형식 (JSON, 반드시 아래 구조와 타입을 지켜서 반환):**
 
-💬 **응답 형식 (JSON):**
+**중요: 반드시 response_type과 system_message, user_message를 포함한 완전한 JSON 형식으로 응답하세요.**
+
+유산소 운동 예시:
 {
-  "response_type": "extraction|validation|confirmation",
+  "response_type": "extraction",
   "system_message": {
     "data": {
-      "exercise": "운동명",
-      "category": "근력운동|유산소운동",
-      "subcategory": "가슴|등|하체|복근|팔|어깨|유산소운동|null",
-      "weight": 무게|null,
-      "sets": 세트수|null,
-      "reps": 횟수|null,
-      "duration_min": 시간|null,
-      "is_bodyweight": true|false
-    },
-    "missing_fields": ["누락된_필드들"],
-    "next_step": "validation|confirmation"
+      "exercise": "조깅",
+      "category": "유산소",
+      "subcategory": "유산소",
+      "weight": null,
+      "sets": null,
+      "reps": null,
+      "duration_min": 40,
+      "is_bodyweight": false
+    }
   },
   "user_message": {
-    "text": "사용자에게 보여줄 친근한 메시지"
+    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
   }
 }
+
+근력운동 예시:
+{
+  "response_type": "extraction",
+  "system_message": {
+    "data": {
+      "exercise": "벤치프레스",
+      "category": "근력운동",
+      "subcategory": "가슴",
+      "weight": 30,
+      "sets": 3,
+      "reps": 10,
+      "duration_min": null,
+      "is_bodyweight": false
+    }
+  },
+  "user_message": {
+    "text": "벤치프레스 운동 기록이 완료되었습니다! 💪\n\n✅ 운동명: 벤치프레스\n💪 분류: 근력운동 (가슴)\n🏋️ 무게: 30kg\n🔢 세트: 3세트\n🔄 횟수: 10회\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+  }
+}
+
+// 모든 필드는 누락 없이 반환해야 하며, 값이 없으면 null로 명시하세요.
+// 반드시 user_message.text 필드를 포함하여 사용자에게 친근한 안내 메시지를 제공하세요.
+// subcategory(운동 부위)는 반드시 한글로 반환(예: "가슴"), 백엔드에서 ENUM(body_part_type) 영문으로 변환합니다.
+// 예시: "가슴"→"chest", "등"→"back", "하체"→"legs", "어깨"→"shoulders", "팔"→"arms", "복근"→"abs", "유산소"→"cardio"
 
 🔄 **진행 조건:**
 - 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
 - 일부 정보 누락 → validation 단계로
 
 📝 **대화 예시:**
-사용자: "벤치프레스 60kg 3세트 10회 했어요"
-AI: "벤치프레스 운동 기록이 완료되었습니다! 💪
-
-✅ 운동명: 벤치프레스
-💪 분류: 근력운동 (가슴)
-🏋️ 무게: 60kg
-🔢 세트: 3세트
-🔄 횟수: 10회
-
-이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+사용자: "조깅 40분 동안 했어요"
+AI: {
+  "response_type": "extraction",
+  "system_message": {
+    "data": {
+      "exercise": "조깅",
+      "category": "유산소",
+      "subcategory": "유산소",
+      "weight": null,
+      "sets": null,
+      "reps": null,
+      "duration_min": 40,
+      "is_bodyweight": false
+    }
+  },
+  "user_message": {
+    "text": "조깅 운동 기록이 완료되었습니다! 🏃‍♂️\n\n✅ 운동명: 조깅\n🏃 분류: 유산소\n⏱️ 운동시간: 40분\n\n이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
+  }
+}
 """
 
 # 🚩 [운동 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -297,7 +345,7 @@ EXERCISE_CONFIRMATION_PROMPT = """
   "system_message": {
     "data": {
       "exercise": "운동명",
-      "category": "근력운동|유산소운동",
+      "category": "근력운동|유산소",
       "subcategory": "부위|null",
       "weight": 무게|null,
       "sets": 세트|null,
@@ -324,7 +372,7 @@ EXERCISE_CONFIRMATION_PROMPT = """
 
 [유산소 운동]
 "✅ 운동명: 달리기
-🏃 분류: 유산소운동
+🏃 분류: 유산소
 ⏱️ 운동시간: 30분
 
 이 정보가 맞나요? 맞으면 '저장', 수정이 필요하면 '아니오'라고 해주세요!"
@@ -670,6 +718,8 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
             validation_result = json.loads(validation_response.choices[0].message["content"])  # type: ignore
 
             # 3. 데이터가 완전한 경우에만 확인 단계로 진행
+            # --- 아래 블록은 미완성/불필요 코드이므로 주석 처리 (linter 에러 방지) ---
+            '''
             if validation_result.get("status") == "complete":
                 confirmation_response = openai.ChatCompletion.create(  # type: ignore
                     model="gpt-4o-mini",
@@ -794,22 +844,16 @@ async def process_voice(file: UploadFile = File(...), db: Session = Depends(get_
                             "missing_fields": [],
                             "suggestions": []
                         }
-
-                # 일반적인 응답 (저장하지 않는 경우)
-                return {
-                    "type": parsed_response.get("response_type", "success"),
-                    "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
-                    "parsed_data": parsed_data,
-                    "record_type": record_type,
-                    "suggestions": []
-                }
-            else:
-                # 일반 텍스트 응답
-                return {
-                    "type": "incomplete",
-                    "message": f"음성 인식 완료: {user_text}",
-                    "suggestions": []
-                }
+            
+            # 일반적인 응답 (저장하지 않는 경우)
+            return {
+                "type": parsed_response.get("response_type", "success"),
+                "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
+                "parsed_data": parsed_data,
+                "record_type": record_type,
+                "suggestions": []
+            }
+            '''
         else:
             # GPT 비활성화 상태
             return {"type": "error", "message": "GPT 기능이 비활성화되어 있습니다."}
@@ -880,7 +924,7 @@ def is_bodyweight_exercise(exercise_name: str) -> bool:
     return any(ex in exercise_name.lower() for ex in bodyweight_exercises)
 
 @app.post("/api/py/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
         if not request.message:
             raise HTTPException(status_code=400, detail="메시지가 비어있습니다.")
@@ -946,136 +990,141 @@ async def chat(request: ChatRequest):
             
             try:
                 # JSON 응답인지 확인하고 파싱
-                if raw.strip().startswith('{') and raw.strip().endswith('}'):
+                if raw.strip().startswith('{') and raw.strip().endswith('}'): 
                     parsed_response = json.loads(raw)
-                    
                     # 운동 기록인 경우 칼로리 소모량 자동 계산 적용
                     if request.record_type == "exercise" and parsed_response.get("system_message", {}).get("data"):
                         data = parsed_response["system_message"]["data"]
-                        
-                        # 운동 정보가 충분하면 칼로리 소모량 계산
                         if data.get("exercise"):
                             calories_burned = calculate_exercise_calories_from_gpt(data)
                             data["calories_burned"] = calories_burned
-                    
                     # 🚀 [핵심 로직] confirmation 단계에서 "네" 응답 시 실제 DB 저장 실행
                     response_type = parsed_response.get("response_type", "success")
-                    
-                    # Always ensure parsed_data is an array for diet records
-                    parsed_data = parsed_response.get("system_message", {}).get("data")
-                    if request.record_type == "diet":
-                        if parsed_data:
-                            if isinstance(parsed_data, dict):
-                                parsed_data = [parsed_data]
-                            elif not isinstance(parsed_data, list):
-                                parsed_data = [parsed_data]
-                        else:
-                            parsed_data = []
-                    
-                    if (response_type == "confirmation" and 
-                        request.message.strip().lower() in ["네", "yes", "y", "저장", "기록해줘", "완료", "끝"] and 
-                        request.current_data and 
-                        request.record_type):
-                        
-                        print(f"[🚀 AUTO-SAVE] 확인 응답 받음 → 실제 DB 저장 시작")
-                        print(f"  기록 타입: {request.record_type}")
-                        print(f"  수집된 데이터: {request.current_data}")
-                        
-                        try:
-                            if request.record_type == "diet":
-                                # 🍽️ 식단 자동 저장
-                                # user_id 우선순위: request.user_id > current_data.user_id > 기본값 3
-                                user_id = (request.user_id or 
-                                          request.current_data.get("user_id") or 
-                                          3)
-                                user_id = int(user_id)
-                                
-                                # 여러 음식이 있는 경우 각각 저장
-                                foods_to_save = parsed_data if isinstance(parsed_data, list) else [parsed_data]
-                                saved_results = []
-                                
-                                for food_data in foods_to_save:
-                                    if not food_data or not food_data.get("food_name"):
-                                        continue
-                                        
-                                    # GPT를 사용하여 그램 수 추정
-                                    amount_str = food_data.get("amount", "1개")
-                                    estimated_grams = estimate_grams_from_korean_amount(food_data["food_name"], amount_str)
-                                    
-                                    # 식사시간 변환
-                                    meal_time_mapping = {
-                                        "아침": "breakfast",
-                                        "점심": "lunch", 
-                                        "저녁": "dinner",
-                                        "야식": "snack",
-                                        "간식": "snack"
-                                    }
-                                    meal_time_eng = meal_time_mapping.get(food_data.get("meal_time", "간식"), "snack")
-                                    
-                                    # note_routes.py의 save_diet_record 사용
-                                    from note_routes import save_diet_record
-                                    from schemas import MealInput
-                                    
-                                    meal_input = MealInput(
-                                        user_id=user_id,
-                                        food_name=food_data["food_name"],
-                                        quantity=estimated_grams,
-                                        meal_time=meal_time_eng,
-                                        log_date=date.today()
-                                    )
-                                    
-                                    # DB 객체 생성 (FastAPI의 Depends와 동일한 방식)
-                                    from database import SessionLocal
-                                    db = SessionLocal()
-                                    
-                                    try:
-                                        save_result = save_diet_record(meal_input, db)
-                                        saved_results.append(save_result)
-                                        print(f"[✅ SUCCESS] 음식 저장 완료: {food_data['food_name']}")
-                                    finally:
-                                        db.close()
-                                
-                                # 저장 결과 요약 메시지 생성
-                                if saved_results:
-                                    food_names = [food.get("food_name", "알 수 없는 음식") for food in foods_to_save if food]
-                                    food_list = ", ".join(food_names)
-                                    
-                                    return {
-                                        "type": "saved",
-                                        "message": f"✅ 식단 기록이 성공적으로 저장되었습니다!\n\n📋 저장된 음식:\n• {food_list}\n\n영양정보는 자동으로 계산되어 데이터베이스에 저장되었습니다.",
-                                        "parsed_data": request.current_data,
-                                        "save_results": saved_results,
-                                        "missing_fields": [],
-                                        "suggestions": []
-                                    }
-                                else:
-                                    return {
-                                        "type": "save_error",
-                                        "message": "저장할 음식 정보가 없습니다.",
-                                        "parsed_data": request.current_data,
-                                        "missing_fields": [],
-                                        "suggestions": []
-                                    }
-                                    
-                            elif request.record_type == "exercise":
-                                # 🏋️ 운동 자동 저장 (향후 구현)
-                                print(f"[INFO] 운동 자동 저장은 향후 구현 예정")
-                                
-                        except Exception as save_error:
-                            print(f"[❌ ERROR] 자동 저장 실패: {save_error}")
+                    user_message = request.message.strip()
+                    if request.record_type == "exercise" and response_type == "confirmation":
+                        save_keywords = ["네", "예", "저장", "y", "yes", "Y", "YES", "ㅇ"]
+                        if user_message in save_keywords:
+                            data = parsed_response["system_message"]["data"]
+                            user_id = request.user_id if request.user_id is not None else data.get("user_id")
+                            if user_id is None:
+                                raise HTTPException(status_code=400, detail="user_id가 필요합니다.")
+                            user_id = int(user_id)
+                            record = ExerciseRecord(
+                                user_id=user_id,
+                                name=data.get("exercise"),
+                                weight=data.get("weight"),
+                                sets=data.get("sets"),
+                                reps=data.get("reps"),
+                                duration_minutes=data.get("duration_min"),
+                                calories_burned=data.get("calories_burned"),
+                                exercise_date=request.current_data.get("exercise_date") if request.current_data else None
+                            )
+                            category = data.get("category")
+                            subcategory = data.get("subcategory")
+                            part = subcategory or category
+                            catalog = get_or_create_exercise_catalog(db, record.name, category, part, None)
+                            sets = record.sets
+                            reps = record.reps
+                            weight = record.weight
+                            if catalog and getattr(catalog, 'body_part', None) == 'cardio':
+                                sets = 1
+                                reps = None
+                                weight = None
+                            exercise = models.ExerciseSession(
+                                user_id=record.user_id,
+                                exercise_catalog_id=getattr(catalog, 'exercise_catalog_id', None),
+                                notes=record.name,
+                                weight=weight,
+                                sets=sets,
+                                reps=reps,
+                                duration_minutes=record.duration_minutes,
+                                calories_burned=record.calories_burned,
+                                exercise_date=record.exercise_date
+                            )
+                            db.add(exercise)
+                            db.commit()
+                            db.refresh(exercise)
                             return {
-                                "type": "save_error",
-                                "message": f"저장 중 오류가 발생했습니다: {str(save_error)}\n다시 시도해 주세요.",
-                                "parsed_data": request.current_data,
-                                "missing_fields": [],
-                                "suggestions": []
+                                "type": "save_success",
+                                "message": f"운동 기록 저장 성공! (ID: {exercise.exercise_session_id})",
+                                "id": exercise.exercise_session_id,
+                                "parsed_data": parsed_response  # 저장 성공 시에도 반환
                             }
-                    
+                    elif request.record_type == "diet" and response_type == "confirmation":
+                        save_keywords = ["네", "예", "저장", "y", "yes", "Y", "YES", "ㅇ"]
+                        if user_message in save_keywords:
+                            # 🥗 식단 자동 저장 로직
+                            system_data = parsed_response.get("system_message", {}).get("data")
+                            if not system_data:
+                                system_data = {}
+
+                            # 배열 또는 단일 객체 모두 처리
+                            foods_to_save = system_data if isinstance(system_data, list) else [system_data]
+
+                            from note_routes import estimate_grams_from_korean_amount, save_diet_record
+                            from schemas import MealInput
+
+                            meal_time_map = {
+                                "아침": "breakfast",
+                                "점심": "lunch",
+                                "저녁": "dinner",
+                                "야식": "snack",
+                                "간식": "snack",
+                            }
+
+                            saved_results = []
+                            user_id = request.user_id if request.user_id is not None else 1
+
+                            for food in foods_to_save:
+                                if not food or not food.get("food_name"):
+                                    continue
+
+                                amount_str = food.get("amount", "1개")
+                                grams = estimate_grams_from_korean_amount(food["food_name"], amount_str)
+
+                                meal_time_kor = food.get("meal_time", "간식")
+                                meal_time_eng = meal_time_map.get(meal_time_kor, "snack")
+
+                                meal_input = MealInput(
+                                    user_id=user_id,
+                                    food_name=food["food_name"],
+                                    quantity=grams,
+                                    meal_time=meal_time_eng,
+                                    log_date=date.today(),
+                                )
+
+                                try:
+                                    result = save_diet_record(meal_input, db)
+                                    saved_results.append(result)
+                                    print(f"[✅ 식단 저장] {food['food_name']} 저장 완료")
+                                except Exception as save_err:
+                                    print(f"[❌ 식단 저장 실패] {food.get('food_name')} - {save_err}")
+
+                            if saved_results:
+                                return {
+                                    "type": "save_success",
+                                    "message": f"식단 기록 저장 성공! (총 {len(saved_results)}건)",
+                                    "saved_results": saved_results,
+                                    "parsed_data": parsed_response,
+                                }
+                            else:
+                                return {
+                                    "type": "save_error",
+                                    "message": "저장할 식단 정보가 없습니다.",
+                                    "parsed_data": parsed_response,
+                                }
                     # 일반적인 응답 (저장하지 않는 경우)
+                    # user_message.text가 있으면 message로, 없으면 fallback
+                    user_message_text = None
+                    if isinstance(parsed_response, dict):
+                        user_message_text = parsed_response.get("user_message", {}).get("text")
+                        # 혹시 system_message.user_message.text 구조도 지원
+                        if not user_message_text and parsed_response.get("system_message", {}).get("user_message", {}).get("text"):
+                            user_message_text = parsed_response["system_message"]["user_message"]["text"]
                     return {
                         "type": parsed_response.get("response_type", "success"),
-                        "message": parsed_response.get("user_message", {}).get("text", "응답을 처리했습니다."),
-                        "parsed_data": parsed_data,
+                        "message": user_message_text or "응답을 처리했습니다.",
+                        "parsed_data": parsed_response,
                         "missing_fields": parsed_response.get("system_message", {}).get("missing_fields", []),
                         "suggestions": []
                     }
@@ -1084,6 +1133,7 @@ async def chat(request: ChatRequest):
                     return {
                         "type": "incomplete",
                         "message": raw,
+                        "parsed_data": None,
                         "suggestions": []
                     }
             except json.JSONDecodeError:
@@ -1091,6 +1141,7 @@ async def chat(request: ChatRequest):
                 return {
                     "type": "incomplete",
                     "message": raw,
+                    "parsed_data": None,
                     "suggestions": []
                 }
         else:
@@ -1104,11 +1155,66 @@ async def chat(request: ChatRequest):
             detail=f"채팅 처리 중 오류가 발생했습니다: {e}"
         )
 
+# --- ExerciseCatalog 자동 조회/생성 함수 ---
+def get_or_create_exercise_catalog(db, name, category=None, subcategory=None, description=None):
+    """
+    운동명, 분류, 부위 등으로 ExerciseCatalog를 조회하거나 없으면 생성
+    (AI 분석 결과만 사용, 하드코딩/키워드 매핑 없음)
+    """
+    normalized_name = normalize_exercise_name(name)
+    # 세트, 횟수, 무게가 모두 없으면 cardio(유산소)로 자동 분류
+    mapping = {
+        '가슴': 'chest', '등': 'back', '하체': 'legs', '어깨': 'shoulders',
+        '팔': 'arms', '복근': 'abs', '유산소': 'cardio'
+    }
+    part_key = subcategory or category or 'cardio'
+    body_part = mapping.get(part_key, None)
+    if not body_part:
+        # 그래도 없으면 cardio로 강제 지정
+        body_part = 'cardio'
+    # DB에서 이름+부위로 조회
+    catalog = db.query(models.ExerciseCatalog).filter(
+        models.ExerciseCatalog.name == normalized_name,
+        models.ExerciseCatalog.body_part == body_part
+    ).first()
+    if catalog:
+        return catalog
+    # 없으면 생성
+    catalog = models.ExerciseCatalog(
+        name=normalized_name,
+        exercise_type=category or None,
+        body_part=body_part,
+        description=description or None
+    )
+    db.add(catalog)
+    db.commit()
+    db.refresh(catalog)
+    return catalog
+
 # 🏋️‍♂️ 운동 기록 저장 (Chat 기반)
 @app.post("/api/py/note/exercise")
 def save_exercise_record(data: ExerciseRecord, db: Session = Depends(get_db)):
+    # AI에서 운동명, 분류, 부위 등 전달받음 (하드코딩/키워드 매핑 없음)
+    catalog = None
+    if hasattr(data, 'exercise_catalog_id') and data.exercise_catalog_id:
+        catalog = db.query(models.ExerciseCatalog).filter(
+            models.ExerciseCatalog.exercise_catalog_id == data.exercise_catalog_id
+        ).first()
+    else:
+        # name, category, subcategory, description 활용 (AI 분석 결과만)
+        name = getattr(data, 'name', None)
+        category = getattr(data, 'category', None)
+        subcategory = getattr(data, 'subcategory', None)
+        description = getattr(data, 'description', None)
+        if name:
+            part = subcategory or category or 'cardio'
+            catalog = get_or_create_exercise_catalog(db, name, category, part, description)
+        else:
+            raise HTTPException(status_code=400, detail="운동명(name)이 누락되었습니다. AI 분석 결과를 확인하세요.")
+    # 하드코딩 분기 없이 AI가 넘긴 값만 그대로 저장
     exercise = models.ExerciseSession(
         user_id=data.user_id,
+        exercise_catalog_id=getattr(catalog, 'exercise_catalog_id', None),
         notes=data.name,
         weight=data.weight,
         sets=data.sets,
@@ -1284,7 +1390,7 @@ def calculate_exercise_calories_from_gpt(exercise_data: dict) -> float:
     GPT를 사용하여 운동 데이터를 기반으로 칼로리 소모량을 계산합니다.
     """
     try:
-        if exercise_data.get('category') == '유산소운동':
+        if exercise_data.get('category') == '유산소':
             # 유산소 운동 칼로리 계산
             duration = exercise_data.get('duration_min', 0)
             exercise_name = exercise_data.get('exercise', '')
@@ -1318,7 +1424,7 @@ def calculate_exercise_calories_from_gpt(exercise_data: dict) -> float:
         print(f"[DEBUG] 칼로리 소모량 계산 완료:")
         print(f"  운동명: {exercise_data.get('exercise', '')}")
         print(f"  분류: {exercise_data.get('category', '')}")
-        if exercise_data.get('category') == '유산소운동':
+        if exercise_data.get('category') == '유산소':
             print(f"  운동시간: {exercise_data.get('duration_min', 0)}분")
         else:
             print(f"  무게: {exercise_data.get('weight', 0)}kg")

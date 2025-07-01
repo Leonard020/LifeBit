@@ -284,6 +284,85 @@ public class DietService {
         return map;
     }
 
+    // ===== 관리자 페이지 음식 카탈로그 관리 메서드 =====
+    
+    /**
+     * 모든 음식 카탈로그 조회 (관리자용)
+     */
+    public List<Map<String, Object>> getAllFoodCatalog() {
+        List<FoodItem> foodItems = foodItemRepository.findAll();
+        
+        return foodItems.stream()
+            .map(foodItem -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("foodItemId", foodItem.getFoodItemId());
+                map.put("name", foodItem.getName());
+                map.put("servingSize", foodItem.getServingSize() != null ? foodItem.getServingSize().doubleValue() : 100.0);
+                map.put("calories", foodItem.getCalories() != null ? foodItem.getCalories().doubleValue() : 0.0);
+                map.put("carbs", foodItem.getCarbs() != null ? foodItem.getCarbs().doubleValue() : 0.0);
+                map.put("protein", foodItem.getProtein() != null ? foodItem.getProtein().doubleValue() : 0.0);
+                map.put("fat", foodItem.getFat() != null ? foodItem.getFat().doubleValue() : 0.0);
+                map.put("createdAt", foodItem.getCreatedAt() != null ? foodItem.getCreatedAt().toString() : null);
+                return map;
+            })
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * 음식 카탈로그 수정 (관리자용)
+     */
+    @Transactional
+    public Map<String, Object> updateFoodCatalog(Long id, String name, Double calories, Double carbs, Double protein, Double fat, Double servingSize) {
+        FoodItem foodItem = foodItemRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Food item not found with id: " + id));
+        
+        // 필드 업데이트
+        if (name != null) {
+            foodItem.setName(name);
+        }
+        if (calories != null) {
+            foodItem.setCalories(BigDecimal.valueOf(calories));
+        }
+        if (carbs != null) {
+            foodItem.setCarbs(BigDecimal.valueOf(carbs));
+        }
+        if (protein != null) {
+            foodItem.setProtein(BigDecimal.valueOf(protein));
+        }
+        if (fat != null) {
+            foodItem.setFat(BigDecimal.valueOf(fat));
+        }
+        if (servingSize != null) {
+            foodItem.setServingSize(BigDecimal.valueOf(servingSize));
+        }
+        
+        FoodItem updatedFoodItem = foodItemRepository.save(foodItem);
+        
+        // 응답 데이터 구성
+        Map<String, Object> response = new HashMap<>();
+        response.put("foodItemId", updatedFoodItem.getFoodItemId());
+        response.put("name", updatedFoodItem.getName());
+        response.put("servingSize", updatedFoodItem.getServingSize() != null ? updatedFoodItem.getServingSize().doubleValue() : 100.0);
+        response.put("calories", updatedFoodItem.getCalories() != null ? updatedFoodItem.getCalories().doubleValue() : 0.0);
+        response.put("carbs", updatedFoodItem.getCarbs() != null ? updatedFoodItem.getCarbs().doubleValue() : 0.0);
+        response.put("protein", updatedFoodItem.getProtein() != null ? updatedFoodItem.getProtein().doubleValue() : 0.0);
+        response.put("fat", updatedFoodItem.getFat() != null ? updatedFoodItem.getFat().doubleValue() : 0.0);
+        response.put("createdAt", updatedFoodItem.getCreatedAt() != null ? updatedFoodItem.getCreatedAt().toString() : null);
+        
+        return response;
+    }
+
+    /**
+     * 음식 카탈로그 삭제 (관리자용)
+     */
+    @Transactional
+    public void deleteFoodCatalog(Long id) {
+        if (!foodItemRepository.existsById(id)) {
+            throw new RuntimeException("Food item not found with id: " + id);
+        }
+        foodItemRepository.deleteById(id);
+    }
+
     private DietLogDTO convertToDietLogDTO(MealLog mealLog) {
         FoodItem foodItem = mealLog.getFoodItem();
 

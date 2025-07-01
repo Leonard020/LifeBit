@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, updateAchievementScore, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
+import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, useHealthLogStatistics, updateAchievementScore, type ExerciseSession, type MealLog, type HealthRecord } from '../../api/auth';
 
 // ✅ 조인된 식단 데이터를 위한 확장 타입
 interface MealLogWithFoodItem extends MealLog {
@@ -76,6 +76,7 @@ import { getToken, getUserInfo, debugToken, isTokenValid } from '../../utils/aut
 interface PythonAnalyticsChartsProps {
   userId: number;
   period: 'day' | 'week' | 'month' | 'year';
+  useHealthLogData?: boolean; // 건강로그 전용 데이터 사용 여부
 }
 
 // 색상 팔레트
@@ -93,7 +94,8 @@ const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#636
 
 export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
   userId,
-  period
+  period,
+  useHealthLogData = false
 }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'weight' | 'exercise' | 'nutrition' | 'goals'>('overview');
@@ -154,12 +156,15 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     refetch: refetchGoals 
   } = useUserGoals(userId.toString());
 
+  // 건강로그 페이지에서는 건강로그 전용 API 사용, 다른 페이지에서는 일반 API 사용
   const { 
     data: healthStats, 
     isLoading: isHealthStatsLoading,
     error: healthStatsError,
     refetch: refetchHealthStats 
-  } = useHealthStatistics(userId.toString(), 'week');
+  } = useHealthLogData 
+    ? useHealthLogStatistics(userId.toString())
+    : useHealthStatistics(userId.toString(), 'week');
 
   // ✅ 실제 영양소 통계를 위한 day period 호출 추가
   const { 
@@ -181,6 +186,11 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     isLoading: isAIInsightsLoading,
     error: aiInsightsError
   } = useAIHealthInsights(userId, period);
+  
+  // 🚀 주간 총 운동 횟수/세트 (모드에 따라 분기)
+  const weeklyWorkoutCurrent = useHealthLogData
+    ? (healthStats?.weeklyTotalCounts_healthloguse || 0)
+    : (healthStats?.weeklyTotalSets || 0);
   
   // 로딩 상태
   const isLoading = isHealthLoading || isMealLoading || isExerciseLoading || isGoalsLoading || isHealthStatsLoading || isNutritionStatsLoading || isPythonAnalyticsLoading || isAIInsightsLoading;
@@ -611,15 +621,29 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
 
   // ✅ 목표 데이터 전처리 (컴포넌트 레벨에서 정의)
   const goalsData = useMemo(() => {
-    // 여러 가지 응답 구조 처리
+    let base: any = null;
     if (userGoals?.success && userGoals?.data) {
-      return userGoals.data;
+      base = userGoals.data;
     } else if (userGoals && typeof userGoals === 'object' && !userGoals.success) {
-      // 직접 목표 객체인 경우
-      return userGoals;
+      base = userGoals;
     }
-    return null;
-  }, [userGoals]);
+    if (!base) return null;
+
+    if (useHealthLogData) {
+      // 건강로그 모드: 부위별 목표를 합산하여 weekly_workout_target을 계산
+      const sumTargets = (
+        (base.weekly_chest || 0) +
+        (base.weekly_back || 0) +
+        (base.weekly_legs || 0) +
+        (base.weekly_shoulders || 0) +
+        (base.weekly_arms || 0) +
+        (base.weekly_abs || 0) +
+        (base.weekly_cardio || 0)
+      );
+      return { ...base, weekly_workout_target: sumTargets };
+    }
+    return base;
+  }, [userGoals, useHealthLogData]);
 
   // 목표 달성률 계산 (기간별 지원)
   const goalAchievements = useMemo(() => {
@@ -1015,10 +1039,14 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
 
   // 운동 점수 계산 함수 (주별 최대 7점)
   const calculateExerciseScore = () => {
-    if (!goalsData?.weekly_workout_target || !healthStats?.weeklyTotalSets) {
+    const totalCurrent = useHealthLogData 
+      ? (healthStats?.weeklyTotalCounts_healthloguse || 0)
+      : (healthStats?.weeklyTotalSets || 0);
+      
+    if (!goalsData?.weekly_workout_target || !totalCurrent) {
       return 0;
     }
-    const achievementRate = Math.min(healthStats.weeklyTotalSets / goalsData.weekly_workout_target, 1.0);
+    const achievementRate = Math.min(totalCurrent / goalsData.weekly_workout_target, 1.0);
     return Math.round(achievementRate * 7);
   };
 
@@ -1037,63 +1065,98 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
     return 0;
   };
 
-  // 운동 부위별 세트 수 데이터 계산
+  // 운동 부위별 데이터 계산 (건강로그 모드에서는 횟수, 일반 모드에서는 세트)
   const calculateDetailedExerciseData = () => {
     const exerciseDetails = {
       chest: {
-        current: healthStats?.weeklyChestSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyChestCounts_healthloguse || 0)
+          : (healthStats?.weeklyChestSets || 0),
         target: goalsData?.weekly_chest || 0,
         hasTarget: (goalsData?.weekly_chest || 0) > 0,
         percentage: (goalsData?.weekly_chest || 0) > 0 
-          ? Math.min(((healthStats?.weeklyChestSets || 0) / goalsData.weekly_chest) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyChestCounts_healthloguse || 0)
+              : (healthStats?.weeklyChestSets || 0)
+            ) / goalsData.weekly_chest) * 100, 100)
           : 0
       },
       back: {
-        current: healthStats?.weeklyBackSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyBackCounts_healthloguse || 0)
+          : (healthStats?.weeklyBackSets || 0),
         target: goalsData?.weekly_back || 0,
         hasTarget: (goalsData?.weekly_back || 0) > 0,
         percentage: (goalsData?.weekly_back || 0) > 0 
-          ? Math.min(((healthStats?.weeklyBackSets || 0) / goalsData.weekly_back) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyBackCounts_healthloguse || 0)
+              : (healthStats?.weeklyBackSets || 0)
+            ) / goalsData.weekly_back) * 100, 100)
           : 0
       },
       legs: {
-        current: healthStats?.weeklyLegsSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyLegsCounts_healthloguse || 0)
+          : (healthStats?.weeklyLegsSets || 0),
         target: goalsData?.weekly_legs || 0,
         hasTarget: (goalsData?.weekly_legs || 0) > 0,
         percentage: (goalsData?.weekly_legs || 0) > 0 
-          ? Math.min(((healthStats?.weeklyLegsSets || 0) / goalsData.weekly_legs) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyLegsCounts_healthloguse || 0)
+              : (healthStats?.weeklyLegsSets || 0)
+            ) / goalsData.weekly_legs) * 100, 100)
           : 0
       },
       shoulders: {
-        current: healthStats?.weeklyShouldersSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyShouldersCounts_healthloguse || 0)
+          : (healthStats?.weeklyShouldersSets || 0),
         target: goalsData?.weekly_shoulders || 0,
         hasTarget: (goalsData?.weekly_shoulders || 0) > 0,
         percentage: (goalsData?.weekly_shoulders || 0) > 0 
-          ? Math.min(((healthStats?.weeklyShouldersSets || 0) / goalsData.weekly_shoulders) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyShouldersCounts_healthloguse || 0)
+              : (healthStats?.weeklyShouldersSets || 0)
+            ) / goalsData.weekly_shoulders) * 100, 100)
           : 0
       },
       arms: {
-        current: healthStats?.weeklyArmsSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyArmsCounts_healthloguse || 0)
+          : (healthStats?.weeklyArmsSets || 0),
         target: goalsData?.weekly_arms || 0,
         hasTarget: (goalsData?.weekly_arms || 0) > 0,
         percentage: (goalsData?.weekly_arms || 0) > 0 
-          ? Math.min(((healthStats?.weeklyArmsSets || 0) / goalsData.weekly_arms) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyArmsCounts_healthloguse || 0)
+              : (healthStats?.weeklyArmsSets || 0)
+            ) / goalsData.weekly_arms) * 100, 100)
           : 0
       },
       abs: {
-        current: healthStats?.weeklyAbsSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyAbsCounts_healthloguse || 0)
+          : (healthStats?.weeklyAbsSets || 0),
         target: goalsData?.weekly_abs || 0,
         hasTarget: (goalsData?.weekly_abs || 0) > 0,
         percentage: (goalsData?.weekly_abs || 0) > 0 
-          ? Math.min(((healthStats?.weeklyAbsSets || 0) / goalsData.weekly_abs) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyAbsCounts_healthloguse || 0)
+              : (healthStats?.weeklyAbsSets || 0)
+            ) / goalsData.weekly_abs) * 100, 100)
           : 0
       },
       cardio: {
-        current: healthStats?.weeklyCardioSets || 0,
+        current: useHealthLogData 
+          ? (healthStats?.weeklyCardioCounts_healthloguse || 0)
+          : (healthStats?.weeklyCardioSets || 0),
         target: goalsData?.weekly_cardio || 0,
         hasTarget: (goalsData?.weekly_cardio || 0) > 0,
         percentage: (goalsData?.weekly_cardio || 0) > 0 
-          ? Math.min(((healthStats?.weeklyCardioSets || 0) / goalsData.weekly_cardio) * 100, 100)
+          ? Math.min(((useHealthLogData 
+              ? (healthStats?.weeklyCardioCounts_healthloguse || 0)
+              : (healthStats?.weeklyCardioSets || 0)
+            ) / goalsData.weekly_cardio) * 100, 100)
           : 0
       }
     };
@@ -1961,19 +2024,19 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                           cx="50" cy="50" r="40" fill="none" 
                           stroke={
                             !goalsData?.weekly_workout_target ? "#d1d5db" :
-                            (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "#10b981" : 
-                            (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5 ? "#f59e0b" : "#ef4444"
+                            weeklyWorkoutCurrent >= goalsData.weekly_workout_target ? "#10b981" : 
+                            weeklyWorkoutCurrent >= goalsData.weekly_workout_target * 0.5 ? "#f59e0b" : "#ef4444"
                           }
                           strokeWidth="8"
                           strokeLinecap="round"
-                          strokeDasharray={`${2 * Math.PI * 40 * Math.min(((healthStats?.weeklyTotalSets || 0) / (goalsData?.weekly_workout_target || 1)) * 100, 100) / 100} ${2 * Math.PI * 40}`}
+                          strokeDasharray={`${2 * Math.PI * 40 * Math.min(((weeklyWorkoutCurrent) / (goalsData?.weekly_workout_target || 1)) * 100, 100) / 100} ${2 * Math.PI * 40}`}
                           className="transition-all duration-1000 ease-out"
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-xl font-bold text-gray-800">
                           {goalsData?.weekly_workout_target 
-                            ? Math.round(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100)
+                            ? Math.round(((weeklyWorkoutCurrent) / goalsData.weekly_workout_target) * 100)
                             : 0}%
                         </span>
                       </div>
@@ -1981,20 +2044,24 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     
                     <p className="text-sm text-gray-600 mb-2">
                       {goalsData?.weekly_workout_target 
-                        ? `${healthStats?.weeklyTotalSets || 0}세트 / ${goalsData.weekly_workout_target}세트`
-                        : `${healthStats?.weeklyTotalSets || 0}세트 / 목표 미설정`
+                                ? useHealthLogData 
+          ? `${healthStats?.weeklyTotalCounts_healthloguse || 0}회 / ${goalsData.weekly_workout_target}회`
+          : `${healthStats?.weeklyTotalSets || 0}세트 / ${goalsData.weekly_workout_target}세트`
+        : useHealthLogData
+          ? `${healthStats?.weeklyTotalCounts_healthloguse || 0}회 / 목표 미설정`
+          : `${healthStats?.weeklyTotalSets || 0}세트 / 목표 미설정`
                       }
                     </p>
                     
                     <Badge 
                       variant={
                         !goalsData?.weekly_workout_target ? "outline" :
-                        (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "default" : "secondary"
+                        weeklyWorkoutCurrent >= goalsData.weekly_workout_target ? "default" : "secondary"
                       }
                       className="mb-3"
                     >
                       {!goalsData?.weekly_workout_target ? "목표 미설정" :
-                       (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? "달성!" : "진행중"}
+                       weeklyWorkoutCurrent >= goalsData.weekly_workout_target ? "달성!" : "진행중"}
                     </Badge>
                   </div>
                   
@@ -2005,7 +2072,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                         className="bg-blue-500 h-2 rounded-full transition-all duration-500"
                         style={{ 
                           width: `${goalsData?.weekly_workout_target 
-                            ? Math.min(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100, 100)
+                            ? Math.min(((weeklyWorkoutCurrent) / goalsData.weekly_workout_target) * 100, 100)
                             : 0}%` 
                         }}
                       />
@@ -2190,6 +2257,22 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* ✅ 테스트 버튼들 */}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handleUpdateAchievementScore}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  점수 업데이트
+                </button>
+                <button
+                  onClick={() => {}} // Removed for clean UI
+                  className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                >
+                  순위 업데이트
+                </button>
+              </div>
             </CardContent>
           </Card>
 
@@ -2207,26 +2290,29 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   {/* 전체 운동 목표 */}
                   <div className="relative">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">주간 총 운동 세트 수</span>
+                      <span className="font-medium">{useHealthLogData ? '주간 총 운동 횟수' : '주간 총 운동 세트 수'}</span>
                       <span className="text-2xl font-bold text-green-600">
-                        {healthStats?.weeklyTotalSets || 0}세트
+                        {useHealthLogData 
+                          ? `${healthStats?.weeklyTotalCounts_healthloguse || 0}회`
+                          : `${healthStats?.weeklyTotalSets || 0}세트`
+                        }
                     </span>
                   </div>
                     <div className="relative">
                       <Progress value={goalsData?.weekly_workout_target 
-                        ? Math.min(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100, 100)
+                        ? Math.min(((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) / goalsData.weekly_workout_target) * 100, 100)
                         : 0} className="h-4" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-xs font-semibold text-white drop-shadow">
                           {goalsData?.weekly_workout_target 
-                            ? Math.round(((healthStats?.weeklyTotalSets || 0) / goalsData.weekly_workout_target) * 100)
+                            ? Math.round(((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) / goalsData.weekly_workout_target) * 100)
                             : 0}%
                         </span>
                       </div>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600 mt-1">
-                      <span>0세트</span>
-                      <span>목표: {goalsData?.weekly_workout_target || 0}세트</span>
+                                    <span>{useHealthLogData ? '0회' : '0세트'}</span>
+              <span>목표: {goalsData?.weekly_workout_target || 0}{useHealthLogData ? '회' : '세트'}</span>
                     </div>
                   </div>
 
@@ -2236,7 +2322,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     const hasAnyTarget = Object.values(exerciseDetails).some(detail => detail.hasTarget);
                     return hasAnyTarget && (
                       <div className="space-y-4">
-                        <h4 className="font-medium text-gray-900">운동 부위별 달성률 (세트 수 기준)</h4>
+                        <h4 className="font-medium text-gray-900">운동 부위별 달성률 ({useHealthLogData ? '횟수' : '세트 수'} 기준)</h4>
                       
                         {/* 가슴 운동 */}
                         {exerciseDetails.chest.hasTarget && (
@@ -2244,7 +2330,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">💪 가슴 운동</span>
                               <span className="text-sm font-bold text-red-600">
-                                {exerciseDetails.chest.current}세트 / {exerciseDetails.chest.target}세트
+                                {exerciseDetails.chest.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.chest.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.chest.percentage} className="h-2" />
@@ -2260,7 +2346,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🏋️‍♂️ 등 운동</span>
                               <span className="text-sm font-bold text-green-600">
-                                {exerciseDetails.back.current}세트 / {exerciseDetails.back.target}세트
+                                {exerciseDetails.back.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.back.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.back.percentage} className="h-2" />
@@ -2276,7 +2362,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🦵 다리 운동</span>
                               <span className="text-sm font-bold text-purple-600">
-                                {exerciseDetails.legs.current}세트 / {exerciseDetails.legs.target}세트
+                                {exerciseDetails.legs.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.legs.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.legs.percentage} className="h-2" />
@@ -2292,7 +2378,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🤸‍♂️ 어깨 운동</span>
                               <span className="text-sm font-bold text-orange-600">
-                                {exerciseDetails.shoulders.current}세트 / {exerciseDetails.shoulders.target}세트
+                                {exerciseDetails.shoulders.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.shoulders.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.shoulders.percentage} className="h-2" />
@@ -2308,7 +2394,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">💪 팔 운동</span>
                               <span className="text-sm font-bold text-pink-600">
-                                {exerciseDetails.arms.current}세트 / {exerciseDetails.arms.target}세트
+                                {exerciseDetails.arms.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.arms.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.arms.percentage} className="h-2" />
@@ -2324,7 +2410,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🏃‍♀️ 복근 운동</span>
                               <span className="text-sm font-bold text-yellow-600">
-                                {exerciseDetails.abs.current}세트 / {exerciseDetails.abs.target}세트
+                                {exerciseDetails.abs.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.abs.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.abs.percentage} className="h-2" />
@@ -2340,7 +2426,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🏃 유산소 운동</span>
                               <span className="text-sm font-bold text-cyan-600">
-                                {exerciseDetails.cardio.current}세트 / {exerciseDetails.cardio.target}세트
+                                {exerciseDetails.cardio.current}{useHealthLogData ? '회' : '세트'} / {exerciseDetails.cardio.target}{useHealthLogData ? '회' : '세트'}
                               </span>
                             </div>
                             <Progress value={exerciseDetails.cardio.percentage} className="h-2" />
@@ -2355,27 +2441,27 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
 
                   {/* 운동 상태 메시지 */}
                   <div className={`p-4 rounded-lg border-l-4 ${
-                    goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target
+                    goalsData?.weekly_workout_target && ((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) >= goalsData.weekly_workout_target)
                       ? 'bg-green-50 border-green-500 text-green-700'
-                      : goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5
+                      : goalsData?.weekly_workout_target && ((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) >= goalsData.weekly_workout_target * 0.5)
                       ? 'bg-yellow-50 border-yellow-500 text-yellow-700'
                       : 'bg-red-50 border-red-500 text-red-700'
                   }`}>
                     <div className="flex items-center">
-                      {goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target ? (
+                      {goalsData?.weekly_workout_target && ((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) >= goalsData.weekly_workout_target) ? (
                         <CheckCircle className="h-5 w-5 mr-2" />
-                      ) : goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5 ? (
+                      ) : goalsData?.weekly_workout_target && ((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) >= goalsData.weekly_workout_target * 0.5) ? (
                         <AlertTriangle className="h-5 w-5 mr-2" />
                       ) : (
                         <X className="h-5 w-5 mr-2" />
                       )}
                       <span className="font-medium">
-                        {goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target
+                        {goalsData?.weekly_workout_target && ((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) >= goalsData.weekly_workout_target)
                           ? '🎉 주간 운동 목표를 달성했습니다!'
-                          : goalsData?.weekly_workout_target && (healthStats?.weeklyTotalSets || 0) >= goalsData.weekly_workout_target * 0.5
-                          ? `💪 조금만 더! ${goalsData.weekly_workout_target - (healthStats?.weeklyTotalSets || 0)}세트 더 운동하면 목표 달성!`
+                          : goalsData?.weekly_workout_target && ((useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0)) >= goalsData.weekly_workout_target * 0.5)
+                          ? `💪 조금만 더! ${goalsData.weekly_workout_target - (useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0))}${useHealthLogData ? '회' : '세트'} 더 운동하면 목표 달성!`
                           : goalsData?.weekly_workout_target
-                          ? `🔥 화이팅! ${goalsData.weekly_workout_target - (healthStats?.weeklyTotalSets || 0)}세트 운동으로 목표를 달성해보세요!`
+                          ? `🔥 화이팅! ${goalsData.weekly_workout_target - (useHealthLogData ? (healthStats?.weeklyTotalCounts_healthloguse || 0) : (healthStats?.weeklyTotalSets || 0))}${useHealthLogData ? '회' : '세트'} 운동으로 목표를 달성해보세요!`
                           : '🎯 프로필에서 주간 운동 목표를 설정해보세요!'
                         }
                       </span>

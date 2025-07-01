@@ -46,11 +46,58 @@ export PROJECT_NAME="${PROJECT_NAME:-lifebit}"
 export ENVIRONMENT="${ENVIRONMENT:-production}"
 export INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+cd "$PROJECT_ROOT"
+
 log_info "배포 설정:"
 log_info "  - AWS Region: $AWS_REGION"
 log_info "  - Project Name: $PROJECT_NAME"
 log_info "  - Environment: $ENVIRONMENT"
 log_info "  - Instance Type: $INSTANCE_TYPE"
+
+# 환경 변수 수집
+echo ""
+log_warning "🔧 환경 변수 설정"
+echo "배포에 필요한 환경 변수를 입력해주세요. 빈 값으로 두면 기본값이 사용됩니다."
+
+# OpenAI API Key 입력
+echo ""
+read -p "OpenAI API Key를 입력하세요 (AI 채팅 기능용, 필수): " OPENAI_API_KEY
+if [ -z "$OPENAI_API_KEY" ]; then
+    log_warning "OpenAI API Key가 입력되지 않았습니다. AI 채팅 기능이 비활성화됩니다."
+    USE_GPT="False"
+else
+    log_success "OpenAI API Key가 설정되었습니다."
+    USE_GPT="True"
+fi
+
+# JWT Secret 입력
+echo ""
+read -p "JWT Secret을 입력하세요 (보안용, 빈 값이면 기본값 사용): " JWT_SECRET
+if [ -z "$JWT_SECRET" ]; then
+    JWT_SECRET="lifebit-production-jwt-secret-$(date +%s)-$(openssl rand -hex 8)"
+    log_info "JWT Secret이 자동 생성되었습니다."
+else
+    log_success "JWT Secret이 설정되었습니다."
+fi
+
+# 소셜 로그인 설정 (선택 사항)
+echo ""
+log_info "소셜 로그인 설정 (선택 사항)"
+read -p "Google Client ID (선택 사항): " GOOGLE_CLIENT_ID
+read -p "Kakao Client ID (선택 사항): " KAKAO_CLIENT_ID
+
+# 데이터베이스 설정
+echo ""
+log_info "데이터베이스 설정"
+read -p "PostgreSQL DB 이름 (기본값: lifebit_db): " POSTGRES_DB
+read -p "PostgreSQL 사용자명 (기본값: lifebit_user): " POSTGRES_USER
+read -p "PostgreSQL 비밀번호 (기본값: lifebit_password): " POSTGRES_PASSWORD
+
+POSTGRES_DB=${POSTGRES_DB:-lifebit_db}
+POSTGRES_USER=${POSTGRES_USER:-lifebit_user}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lifebit_password}
 
 # 사용자에게 도메인 이름 입력받기 (선택 사항)
 echo ""
@@ -69,9 +116,21 @@ else
     DOMAIN_NAME_VAR="domain_name=$USER_DOMAIN_NAME"
 fi
 
+# 환경 변수 요약 출력
+echo ""
+log_info "🔍 설정된 환경 변수 요약:"
+log_info "  - OpenAI API Key: ${OPENAI_API_KEY:+설정됨}${OPENAI_API_KEY:-설정되지 않음}"
+log_info "  - USE_GPT: $USE_GPT"
+log_info "  - JWT Secret: 설정됨"
+log_info "  - Google Client ID: ${GOOGLE_CLIENT_ID:-설정되지 않음}"
+log_info "  - Kakao Client ID: ${KAKAO_CLIENT_ID:-설정되지 않음}"
+log_info "  - PostgreSQL DB: $POSTGRES_DB"
+log_info "  - PostgreSQL User: $POSTGRES_USER"
+log_info "  - Domain: ${USER_DOMAIN_NAME:-EC2 Public IP 사용}"
+
 # LifeBit.sql 파일 존재 확인
 log_info "데이터베이스 스키마 파일 확인 중..."
-if [ ! -f "./LifeBit.sql" ]; then
+if [ ! -f "$PROJECT_ROOT/LifeBit.sql" ]; then
     log_error "LifeBit.sql 파일을 찾을 수 없습니다!"
     log_error "데이터베이스 초기화를 위해 LifeBit.sql 파일이 필요합니다."
     log_error "프로젝트 루트에 LifeBit.sql 파일이 있는지 확인해주세요."
@@ -79,7 +138,7 @@ if [ ! -f "./LifeBit.sql" ]; then
 fi
 
 # LifeBit.sql 파일 크기 확인 (최소 10KB 이상이어야 함)
-SQL_SIZE=$(stat -c%s "./LifeBit.sql" 2>/dev/null || echo "0")
+SQL_SIZE=$(stat -c%s "$PROJECT_ROOT/LifeBit.sql" 2>/dev/null || echo "0")
 if [ "$SQL_SIZE" -lt 10240 ]; then
     log_error "LifeBit.sql 파일이 너무 작습니다 (${SQL_SIZE} bytes)"
     log_error "올바른 데이터베이스 스키마 파일인지 확인해주세요."
@@ -89,15 +148,15 @@ fi
 log_success "LifeBit.sql 파일 확인 완료 (${SQL_SIZE} bytes)"
 
 # 사전 점검 실행
-if [ -f "./pre-deployment-check.sh" ]; then
+if [ -f "./scripts/pre-deployment-check.sh" ]; then
     log_info "사전 점검 실행 중..."
-    if ! ./pre-deployment-check.sh; then
+    if ! ./scripts/pre-deployment-check.sh; then
         log_error "사전 점검에 실패했습니다. 배포를 중단합니다."
         exit 1
     fi
     log_success "사전 점검 완료"
 else
-    log_warning "사전 점검 스크립트를 찾을 수 없습니다. 계속 진행합니다..."
+    log_warning "scripts/pre-deployment-check.sh 스크립트를 찾을 수 없습니다. 계속 진행합니다..."
 fi
 
 # 필수 도구 확인
@@ -281,10 +340,39 @@ log_info "Ansible 플레이북 실행 중..."
 max_retries=3
 retry_count=0
 
+# 환경 변수를 Ansible에 전달
+ANSIBLE_EXTRA_VARS="$DOMAIN_NAME_VAR"
+if [ -n "$OPENAI_API_KEY" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS openai_api_key='$OPENAI_API_KEY'"
+fi
+if [ -n "$USE_GPT" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS use_gpt='$USE_GPT'"
+fi
+if [ -n "$JWT_SECRET" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS jwt_secret='$JWT_SECRET'"
+fi
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS google_client_id='$GOOGLE_CLIENT_ID'"
+fi
+if [ -n "$KAKAO_CLIENT_ID" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS kakao_client_id='$KAKAO_CLIENT_ID'"
+fi
+if [ -n "$POSTGRES_DB" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS postgres_db='$POSTGRES_DB'"
+fi
+if [ -n "$POSTGRES_USER" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS postgres_user='$POSTGRES_USER'"
+fi
+if [ -n "$POSTGRES_PASSWORD" ]; then
+    ANSIBLE_EXTRA_VARS="$ANSIBLE_EXTRA_VARS postgres_password='$POSTGRES_PASSWORD'"
+fi
+
+log_info "Ansible 변수: $ANSIBLE_EXTRA_VARS"
+
 while [ $retry_count -lt $max_retries ]; do
     log_info "플레이북 실행 시도 $(($retry_count + 1))/$max_retries..."
     
-    if ansible-playbook playbook.yml --extra-vars "$DOMAIN_NAME_VAR"; then
+    if ansible-playbook playbook.yml --extra-vars "$ANSIBLE_EXTRA_VARS"; then
         log_success "Ansible 플레이북이 성공적으로 실행되었습니다."
         break
     else

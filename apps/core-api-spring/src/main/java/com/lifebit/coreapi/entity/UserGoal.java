@@ -8,7 +8,14 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_goals")
+@Table(name = "user_goals",
+    uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"uuid"})
+    },
+    indexes = {
+        @Index(name = "idx_user_goals_user_id", columnList = "user_id")
+    }
+)
 @Getter @Setter
 public class UserGoal {
     @Id

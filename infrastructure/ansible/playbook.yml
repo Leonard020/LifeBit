@@ -19,7 +19,7 @@
 
     - name: Fail if user_data not completed
       fail:
-        msg: "User data script has not completed. Please wait or run fix-unattended-upgrades.sh"
+        msg: "User data script has not completed. Please wait or run scripts/fix-unattended-upgrades.sh"
       when: not user_data_status.stat.exists
 
     - name: Update apt cache (if needed)

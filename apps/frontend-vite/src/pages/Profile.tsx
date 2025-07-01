@@ -62,10 +62,11 @@ const Profile = () => {
   const [selectedBodyParts, setSelectedBodyParts] = useState<string[]>([]);
 
   const [goals, setGoals] = useState({
+    weeklyWorkoutTarget: '0',
     dailyCalories: '2000',
-    dailyCarbs: '200',
+    dailyCarbs: '300',
     dailyProtein: '120',
-    dailyFat: '60',
+    dailyFat: '80',
     weeklyChest: '0',
     weeklyBack: '0',
     weeklyLegs: '0',
@@ -175,10 +176,11 @@ const Profile = () => {
           setSelectedBodyParts([]);
           setSelectedBodyPartsToStorage([]);
           setGoals({
+            weeklyWorkoutTarget: '0',
             dailyCalories: '2000',
-            dailyCarbs: '200',
+            dailyCarbs: '300',
             dailyProtein: '120',
-            dailyFat: '60',
+            dailyFat: '80',
             weeklyChest: '0',
             weeklyBack: '0',
             weeklyLegs: '0',
@@ -207,25 +209,27 @@ const Profile = () => {
         setSelectedBodyParts([]);
         setSelectedBodyPartsToStorage([]);
         setGoals({
-          dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
-          dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
-          dailyProtein: goalsData.daily_protein_target?.toString() || '120',
-          dailyFat: goalsData.daily_fat_target?.toString() || '60',
+          weeklyWorkoutTarget: '0',
+          dailyCalories: '2000',
+          dailyCarbs: '300',
+          dailyProtein: '120',
+          dailyFat: '80',
           weeklyChest: '0',
           weeklyBack: '0',
           weeklyLegs: '0',
           weeklyShoulders: '0',
           weeklyArms: '0',
           weeklyAbs: '0',
-          weeklyCardio: goalsData.weekly_cardio?.toString() || '0',
+          weeklyCardio: '0',
         });
         return;
       }
       setGoals({
+        weeklyWorkoutTarget: goalsData.weekly_workout_target?.toString() || '0',
         dailyCalories: goalsData.daily_calories_target?.toString() || '2000',
-        dailyCarbs: goalsData.daily_carbs_target?.toString() || '200',
+        dailyCarbs: goalsData.daily_carbs_target?.toString() || '300',
         dailyProtein: goalsData.daily_protein_target?.toString() || '120',
-        dailyFat: goalsData.daily_fat_target?.toString() || '60',
+        dailyFat: goalsData.daily_fat_target?.toString() || '80',
         weeklyChest: goalsData.weekly_chest?.toString() || '0',
         weeklyBack: goalsData.weekly_back?.toString() || '0',
         weeklyLegs: goalsData.weekly_legs?.toString() || '0',
@@ -449,6 +453,7 @@ const Profile = () => {
             setProfileData={setProfileData}
             loading={loading}
             onSave={handleProfileSave}
+            nicknameEditable={false}
           />
 
           {/* Health Goals */}
@@ -554,13 +559,13 @@ const Profile = () => {
                 </div>
 
                 {/* Total Weekly Workout Target Display */}
-                <div className="space-y-2">
-                  <Label>총 주간 운동 목표</Label>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="text-lg font-semibold text-blue-700">
+                <div className="mt-4">
+                  <Label className="text-sm text-muted-foreground">총 주간 운동 목표</Label>
+                  <div className="p-3 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
+                    <div className="text-lg font-semibold text-blue-700 dark:text-[#6ca0ff]">
                       {totalWeeklyWorkoutTarget}회 / 주
                     </div>
-                    <div className="text-sm text-blue-600">
+                    <div className="text-sm text-blue-600 dark:text-[#b3b8d8]">
                       (근력운동: {totalWeeklyWorkoutTarget - parseInt(goals.weeklyCardio)}회, 유산소: {goals.weeklyCardio}회)
                     </div>
                   </div>

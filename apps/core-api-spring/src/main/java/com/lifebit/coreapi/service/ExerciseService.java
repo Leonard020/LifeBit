@@ -20,6 +20,9 @@ import java.util.UUID;
 import com.lifebit.coreapi.entity.TimePeriodType;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
 
 @Service
 @Transactional(readOnly = true)
@@ -47,9 +50,11 @@ public class ExerciseService {
         session.setExerciseDate(exerciseDate != null ? exerciseDate : LocalDate.now());
         session.setCreatedAt(LocalDateTime.now());
 
-        session.setSets(sets != null ? sets : 0);
-        session.setReps(reps != null ? reps : 0);
-        session.setWeight(weight != null ? BigDecimal.valueOf(weight) : BigDecimal.ZERO);
+        // cardio/bodyPart 분기 및 set=1, reps/weight=null 등 하드코딩 삭제
+        // 프론트/AI에서 받은 값만 저장
+        session.setSets(sets);
+        session.setReps(reps);
+        session.setWeight(weight != null ? BigDecimal.valueOf(weight) : null);
         session.setTimePeriod(timePeriod);
 
         return exerciseSessionRepository.save(session);
@@ -143,18 +148,38 @@ public class ExerciseService {
     }
 
     /**
-     * 최근 7일간 운동 횟수 조회
+     * 주간 운동 횟수 조회 (일요일~토요일 기준)
      */
     public int getWeeklyExerciseCount(Long userId) {
-        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
         return sessions.size();
     }
 
     /**
-     * 최근 7일간 총 칼로리 소모량 조회
+     * 주간 총 칼로리 소모량 조회 (일요일~토요일 기준)
      */
     public int getWeeklyCaloriesBurned(Long userId) {
-        List<ExerciseSession> sessions = getRecentExerciseSessions(userId, 7);
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
         return sessions.stream()
                 .mapToInt(session -> session.getCaloriesBurned() != null ? session.getCaloriesBurned() : 0)
                 .sum();
@@ -198,36 +223,35 @@ public class ExerciseService {
      */
     @Transactional
     public ExerciseCatalog findOrCreateExercise(String name, String bodyPart, String description) {
-        // 먼저 기존 운동 검색
+        if (name == null || name.isBlank() || bodyPart == null || bodyPart.isBlank()) {
+            throw new IllegalArgumentException("운동명(name) 또는 운동 부위(bodyPart)가 누락되었습니다. AI 분석 결과를 확인하세요.");
+        }
+        // bodyPart를 LifeBit.sql ENUM(영문)으로 변환
+        String bodyPartEnum = switch (bodyPart.trim().toLowerCase()) {
+            case "가슴", "chest" -> "chest";
+            case "등", "back" -> "back";
+            case "하체", "다리", "legs", "leg" -> "legs";
+            case "어깨", "shoulders", "shoulder" -> "shoulders";
+            case "팔", "arms", "arm" -> "arms";
+            case "복근", "abs", "ab" -> "abs";
+            case "유산소", "cardio" -> "cardio";
+            default -> throw new IllegalArgumentException("알 수 없는 운동 부위(bodyPart): " + bodyPart);
+        };
+        com.lifebit.coreapi.entity.BodyPartType bodyPartType = com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPartEnum);
+        // 기존 운동 검색 (이름+부위)
         List<ExerciseCatalog> existingExercises = exerciseCatalogRepository.findByNameContainingIgnoreCase(name);
-
-        if (!existingExercises.isEmpty()) {
-            // 정확히 일치하는 이름이 있는지 확인
-            for (ExerciseCatalog exercise : existingExercises) {
-                if (exercise.getName().equalsIgnoreCase(name)) {
-                    return exercise;
-                }
+        for (ExerciseCatalog exercise : existingExercises) {
+            if (exercise.getName().equalsIgnoreCase(name) && exercise.getBodyPart() == bodyPartType) {
+                return exercise;
             }
         }
-
-        // 새로운 운동 카탈로그 생성
+        // 새 카탈로그 생성
         ExerciseCatalog newExercise = new ExerciseCatalog();
         newExercise.setUuid(java.util.UUID.randomUUID());
         newExercise.setName(name);
-
-        // bodyPart를 BodyPartType으로 변환
-        try {
-            com.lifebit.coreapi.entity.BodyPartType bodyPartType = com.lifebit.coreapi.entity.BodyPartType
-                    .valueOf(bodyPart.toUpperCase());
-            newExercise.setBodyPart(bodyPartType);
-        } catch (IllegalArgumentException e) {
-            // 기본값 설정
-            newExercise.setBodyPart(com.lifebit.coreapi.entity.BodyPartType.cardio);
-        }
-
+        newExercise.setBodyPart(bodyPartType);
         newExercise.setDescription(description);
         newExercise.setCreatedAt(LocalDateTime.now());
-
         return exerciseCatalogRepository.save(newExercise);
     }
 
@@ -240,6 +264,14 @@ public class ExerciseService {
 
     /**
      * ID로 운동 카탈로그 조회
+     */
+    public ExerciseCatalog getExerciseCatalogById(Long catalogId) {
+        return exerciseCatalogRepository.findById(catalogId)
+            .orElseThrow(() -> new IllegalArgumentException("운동 카탈로그를 찾을 수 없습니다 - catalogId: " + catalogId));
+    }
+
+    /**
+     * 운동 세션에 운동 카탈로그 설정
      */
     @Transactional
     public ExerciseSession setExerciseCatalog(ExerciseSession session, Long catalogId) {
@@ -336,15 +368,25 @@ public class ExerciseService {
     }
 
     /**
-     * 주간 운동 부위별 운동 횟수 조회
+     * 주간 운동 부위별 운동 횟수 조회 (일요일~토요일 기준)
      */
     public Map<String, Integer> getWeeklyBodyPartCounts(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        log.info("🗓️ [getWeeklyBodyPartCounts] 주별 운동 부위별 빈도 조회 - 사용자: {}, 기간: {} ~ {} (오늘: {})", 
+                userId, startDate, endDate, today);
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
+        
+        log.info("📊 [getWeeklyBodyPartCounts] 조회된 운동 세션 수: {}", sessions.size());
         
         Map<String, Integer> bodyPartCounts = new HashMap<>();
         bodyPartCounts.put("CHEST", 0);
@@ -354,14 +396,17 @@ public class ExerciseService {
         bodyPartCounts.put("ARMS", 0);
         bodyPartCounts.put("ABS", 0);
         bodyPartCounts.put("CARDIO", 0);
-        
         for (ExerciseSession session : sessions) {
+            String bodyPart = null;
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            }
+            if (bodyPart != null) {
                 bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1); // 횟수로 카운트
             }
         }
         
+        log.info("✅ [getWeeklyBodyPartCounts] 결과: {}", bodyPartCounts);
         return bodyPartCounts;
     }
 
@@ -415,16 +460,20 @@ public class ExerciseService {
     }
 
     /**
-     * 주간 운동 부위별 운동 시간(분) 조회
+     * 주간 운동 부위별 운동 시간(분) 조회 (일요일~토요일 기준)
      */
     public Map<String, Integer> getWeeklyBodyPartMinutes(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
-        
         Map<String, Integer> bodyPartMinutes = new HashMap<>();
         bodyPartMinutes.put("CHEST", 0);
         bodyPartMinutes.put("BACK", 0);
@@ -433,40 +482,56 @@ public class ExerciseService {
         bodyPartMinutes.put("ARMS", 0);
         bodyPartMinutes.put("ABS", 0);
         bodyPartMinutes.put("CARDIO", 0);
-        
         for (ExerciseSession session : sessions) {
+            String bodyPart = null;
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            }
+            if (bodyPart != null) {
                 int duration = session.getDurationMinutes() != null ? session.getDurationMinutes() : 0;
                 bodyPartMinutes.put(bodyPart, bodyPartMinutes.getOrDefault(bodyPart, 0) + duration);
             }
         }
-        
         return bodyPartMinutes;
     }
 
     /**
-     * 주간 총 운동 세트 수 계산 (weekly_workout_target 비교용)
+     * 주간 총 운동 세트 수 계산 (weekly_workout_target 비교용, 일요일~토요일 기준)
      */
     public int getWeeklyTotalSets(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
                 user, startDate, endDate);
         
         return sessions.stream()
-                .mapToInt(session -> session.getSets() != null ? session.getSets() : 0)
+                .mapToInt(session -> {
+                    Integer s = session.getSets();
+                    if (s != null && s > 0) return s;
+                    // 세트 수가 없는 유산소/플랭크 등은 1세트로 간주
+                    return 1;
+                })
                 .sum();
     }
 
     /**
-     * 주간 부위별 운동 세트 수 계산
+     * 주간 부위별 운동 세트 수 계산 (일요일~토요일 기준)
      */
     public Map<String, Integer> getWeeklyBodyPartSets(Long userId) {
-        LocalDate startDate = LocalDate.now().minusDays(7);
-        LocalDate endDate = LocalDate.now();
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
         
         User user = userRepository.getReferenceById(userId);
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
@@ -482,13 +547,285 @@ public class ExerciseService {
         bodyPartSets.put("CARDIO", 0);
         
         for (ExerciseSession session : sessions) {
+            String bodyPart = null;
             if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
-                String bodyPart = session.getExerciseCatalog().getBodyPart().name();
-                int sets = session.getSets() != null ? session.getSets() : 0;
-                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + sets);
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            } else if (session.getNotes() != null) {
+                String note = session.getNotes().toLowerCase();
+                if (note.contains("조깅") || note.contains("달리기") || note.contains("런닝") || note.contains("걷기") || note.contains("run")) {
+                    bodyPart = "CARDIO";
+                }
+            }
+            
+            if (bodyPart != null) {
+                Integer sets = session.getSets();
+                int setsToAdd = (sets != null && sets > 0) ? sets : 1; // 세트 수가 없으면 1세트로 간주
+                bodyPartSets.put(bodyPart, bodyPartSets.getOrDefault(bodyPart, 0) + setsToAdd);
             }
         }
         
         return bodyPartSets;
+    }
+
+    // 관리자 페이지에서 운동 카탈로그 조회
+    public List<ExerciseCatalog> getAllCatalogs() {
+        return exerciseCatalogRepository.findAllOrderByCreatedAtDesc();
+    }
+    
+    // 관리자용: 운동 카탈로그 생성
+    @Transactional
+    public ExerciseCatalog createExerciseCatalog(ExerciseCatalog exerciseCatalog) {
+        exerciseCatalog.setUuid(UUID.randomUUID());
+        exerciseCatalog.setCreatedAt(LocalDateTime.now());
+        return exerciseCatalogRepository.save(exerciseCatalog);
+    }
+    
+    // 관리자용: 운동 카탈로그 수정
+    @Transactional
+    public ExerciseCatalog updateExerciseCatalog(Long id, Map<String, Object> request) {
+        log.info("🔧 [ExerciseService] 운동 카탈로그 수정 요청 - ID: {}, 요청 데이터: {}", id, request);
+        
+        ExerciseCatalog catalog = exerciseCatalogRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("운동 카탈로그를 찾을 수 없습니다: " + id));
+
+        log.info("🔧 [ExerciseService] 기존 카탈로그 - 이름: {}, 부위: {}, 타입: {}, 강도: {}", 
+            catalog.getName(), catalog.getBodyPart(), catalog.getExerciseType(), catalog.getIntensity());
+
+        // 운동명 수정 (기본 중복 검사만)
+        if (request.containsKey("name")) {
+            String newName = (String) request.get("name");
+            if (!newName.equals(catalog.getName())) {
+                Optional<ExerciseCatalog> existing = exerciseCatalogRepository.findByName(newName);
+                if (existing.isPresent() && !existing.get().getExerciseCatalogId().equals(id)) {
+                    throw new RuntimeException("이미 존재하는 운동명입니다: " + newName);
+                }
+                catalog.setName(newName);
+                log.info("🔧 [ExerciseService] 운동명 수정: {} → {}", catalog.getName(), newName);
+            }
+        }
+
+        // 운동 부위 수정 (한글 → 영어 변환)
+        if (request.containsKey("bodyPart")) {
+            String bodyPartKor = (String) request.get("bodyPart");
+            String bodyPartEng = convertBodyPartToEnglishAdmin(bodyPartKor);
+            log.info("🔧 [ExerciseService] 운동 부위 변환: {} → {}", bodyPartKor, bodyPartEng);
+            
+            try {
+                com.lifebit.coreapi.entity.BodyPartType bodyPartType = 
+                    com.lifebit.coreapi.entity.BodyPartType.valueOf(bodyPartEng.toLowerCase());
+                
+                com.lifebit.coreapi.entity.BodyPartType oldBodyPart = catalog.getBodyPart();
+                catalog.setBodyPart(bodyPartType);
+                log.info("🔧 [ExerciseService] 운동 부위 설정: {} → {}", oldBodyPart, bodyPartType);
+            } catch (IllegalArgumentException e) {
+                log.error("❌ [ExerciseService] 유효하지 않은 운동 부위: {} → {}", bodyPartKor, bodyPartEng);
+                throw new RuntimeException("유효하지 않은 운동 부위입니다: " + bodyPartKor);
+            }
+        }
+
+        // 운동 타입 수정 (한글 → 영어 변환)
+        if (request.containsKey("exerciseType")) {
+            String exerciseTypeKor = (String) request.get("exerciseType");
+            String exerciseTypeEng = convertExerciseTypeToEnglishAdmin(exerciseTypeKor);
+            catalog.setExerciseType(exerciseTypeEng);
+            log.info("🔧 [ExerciseService] 운동 타입 변환: {} → {}", exerciseTypeKor, exerciseTypeEng);
+        }
+
+        // 강도 수정 (한글 → 영어 변환)
+        if (request.containsKey("intensity")) {
+            Object intensityObj = request.get("intensity");
+            if (intensityObj != null) {
+                String intensityKor = (String) intensityObj;
+                String intensityEng = convertIntensityToEnglishAdmin(intensityKor);
+                catalog.setIntensity(intensityEng);
+                log.info("🔧 [ExerciseService] 강도 변환: {} → {}", intensityKor, intensityEng);
+            } else {
+                catalog.setIntensity(null);
+                log.info("🔧 [ExerciseService] 강도를 null로 설정");
+            }
+        }
+
+        // 설명 수정
+        if (request.containsKey("description")) {
+            catalog.setDescription((String) request.get("description"));
+        }
+
+        log.info("💾 [ExerciseService] 저장 직전 - 부위: {}, 타입: {}, 강도: {}", 
+            catalog.getBodyPart(), catalog.getExerciseType(), catalog.getIntensity());
+
+        ExerciseCatalog savedCatalog = exerciseCatalogRepository.save(catalog);
+        
+        log.info("✅ [ExerciseService] 운동 카탈로그 수정 완료 - ID: {}, 이름: {}, 부위: {}, 타입: {}, 강도: {}", 
+            savedCatalog.getExerciseCatalogId(), savedCatalog.getName(), 
+            savedCatalog.getBodyPart(), savedCatalog.getExerciseType(), savedCatalog.getIntensity());
+        
+        return savedCatalog;
+    }
+
+    // 관리자 전용 변환 함수들 (기존 로직과 분리)
+    private String convertBodyPartToEnglishAdmin(String korean) {
+        return switch (korean) {
+            case "가슴" -> "chest";
+            case "등" -> "back";
+            case "다리" -> "legs";
+            case "어깨" -> "shoulders";
+            case "팔" -> "arms";
+            case "복근" -> "abs";
+            case "유산소" -> "cardio";
+            default -> korean.toLowerCase();
+        };
+    }
+
+    private String convertExerciseTypeToEnglishAdmin(String korean) {
+        return switch (korean) {
+            case "근력" -> "strength";
+            case "유산소" -> "aerobic";
+            default -> korean.toLowerCase();
+        };
+    }
+
+    private String convertIntensityToEnglishAdmin(String korean) {
+        return switch (korean) {
+            case "하" -> "low";
+            case "중" -> "medium";
+            case "상" -> "high";
+            default -> korean.toLowerCase();
+        };
+    }
+    
+    // 관리자용: 운동 카탈로그 삭제
+    @Transactional
+    public void deleteExerciseCatalog(Long id) {
+        if (!exerciseCatalogRepository.existsById(id)) {
+            throw new RuntimeException("운동을 찾을 수 없습니다: " + id);
+        }
+        exerciseCatalogRepository.deleteById(id);
+    }
+    
+    // 강도 미설정 운동만 조회
+    public List<ExerciseCatalog> getUncategorizedExercises() {
+        return exerciseCatalogRepository.findByIntensityIsNull();
+    }
+
+    // ==================================================================================
+    // 건강로그 페이지 전용 세트 계산 메서드들 (기존 로직과 분리)
+    // ==================================================================================
+
+    /**
+     * 건강로그용 - 주간 운동 부위별 횟수 계산 (하루에 부위별 1회씩만 카운트)
+     */
+    public Map<String, Integer> getWeeklyBodyPartCounts_healthloguse(Long userId) {
+        // 현재 주의 일요일 찾기
+        LocalDate today = LocalDate.now();
+        int dayOfWeek = today.getDayOfWeek().getValue(); // 1=월요일, 7=일요일
+        int daysFromSunday = (dayOfWeek == 7) ? 0 : dayOfWeek; // 일요일이면 0, 아니면 월요일부터의 일수
+        
+        LocalDate startDate = today.minusDays(daysFromSunday); // 이번 주 일요일
+        LocalDate endDate = startDate.plusDays(6); // 이번 주 토요일
+        
+        log.info("🗓️ [getWeeklyBodyPartCounts_healthloguse] 건강로그용 주별 운동 부위별 횟수 조회 - 사용자: {}, 기간: {} ~ {} (오늘: {})", 
+                userId, startDate, endDate, today);
+        
+        User user = userRepository.getReferenceById(userId);
+        List<ExerciseSession> sessions = exerciseSessionRepository.findByUserAndExerciseDateBetweenOrderByExerciseDateDesc(
+                user, startDate, endDate);
+        
+        log.info("📊 [getWeeklyBodyPartCounts_healthloguse] 조회된 운동 세션 수: {}", sessions.size());
+        
+        // 날짜별 부위별 운동 여부 추적 (하루에 부위별 1회만 카운트)
+        Map<String, Set<String>> dateBodyPartMap = new HashMap<>();
+        
+        for (ExerciseSession session : sessions) {
+            String bodyPart = null;
+            if (session.getExerciseCatalog() != null && session.getExerciseCatalog().getBodyPart() != null) {
+                bodyPart = session.getExerciseCatalog().getBodyPart().name().toUpperCase();
+            } else if (session.getNotes() != null) {
+                String note = session.getNotes().toLowerCase();
+                if (note.contains("조깅") || note.contains("달리기") || note.contains("런닝") || note.contains("걷기") || note.contains("run")) {
+                    bodyPart = "CARDIO";
+                }
+            }
+            
+            if (bodyPart != null) {
+                String dateKey = session.getExerciseDate().toString();
+                dateBodyPartMap.computeIfAbsent(dateKey, k -> new HashSet<>()).add(bodyPart);
+            }
+        }
+        
+        // 부위별 횟수 집계 (날짜별로 1회씩만 카운트)
+        Map<String, Integer> bodyPartCounts = new HashMap<>();
+        bodyPartCounts.put("CHEST", 0);
+        bodyPartCounts.put("BACK", 0);
+        bodyPartCounts.put("LEGS", 0);
+        bodyPartCounts.put("SHOULDERS", 0);
+        bodyPartCounts.put("ARMS", 0);
+        bodyPartCounts.put("ABS", 0);
+        bodyPartCounts.put("CARDIO", 0);
+        
+        for (Set<String> bodyParts : dateBodyPartMap.values()) {
+            for (String bodyPart : bodyParts) {
+                bodyPartCounts.put(bodyPart, bodyPartCounts.getOrDefault(bodyPart, 0) + 1);
+            }
+        }
+        
+        log.info("✅ [getWeeklyBodyPartCounts_healthloguse] 결과: {}", bodyPartCounts);
+        return bodyPartCounts;
+    }
+
+    /**
+     * 건강로그용 - 주간 가슴 운동 횟수 조회
+     */
+    public int getWeeklyChestCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("CHEST", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 등 운동 횟수 조회
+     */
+    public int getWeeklyBackCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("BACK", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 다리 운동 횟수 조회
+     */
+    public int getWeeklyLegsCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("LEGS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 어깨 운동 횟수 조회
+     */
+    public int getWeeklyShouldersCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("SHOULDERS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 팔 운동 횟수 조회
+     */
+    public int getWeeklyArmsCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("ARMS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 복근 운동 횟수 조회
+     */
+    public int getWeeklyAbsCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("ABS", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 유산소 운동 횟수 조회
+     */
+    public int getWeeklyCardioCounts_healthloguse(Long userId) {
+        return getWeeklyBodyPartCounts_healthloguse(userId).getOrDefault("CARDIO", 0);
+    }
+
+    /**
+     * 건강로그용 - 주간 총 운동 횟수 계산
+     */
+    public int getWeeklyTotalCounts_healthloguse(Long userId) {
+        Map<String, Integer> bodyPartCounts = getWeeklyBodyPartCounts_healthloguse(userId);
+        return bodyPartCounts.values().stream().mapToInt(Integer::intValue).sum();
     }
 }

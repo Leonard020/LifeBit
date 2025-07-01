@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,4 +36,12 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
 
     @Query("SELECT es FROM ExerciseSession es JOIN FETCH es.user JOIN FETCH es.exerciseCatalog WHERE es.user.userId = :userId AND es.exerciseDate BETWEEN :start AND :end")
     List<ExerciseSession> findByUser_UserIdAndExerciseDateBetweenWithCatalog(@Param("userId") Long userId, @Param("start") LocalDate start, @Param("end") LocalDate end);
+    
+    // 대시보드 통계용 메서드
+    @Query("SELECT COUNT(es) FROM ExerciseSession es WHERE es.createdAt BETWEEN :start AND :end")
+    long countByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    
+    // 기간별 활동 사용자 수 통계용 메서드
+    @Query("SELECT COUNT(DISTINCT es.user.userId) FROM ExerciseSession es WHERE es.createdAt BETWEEN :start AND :end")
+    long countDistinctUsersByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

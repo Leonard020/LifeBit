@@ -16,10 +16,10 @@ CREATE TYPE user_role AS ENUM ('USER', 'ADMIN');
 CREATE TYPE badge_type AS ENUM ('FIRST_LOGIN', 'STREAK_7', 'STREAK_30', 'STREAK_100', 'WEIGHT_GOAL', 'WORKOUT_GOAL', 'NUTRITION_GOAL', 'SOCIAL_SHARE', 'PERFECT_WEEK', 'MONTHLY_CHAMPION');
 
 -- 신체 부위 타입
-CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio', 'full_body');
+CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio');
 
 -- 운동 부위 타입
-CREATE TYPE exercise_part_type AS ENUM ('strength', 'aerobic', 'flexibility', 'balance');
+CREATE TYPE exercise_part_type AS ENUM ('strength','cardio');
 
 -- 시간대 타입
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');
@@ -97,6 +97,14 @@ CREATE TABLE user_goals (
 	weekly_arms INTEGER DEFAULT 0,
 	weekly_abs INTEGER DEFAULT 0,
 	weekly_cardio INTEGER DEFAULT 0,
+    weekly_workout_target_set INTEGER DEFAULT 3,
+	weekly_chest_set INTEGER DEFAULT 0,
+	weekly_back_set INTEGER DEFAULT 0,
+	weekly_legs_set INTEGER DEFAULT 0,
+	weekly_shoulders_set INTEGER DEFAULT 0,
+	weekly_arms_set INTEGER DEFAULT 0,
+	weekly_abs_set INTEGER DEFAULT 0,
+	weekly_cardio_set INTEGER DEFAULT 0,
     daily_carbs_target INTEGER DEFAULT 200,
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
@@ -474,3 +482,16 @@ CREATE TRIGGER user_ranking_tier_trigger
 BEFORE INSERT OR UPDATE ON user_ranking
 FOR EACH ROW
 EXECUTE FUNCTION update_user_tier();
+
+-- ranking_notifications
+CREATE TABLE ranking_notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ranking_notifications_user ON ranking_notifications(user_id);

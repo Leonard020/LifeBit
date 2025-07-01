@@ -156,15 +156,27 @@ public class ExerciseSessionController {
                     : java.time.LocalDate.now();
             TimePeriodType timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
 
+            // ✅ 운동 카탈로그 조회하여 유산소 운동인지 확인
+            ExerciseCatalog catalog = exerciseService.getExerciseCatalogById(catalogId);
+            if (catalog == null) {
+                log.error("운동 카탈로그를 찾을 수 없습니다 - catalogId: {}", catalogId);
+                return ResponseEntity.badRequest().build();
+            }
+
+            // sets, reps, weight 값 처리 (유산소 운동인 경우 자동 조정) cardio/bodyPart 분기 하드코딩 삭제
+            Integer finalSets = request.get("sets") != null ? Integer.valueOf(request.get("sets").toString()) : null;
+            Integer finalReps = request.get("reps") != null ? Integer.valueOf(request.get("reps").toString()) : null;
+            Double finalWeight = request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : null;
+
             ExerciseSession savedSession = exerciseService.recordExercise(
                     tokenUserId,
                     catalogId,
                     durationMinutes,
                     caloriesBurned,
                     notes,
-                    request.get("sets") != null ? Integer.valueOf(request.get("sets").toString()) : 0,
-                    request.get("reps") != null ? Integer.valueOf(request.get("reps").toString()) : 0,
-                    request.get("weight") != null ? Double.valueOf(request.get("weight").toString()) : 0d,
+                    finalSets,
+                    finalReps,
+                    finalWeight,
                     exerciseDate,
                     timePeriod);
 

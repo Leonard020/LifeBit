@@ -112,14 +112,14 @@ public class UserGoalService {
         defaultGoal.setDailyProteinTarget(120); // 단백질 120g  
         defaultGoal.setDailyFatTarget(80); // 지방 80g
         defaultGoal.setDailyCaloriesTarget(2000); // 칼로리 2000kcal
-        // ✅ 운동 부위별 기본 목표 (주간)
-        defaultGoal.setWeeklyChest(60); // 가슴 60분
-        defaultGoal.setWeeklyBack(60); // 등 60분
-        defaultGoal.setWeeklyLegs(60); // 다리 60분
-        defaultGoal.setWeeklyShoulders(30); // 어깨 30분
-        defaultGoal.setWeeklyArms(30); // 팔 30분
-        defaultGoal.setWeeklyAbs(30); // 복근 30분
-        defaultGoal.setWeeklyCardio(60); // 유산소 60분
+        // ✅ 운동 부위별 기본 목표 (주간 - 횟수)
+        defaultGoal.setWeeklyChest(3); // 가슴 주 3회
+        defaultGoal.setWeeklyBack(3); // 등 주 3회
+        defaultGoal.setWeeklyLegs(3); // 다리 주 3회
+        defaultGoal.setWeeklyShoulders(2); // 어깨 주 2회
+        defaultGoal.setWeeklyArms(2); // 팔 주 2회
+        defaultGoal.setWeeklyAbs(3); // 복근 주 3회
+        defaultGoal.setWeeklyCardio(3); // 유산소 주 3회
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         return userGoalRepository.save(defaultGoal);
@@ -144,14 +144,14 @@ public class UserGoalService {
         defaultGoal.setDailyProteinTarget(120); // 단백질 120g  
         defaultGoal.setDailyFatTarget(80); // 지방 80g
         defaultGoal.setDailyCaloriesTarget(2000); // 칼로리 2000kcal
-        // ✅ 운동 부위별 기본 목표 (주간)
-        defaultGoal.setWeeklyChest(60); // 가슴 60분
-        defaultGoal.setWeeklyBack(60); // 등 60분
-        defaultGoal.setWeeklyLegs(60); // 다리 60분
-        defaultGoal.setWeeklyShoulders(30); // 어깨 30분
-        defaultGoal.setWeeklyArms(30); // 팔 30분
-        defaultGoal.setWeeklyAbs(30); // 복근 30분
-        defaultGoal.setWeeklyCardio(60); // 유산소 60분
+        // ✅ 운동 부위별 기본 목표 (주간 - 횟수)
+        defaultGoal.setWeeklyChest(3); // 가슴 주 3회
+        defaultGoal.setWeeklyBack(3); // 등 주 3회
+        defaultGoal.setWeeklyLegs(3); // 다리 주 3회
+        defaultGoal.setWeeklyShoulders(2); // 어깨 주 2회
+        defaultGoal.setWeeklyArms(2); // 팔 주 2회
+        defaultGoal.setWeeklyAbs(3); // 복근 주 3회
+        defaultGoal.setWeeklyCardio(3); // 유산소 주 3회
         defaultGoal.setCreatedAt(LocalDateTime.now());
         defaultGoal.setUpdatedAt(LocalDateTime.now());
         

@@ -69,11 +69,21 @@ public class NoteExerciseService {
 
         // 🔸 운동 카탈로그 설정
         ExerciseCatalog catalog = exerciseCatalogRepository.findByName(dto.getExerciseName())
-                .orElseGet(() -> {
-                    ExerciseCatalog newCatalog = new ExerciseCatalog();
-                    newCatalog.setName(dto.getExerciseName());
-                    return exerciseCatalogRepository.save(newCatalog);
-                });
+                .orElseGet(() -> null);
+
+        if (catalog == null) {
+            // 카탈로그가 없으면 새로 생성
+            catalog = new ExerciseCatalog();
+            catalog.setName(dto.getExerciseName());
+        }
+
+        // 새 카탈로그이거나 업데이트가 필요한 경우 저장
+        if (catalog.getExerciseCatalogId() == null) {
+            catalog = exerciseCatalogRepository.save(catalog);
+        } else if (catalog.getBodyPart() != null && !exerciseCatalogRepository.existsById(catalog.getExerciseCatalogId())) {
+            // 존재하나 트랜잭션 안에서 영속 상태가 아닐 수 있음 -> merge
+            catalog = exerciseCatalogRepository.save(catalog);
+        }
         session.setExerciseCatalog(catalog);
 
         // 🔸 기본 필드 설정
@@ -150,6 +160,9 @@ public class NoteExerciseService {
     private int calculateCurrentStreak(Long userId) {
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
             userId, LocalDate.now().minusDays(365), LocalDate.now());
+        
+        // 날짜별 내림차순 정렬 (최근 → 과거)
+        sessions.sort(java.util.Comparator.comparing(ExerciseSession::getExerciseDate).reversed());
         
         if (sessions.isEmpty()) {
             return 0;

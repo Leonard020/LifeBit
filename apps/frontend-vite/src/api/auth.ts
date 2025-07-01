@@ -402,6 +402,33 @@ export const useMealLogs = (userId: string, period: string = 'month') => {
   });
 };
 
+// 건강로그 페이지 전용 통계 조회 Hook (횟수 기반)
+export const useHealthLogStatistics = (userId: string) => {
+  return useQuery({
+    queryKey: ['healthLogStatistics', userId],
+    queryFn: async () => {
+      try {
+        console.log('📊 [useHealthLogStatistics] 건강로그 전용 API 호출 시작:', { userId });
+        
+        const response = await axios.get(`${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}/healthlog-counts`);
+        
+        console.log('✅ [useHealthLogStatistics] 건강로그 전용 API 호출 성공:', response.data);
+        return response.data;
+      } catch (error) {
+        console.error('❌ [useHealthLogStatistics] 건강로그 전용 API 호출 실패:', {
+          error,
+          userId,
+          endpoint: `${API_ENDPOINTS.HEALTH_STATISTICS}/${userId}/healthlog-counts`
+        });
+        throw error;
+      }
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5분간 캐시 유지
+    gcTime: 10 * 60 * 1000, // 10분간 가비지 컬렉션 지연
+  });
+};
+
 // 건강 통계 조회 Hook (기존 함수를 React Query로 교체)
 export const useHealthStatistics = (userId: string, period: string = 'month') => {
   return useQuery({
@@ -565,6 +592,17 @@ export const updateAchievementScore = async () => {
     return response.data;
   } catch (error) {
     console.error('목표 달성률 점수 업데이트 실패:', error);
+    throw error;
+  }
+};
+
+// 랭킹 순위 업데이트 (테스트용)
+export const updateRankingPositions = async () => {
+  try {
+    const response = await axios.post('/api/user-goals/update-ranking-positions');
+    return response.data;
+  } catch (error) {
+    console.error('랭킹 순위 업데이트 실패:', error);
     throw error;
   }
 };
