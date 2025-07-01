@@ -475,14 +475,10 @@ const HealthLog: React.FC = () => {
             setActiveTab(newTab);
             localStorage.setItem('healthlog-active-tab', newTab);
           }} className="mb-6">
-            <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+            <TabsList className="grid w-full grid-cols-2 max-w-2xl">
               <TabsTrigger value="enhanced" className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4" />
                 나의활동
-              </TabsTrigger>
-              <TabsTrigger value="react" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                기본 차트
               </TabsTrigger>
               <TabsTrigger value="python" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
@@ -505,49 +501,6 @@ const HealthLog: React.FC = () => {
                   period={selectedPeriod}
                 />
               </ErrorBoundary>
-            </TabsContent>
-
-            <TabsContent value="react" className="mt-6">
-              {/* 기간 선택 - 기본 차트용 */}
-              <div className="mb-6">
-                <PeriodSelector
-                  selectedPeriod={reactPeriod}
-                  onPeriodChange={setReactPeriod}
-                />
-              </div>
-              
-              {/* 기존 React 차트 */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-                {/* 왼쪽: 통계 차트 (모바일에서는 전체 너비, 데스크톱에서는 2/3) */}
-                <div className="xl:col-span-2">
-                  <ErrorBoundary>
-                    <StatisticsCharts 
-                      userId={userId?.toString() || ''} 
-                      period={reactPeriod}
-                    />
-                  </ErrorBoundary>
-                </div>
-                
-                {/* 오른쪽: 추천 패널 (모바일에서는 전체 너비, 데스크톱에서는 1/3) */}
-                <div className="xl:col-span-1">
-                  <ErrorBoundary>
-                    <RecommendationPanel 
-                      userId={userId?.toString() || ''}
-                    />
-                  </ErrorBoundary>
-                </div>
-              </div>
-              
-              {/* 하단: 목표 진행률 */}
-              <div>
-                              <ErrorBoundary>
-                <GoalProgress 
-                  userId={userId?.toString() || ''}
-                  period={reactPeriod}
-                  useHealthLogData={true}
-                />
-              </ErrorBoundary>
-              </div>
             </TabsContent>
 
             <TabsContent value="python" className="mt-6">

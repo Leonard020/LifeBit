@@ -40,6 +40,9 @@ import { toast } from '../../hooks/use-toast';
 import { useDailyNutritionStats } from '@/api/authApi';
 import { PeriodType, NutritionGoals } from './types/health';
 import { processTodayData } from './utils/healthUtils';
+import { GoalProgress } from './GoalProgress';
+import { GoalsTab } from './tabs/GoalsTab';
+import { GoalAchievements } from './types/analytics';
 
 interface EnhancedHealthDashboardProps {
   userId: string;
@@ -54,7 +57,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   console.log('🚀 [EnhancedHealthDashboard] 컴포넌트 렌더링 시작!', { userId, period });
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'calendar'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'goal'>('dashboard');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,13 +170,161 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     const goalData = userGoals?.data || userGoals;
     const healthData = healthStats?.data || healthStats;
 
-    return processTodayData(
+    const base = processTodayData(
       exerciseData,
       mealData,
       goalData,
       healthData,
       nutritionStats
     );
+
+    // nutritionStats 변환 (GoalsTab 타입에 맞게)
+    const nutritionStatsForGoal = base.nutrition
+      ? {
+          totalCalories: base.nutrition.calories,
+          totalCarbs: base.nutrition.carbs,
+          totalProtein: base.nutrition.protein,
+          totalFat: base.nutrition.fat
+        }
+      : {};
+
+    // 이번 주 날짜 배열 생성 (일요일~토요일)
+    const getWeekDates = () => {
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay()); // 일요일 기준
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        return d.toISOString().slice(0, 10);
+      });
+    };
+
+    // 부위별 날짜별 1회만 카운트
+    const getBodyPartWeeklyCounts = (exerciseSessions: unknown[]): Record<string, number> => {
+      const weekDates = getWeekDates();
+      const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio'];
+      const counts: Record<string, number> = {};
+      bodyParts.forEach(part => counts[part] = 0);
+      const seen: Record<string, boolean> = {};
+      for (const s of exerciseSessions) {
+        const typedSession = s as { exercise_date?: string; exerciseDate?: string; body_part?: string; bodyPart?: string };
+        const date = (typedSession.exercise_date || typedSession.exerciseDate || '').slice(0, 10);
+        const part = (typedSession.body_part || typedSession.bodyPart || '').toLowerCase();
+        if (!date || !part || !weekDates.includes(date) || !Object.prototype.hasOwnProperty.call(counts, part)) continue;
+        const key = `${part}_${date}`;
+        if (!seen[key]) {
+          seen[key] = true;
+          counts[part]++;
+        }
+      }
+      return counts;
+    };
+
+    // 부위별 목표값 (프로필에서 설정한 주간 횟수)
+    const bodyPartTargets: Record<string, number> = {
+      chest: Number(userGoals?.weekly_chest || userGoals?.data?.weekly_chest || 0),
+      back: Number(userGoals?.weekly_back || userGoals?.data?.weekly_back || 0),
+      legs: Number(userGoals?.weekly_legs || userGoals?.data?.weekly_legs || 0),
+      shoulders: Number(userGoals?.weekly_shoulders || userGoals?.data?.weekly_shoulders || 0),
+      arms: Number(userGoals?.weekly_arms || userGoals?.data?.weekly_arms || 0),
+      abs: Number(userGoals?.weekly_abs || userGoals?.data?.weekly_abs || 0),
+      cardio: Number(userGoals?.weekly_cardio || userGoals?.data?.weekly_cardio || 0),
+    };
+
+    // 실제 부위별 주간 횟수 계산
+    const bodyPartCounts: Record<string, number> = getBodyPartWeeklyCounts(exerciseData);
+
+    // 달성률 계산 함수
+    const getPercent = (current: number, target: number) => target > 0 ? Math.min((current / target) * 100, 100) : 0;
+
+    // 목표 달성률 객체 생성 (BodyPartGoals 타입에 맞게 명시적으로 작성)
+    const goalAchievements: GoalAchievements = {
+      exercise: {
+        current: (Object.values(bodyPartCounts) as number[]).reduce((a, b) => a + b, 0),
+        target: (Object.values(bodyPartTargets) as number[]).reduce((a, b) => a + b, 0),
+        percentage: getPercent(
+          (Object.values(bodyPartCounts) as number[]).reduce((a, b) => a + b, 0),
+          (Object.values(bodyPartTargets) as number[]).reduce((a, b) => a + b, 0)
+        ),
+        hasTarget: (Object.values(bodyPartTargets) as number[]).some(v => v > 0)
+      },
+      weight: { current: 0, target: 0, percentage: 0, hasTarget: false }, // 필요시 추가 구현
+      calories: {
+        current: nutritionStatsForGoal.totalCalories || 0,
+        target: Number(userGoals?.daily_calories_target || userGoals?.data?.daily_calories_target || 0),
+        percentage: getPercent(nutritionStatsForGoal.totalCalories || 0, Number(userGoals?.daily_calories_target || userGoals?.data?.daily_calories_target || 0)),
+        hasTarget: !!(userGoals?.daily_calories_target || userGoals?.data?.daily_calories_target)
+      },
+      carbs: {
+        current: nutritionStatsForGoal.totalCarbs || 0,
+        target: Number(userGoals?.daily_carbs_target || userGoals?.data?.daily_carbs_target || 0),
+        percentage: getPercent(nutritionStatsForGoal.totalCarbs || 0, Number(userGoals?.daily_carbs_target || userGoals?.data?.daily_carbs_target || 0)),
+        hasTarget: !!(userGoals?.daily_carbs_target || userGoals?.data?.daily_carbs_target)
+      },
+      protein: {
+        current: nutritionStatsForGoal.totalProtein || 0,
+        target: Number(userGoals?.daily_protein_target || userGoals?.data?.daily_protein_target || 0),
+        percentage: getPercent(nutritionStatsForGoal.totalProtein || 0, Number(userGoals?.daily_protein_target || userGoals?.data?.daily_protein_target || 0)),
+        hasTarget: !!(userGoals?.daily_protein_target || userGoals?.data?.daily_protein_target)
+      },
+      fat: {
+        current: nutritionStatsForGoal.totalFat || 0,
+        target: Number(userGoals?.daily_fat_target || userGoals?.data?.daily_fat_target || 0),
+        percentage: getPercent(nutritionStatsForGoal.totalFat || 0, Number(userGoals?.daily_fat_target || userGoals?.data?.daily_fat_target || 0)),
+        hasTarget: !!(userGoals?.daily_fat_target || userGoals?.data?.daily_fat_target)
+      },
+      bodyParts: {
+        chest: {
+          current: bodyPartCounts['chest'] || 0,
+          target: bodyPartTargets['chest'] || 0,
+          percentage: getPercent(bodyPartCounts['chest'] || 0, bodyPartTargets['chest'] || 0),
+          hasTarget: !!bodyPartTargets['chest']
+        },
+        back: {
+          current: bodyPartCounts['back'] || 0,
+          target: bodyPartTargets['back'] || 0,
+          percentage: getPercent(bodyPartCounts['back'] || 0, bodyPartTargets['back'] || 0),
+          hasTarget: !!bodyPartTargets['back']
+        },
+        legs: {
+          current: bodyPartCounts['legs'] || 0,
+          target: bodyPartTargets['legs'] || 0,
+          percentage: getPercent(bodyPartCounts['legs'] || 0, bodyPartTargets['legs'] || 0),
+          hasTarget: !!bodyPartTargets['legs']
+        },
+        shoulders: {
+          current: bodyPartCounts['shoulders'] || 0,
+          target: bodyPartTargets['shoulders'] || 0,
+          percentage: getPercent(bodyPartCounts['shoulders'] || 0, bodyPartTargets['shoulders'] || 0),
+          hasTarget: !!bodyPartTargets['shoulders']
+        },
+        arms: {
+          current: bodyPartCounts['arms'] || 0,
+          target: bodyPartTargets['arms'] || 0,
+          percentage: getPercent(bodyPartCounts['arms'] || 0, bodyPartTargets['arms'] || 0),
+          hasTarget: !!bodyPartTargets['arms']
+        },
+        abs: {
+          current: bodyPartCounts['abs'] || 0,
+          target: bodyPartTargets['abs'] || 0,
+          percentage: getPercent(bodyPartCounts['abs'] || 0, bodyPartTargets['abs'] || 0),
+          hasTarget: !!bodyPartTargets['abs']
+        },
+        cardio: {
+          current: bodyPartCounts['cardio'] || 0,
+          target: bodyPartTargets['cardio'] || 0,
+          percentage: getPercent(bodyPartCounts['cardio'] || 0, bodyPartTargets['cardio'] || 0),
+          hasTarget: !!bodyPartTargets['cardio']
+        }
+      }
+    };
+
+    return {
+      ...base,
+      goalAchievements,
+      nutritionStatsForGoal
+    };
   }, [exerciseSessions, mealLogs, userGoals, healthStats, nutritionStats, allLoading]);
 
   const handleMealAdd = useCallback((mealType: string) => {
@@ -261,7 +412,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   return (
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'exercise' | 'calendar')}>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'dashboard' | 'nutrition' | 'exercise' | 'goal')}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="dashboard" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
@@ -275,9 +426,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             <Dumbbell className="h-4 w-4" />
             운동 분석
           </TabsTrigger>
-          <TabsTrigger value="calendar" className="flex items-center gap-2">
-            <CalendarIcon className="h-4 w-4" />
-            캘린더
+          <TabsTrigger value="goal" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            목표
           </TabsTrigger>
         </TabsList>
 
@@ -289,61 +440,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             targetMinutes={todayData.targetMinutes}
             isExercising={todayData.exerciseMinutes > 0}
           />
-
-          {/* 식단 관리 카드들 */}
-          <div className="grid grid-cols-2 gap-4">
-            <MealCard
-              type="breakfast"
-              title="아침"
-              icon={<Coffee className="h-5 w-5 text-orange-600" />}
-              isCompleted={false} // 실제 데이터로 교체 필요
-              calories={Math.round(todayData.nutrition.calories * 0.25)}
-              onAdd={() => handleMealAdd('breakfast')}
-            />
-            <MealCard
-              type="lunch"
-              title="점심"
-              icon={<Utensils className="h-5 w-5 text-green-600" />}
-              isCompleted={false}
-              calories={Math.round(todayData.nutrition.calories * 0.35)}
-              onAdd={() => handleMealAdd('lunch')}
-            />
-            <MealCard
-              type="dinner"
-              title="저녁"
-              icon={<Utensils className="h-5 w-5 text-blue-600" />}
-              isCompleted={false}
-              calories={Math.round(todayData.nutrition.calories * 0.3)}
-              onAdd={() => handleMealAdd('dinner')}
-            />
-            <MealCard
-              type="snack"
-              title="간식"
-              icon={<Cookie className="h-5 w-5 text-purple-600" />}
-              isCompleted={false}
-              calories={Math.round(todayData.nutrition.calories * 0.1)}
-              onAdd={() => handleMealAdd('snack')}
-            />
-          </div>
-
-          {/* 하단 액션 버튼들 */}
-          <div className="flex gap-3">
-            <Button 
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => navigate('/note')}
-            >
-              <Flame className="h-4 w-4 mr-2" />
-              기록 보상
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex-1"
-              onClick={() => navigate('/note')}
-            >
-              <Apple className="h-4 w-4 mr-2" />
-              식단 앨범
-            </Button>
-          </div>
         </TabsContent>
 
         {/* 영양 분석 탭 */}
@@ -353,16 +449,6 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             protein={todayData.nutrition.protein}
             fat={todayData.nutrition.fat}
             calories={todayData.nutrition.calories}
-            nutritionGoals={todayData.nutritionGoals}
-          />
-          
-          <AIRecommendations
-            calories={todayData.nutrition.calories}
-            carbs={todayData.nutrition.carbs}
-            protein={todayData.nutrition.protein}
-            fat={todayData.nutrition.fat}
-            exerciseMinutes={todayData.exerciseMinutes}
-            caloriesBurned={todayData.caloriesBurned}
             nutritionGoals={todayData.nutritionGoals}
           />
         </TabsContent>
@@ -382,102 +468,17 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               period={period}
             />
           </div>
-          
-          {/* 주별 운동 요약 통계 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Dumbbell className="h-5 w-5" />
-                주별 운동 요약
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {healthStats?.totalExerciseSessions || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">총 운동 세션</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-green-600">
-                    {healthStats?.weeklyWorkouts || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">주간 운동 횟수</div>
-                </div>
-                <div className="bg-orange-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-orange-600">
-                    {healthStats?.totalCaloriesBurned || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">소모 칼로리</div>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {healthStats?.streak || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">연속 운동일</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
-        {/* 캘린더 탭 */}
-        <TabsContent value="calendar" className="space-y-6">
-          {/* 체중 트렌드 차트 */}
-          <WeightTrendChart 
-            userId={userId} 
-            period={period}
+        {/* 목표 탭 */}
+        <TabsContent value="goal" className="space-y-6">
+          <GoalsTab
+            goalAchievements={todayData?.goalAchievements as GoalAchievements}
+            goalsData={userGoals?.data || userGoals || null}
+            healthStats={healthStats?.data || healthStats || null}
+            chartData={[]}
+            nutritionStats={todayData?.nutritionStatsForGoal || {}}
           />
-          
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5" />
-                  {currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handlePrevMonth}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleNextMonth}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                month={currentMonth}
-                onMonthChange={setCurrentMonth}
-                className="rounded-md border"
-              />
-              
-              {/* 범례 */}
-              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span>먹었어요</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <span>태웠어요</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                  <span>몸무게</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span>물 섭취</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>

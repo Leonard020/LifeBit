@@ -2207,9 +2207,9 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                   {/* 전체 운동 목표 */}
                   <div className="relative">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">주간 총 운동 세트 수</span>
+                      <span className="font-medium">주간 총 운동 횟수</span>
                       <span className="text-2xl font-bold text-green-600">
-                        {healthStats?.weeklyTotalSets || 0}세트
+                        {healthStats?.weeklyTotalSets || 0}회
                     </span>
                   </div>
                     <div className="relative">
@@ -2225,8 +2225,8 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                       </div>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600 mt-1">
-                      <span>0세트</span>
-                      <span>목표: {goalsData?.weekly_workout_target || 0}세트</span>
+                      <span>0회</span>
+                      <span>목표: {goalsData?.weekly_workout_target || 0}회</span>
                     </div>
                   </div>
 
@@ -2236,7 +2236,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                     const hasAnyTarget = Object.values(exerciseDetails).some(detail => detail.hasTarget);
                     return hasAnyTarget && (
                       <div className="space-y-4">
-                        <h4 className="font-medium text-gray-900">운동 부위별 달성률 (세트 수 기준)</h4>
+                        <h4 className="font-medium text-gray-900">운동 부위별 달성률 (횟수 기준)</h4>
                       
                         {/* 가슴 운동 */}
                         {exerciseDetails.chest.hasTarget && (
@@ -2244,7 +2244,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">💪 가슴 운동</span>
                               <span className="text-sm font-bold text-red-600">
-                                {exerciseDetails.chest.current}세트 / {exerciseDetails.chest.target}세트
+                                {exerciseDetails.chest.current}회 / {exerciseDetails.chest.target}회
                               </span>
                             </div>
                             <Progress value={exerciseDetails.chest.percentage} className="h-2" />
@@ -2260,7 +2260,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🏋️‍♂️ 등 운동</span>
                               <span className="text-sm font-bold text-green-600">
-                                {exerciseDetails.back.current}세트 / {exerciseDetails.back.target}세트
+                                {exerciseDetails.back.current}세트 / {exerciseDetails.back.target}회
                               </span>
                             </div>
                             <Progress value={exerciseDetails.back.percentage} className="h-2" />
@@ -2276,7 +2276,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🦵 다리 운동</span>
                               <span className="text-sm font-bold text-purple-600">
-                                {exerciseDetails.legs.current}세트 / {exerciseDetails.legs.target}세트
+                                {exerciseDetails.legs.current}세트 / {exerciseDetails.legs.target}회
                               </span>
                             </div>
                             <Progress value={exerciseDetails.legs.percentage} className="h-2" />
@@ -2292,7 +2292,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🤸‍♂️ 어깨 운동</span>
                               <span className="text-sm font-bold text-orange-600">
-                                {exerciseDetails.shoulders.current}세트 / {exerciseDetails.shoulders.target}세트
+                                {exerciseDetails.shoulders.current}회 / {exerciseDetails.shoulders.target}회
                               </span>
                             </div>
                             <Progress value={exerciseDetails.shoulders.percentage} className="h-2" />
@@ -2308,7 +2308,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">💪 팔 운동</span>
                               <span className="text-sm font-bold text-pink-600">
-                                {exerciseDetails.arms.current}세트 / {exerciseDetails.arms.target}세트
+                                {exerciseDetails.arms.current}회 / {exerciseDetails.arms.target}회
                               </span>
                             </div>
                             <Progress value={exerciseDetails.arms.percentage} className="h-2" />
@@ -2324,7 +2324,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🏃‍♀️ 복근 운동</span>
                               <span className="text-sm font-bold text-yellow-600">
-                                {exerciseDetails.abs.current}세트 / {exerciseDetails.abs.target}세트
+                                {exerciseDetails.abs.current}회 / {exerciseDetails.abs.target}회
                               </span>
                             </div>
                             <Progress value={exerciseDetails.abs.percentage} className="h-2" />
@@ -2340,7 +2340,7 @@ export const PythonAnalyticsCharts: React.FC<PythonAnalyticsChartsProps> = ({
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm font-medium">🏃 유산소 운동</span>
                               <span className="text-sm font-bold text-cyan-600">
-                                {exerciseDetails.cardio.current}세트 / {exerciseDetails.cardio.target}세트
+                                {exerciseDetails.cardio.current}회 / {exerciseDetails.cardio.target}세트
                               </span>
                             </div>
                             <Progress value={exerciseDetails.cardio.percentage} className="h-2" />
