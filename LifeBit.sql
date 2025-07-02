@@ -204,6 +204,7 @@ CREATE TABLE user_ranking (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    goal_based_score INTEGER NOT NULL DEFAULT 0,
     tier VARCHAR(255) DEFAULT 'UNRANK'
 );
 
