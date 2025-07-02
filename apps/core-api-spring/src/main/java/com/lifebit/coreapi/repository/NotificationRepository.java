@@ -34,4 +34,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     // 시스템 공용 알림만 조회
     @Query("SELECT n FROM Notification n WHERE n.userId IS NULL ORDER BY n.createdAt DESC")
     List<Notification> findByUserIdIsNullOrderByCreatedAtDesc();
+
+    /**
+     * 시스템 알림(공용) 및 개인 알림을 모두 조회하며, 시스템 알림의 경우 notification_read 테이블과 조인하여 읽음 여부를 반환
+     * 반환: Object[] { Notification, isRead(boolean) }
+     */
+    @Query("""
+    SELECT n, 
+           CASE WHEN nr.id IS NOT NULL THEN true ELSE false END as isRead
+    FROM Notification n
+    LEFT JOIN NotificationRead nr ON nr.notificationId = n.id AND nr.userId = :userId
+    WHERE n.userId = :userId OR n.userId IS NULL
+    ORDER BY n.createdAt DESC
+    """)
+    Page<Object[]> findAllNotificationsWithReadStatus(@Param("userId") Long userId, Pageable pageable);
 } 
