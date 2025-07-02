@@ -3,6 +3,7 @@ package com.lifebit.coreapi.service;
 import com.lifebit.coreapi.entity.Achievement;
 import com.lifebit.coreapi.entity.BadgeType;
 import com.lifebit.coreapi.entity.UserRanking;
+import com.lifebit.coreapi.entity.enums.AchievementType;
 import com.lifebit.coreapi.entity.enums.RankingTier;
 import com.lifebit.coreapi.repository.AchievementRepository;
 import com.lifebit.coreapi.repository.UserRepository;
@@ -48,16 +49,20 @@ public class DataInitializerService {
         log.info("🏆 기본 업적 데이터 초기화 중...");
         
         List<Achievement> achievements = List.of(
-            createAchievement("첫 운동 시작", "첫 운동을 기록해보세요", BadgeType.FIRST_LOGIN, 1),
-            createAchievement("운동 3일 연속", "3일 연속으로 운동해보세요", BadgeType.STREAK_7, 3),
-            createAchievement("운동 7일 연속", "일주일 연속 운동의 달인!", BadgeType.STREAK_7, 7),
-            createAchievement("운동 30일 연속", "한 달 연속 운동 챌린지!", BadgeType.STREAK_30, 30),
-            createAchievement("첫 식단 기록", "첫 식단을 기록해보세요", BadgeType.FIRST_LOGIN, 1),
-            createAchievement("건강한 한 주", "일주일 동안 꾸준히 기록하기", BadgeType.STREAK_7, 7),
-            createAchievement("목표 달성", "설정한 목표를 달성해보세요", BadgeType.WORKOUT_GOAL, 1),
-            createAchievement("완벽한 한 주", "일주일 동안 모든 목표를 달성하세요", BadgeType.PERFECT_WEEK, 7),
-            createAchievement("영양 균형", "영양 목표를 달성해보세요", BadgeType.NUTRITION_GOAL, 1),
-            createAchievement("체중 관리", "체중 목표를 달성해보세요", BadgeType.WEIGHT_GOAL, 1)
+            // AchievementType enum을 사용하여 일관성 보장
+            createAchievement(AchievementType.FIRST_EXERCISE.getTitle(), "첫 운동을 기록해보세요", BadgeType.FIRST_LOGIN, AchievementType.FIRST_EXERCISE.getTargetValue()),
+            createAchievement(AchievementType.STREAK_7.getTitle(), "일주일 연속 운동의 달인!", BadgeType.STREAK_7, AchievementType.STREAK_7.getTargetValue()),
+            createAchievement(AchievementType.STREAK_30.getTitle(), "한 달 연속 운동 챌린지!", BadgeType.STREAK_30, AchievementType.STREAK_30.getTargetValue()),
+            createAchievement(AchievementType.STREAK_90.getTitle(), "3개월 연속 운동 챌린지!", BadgeType.STREAK_100, AchievementType.STREAK_90.getTargetValue()),
+            createAchievement(AchievementType.STREAK_180.getTitle(), "6개월 연속 운동 레전드!", BadgeType.STREAK_100, AchievementType.STREAK_180.getTargetValue()),
+            createAchievement(AchievementType.FIRST_MEAL.getTitle(), "첫 식단을 기록해보세요", BadgeType.FIRST_LOGIN, AchievementType.FIRST_MEAL.getTargetValue()),
+            createAchievement(AchievementType.CONSECUTIVE_MEAL_7.getTitle(), "일주일 동안 꾸준히 식단 기록하기", BadgeType.STREAK_7, AchievementType.CONSECUTIVE_MEAL_7.getTargetValue()),
+            createAchievement(AchievementType.CONSECUTIVE_MEAL_14.getTitle(), "2주 연속 식단 기록!", BadgeType.NUTRITION_GOAL, AchievementType.CONSECUTIVE_MEAL_14.getTargetValue()),
+            createAchievement(AchievementType.CONSECUTIVE_MEAL_30.getTitle(), "한 달 연속 식단 기록!", BadgeType.NUTRITION_GOAL, AchievementType.CONSECUTIVE_MEAL_30.getTargetValue()),
+            createAchievement(AchievementType.CONSECUTIVE_MEAL_60.getTitle(), "2개월 연속 식단 기록!", BadgeType.NUTRITION_GOAL, AchievementType.CONSECUTIVE_MEAL_60.getTargetValue()),
+            createAchievement(AchievementType.TOTAL_WORKOUT_DAYS.getTitle(), "총 50회 운동 완료!", BadgeType.WORKOUT_GOAL, AchievementType.TOTAL_WORKOUT_DAYS.getTargetValue()),
+            createAchievement(AchievementType.WEEKLY_EXERCISE.getTitle(), "주간 7회 운동 완료!", BadgeType.WORKOUT_GOAL, AchievementType.WEEKLY_EXERCISE.getTargetValue()),
+            createAchievement(AchievementType.MONTHLY_EXERCISE.getTitle(), "월간 30회 운동 완료!", BadgeType.WORKOUT_GOAL, AchievementType.MONTHLY_EXERCISE.getTargetValue())
         );
 
         achievementRepository.saveAll(achievements);

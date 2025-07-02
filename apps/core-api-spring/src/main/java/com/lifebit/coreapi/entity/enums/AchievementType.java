@@ -18,7 +18,13 @@ public enum AchievementType {
     
     // 기타 업적들
     FIRST_EXERCISE("첫 걸음", 1),
-    FIRST_MEAL("식단 시작", 1);
+    FIRST_MEAL("식단 시작", 1),
+    
+    // 연속 식단 기록 업적
+    CONSECUTIVE_MEAL_7("건강한 한 주", 7),
+    CONSECUTIVE_MEAL_14("식단 전문가", 14),
+    CONSECUTIVE_MEAL_30("식단 기록자", 30),
+    CONSECUTIVE_MEAL_60("식단 완벽주의자", 60);
     
     private final String title;
     private final int targetValue;

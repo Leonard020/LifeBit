@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.lifebit.coreapi.entity.enums.AchievementType;
 
 @Slf4j
 @Service
@@ -35,6 +36,7 @@ public class DietService {
     private final UserRepository userRepository;
     private final UserGoalRepository userGoalRepository;
     private final UserGoalService userGoalService;
+    private final AchievementService achievementService;
 
     public List<DietLogDTO> getDailyDietRecords(LocalDate date, Long userId) {
         User user = userRepository.findById(userId)
@@ -218,6 +220,39 @@ public class DietService {
         // createdAt은 이미 위에서 설정
 
         MealLog savedMealLog = mealLogRepository.save(mealLog);
+        
+        // ✅ 업적 체크 및 업데이트
+        try {
+            log.info("🟣 [DietService] 업적 업데이트 시작 - 사용자: {}", request.getUserId());
+            
+            // 사용자 업적 초기화 (없으면 생성)
+            achievementService.initializeUserAchievements(request.getUserId());
+            
+            // 첫 식단 기록 업적 업데이트
+            int totalMealRecords = getTotalMealRecords(request.getUserId());
+            log.info("🟣 [DietService] 총 식단 기록 수: {}", totalMealRecords);
+            achievementService.updateUserAchievementProgress(request.getUserId(), 
+                AchievementType.FIRST_MEAL.getTitle(), totalMealRecords);
+            
+            // 연속 식단 기록 업적 업데이트 (설정 기반)
+            int consecutiveMealDays = getConsecutiveMealDays(request.getUserId());
+            log.info("🟣 [DietService] 연속 식단 기록 일수: {}", consecutiveMealDays);
+            achievementService.updateUserAchievementProgress(request.getUserId(), 
+                AchievementType.CONSECUTIVE_MEAL_7.getTitle(), consecutiveMealDays);
+            achievementService.updateUserAchievementProgress(request.getUserId(), 
+                AchievementType.CONSECUTIVE_MEAL_14.getTitle(), consecutiveMealDays);
+            achievementService.updateUserAchievementProgress(request.getUserId(), 
+                AchievementType.CONSECUTIVE_MEAL_30.getTitle(), consecutiveMealDays);
+            achievementService.updateUserAchievementProgress(request.getUserId(), 
+                AchievementType.CONSECUTIVE_MEAL_60.getTitle(), consecutiveMealDays);
+            
+            log.info("✅ [DietService] 업적 업데이트 완료 - 사용자: {}", request.getUserId());
+            
+        } catch (Exception e) {
+            // 업적 업데이트 실패 시 로그만 남기고 계속 진행
+            log.error("❌ [DietService] 업적 업데이트 실패 - 사용자: {}, 오류: {}", request.getUserId(), e.getMessage(), e);
+        }
+        
         return convertToDietLogDTO(savedMealLog);
     }
 
@@ -420,39 +455,90 @@ public class DietService {
      */
     private MealTimeType convertMealTimeWithFallback(String mealTime) {
         if (mealTime == null || mealTime.trim().isEmpty()) {
-            return inferMealTimeFromCurrentHour();
+            return MealTimeType.breakfast; // 기본값
         }
-        
-        // 한글 → 영어 변환 매핑
-        Map<String, String> koreanToEnglish = Map.of(
-            "아침", "breakfast",
-            "점심", "lunch",
-            "저녁", "dinner", 
-            "야식", "midnight",
-            "간식", "snack"
-        );
-        
-        String englishMealTime = koreanToEnglish.getOrDefault(mealTime, mealTime);
-        
-        try {
-            return MealTimeType.valueOf(englishMealTime.toLowerCase());
-        } catch (IllegalArgumentException e) {
-            System.err.println("Invalid mealTime value received: " + mealTime + ", using time-based inference");
-            return inferMealTimeFromCurrentHour();
+
+        String normalized = mealTime.trim().toLowerCase();
+
+        // 한글 → 영어 매핑
+        if (normalized.contains("아침") || normalized.contains("조식") || normalized.contains("breakfast")) {
+            return MealTimeType.breakfast;
+        } else if (normalized.contains("점심") || normalized.contains("중식") || normalized.contains("lunch")) {
+            return MealTimeType.lunch;
+        } else if (normalized.contains("저녁") || normalized.contains("석식") || normalized.contains("dinner")) {
+            return MealTimeType.dinner;
+        } else if (normalized.contains("간식") || normalized.contains("snack")) {
+            return MealTimeType.snack;
+        }
+
+        // 시간대 기반 추론 (현재 시간 기준)
+        LocalDateTime now = LocalDateTime.now();
+        int hour = now.getHour();
+
+        if (hour >= 5 && hour < 11) {
+            return MealTimeType.breakfast;
+        } else if (hour >= 11 && hour < 17) {
+            return MealTimeType.lunch;
+        } else if (hour >= 17 && hour < 22) {
+            return MealTimeType.dinner;
+        } else {
+            return MealTimeType.snack;
         }
     }
-
+    
     /**
-     * 현재 시간을 기준으로 적절한 식사시간 추론
+     * 총 식단 기록 수 계산
      */
-    private MealTimeType inferMealTimeFromCurrentHour() {
-        int hour = java.time.LocalTime.now().getHour();
+    private int getTotalMealRecords(Long userId) {
+        User user = new User();
+        user.setUserId(userId);
+        List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(
+            user, LocalDate.now().minusDays(365), LocalDate.now());
         
-        if (hour >= 6 && hour < 11) return MealTimeType.breakfast;   // 06:00 - 10:59
-        if (hour >= 11 && hour < 15) return MealTimeType.lunch;      // 11:00 - 14:59
-        if (hour >= 15 && hour < 18) return MealTimeType.snack;      // 15:00 - 17:59
-        if (hour >= 18 && hour < 22) return MealTimeType.dinner;     // 18:00 - 21:59
-        return MealTimeType.midnight;                                // 22:00 - 05:59 (야식)
+        int totalRecords = mealLogs.size();
+        log.info("🟣 [DietService] 총 식단 기록 수 계산 - 사용자: {}, 총 기록 수: {}", userId, totalRecords);
+        return totalRecords;
+    }
+    
+    /**
+     * 연속 식단 기록 일수 계산
+     */
+    private int getConsecutiveMealDays(Long userId) {
+        User user = new User();
+        user.setUserId(userId);
+        List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(
+            user, LocalDate.now().minusDays(365), LocalDate.now());
+        
+        // 날짜별 내림차순 정렬 (최근 → 과거)
+        mealLogs.sort(java.util.Comparator.comparing(MealLog::getLogDate).reversed());
+        
+        if (mealLogs.isEmpty()) {
+            log.info("🟣 [DietService] 식단 기록 없음 - 사용자: {}", userId);
+            return 0;
+        }
+
+        int streak = 0;
+        LocalDate currentDate = LocalDate.now();
+        
+        // 오늘부터 역순으로 연속 식단 기록 일수 계산
+        for (int i = 0; i < mealLogs.size(); i++) {
+            MealLog mealLog = mealLogs.get(i);
+            LocalDate logDate = mealLog.getLogDate();
+            
+            // 현재 확인하려는 날짜와 로그 날짜가 일치하는지 확인
+            if (logDate.equals(currentDate)) {
+                streak++;
+                currentDate = currentDate.minusDays(1);
+                log.debug("🟣 [DietService] 연속 식단 기록 일수 증가 - 날짜: {}, 현재 연속: {}", logDate, streak);
+            } else if (logDate.isBefore(currentDate)) {
+                // 연속이 끊어짐 - 더 이상 확인할 필요 없음
+                log.debug("🟣 [DietService] 연속 식단 기록 끊어짐 - 날짜: {}, 현재 연속: {}", logDate, streak);
+                break;
+            }
+        }
+        
+        log.info("🟣 [DietService] 연속 식단 기록 일수 계산 완료 - 사용자: {}, 연속 일수: {}", userId, streak);
+        return streak;
     }
 
     @Transactional

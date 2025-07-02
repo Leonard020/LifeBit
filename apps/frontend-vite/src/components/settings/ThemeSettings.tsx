@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,10 @@ const ThemeSettings: React.FC = () => {
     resetToDefaults,
   } = useTheme();
 
+  // 각 카테고리별 변경사항 추적
+  const [fontSizeChanged, setFontSizeChanged] = useState(false);
+  const [accessibilityChanged, setAccessibilityChanged] = useState(false);
+
   const colorSchemes = [
     { value: 'default', label: '기본', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
     { value: 'blue', label: '블루', color: 'bg-gradient-to-r from-blue-500 to-cyan-500' },
@@ -37,8 +41,47 @@ const ThemeSettings: React.FC = () => {
     { value: 'normal', label: '크게', size: 'text-lg' },
   ];
 
+  // 폰트 크기 변경 핸들러
+  const handleFontSizeChange = (size: FontSize) => {
+    setFontSize(size);
+    setFontSizeChanged(true);
+  };
+
+  // 접근성 설정 변경 핸들러
+  const handleHighContrastChange = (value: boolean) => {
+    setHighContrast(value);
+    setAccessibilityChanged(true);
+  };
+
+  const handleReduceMotionChange = (value: boolean) => {
+    setReduceMotion(value);
+    setAccessibilityChanged(true);
+  };
+
+  // 폰트 크기 저장
+  const handleFontSizeSave = () => {
+    saveSettings();
+    setFontSizeChanged(false);
+    toast({
+      title: '폰트 크기 저장됨',
+      description: '폰트 크기가 성공적으로 저장되었습니다.',
+    });
+  };
+
+  // 접근성 설정 저장
+  const handleAccessibilitySave = () => {
+    saveSettings();
+    setAccessibilityChanged(false);
+    toast({
+      title: '접근성 설정 저장됨',
+      description: '접근성 설정이 성공적으로 저장되었습니다.',
+    });
+  };
+
   const handleSave = () => {
     saveSettings();
+    setFontSizeChanged(false);
+    setAccessibilityChanged(false);
     toast({
       title: '설정 저장됨',
       description: '테마 설정이 성공적으로 저장되었습니다.',
@@ -47,6 +90,8 @@ const ThemeSettings: React.FC = () => {
 
   const handleCancel = () => {
     cancelSettings();
+    setFontSizeChanged(false);
+    setAccessibilityChanged(false);
     toast({
       title: '설정 취소됨',
       description: '변경사항이 취소되었습니다.',
@@ -55,6 +100,8 @@ const ThemeSettings: React.FC = () => {
 
   const handleReset = () => {
     resetToDefaults();
+    setFontSizeChanged(false);
+    setAccessibilityChanged(false);
     toast({
       title: '기본값으로 초기화',
       description: '모든 설정이 기본값으로 초기화되었습니다.',
@@ -72,12 +119,12 @@ const ThemeSettings: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-row gap-4 justify-center">
+          <div className="flex flex-row gap-4 justify-center mb-4">
             {fontSizes.map((size) => (
               <Button
                 key={size.value}
                 variant={tempSettings.fontSize === size.value ? 'default' : 'outline'}
-                onClick={() => setFontSize(size.value as FontSize)}
+                onClick={() => handleFontSizeChange(size.value as FontSize)}
                 className="h-20 w-32 flex flex-col items-center justify-center gap-3 text-xl"
               >
                 <div className={`${size.size} font-bold text-2xl`}>Aa</div>
@@ -85,6 +132,18 @@ const ThemeSettings: React.FC = () => {
               </Button>
             ))}
           </div>
+          {fontSizeChanged && (
+            <div className="flex justify-end">
+              <Button
+                onClick={handleFontSizeSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                폰트 크기 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -107,7 +166,7 @@ const ThemeSettings: React.FC = () => {
             <Switch 
               id="high-contrast" 
               checked={tempSettings.highContrast}
-              onCheckedChange={setHighContrast}
+              onCheckedChange={handleHighContrastChange}
             />
           </div>
           
@@ -123,13 +182,26 @@ const ThemeSettings: React.FC = () => {
             <Switch 
               id="reduce-motion" 
               checked={tempSettings.reduceMotion}
-              onCheckedChange={setReduceMotion}
+              onCheckedChange={handleReduceMotionChange}
             />
           </div>
+          
+          {accessibilityChanged && (
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleAccessibilitySave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                접근성 설정 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* 저장/취소 버튼 (Card로 감싸기) */}
+      {/* 전체 저장/취소 버튼 */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
@@ -165,7 +237,7 @@ const ThemeSettings: React.FC = () => {
                 className="flex items-center gap-2"
               >
                 <Save className="h-4 w-4" />
-                저장
+                모든 설정 저장
               </Button>
             </div>
           </div>
