@@ -146,7 +146,53 @@ const formatStructuredDataDisplay = (data: ChatResponse['parsed_data'], recordTy
     );
   }
 
-  // 운동 데이터나 기타 데이터는 기존 방식 유지
+  // 운동 데이터는 사용자 친화적으로 표시
+  if (recordType === 'exercise' && data.exercise) {
+    return (
+      <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center">
+              <Zap className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-gray-800">{data.exercise}</h4>
+              <p className="text-xs text-gray-500">{data.category} {data.subcategory ? `(${data.subcategory})` : ''}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          {data.weight && (
+            <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
+              <span className="text-sm text-gray-600">무게</span>
+              <span className="font-semibold text-blue-600">{data.weight}kg</span>
+            </div>
+          )}
+          {data.sets && (
+            <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
+              <span className="text-sm text-gray-600">세트</span>
+              <span className="font-semibold text-green-600">{data.sets}세트</span>
+            </div>
+          )}
+          {data.reps && (
+            <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
+              <span className="text-sm text-gray-600">횟수</span>
+              <span className="font-semibold text-purple-600">{data.reps}회</span>
+            </div>
+          )}
+          {data.duration_min && (
+            <div className="flex items-center justify-between p-2 bg-orange-50 rounded-lg">
+              <span className="text-sm text-gray-600">시간</span>
+              <span className="font-semibold text-orange-600">{data.duration_min}분</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 기타 데이터는 기존 방식 유지
   return (
     <pre className="text-sm whitespace-pre-wrap bg-white p-3 rounded border">
       {JSON.stringify(data, null, 2)}

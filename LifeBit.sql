@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TYPE user_role AS ENUM ('USER', 'ADMIN');
 
 -- 배지 타입
-CREATE TYPE badge_type AS ENUM ('FIRST_LOGIN', 'STREAK_7', 'STREAK_30', 'STREAK_100', 'WEIGHT_GOAL', 'WORKOUT_GOAL', 'NUTRITION_GOAL', 'SOCIAL_SHARE', 'PERFECT_WEEK', 'MONTHLY_CHAMPION');
+CREATE TYPE badge_type AS ENUM ('FIRST_LOGIN', 'STREAK_7', 'STREAK_30', 'STREAK_100', 'WEIGHT_GOAL', 'WORKOUT_GOAL', 'NUTRITION_GOAL', 'SOCIAL_SHARE', 'PERFECT_WEEK', 'MONTHLY_CHAMPION', 'bronze', 'silver', 'gold', 'platinum');
 
 -- 신체 부위 타입
 CREATE TYPE body_part_type AS ENUM ('chest', 'back', 'legs', 'shoulders', 'arms', 'abs', 'cardio');
@@ -25,7 +25,7 @@ CREATE TYPE exercise_part_type AS ENUM ('strength','cardio');
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');
 
 -- 식사 시간 타입
-CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
+CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack', 'midnight', '아침', '점심', '저녁', '야식', '간식');
 
 -- 입력 소스 타입
 CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
@@ -155,6 +155,7 @@ CREATE TABLE exercise_sessions (
     time_period time_period_type, 
     input_source input_source_type,
     confidence_score DECIMAL(4,2),
+    original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
     created_at TIMESTAMP DEFAULT NOW()
@@ -187,8 +188,8 @@ CREATE TABLE meal_logs (
     meal_time meal_time_type NOT NULL,
     quantity DECIMAL(6,2),
     log_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    input_source input_source_type,
-    confidence_score DECIMAL(4,2),
+    input_source input_source_type DEFAULT 'TYPING',
+    confidence_score DECIMAL(4,2) DEFAULT 1.0,
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
     validation_notes TEXT,
