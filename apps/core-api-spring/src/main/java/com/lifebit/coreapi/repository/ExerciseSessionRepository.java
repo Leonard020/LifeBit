@@ -57,4 +57,32 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
     
     @Query("SELECT COUNT(es) FROM ExerciseSession es WHERE es.createdAt BETWEEN :start AND :end")
     Long countExerciseSessionsBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // 누적형 업적: 유저별 검증된 운동 기록 카운트
+    @Query("SELECT COUNT(es) FROM ExerciseSession es WHERE es.user.userId = :userId AND es.validationStatus = 'VALIDATED'")
+    long countValidatedWorkoutsByUserId(@Param("userId") Long userId);
+
+    // 연속형 업적: 유저별 검증된 운동 기록 날짜 목록
+    @Query("SELECT DISTINCT es.exerciseDate FROM ExerciseSession es WHERE es.user.userId = :userId AND es.validationStatus = 'VALIDATED' ORDER BY es.exerciseDate ASC")
+    List<LocalDate> findValidatedExerciseDatesByUserId(@Param("userId") Long userId);
+
+    // 특정 요일/시간대 업적: 아침 운동
+    @Query("SELECT COUNT(es) FROM ExerciseSession es WHERE es.user.userId = :userId AND es.timePeriod = 'MORNING' AND es.validationStatus = 'VALIDATED'")
+    long countMorningWorkoutsByUserId(@Param("userId") Long userId);
+
+    // 특정 요일/시간대 업적: 저녁 운동
+    @Query("SELECT COUNT(es) FROM ExerciseSession es WHERE es.user.userId = :userId AND es.timePeriod = 'NIGHT' AND es.validationStatus = 'VALIDATED'")
+    long countNightWorkoutsByUserId(@Param("userId") Long userId);
+
+    // 특정 요일/시간대 업적: 주말 운동 (토: 6, 일: 7, PostgreSQL 기준)
+    @Query(value = "SELECT COUNT(*) FROM exercise_sessions es WHERE es.user_id = :userId AND EXTRACT(ISODOW FROM es.exercise_date) IN (6, 7) AND es.validation_status = 'VALIDATED'", nativeQuery = true)
+    long countWeekendWorkoutsByUserId(@Param("userId") Long userId);
+
+    // 특정 값 도달 업적: 누적 칼로리 소모
+    @Query("SELECT COALESCE(SUM(es.caloriesBurned), 0) FROM ExerciseSession es WHERE es.user.userId = :userId AND es.validationStatus = 'VALIDATED'")
+    int sumTotalCaloriesBurnedByUserId(@Param("userId") Long userId);
+
+    // 특정 값 도달 업적: 총 운동 시간(분)
+    @Query("SELECT COALESCE(SUM(es.durationMinutes), 0) FROM ExerciseSession es WHERE es.user.userId = :userId AND es.validationStatus = 'VALIDATED'")
+    int sumTotalWorkoutMinutesByUserId(@Param("userId") Long userId);
 }

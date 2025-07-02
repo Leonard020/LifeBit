@@ -21,6 +21,9 @@ import java.util.stream.Collectors;
 
 import com.lifebit.coreapi.entity.enums.AchievementType;
 import com.lifebit.coreapi.event.AchievementCompletedEvent;
+import com.lifebit.coreapi.repository.ExerciseSessionRepository;
+import com.lifebit.coreapi.repository.MealLogRepository;
+import com.lifebit.coreapi.repository.HealthRecordRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,9 @@ public class AchievementService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ExerciseSessionRepository exerciseSessionRepository;
+    private final MealLogRepository mealLogRepository;
+    private final HealthRecordRepository healthRecordRepository;
     
     /**
      * 특정 사용자의 업적 정보를 조회합니다.
@@ -245,5 +251,74 @@ public class AchievementService {
     public int getUserAchievementCount(Long userId) {
         return (int) userAchievementRepository.findByUserIdWithAchievements(userId)
             .stream().filter(ua -> Boolean.TRUE.equals(ua.getIsAchieved())).count();
+    }
+    
+    /**
+     * 연속형 업적(연속 운동/식단 기록) 자동 체크 및 달성 처리
+     */
+    @Transactional
+    public void checkAndUpdateStreakAchievements(Long userId) {
+        // 1. 운동 연속 기록
+        List<LocalDate> exerciseDates = exerciseSessionRepository.findValidatedExerciseDatesByUserId(userId);
+        int maxExerciseStreak = calculateMaxStreak(exerciseDates);
+        updateUserAchievementProgress(userId, "7일 연속 운동", maxExerciseStreak);
+        updateUserAchievementProgress(userId, "30일 연속 운동", maxExerciseStreak);
+
+        // 2. 식단 연속 기록
+        List<LocalDate> mealDates = mealLogRepository.findValidatedMealDatesByUserId(userId);
+        int maxMealStreak = calculateMaxStreak(mealDates);
+        updateUserAchievementProgress(userId, "7일 연속 식단", maxMealStreak);
+        updateUserAchievementProgress(userId, "30일 연속 식단", maxMealStreak);
+    }
+
+    /** 날짜 리스트에서 최대 연속 기록 일수 계산 */
+    private int calculateMaxStreak(List<LocalDate> dates) {
+        if (dates == null || dates.isEmpty()) return 0;
+        int maxStreak = 1, curStreak = 1;
+        for (int i = 1; i < dates.size(); i++) {
+            if (dates.get(i).equals(dates.get(i - 1).plusDays(1))) {
+                curStreak++;
+                maxStreak = Math.max(maxStreak, curStreak);
+            } else {
+                curStreak = 1;
+            }
+        }
+        return maxStreak;
+    }
+
+    /**
+     * 특정 요일/시간대 업적(아침 운동, 저녁 운동, 주말 운동) 자동 체크 및 달성 처리
+     */
+    @Transactional
+    public void checkAndUpdateTimePeriodAchievements(Long userId) {
+        // 아침 운동 업적
+        long morningCount = exerciseSessionRepository.countMorningWorkoutsByUserId(userId);
+        updateUserAchievementProgress(userId, "아침 운동 10회 달성", (int)morningCount);
+
+        // 저녁 운동 업적
+        long nightCount = exerciseSessionRepository.countNightWorkoutsByUserId(userId);
+        updateUserAchievementProgress(userId, "저녁 운동 10회 달성", (int)nightCount);
+
+        // 주말 운동 업적
+        long weekendCount = exerciseSessionRepository.countWeekendWorkoutsByUserId(userId);
+        updateUserAchievementProgress(userId, "주말 운동 5회 달성", (int)weekendCount);
+    }
+
+    /**
+     * 특정 값 도달 업적(체중 목표, 누적 칼로리, 총 운동 시간) 자동 체크 및 달성 처리
+     */
+    @Transactional
+    public void checkAndUpdateValueAchievements(Long userId) {
+        // 1. 체중 목표 달성 (예: 60kg 이하)
+        boolean weightGoal = healthRecordRepository.existsWeightGoalAchieved(userId, 60.0);
+        updateUserAchievementProgress(userId, "체중 60kg 달성", weightGoal ? 1 : 0);
+
+        // 2. 누적 칼로리 소모
+        int totalCalories = exerciseSessionRepository.sumTotalCaloriesBurnedByUserId(userId);
+        updateUserAchievementProgress(userId, "누적 칼로리 10000kcal 달성", totalCalories);
+
+        // 3. 총 운동 시간
+        int totalMinutes = exerciseSessionRepository.sumTotalWorkoutMinutesByUserId(userId);
+        updateUserAchievementProgress(userId, "총 운동 1000분 달성", totalMinutes);
     }
 } 

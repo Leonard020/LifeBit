@@ -55,4 +55,12 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     
     @Query("SELECT COUNT(ml) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
     Long countMealLogsBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    
+    // 누적형 업적: 유저별 검증된 식단 기록 카운트
+    @Query("SELECT COUNT(ml) FROM MealLog ml WHERE ml.user.userId = :userId AND ml.validationStatus = 'VALIDATED'")
+    long countValidatedMealsByUserId(@Param("userId") Long userId);
+    
+    // 연속형 업적: 유저별 검증된 식단 기록 날짜 목록
+    @Query("SELECT DISTINCT ml.logDate FROM MealLog ml WHERE ml.user.userId = :userId AND ml.validationStatus = 'VALIDATED' ORDER BY ml.logDate ASC")
+    List<LocalDate> findValidatedMealDatesByUserId(@Param("userId") Long userId);
 } 

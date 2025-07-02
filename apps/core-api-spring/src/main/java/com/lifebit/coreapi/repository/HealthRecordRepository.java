@@ -32,4 +32,8 @@ public interface HealthRecordRepository extends JpaRepository<HealthRecord, Long
     
     // 사용자별 건강 기록 개수
     long countByUserId(Long userId);
+    
+    // 특정 값 도달 업적: 체중 목표 달성 (예: 60kg 이하 기록 존재 여부)
+    @Query("SELECT COUNT(hr) > 0 FROM HealthRecord hr WHERE hr.userId = :userId AND hr.weight <= :targetWeight")
+    boolean existsWeightGoalAchieved(@Param("userId") Long userId, @Param("targetWeight") double targetWeight);
 } 
