@@ -59,31 +59,12 @@ public class NotificationService {
     }
 
     public Page<NotificationDto> getUserNotificationsPageDto(Long userId, Pageable pageable, Boolean isRead) {
-        System.out.println("[DEBUG] getUserNotificationsPageDto 시작: userId=" + userId + ", isRead=" + isRead);
-        
-        Page<Notification> notifications = getUserNotificationsPage(userId, pageable, isRead);
-        System.out.println("[DEBUG] getUserNotificationsPageDto: 조회된 알림 개수=" + notifications.getTotalElements());
-        
-        return notifications.map(n -> {
-            boolean read;
-            if (n.getUserId() == null) {
-                // 시스템 알림: userId, notificationId 모두 null이 아니고 Long 타입으로 강제
-                Long safeUserId = userId;
-                Long safeNotificationId = n.getId();
-                if (safeUserId == null || safeNotificationId == null) {
-                    read = false;
-                    System.out.println("[DEBUG] SYSTEM 알림 id=" + safeNotificationId + ", userId=" + safeUserId + " (null 체크 실패), isRead=false");
-                } else {
-                    boolean exists = notificationReadRepository.existsByUserIdAndNotificationId(safeUserId, safeNotificationId);
-                    read = exists;
-                    System.out.println("[DEBUG] SYSTEM 알림 id=" + safeNotificationId + ", userId=" + safeUserId + ", exists=" + exists + ", isRead=" + read);
-                }
-            } else {
-                read = n.isRead();
-                System.out.println("[DEBUG] 개인 알림 id=" + n.getId() + ", userId=" + n.getUserId() + ", isRead=" + read);
-            }
-            
-            NotificationDto dto = NotificationDto.builder()
+        // 새로운 쿼리 사용: 시스템 알림 + 개인 알림 + 읽음 여부
+        Page<Object[]> results = notificationRepository.findAllNotificationsWithReadStatus(userId, pageable);
+        return results.map(obj -> {
+            Notification n = (Notification) obj[0];
+            boolean read = (Boolean) obj[1];
+            return NotificationDto.builder()
                 .id(n.getId())
                 .type(n.getType())
                 .refId(n.getRefId())
@@ -91,10 +72,8 @@ public class NotificationService {
                 .message(n.getMessage())
                 .isRead(read)
                 .createdAt(n.getCreatedAt())
+                .userId(n.getUserId())
                 .build();
-                
-            System.out.println("[DEBUG] NotificationDto 생성: id=" + dto.getId() + ", isRead=" + dto.isRead());
-            return dto;
         });
     }
 
