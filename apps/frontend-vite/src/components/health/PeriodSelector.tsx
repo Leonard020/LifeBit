@@ -16,7 +16,7 @@ export const PeriodSelector: React.FC<PeriodSelectorProps> = ({
   ] as const;
 
   return (
-    <div className="flex bg-gray-100 rounded-lg p-1">
+    <div className="flex bg-gray-100 dark:bg-[#232946] rounded-lg p-1">
       {periods.map((period) => (
         <button
           key={period.value}
@@ -24,8 +24,8 @@ export const PeriodSelector: React.FC<PeriodSelectorProps> = ({
           className={`
             flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all
             ${selectedPeriod === period.value
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              ? 'bg-white text-blue-600 shadow-sm dark:bg-[#181c2a] dark:text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-[#232946]'
             }
           `}
         >

@@ -446,19 +446,48 @@ const HealthLog: React.FC = () => {
             const newTab = value as 'enhanced' | 'react' | 'python';
             setActiveTab(newTab);
             localStorage.setItem('healthlog-active-tab', newTab);
-          }} className="mb-6">
-            <TabsList className="grid w-full grid-cols-2 max-w-2xl">
-              <TabsTrigger value="enhanced" className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4" />
-                나의활동
-              </TabsTrigger>
-              <TabsTrigger value="python" className="flex items-center gap-2">
-                <Brain className="h-4 w-4" />
-                기간별차트
-              </TabsTrigger>
-            </TabsList>
-
-            {/* 향상된 UI 탭 */}
+          }}>
+            <div className="w-full flex justify-center my-4">
+              <TabsList className="flex gap-4 justify-center w-full bg-transparent p-0 rounded-none shadow-none">
+                {/* 나의활동 버튼 */}
+                <div className="dark:p-[2px] dark:rounded-xl dark:bg-gradient-to-r dark:from-[#a259fa] dark:to-[#ff6ec4]">
+                  <TabsTrigger value="enhanced" className="rounded-xl px-5 py-2 h-12 min-w-[120px] font-bold text-base flex items-center gap-2 transition border-none overflow-hidden
+                    data-[state=active]:bg-white
+                    data-[state=active]:text-black
+                    data-[state=active]:dark:bg-gradient-to-r
+                    data-[state=active]:dark:from-[#a259fa]
+                    data-[state=active]:dark:to-[#ff6ec4]
+                    data-[state=active]:dark:text-white
+                    data-[state=inactive]:bg-[#f6fafd]
+                    data-[state=inactive]:text-gray-800
+                    data-[state=inactive]:dark:bg-[#232946]
+                    data-[state=inactive]:dark:text-gray-300
+                  ">
+                    <Smartphone className="h-5 w-5 mr-2" />
+                    나의활동
+                  </TabsTrigger>
+                </div>
+                {/* 기간별차트 버튼 */}
+                <div className="dark:p-[2px] dark:rounded-xl dark:bg-gradient-to-r dark:from-[#ff9770] dark:via-[#43e97b] dark:to-[#38b6ff]">
+                  <TabsTrigger value="python" className="rounded-xl px-5 py-2 h-12 min-w-[120px] font-bold text-base flex items-center gap-2 transition border-none overflow-hidden
+                    data-[state=active]:bg-white
+                    data-[state=active]:text-black
+                    data-[state=active]:dark:bg-gradient-to-r
+                    data-[state=active]:dark:from-[#ff9770]
+                    data-[state=active]:dark:via-[#43e97b]
+                    data-[state=active]:dark:to-[#38b6ff]
+                    data-[state=active]:dark:text-white
+                    data-[state=inactive]:bg-[#f6fafd]
+                    data-[state=inactive]:text-gray-800
+                    data-[state=inactive]:dark:bg-[#232946]
+                    data-[state=inactive]:dark:text-gray-300
+                  ">
+                    <Brain className="h-5 w-5 mr-2" />
+                    기간별차트
+                  </TabsTrigger>
+                </div>
+              </TabsList>
+            </div>
             <TabsContent value="enhanced" className="mt-6">
               <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border p-1 mb-4">
                 <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900 rounded-lg p-3">
@@ -466,7 +495,6 @@ const HealthLog: React.FC = () => {
                   <span className="font-medium">사용자 제공 UI를 반영한 향상된 건강 대시보드</span>
                 </div>
               </div>
-              
               <ErrorBoundary>
                 <EnhancedHealthDashboard 
                   userId={userId?.toString() || ''} 
@@ -474,7 +502,6 @@ const HealthLog: React.FC = () => {
                 />
               </ErrorBoundary>
             </TabsContent>
-
             <TabsContent value="python" className="mt-6">
               {/* 기간 선택 - AI분석용 */}
               <div className="mb-6">
@@ -483,9 +510,6 @@ const HealthLog: React.FC = () => {
                   onPeriodChange={setPythonPeriod}
                 />
               </div>
-              
-
-              
               <ErrorBoundary>
                 <PythonAnalyticsCharts 
                   userId={userId || 0} 

@@ -200,7 +200,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
               <Calendar className="h-5 w-5 text-white" />
             </div>
             <div>
-              <div className="text-xl font-bold text-gray-800">🔥 운동 캘린더 히트맵</div>
+              <div className="text-xl font-bold text-gray-800 dark:text-white">🔥 운동 캘린더 히트맵</div>
               <div className="text-sm text-gray-600 font-normal">최근 5주간의 운동 기록</div>
             </div>
           </CardTitle>
