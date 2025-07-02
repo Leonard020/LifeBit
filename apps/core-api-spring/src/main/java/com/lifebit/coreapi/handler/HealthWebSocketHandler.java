@@ -22,9 +22,35 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class HealthWebSocketHandler extends TextWebSocketHandler {
 
-    // 사용자별 WebSocket 세션 저장
-    private final Map<String, WebSocketSession> userSessions = new ConcurrentHashMap<>();
+    // 사용자별 WebSocket 세션 저장 (확장된 정보)
+    private final Map<String, UserSessionInfo> userSessions = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    // 사용자 세션 정보 클래스
+    public static class UserSessionInfo {
+        private final String userId;
+        private final WebSocketSession session;
+        private String currentPage;
+        private LocalDateTime lastActivity;
+        
+        public UserSessionInfo(String userId, WebSocketSession session) {
+            this.userId = userId;
+            this.session = session;
+            this.currentPage = "unknown";
+            this.lastActivity = LocalDateTime.now();
+        }
+        
+        // Getters and Setters
+        public String getUserId() { return userId; }
+        public WebSocketSession getSession() { return session; }
+        public String getCurrentPage() { return currentPage; }
+        public void setCurrentPage(String currentPage) { 
+            this.currentPage = currentPage;
+            this.lastActivity = LocalDateTime.now();
+        }
+        public LocalDateTime getLastActivity() { return lastActivity; }
+        public void updateActivity() { this.lastActivity = LocalDateTime.now(); }
+    }
     
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
@@ -36,7 +62,7 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
         // JWT 토큰 검증
         String userId = validateAndExtractUserId(session);
         if (userId != null) {
-            userSessions.put(userId, session);
+            userSessions.put(userId, new UserSessionInfo(userId, session));
             log.info("✅ [WebSocket] 연결 성공 - 사용자 ID: {}, 세션 ID: {}", userId, session.getId());
             
             // 연결 성공 메시지 전송 (안전하게 처리)
@@ -81,6 +107,23 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
         // 클라이언트에서 ping 메시지를 보낸 경우 pong으로 응답
         if ("ping".equals(message.getPayload())) {
             sendMessage(session, "pong");
+            return;
+        }
+        
+        // JSON 메시지 처리
+        try {
+            if (message.getPayload().startsWith("{")) {
+                var messageData = objectMapper.readValue(message.getPayload(), java.util.Map.class);
+                String type = (String) messageData.get("type");
+                
+                if ("page_change".equals(type) && userId != null) {
+                    String page = (String) messageData.get("page");
+                    updateUserPage(userId, page);
+                    log.info("📄 [WebSocket] 페이지 변경 - 사용자 ID: {}, 페이지: {}", userId, page);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [WebSocket] 메시지 파싱 실패: {}", e.getMessage());
         }
     }
 
@@ -109,8 +152,8 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
      * 업데이트 메시지 전송 (내부 메서드)
      */
     private void sendUpdateMessage(String userId, String type, Object data) {
-        WebSocketSession session = userSessions.get(userId);
-        if (session != null && session.isOpen()) {
+        UserSessionInfo userSession = userSessions.get(userId);
+        if (userSession != null && userSession.getSession().isOpen()) {
             try {
                 HealthUpdateMessage message = HealthUpdateMessage.builder()
                         .type(type)
@@ -120,7 +163,7 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
                         .build();
                 
                 String jsonMessage = objectMapper.writeValueAsString(message);
-                sendMessage(session, jsonMessage);
+                sendMessage(userSession.getSession(), jsonMessage);
                 
                 log.info("📤 업데이트 메시지 전송 - 사용자 ID: {}, 타입: {}", userId, type);
             } catch (Exception e) {
@@ -306,8 +349,60 @@ public class HealthWebSocketHandler extends TextWebSocketHandler {
      * 특정 사용자가 연결되어 있는지 확인
      */
     public boolean isUserConnected(String userId) {
-        WebSocketSession session = userSessions.get(userId);
-        return session != null && session.isOpen();
+        UserSessionInfo userSession = userSessions.get(userId);
+        return userSession != null && userSession.getSession().isOpen();
+    }
+
+    /**
+     * 사용자의 현재 페이지 업데이트
+     */
+    public void updateUserPage(String userId, String page) {
+        UserSessionInfo userSession = userSessions.get(userId);
+        if (userSession != null) {
+            userSession.setCurrentPage(page);
+            log.info("📄 [WebSocket] 사용자 페이지 업데이트 - ID: {}, 페이지: {}", userId, page);
+        }
+    }
+
+    /**
+     * 페이지별 접속자 수 조회
+     */
+    public int getUserCountByPage(String pageName) {
+        return (int) userSessions.values().stream()
+                .filter(session -> session.getSession().isOpen())
+                .filter(session -> pageName.equals(session.getCurrentPage()))
+                .count();
+    }
+
+    /**
+     * 상세 접속자 정보 조회
+     */
+    public java.util.Map<String, Object> getDetailedUserStats() {
+        java.util.Map<String, Object> stats = new java.util.HashMap<>();
+        
+        // 총 접속자 수
+        int totalOnline = (int) userSessions.values().stream()
+                .filter(session -> session.getSession().isOpen())
+                .count();
+        
+        // 페이지별 접속자 수
+        int healthLogUsers = getUserCountByPage("health-log");
+        int adminUsers = getUserCountByPage("admin");
+        int profileUsers = getUserCountByPage("profile");
+        int unknownUsers = getUserCountByPage("unknown");
+        
+        stats.put("onlineUsers", totalOnline);
+        stats.put("authenticatedUsers", totalOnline); // 모든 WebSocket 사용자는 인증됨
+        stats.put("activeRecorders", healthLogUsers + adminUsers); // HealthLog + Admin 페이지 사용자가 활동 중
+        stats.put("pageStats", java.util.Map.of(
+            "health-log", healthLogUsers,
+            "admin", adminUsers,
+            "profile", profileUsers,
+            "unknown", unknownUsers
+        ));
+        stats.put("timestamp", System.currentTimeMillis());
+        
+        return stats;
     }
 
     /**

@@ -5,5 +5,10 @@ public enum MealTimeType {
     lunch,
     dinner,
     snack,
-    midnight
+    midnight,
+    아침,
+    점심,
+    저녁,
+    야식,
+    간식
 } 

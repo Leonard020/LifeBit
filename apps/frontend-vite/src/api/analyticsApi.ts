@@ -158,6 +158,276 @@ export interface PersonalizedRecommendations {
 }
 
 // ============================================================================
+// 관리자 대시보드 타입 정의
+// ============================================================================
+
+export interface AccessStatsDto {
+  period: string;
+  접속자: number;
+}
+
+export interface UserActivityDto {
+  period: string;
+  총접속자: number;
+  활동사용자: number;
+}
+
+export interface ExerciseStatsDto {
+  category: string;
+  참여자: number;
+  color: string;
+}
+
+export interface MealStatsDto {
+  name?: string;
+  value?: number;
+  color?: string;
+  날짜?: string;
+  아침?: number;
+  점심?: number;
+  저녁?: number;
+  간식?: number;
+}
+
+export interface AnalyticsDataDto {
+  accessStats: AccessStatsDto[];
+  userActivity: UserActivityDto[];
+  exerciseStats: ExerciseStatsDto[];
+  mealStats: MealStatsDto[];
+  summary?: SummaryDto; // 요약 정보 추가
+}
+
+export interface SummaryDto {
+  current: PeriodSummaryDto;
+  previous: PeriodSummaryDto;
+}
+
+export interface PeriodSummaryDto {
+  totalUsers: number;     // 총 회원수
+  activeUsers: number;    // 접속자
+  recordingUsers: number; // 활동 사용자
+}
+
+export interface OnlineUsersDto {
+  onlineUsers: number;
+  timestamp: number;
+}
+
+export interface OnlineUsersDetailDto {
+  onlineUsers: number;
+  authenticatedUsers: number;
+  activeRecorders: number;
+  pageStats: {
+    'health-log': number;
+    admin: number;
+    profile: number;
+    unknown: number;
+  };
+  timestamp: number;
+}
+
+// ============================================================================
+// 관리자 대시보드 API 함수들
+// ============================================================================
+
+// 접속 현황 통계 조회
+export const getAccessStats = async (period: string): Promise<AccessStatsDto[]> => {
+  console.log('🔍 [API] getAccessStats 요청:', { period });
+  
+  try {
+    const response = await axiosInstance.get(`/api/admin/analytics/access-stats?period=${period}`);
+    console.log('✅ [API] getAccessStats 성공:', response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] getAccessStats 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 사용자 활동 비교 통계 조회
+export const getUserActivityStats = async (period: string): Promise<UserActivityDto[]> => {
+  console.log('🔍 [API] getUserActivityStats 요청:', { period });
+  
+  try {
+    const response = await axiosInstance.get(`/api/admin/analytics/user-activity?period=${period}`);
+    console.log('✅ [API] getUserActivityStats 성공:', response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] getUserActivityStats 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 운동 참여자 통계 조회
+export const getExerciseStats = async (period: string): Promise<ExerciseStatsDto[]> => {
+  console.log('🔍 [API] getExerciseStats 요청:', { period });
+  
+  try {
+    const response = await axiosInstance.get(`/api/admin/analytics/exercise-stats?period=${period}`);
+    console.log('✅ [API] getExerciseStats 성공:', response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] getExerciseStats 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 식사 기록 통계 조회
+export const getMealStats = async (period: string): Promise<MealStatsDto[]> => {
+  console.log('🔍 [API] getMealStats 요청:', { period });
+  
+  try {
+    const response = await axiosInstance.get(`/api/admin/analytics/meal-stats?period=${period}`);
+    console.log('✅ [API] getMealStats 성공:', response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] getMealStats 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 전체 애널리틱스 데이터 한번에 조회
+export const getAllAnalytics = async (period: string): Promise<AnalyticsDataDto> => {
+  console.log('🔍 [API] getAllAnalytics 요청 시작:', { period, timestamp: new Date().toISOString() });
+  
+  try {
+    const url = `/api/admin/analytics/all?period=${period}`;
+    console.log('🌐 [API] 요청 URL:', url);
+    
+    const response = await axiosInstance.get(url);
+    
+    console.log('✅ [API] getAllAnalytics 성공:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      dataKeys: Object.keys(response.data),
+      dataSize: JSON.stringify(response.data).length
+    });
+    
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] getAllAnalytics 실패:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      responseData: error.response?.data,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        timeout: error.config?.timeout
+      },
+      code: error.code,
+      stack: error.stack
+    });
+    throw error;
+  }
+};
+
+// 서버 연결 상태 확인 헬퍼 함수
+export const checkServerHealth = async (): Promise<{
+  isOnline: boolean;
+  coreApi: boolean;
+  details: any;
+}> => {
+  const results = {
+    isOnline: false,
+    coreApi: false,
+    details: {} as any
+  };
+
+  try {
+    console.log('🏥 [Health Check] 서버 상태 확인 시작');
+    
+    // Core API 헬스 체크
+    try {
+      const coreResponse = await fetch('http://localhost:8080/actuator/health', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000) // 5초 타임아웃
+      });
+      
+      if (coreResponse.ok) {
+        results.coreApi = true;
+        results.isOnline = true;
+        results.details.coreApi = await coreResponse.json();
+        console.log('✅ [Health Check] Core API 연결 성공');
+      } else {
+        results.details.coreApi = `HTTP ${coreResponse.status}: ${coreResponse.statusText}`;
+        console.warn('⚠️ [Health Check] Core API 응답 오류:', coreResponse.status);
+      }
+    } catch (coreError: any) {
+      results.details.coreApi = coreError.message;
+      console.error('❌ [Health Check] Core API 연결 실패:', coreError.message);
+    }
+
+    // Analytics API 직접 테스트
+    try {
+      const analyticsResponse = await axiosInstance.get('/api/admin/analytics/all?period=daily');
+      results.details.analytics = '연결 성공';
+      console.log('✅ [Health Check] Analytics API 연결 성공');
+    } catch (analyticsError: any) {
+      results.details.analytics = analyticsError.message;
+      console.error('❌ [Health Check] Analytics API 연결 실패:', analyticsError.message);
+    }
+
+    console.log('🏥 [Health Check] 결과:', results);
+    return results;
+    
+  } catch (error: any) {
+    console.error('❌ [Health Check] 전체 실패:', error);
+    results.details.error = error.message;
+    return results;
+  }
+};
+
+// 실시간 통계 데이터 조회
+export const getRealtimeAnalytics = async (): Promise<AnalyticsDataDto> => {
+  console.log('📡 [API] getRealtimeAnalytics 요청');
+  
+  try {
+    const response = await axiosInstance.get('/api/admin/analytics/realtime');
+    console.log('✅ [API] getRealtimeAnalytics 성공:', response.status);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] getRealtimeAnalytics 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * 실시간 접속자 수 조회 (기본)
+ */
+export const getOnlineUsers = async (): Promise<OnlineUsersDto> => {
+  console.log('👥 [API] 실시간 접속자 수 요청');
+  
+  try {
+    const response = await axiosInstance.get('/api/admin/analytics/online-users');
+    console.log('✅ [API] 실시간 접속자 수 수신 성공:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] 실시간 접속자 수 요청 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * 실시간 접속자 상세 정보 조회 (페이지별)
+ */
+export const getOnlineUsersDetail = async (): Promise<OnlineUsersDetailDto> => {
+  console.log('👥 [API] 실시간 접속자 상세 정보 요청');
+  
+  try {
+    const response = await axiosInstance.get('/api/admin/analytics/online-users-detail');
+    console.log('✅ [API] 실시간 접속자 상세 정보 수신 성공:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] 실시간 접속자 상세 정보 요청 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// ============================================================================
 // API 함수들 (향후 구현)
 // ============================================================================
 
@@ -392,11 +662,155 @@ export const AI_SYSTEM_ROADMAP = {
   }
 };
 
+// ============================================================================
+// 관리자 대시보드 React Query Hooks
+// ============================================================================
+
+export const useAccessStats = (period: string) => {
+  return useQuery({
+    queryKey: ['adminAccessStats', period],
+    queryFn: () => getAccessStats(period),
+    staleTime: 1000 * 60 * 5, // 5분
+    gcTime: 1000 * 60 * 10, // 10분
+    refetchInterval: 1000 * 60 * 10, // 10분마다 자동 갱신
+  });
+};
+
+export const useUserActivityStats = (period: string) => {
+  return useQuery({
+    queryKey: ['adminUserActivity', period],
+    queryFn: () => getUserActivityStats(period),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchInterval: 1000 * 60 * 10,
+  });
+};
+
+export const useExerciseStats = (period: string) => {
+  return useQuery({
+    queryKey: ['adminExerciseStats', period],
+    queryFn: () => getExerciseStats(period),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchInterval: 1000 * 60 * 10,
+  });
+};
+
+export const useMealStats = (period: string) => {
+  return useQuery({
+    queryKey: ['adminMealStats', period],
+    queryFn: () => getMealStats(period),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchInterval: 1000 * 60 * 10,
+  });
+};
+
+export const useAllAnalytics = (period: string) => {
+  return useQuery({
+    queryKey: ['adminAllAnalytics', period],
+    queryFn: async () => {
+      console.log('🔍 [useAllAnalytics] React Query 호출 시작:', { period });
+      try {
+        const data = await getAllAnalytics(period);
+        console.log('✅ [useAllAnalytics] React Query 성공:', { 
+          period, 
+          dataKeys: Object.keys(data),
+          accessStatsCount: data.accessStats?.length,
+          userActivityCount: data.userActivity?.length,
+          exerciseStatsCount: data.exerciseStats?.length,
+          mealStatsCount: data.mealStats?.length
+        });
+        return data;
+      } catch (error: any) {
+        console.error('❌ [useAllAnalytics] React Query 실패:', { 
+          period, 
+          error: error.message,
+          status: error.response?.status,
+          details: error.response?.data 
+        });
+        throw error;
+      }
+    },
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchInterval: 1000 * 60 * 10,
+    retry: (failureCount, error: any) => {
+      console.log('🔄 [useAllAnalytics] Retry 시도:', { 
+        failureCount, 
+        period,
+        status: error.response?.status,
+        message: error.message 
+      });
+      
+      // 네트워크 에러나 5xx 에러인 경우만 재시도 (최대 2번)
+      return failureCount < 2 && (
+        error.code === 'ERR_NETWORK' || 
+        error.code === 'ECONNREFUSED' ||
+        (error.response?.status >= 500)
+      );
+    },
+    retryDelay: (attemptIndex) => {
+      const delay = Math.min(1000 * 2 ** attemptIndex, 30000);
+      console.log('⏱️ [useAllAnalytics] Retry 지연:', { attemptIndex, delay });
+      return delay;
+    },
+  });
+};
+
+export const useRealtimeAnalytics = () => {
+  return useQuery({
+    queryKey: ['adminRealtimeAnalytics'],
+    queryFn: getRealtimeAnalytics,
+    staleTime: 1000 * 30, // 30초
+    gcTime: 1000 * 60 * 5, // 5분
+    refetchInterval: 1000 * 60, // 1분마다 자동 갱신
+  });
+};
+
+/**
+ * 실시간 접속자 수 React Query Hook (기본)
+ */
+export const useOnlineUsers = () => {
+  return useQuery({
+    queryKey: ['adminOnlineUsers'],
+    queryFn: getOnlineUsers,
+    staleTime: 1000 * 10, // 10초
+    gcTime: 1000 * 60 * 2, // 2분
+    refetchInterval: 1000 * 30, // 30초마다 자동 갱신
+    retry: 2,
+    retryDelay: 1000, // 1초 간격으로 재시도
+  });
+};
+
+/**
+ * 실시간 접속자 상세 정보 React Query Hook
+ */
+export const useOnlineUsersDetail = () => {
+  return useQuery({
+    queryKey: ['adminOnlineUsersDetail'],
+    queryFn: getOnlineUsersDetail,
+    staleTime: 1000 * 10, // 10초
+    gcTime: 1000 * 60 * 2, // 2분
+    refetchInterval: 1000 * 15, // 15초마다 자동 갱신 (더 자주)
+    retry: 2,
+    retryDelay: 1000,
+  });
+};
+
 export default {
   useHealthAnalyticsReport,
   useAIHealthInsights,
   useWeightTrendsAnalysis,
   useExercisePatternsAnalysis,
   usePersonalizedRecommendations,
+  useAccessStats,
+  useUserActivityStats,
+  useExerciseStats,
+  useMealStats,
+  useAllAnalytics,
+  useRealtimeAnalytics,
+  useOnlineUsers,
+  useOnlineUsersDetail,
   AI_SYSTEM_ROADMAP
 }; 

@@ -158,37 +158,46 @@ const Index = () => {
       console.log('  chatStructuredData:', chatStructuredData);
       console.log('  chatAiFeedback:', chatAiFeedback);
 
-      // 필수 정보 체크
-      if (!structuredData) {
-        // 직전 AI 응답에서 복구 시도
-        if (chatAiFeedback?.parsed_data) {
-          console.log('  chatAiFeedback.parsed_data 존재:', chatAiFeedback.parsed_data);
-          // ✅ system_message.data 구조도 지원
-          if (chatAiFeedback.parsed_data.system_message && chatAiFeedback.parsed_data.system_message.data) {
-            structuredData = chatAiFeedback.parsed_data.system_message.data;
-            setChatStructuredData(structuredData);
-            console.log('  system_message.data에서 복구:', structuredData);
-          }
-          // ✅ 단일 객체(운동) 구조도 지원
-          else if (chatAiFeedback.parsed_data.exercise) {
-            structuredData = chatAiFeedback.parsed_data;
-            setChatStructuredData(chatAiFeedback.parsed_data);
-            console.log('  parsed_data에서 복구:', structuredData);
-          } else {
-            structuredData = chatAiFeedback.parsed_data;
-            setChatStructuredData(chatAiFeedback.parsed_data);
-            console.log('  parsed_data에서 복구 (기본):', structuredData);
-          }
-        } else if (chatAiFeedback?.data) {
-          structuredData = chatAiFeedback.data;
-          setChatStructuredData(chatAiFeedback.data);
-          console.log('  chatAiFeedback.data에서 복구:', structuredData);
-        }
+              // 필수 정보 체크
         if (!structuredData) {
-          console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
-          return;
+          // 직전 AI 응답에서 복구 시도
+          if (chatAiFeedback?.parsed_data) {
+            console.log('  chatAiFeedback.parsed_data 존재:', chatAiFeedback.parsed_data);
+            // ✅ system_message.data 구조도 지원
+            if (chatAiFeedback.parsed_data.system_message && chatAiFeedback.parsed_data.system_message.data) {
+              structuredData = chatAiFeedback.parsed_data.system_message.data;
+              setChatStructuredData(structuredData);
+              console.log('  system_message.data에서 복구:', structuredData);
+            }
+            // ✅ 단일 객체(운동) 구조도 지원
+            else if (chatAiFeedback.parsed_data.exercise) {
+              structuredData = chatAiFeedback.parsed_data;
+              setChatStructuredData(chatAiFeedback.parsed_data);
+              console.log('  parsed_data에서 복구:', structuredData);
+            } else {
+              structuredData = chatAiFeedback.parsed_data;
+              setChatStructuredData(chatAiFeedback.parsed_data);
+              console.log('  parsed_data에서 복구 (기본):', structuredData);
+            }
+          } else if (chatAiFeedback?.data) {
+            structuredData = chatAiFeedback.data;
+            setChatStructuredData(chatAiFeedback.data);
+            console.log('  chatAiFeedback.data에서 복구:', structuredData);
+          }
+          if (!structuredData) {
+            console.log('⚠️ [Index] chatStructuredData 없음, 데이터 부족 메시지 표시');
+            return;
+          }
         }
-      }
+        
+        // structuredData가 있지만 subcategory가 없는 경우, system_message.data에서 다시 시도
+        if (structuredData && !structuredData.subcategory && chatAiFeedback?.parsed_data?.system_message?.data) {
+          const systemData = chatAiFeedback.parsed_data.system_message.data;
+          if (systemData.subcategory) {
+            structuredData.subcategory = systemData.subcategory;
+            console.log('  system_message.data에서 subcategory 복구:', systemData.subcategory);
+          }
+        }
       // userId도 복구 시도
       if (!userId && structuredData?.user_id) {
         userId = structuredData.user_id;
