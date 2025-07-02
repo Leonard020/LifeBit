@@ -797,17 +797,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                         {calculateExerciseScore()}점 / 7점
                       </span>
                     </div>
-                    <div className="text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExerciseScoreUpdate}
-                        className="text-xs px-3 py-1 h-auto border-blue-300 text-blue-600 hover:bg-blue-50"
-                      >
-                        운동 점수 업데이트
-                      </Button>
-                      <p className="text-xs text-muted-foreground mt-1">주간 단위 업데이트</p>
-                    </div>
+
                   </div>
                 </div>
 
@@ -918,17 +908,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                         {calculateDashboardNutritionScore()}점 / 1점
                       </span>
                     </div>
-                    <div className="text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleNutritionScoreUpdate}
-                        className="text-xs px-3 py-1 h-auto border-green-300 text-green-600 hover:bg-green-50"
-                      >
-                        식단 점수 업데이트
-                      </Button>
-                      <p className="text-xs text-muted-foreground mt-1">일간 단위 업데이트</p>
-                    </div>
+
                   </div>
                 </div>
               </div>
