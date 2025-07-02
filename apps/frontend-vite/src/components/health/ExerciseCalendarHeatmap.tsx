@@ -340,87 +340,58 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
         </div>
 
         {/* 💎 개선된 통계 요약 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
-            <div className="flex items-center justify-center gap-2 text-blue-600 mb-2">
-              <div className="p-1.5 bg-blue-500 rounded-full shadow-sm">
-                <Activity className="h-3 w-3 text-white" />
-              </div>
-              <span className="text-xs font-semibold">총 운동 횟수</span>
+        <div className="grid grid-cols-4 gap-3">
+          <div className={(isDarkMode
+            ? 'flex flex-col items-center justify-center gap-1 bg-card !border-2 !border-[#7c3aed] rounded-2xl p-3 text-blue-400 min-w-0'
+            : 'flex flex-col items-center justify-center gap-1 bg-blue-500 rounded-2xl p-3 text-white border-none min-w-0')}
+          >
+            <Activity className="w-5 h-5 mb-0.5" />
+            <div className="text-xs font-semibold">총 운동 횟수</div>
+            <div className="text-xl font-extrabold">{stats.totalWorkouts}</div>
+            <div className={isDarkMode ? 'text-[10px] text-blue-300 mt-0.5' : 'text-[10px] text-blue-100 mt-0.5'}>
+              🎯 목표 달성률 {Math.round((stats.totalWorkouts / 35) * 100)}%
             </div>
-                         <div className="text-3xl font-bold text-blue-700 mb-1">{stats.totalWorkouts}</div>
-             <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-               🎯 목표 달성률 {Math.round((stats.totalWorkouts / 35) * 100)}%
-             </div>
-            <div className="absolute top-2 right-2 text-2xl opacity-20">💪</div>
           </div>
-          
-          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
-            <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
-              <div className="p-1.5 bg-green-500 rounded-full shadow-sm">
-                <Clock className="h-3 w-3 text-white" />
-              </div>
-              <span className="text-xs font-semibold">총 운동 시간</span>
-            </div>
-            <div className="text-3xl font-bold text-green-700 mb-1">{stats.totalMinutes}</div>
-            <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+          <div className={(isDarkMode
+            ? 'flex flex-col items-center justify-center gap-1 bg-card !border-2 !border-[#7c3aed] rounded-2xl p-3 text-green-400 min-w-0'
+            : 'flex flex-col items-center justify-center gap-1 bg-green-500 rounded-2xl p-3 text-white border-none min-w-0')}
+          >
+            <Clock className="w-5 h-5 mb-0.5" />
+            <div className="text-xs font-semibold">총 운동 시간</div>
+            <div className="text-xl font-extrabold">{stats.totalMinutes}</div>
+            <div className={isDarkMode ? 'text-[10px] text-green-300 mt-0.5' : 'text-[10px] text-green-100 mt-0.5'}>
               ⏰ 평균 {Math.round(stats.totalMinutes / (stats.activeDays || 1))}분/일
             </div>
-            <div className="absolute top-2 right-2 text-2xl opacity-20">⏱️</div>
           </div>
-          
-          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
-            <div className="flex items-center justify-center gap-2 text-orange-600 mb-2">
-              <div className="p-1.5 bg-orange-500 rounded-full shadow-sm">
-                <Flame className="h-3 w-3 text-white" />
-              </div>
-              <span className="text-xs font-semibold">소모 칼로리</span>
-            </div>
-            <div className="text-3xl font-bold text-orange-700 mb-1">{stats.totalCalories.toLocaleString()}</div>
-            <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+          <div className={(isDarkMode
+            ? 'flex flex-col items-center justify-center gap-1 bg-card !border-2 !border-[#7c3aed] rounded-2xl p-3 text-orange-400 min-w-0'
+            : 'flex flex-col items-center justify-center gap-1 bg-orange-500 rounded-2xl p-3 text-white border-none min-w-0')}
+          >
+            <Flame className="w-5 h-5 mb-0.5" />
+            <div className="text-xs font-semibold">소모 칼로리</div>
+            <div className="text-xl font-extrabold">{stats.totalCalories.toLocaleString()}</div>
+            <div className={isDarkMode ? 'text-[10px] text-orange-300 mt-0.5' : 'text-[10px] text-orange-100 mt-0.5'}>
               🔥 평균 {Math.round(stats.totalCalories / (stats.activeDays || 1))}kcal/일
             </div>
-            <div className="absolute top-2 right-2 text-2xl opacity-20">🔥</div>
           </div>
-          
-          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
-            <div className="flex items-center justify-center gap-2 text-purple-600 mb-2">
-              <div className="p-1.5 bg-purple-500 rounded-full shadow-sm">
-                <Target className="h-3 w-3 text-white" />
-              </div>
-              <span className="text-xs font-semibold">활동 일수</span>
+          <div className={(isDarkMode
+            ? 'flex flex-col items-center justify-center gap-1 bg-card !border-2 !border-[#7c3aed] rounded-2xl p-3 text-purple-400 min-w-0'
+            : 'flex flex-col items-center justify-center gap-1 bg-purple-500 rounded-2xl p-3 text-white border-none min-w-0')}
+          >
+            <Target className="w-5 h-5 mb-0.5" />
+            <div className="text-xs font-semibold">활동 일수</div>
+            <div className="text-xl font-extrabold">{stats.activeDays}</div>
+            <div className={isDarkMode ? 'text-[10px] text-purple-300 mt-0.5' : 'text-[10px] text-purple-100 mt-0.5'}>
+              📈 연속성 {Math.round((stats.activeDays / 35) * 100)}%
             </div>
-                         <div className="text-3xl font-bold text-purple-700 mb-1">{stats.activeDays}</div>
-             <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-               📈 연속성 {Math.round((stats.activeDays / 35) * 100)}%
-             </div>
-            <div className="absolute top-2 right-2 text-2xl opacity-20">📅</div>
           </div>
         </div>
 
         {/* 🎉 성취감 있는 격려 메시지 */}
-        <div className="relative p-6 bg-gradient-to-r from-green-50 via-blue-50 to-purple-50 rounded-2xl border-2 border-gradient shadow-lg overflow-hidden">
-          <div className="relative z-10 text-center">
-            <div className="text-2xl mb-2">
-              {stats.activeDays > 60 ? '🏆' : stats.activeDays > 30 ? '💪' : stats.activeDays > 15 ? '🌟' : '🚀'}
-            </div>
-            <div className="text-lg font-bold text-gray-800 mb-1">
-              {stats.activeDays > 60 ? '운동 마스터!' : 
-               stats.activeDays > 30 ? '훌륭한 진전!' : 
-               stats.activeDays > 15 ? '좋은 시작!' : 
-               '운동 시작!'}
-            </div>
-            <div className="text-sm text-gray-600">
-              {stats.activeDays > 60 ? '꾸준함이 정말 대단해요! 최고의 운동 습관을 유지하고 계시네요! 👑' :
-               stats.activeDays > 30 ? '운동 습관이 완전히 자리잡았어요! 이 기세를 이어가세요! 🔥' :
-               stats.activeDays > 15 ? '멋진 시작이에요! 조금만 더 꾸준히 하면 습관이 될 거예요! 💪' :
-               '건강한 습관의 첫걸음을 시작해보세요! 작은 시작이 큰 변화를 만들어요! ✨'}
-            </div>
-          </div>
+
           {/* 배경 장식 */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-yellow-200/20 to-transparent rounded-full"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-green-200/20 to-transparent rounded-full"></div>
-        </div>
       </CardContent>
     </Card>
   );
