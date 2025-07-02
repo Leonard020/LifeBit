@@ -307,7 +307,7 @@ const UserInfo = () => {
                   <Upload className="mr-2 h-4 w-4" />
                   사진 변경
                 </Button>
-                <Button variant="destructive" size="sm" onClick={handleRemoveImage}>
+                <Button variant="outline" size="sm" onClick={handleRemoveImage}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   기본값으로
                 </Button>
