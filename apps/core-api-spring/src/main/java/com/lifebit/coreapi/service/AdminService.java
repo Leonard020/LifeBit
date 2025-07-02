@@ -84,24 +84,24 @@ public class AdminService {
             long monthlyActiveUsers = userRepository.countByLastVisitedAfter(monthStart.atStartOfDay());
             stats.put("monthlyActiveUsers", monthlyActiveUsers);
             
-            // 일일 활동자 (오늘 기록을 작성한 사용자 수)
+            // 일일 활동자 (오늘 기록을 작성한 사용자 수) - 시뮬레이션 데이터
             long dailyExerciseUsers = exerciseSessionRepository.countDistinctUsersByDateBetween(today, today);
             long dailyMealUsers = mealLogRepository.countDistinctUsersByDateBetween(today, today);
-            // 실제 활동자 수 계산 (운동 또는 식단 기록 중 하나라도 한 사용자)
-            long dailyActiveRecorders = userRepository.countDistinctActiveUsersByDate(today.atStartOfDay(), today.plusDays(1).atStartOfDay());
-            stats.put("dailyActiveRecorders", dailyActiveRecorders > 0 ? dailyActiveRecorders : Math.max(dailyExerciseUsers, dailyMealUsers));
+            // 간단한 계산으로 활동자 수 추정
+            long dailyActiveRecorders = Math.max(dailyExerciseUsers, dailyMealUsers);
+            stats.put("dailyActiveRecorders", dailyActiveRecorders);
             
             // 주간 활동자
             long weeklyExerciseUsers = exerciseSessionRepository.countDistinctUsersByDateBetween(weekStart, today);
             long weeklyMealUsers = mealLogRepository.countDistinctUsersByDateBetween(weekStart, today);
-            long weeklyActiveRecorders = userRepository.countDistinctActiveUsersByDate(weekStart.atStartOfDay(), now);
-            stats.put("weeklyActiveRecorders", weeklyActiveRecorders > 0 ? weeklyActiveRecorders : Math.max(weeklyExerciseUsers, weeklyMealUsers));
+            long weeklyActiveRecorders = Math.max(weeklyExerciseUsers, weeklyMealUsers);
+            stats.put("weeklyActiveRecorders", weeklyActiveRecorders);
             
             // 월간 활동자
             long monthlyExerciseUsers = exerciseSessionRepository.countDistinctUsersByDateBetween(monthStart, today);
             long monthlyMealUsers = mealLogRepository.countDistinctUsersByDateBetween(monthStart, today);
-            long monthlyActiveRecorders = userRepository.countDistinctActiveUsersByDate(monthStart.atStartOfDay(), now);
-            stats.put("monthlyActiveRecorders", monthlyActiveRecorders > 0 ? monthlyActiveRecorders : Math.max(monthlyExerciseUsers, monthlyMealUsers));
+            long monthlyActiveRecorders = Math.max(monthlyExerciseUsers, monthlyMealUsers);
+            stats.put("monthlyActiveRecorders", monthlyActiveRecorders);
             
         } catch (Exception e) {
             // 오류 발생 시 기본값 설정
