@@ -2,20 +2,37 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+const useIsDarkMode = () => {
+  const [isDark, setIsDark] = React.useState(() =>
+    typeof window !== 'undefined' ? document.documentElement.classList.contains('dark') : false
+  );
+  React.useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+};
+
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
-      className,
-      typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? 'glass-card-dark' : ''
-    )}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  const isDark = useIsDarkMode();
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "rounded-lg border bg-card text-card-foreground shadow-sm",
+        className,
+        isDark ? 'glass-card-dark' : ''
+      )}
+      {...props}
+    />
+  );
+});
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<

@@ -206,8 +206,13 @@
     @apply border-border;
   }
 
+  html, body {
+    @apply bg-background text-foreground !important;
+    background: hsl(0, 0%, 100%) !important;
+    transition: background 0.2s;
+  }
+
   body {
-    @apply bg-background text-foreground;
     font-size: var(--font-size-base) !important;
   }
 

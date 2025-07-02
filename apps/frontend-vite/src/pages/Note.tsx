@@ -1118,8 +1118,8 @@ const Note = () => {
   }, [fetchDietData]);
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8 pb-24">
+    <div className="min-h-screen bg-background container mx-auto px-4 py-8 pb-24">
+      <Layout>
         <Card className="mb-6">
           <CardContent className="p-4">
             <div className="flex items-center justify-center">
@@ -1671,8 +1671,8 @@ const Note = () => {
             )}
           </DialogContent>
         </Dialog>
-      </div>
-    </Layout>
+      </Layout>
+    </div>
   );
 };
 

@@ -689,8 +689,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                 })}
                 {goalPeriod === 'week' && `이번 주`}
                 {goalPeriod === 'month' && `이번 달 (${new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })})`}
-              </div>
-              
+          </div>
+
               
               {/* 점수 업데이트 버튼들 */}
               <div className="flex justify-center gap-3 mb-4">
@@ -764,7 +764,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       {!weeklyWorkoutTarget ? "목표 미설정" :
                        totalWeeklyCount >= weeklyWorkoutTarget ? "달성!" : "진행중"}
                     </Badge>
-                  </div>
+          </div>
                   
                   <div className="text-center">
                     <p className="text-xs text-gray-500 mb-2">주간 운동 달성 시 최대 7점</p>
@@ -892,8 +892,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       </div>
                       <p className="text-xs text-gray-600 font-medium">지방</p>
                     </div>
-                  </div>
-                  
+          </div>
+          
                   <div className="text-center">
                     <p className="text-xs text-gray-500 mb-2">일일 식단 100% 달성 시 1점 (주간 최대 7점)</p>
                     <div className="text-sm text-gray-600 mb-3">
@@ -996,14 +996,14 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           {/* 상세 목표 달성률 섹션 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 📊 상세 운동 목표 달성률 */}
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader>
                 <CardTitle className="flex items-center">
                   <Activity className="h-5 w-5 mr-2 text-green-600" />
                   상세 운동 목표 달성률 (주간)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
                 {(() => {
                   // 메모된 주간 집계 사용 (healthStats 우선)
                   const totalWeeklyCountLocal = totalWeeklyCount;
@@ -1019,20 +1019,20 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           <span className="text-2xl font-bold text-green-600">
                             {totalWeeklyCountLocal}회
                           </span>
-                        </div>
+                  </div>
                         <div className="relative">
                           <Progress value={percentage} className="h-4" />
                           <div className="absolute inset-0 flex items-center justify-center">
                             <span className="text-xs font-semibold text-white drop-shadow">
                               {Math.round(percentage)}%
                             </span>
-                          </div>
-                        </div>
+                </div>
+                  </div>
                         <div className="flex justify-between text-sm text-gray-600 mt-1">
                           <span>0회</span>
                           <span>목표: {target}회</span>
-                        </div>
-                      </div>
+                </div>
+                  </div>
 
                       {/* 운동 부위별 목표 달성률 */}
                       {(() => {
@@ -1050,12 +1050,12 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                                   <span className="text-sm font-bold text-red-600">
                                     {exerciseDetails.chest.current}회 / {exerciseDetails.chest.target}회
                                   </span>
-                                </div>
+                </div>
                                 <Progress value={exerciseDetails.chest.percentage} className="h-2" />
                                 <div className="text-xs text-red-600 mt-1 text-center">
                                   {Math.round(exerciseDetails.chest.percentage)}% 달성
-                                </div>
-                              </div>
+                  </div>
+                </div>
                             )}
 
                             {/* 등 운동 */}
@@ -1066,7 +1066,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                                   <span className="text-sm font-bold text-green-600">
                                     {exerciseDetails.back.current}회 / {exerciseDetails.back.target}회
                                   </span>
-                                </div>
+              </div>
                                 <Progress value={exerciseDetails.back.percentage} className="h-2" />
                                 <div className="text-xs text-green-600 mt-1 text-center">
                                   {Math.round(exerciseDetails.back.percentage)}% 달성
@@ -1188,18 +1188,18 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                     </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
 
             {/* 🍎 상세 영양소 목표 달성률 */}
-            <Card>
-              <CardHeader>
+          <Card>
+            <CardHeader>
                 <CardTitle className="flex items-center">
                   <Utensils className="h-5 w-5 mr-2 text-blue-600" />
                   상세 영양소 목표 달성률 (일간)
                 </CardTitle>
-              </CardHeader>
-              <CardContent>
+            </CardHeader>
+            <CardContent>
                 <div className="space-y-4">
                   {/* 탄수화물 */}
                   <div>
@@ -1234,7 +1234,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       <span className="font-bold text-purple-600">
                         {(todayData?.nutrition?.protein || 0).toFixed(1)}g / {(todayData?.nutritionGoals?.protein || 0).toFixed(1)}g
                       </span>
-                    </div>
+                </div>
                     <div className="relative">
                       <Progress value={todayData?.nutritionGoals?.protein 
                         ? Math.min((todayData.nutrition.protein / todayData.nutritionGoals.protein) * 100, 100)
@@ -1245,8 +1245,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                             ? Math.round((todayData.nutrition.protein / todayData.nutritionGoals.protein) * 100)
                             : 0}%
                         </span>
-                      </div>
-                    </div>
+                </div>
+                </div>
                   </div>
                   
                   {/* 지방 */}
@@ -1296,10 +1296,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           : 0}%</div>
                       </div>
                     </div>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
           </div>
         </TabsContent>
 

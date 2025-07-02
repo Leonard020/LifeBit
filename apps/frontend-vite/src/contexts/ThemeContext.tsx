@@ -120,8 +120,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const applyTheme = (dark: boolean) => {
     if (dark) {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     }
     setIsDarkMode(dark);
   };

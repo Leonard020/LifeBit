@@ -188,7 +188,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   if (!isMobile) {
     return (
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="min-h-screen bg-background flex w-full">
           <AppSidebar />
           <SidebarInset className="flex-1">
             <WebHeader setContactOpen={setContactOpen} />

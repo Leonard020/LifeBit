@@ -409,17 +409,17 @@ const HealthLog: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900">
         <div className="container mx-auto px-4 py-6 md:py-8">
           {/* 헤더 */}
           <div className="mb-6 md:mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-                  <Activity className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Activity className="h-6 w-6 md:h-8 md:w-8 text-blue-600 dark:text-blue-300" />
                   건강 로그
                 </h1>
-                <p className="text-sm md:text-base text-gray-600 mt-1">
+                <p className="text-sm md:text-base text-gray-600 dark:text-gray-300 mt-1">
                   나의 건강 데이터를 한눈에 확인하고 분석해보세요
                 </p>
               </div>
@@ -468,8 +468,8 @@ const HealthLog: React.FC = () => {
 
             {/* 향상된 UI 탭 */}
             <TabsContent value="enhanced" className="mt-6">
-              <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
-                <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 rounded-lg p-3">
+              <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border p-1 mb-4">
+                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900 rounded-lg p-3">
                   <Heart className="h-4 w-4" />
                   <span className="font-medium">사용자 제공 UI를 반영한 향상된 건강 대시보드</span>
                 </div>
@@ -493,8 +493,8 @@ const HealthLog: React.FC = () => {
               </div>
               
               {/* AI 고급 분석 차트 */}
-              <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
-                <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg p-3">
+              <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border p-1 mb-4">
+                <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-900 rounded-lg p-3">
                   <Zap className="h-4 w-4" />
                   <span className="font-medium">AI 기반 고급 데이터 분석 및 인사이트</span>
                 </div>
