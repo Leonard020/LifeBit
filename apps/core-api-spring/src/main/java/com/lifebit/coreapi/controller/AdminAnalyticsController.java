@@ -2,6 +2,7 @@ package com.lifebit.coreapi.controller;
 
 import com.lifebit.coreapi.dto.AnalyticsResponseDto.*;
 import com.lifebit.coreapi.service.AdminAnalyticsService;
+import com.lifebit.coreapi.handler.HealthWebSocketHandler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/analytics")
@@ -17,6 +20,7 @@ import java.util.List;
 public class AdminAnalyticsController {
 
     private final AdminAnalyticsService adminAnalyticsService;
+    private final HealthWebSocketHandler webSocketHandler;
 
     /**
      * 접속 현황 통계 조회
@@ -119,6 +123,48 @@ public class AdminAnalyticsController {
             return ResponseEntity.ok(analytics);
         } catch (Exception e) {
             log.error("❌ [AdminAnalytics] 실시간 애널리틱스 데이터 조회 실패", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 실시간 접속자 수 조회 (기본)
+     */
+    @GetMapping("/online-users")
+    public ResponseEntity<Map<String, Object>> getOnlineUsers() {
+        try {
+            log.info("👥 [AdminAnalytics] 실시간 접속자 수 조회 요청 수신");
+            
+            int onlineCount = webSocketHandler.getConnectedUserCount();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("onlineUsers", onlineCount);
+            response.put("timestamp", System.currentTimeMillis());
+            
+            log.info("✅ [AdminAnalytics] 실시간 접속자 수 조회 성공 - 접속자: {}명", onlineCount);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("❌ [AdminAnalytics] 실시간 접속자 수 조회 실패", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 실시간 접속자 상세 정보 조회 (페이지별)
+     */
+    @GetMapping("/online-users-detail")
+    public ResponseEntity<Map<String, Object>> getOnlineUsersDetail() {
+        try {
+            log.info("👥 [AdminAnalytics] 실시간 접속자 상세 정보 조회 요청 수신");
+            
+            Map<String, Object> detailedStats = webSocketHandler.getDetailedUserStats();
+            
+            log.info("✅ [AdminAnalytics] 실시간 접속자 상세 정보 조회 성공 - 총 접속자: {}명, 기록 중: {}명", 
+                detailedStats.get("onlineUsers"), detailedStats.get("activeRecorders"));
+            
+            return ResponseEntity.ok(detailedStats);
+        } catch (Exception e) {
+            log.error("❌ [AdminAnalytics] 실시간 접속자 상세 정보 조회 실패", e);
             return ResponseEntity.internalServerError().build();
         }
     }

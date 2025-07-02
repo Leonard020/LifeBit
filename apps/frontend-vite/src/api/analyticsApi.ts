@@ -194,6 +194,36 @@ export interface AnalyticsDataDto {
   userActivity: UserActivityDto[];
   exerciseStats: ExerciseStatsDto[];
   mealStats: MealStatsDto[];
+  summary?: SummaryDto; // 요약 정보 추가
+}
+
+export interface SummaryDto {
+  current: PeriodSummaryDto;
+  previous: PeriodSummaryDto;
+}
+
+export interface PeriodSummaryDto {
+  totalUsers: number;     // 총 회원수
+  activeUsers: number;    // 접속자
+  recordingUsers: number; // 활동 사용자
+}
+
+export interface OnlineUsersDto {
+  onlineUsers: number;
+  timestamp: number;
+}
+
+export interface OnlineUsersDetailDto {
+  onlineUsers: number;
+  authenticatedUsers: number;
+  activeRecorders: number;
+  pageStats: {
+    'health-log': number;
+    admin: number;
+    profile: number;
+    unknown: number;
+  };
+  timestamp: number;
 }
 
 // ============================================================================
@@ -361,6 +391,38 @@ export const getRealtimeAnalytics = async (): Promise<AnalyticsDataDto> => {
     return response.data;
   } catch (error: any) {
     console.error('❌ [API] getRealtimeAnalytics 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * 실시간 접속자 수 조회 (기본)
+ */
+export const getOnlineUsers = async (): Promise<OnlineUsersDto> => {
+  console.log('👥 [API] 실시간 접속자 수 요청');
+  
+  try {
+    const response = await axiosInstance.get('/api/admin/analytics/online-users');
+    console.log('✅ [API] 실시간 접속자 수 수신 성공:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] 실시간 접속자 수 요청 실패:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * 실시간 접속자 상세 정보 조회 (페이지별)
+ */
+export const getOnlineUsersDetail = async (): Promise<OnlineUsersDetailDto> => {
+  console.log('👥 [API] 실시간 접속자 상세 정보 요청');
+  
+  try {
+    const response = await axiosInstance.get('/api/admin/analytics/online-users-detail');
+    console.log('✅ [API] 실시간 접속자 상세 정보 수신 성공:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [API] 실시간 접속자 상세 정보 요청 실패:', error.response?.data || error.message);
     throw error;
   }
 };
@@ -706,6 +768,36 @@ export const useRealtimeAnalytics = () => {
   });
 };
 
+/**
+ * 실시간 접속자 수 React Query Hook (기본)
+ */
+export const useOnlineUsers = () => {
+  return useQuery({
+    queryKey: ['adminOnlineUsers'],
+    queryFn: getOnlineUsers,
+    staleTime: 1000 * 10, // 10초
+    gcTime: 1000 * 60 * 2, // 2분
+    refetchInterval: 1000 * 30, // 30초마다 자동 갱신
+    retry: 2,
+    retryDelay: 1000, // 1초 간격으로 재시도
+  });
+};
+
+/**
+ * 실시간 접속자 상세 정보 React Query Hook
+ */
+export const useOnlineUsersDetail = () => {
+  return useQuery({
+    queryKey: ['adminOnlineUsersDetail'],
+    queryFn: getOnlineUsersDetail,
+    staleTime: 1000 * 10, // 10초
+    gcTime: 1000 * 60 * 2, // 2분
+    refetchInterval: 1000 * 15, // 15초마다 자동 갱신 (더 자주)
+    retry: 2,
+    retryDelay: 1000,
+  });
+};
+
 export default {
   useHealthAnalyticsReport,
   useAIHealthInsights,
@@ -718,5 +810,7 @@ export default {
   useMealStats,
   useAllAnalytics,
   useRealtimeAnalytics,
+  useOnlineUsers,
+  useOnlineUsersDetail,
   AI_SYSTEM_ROADMAP
 }; 

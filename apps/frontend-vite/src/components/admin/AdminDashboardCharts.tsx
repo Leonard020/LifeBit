@@ -341,7 +341,9 @@ export const AdminDashboardCharts: React.FC<AdminDashboardChartsProps> = ({ peri
   const { accessStats, userActivity, exerciseStats, mealStats } = analyticsData;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div className="space-y-6 mb-8">
+      {/* 기존 차트들 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* 1. 접속 현황 (주차 표현 통일) */}
       <Card className="shadow-lg">
         <CardHeader className="pb-3">
@@ -453,6 +455,7 @@ export const AdminDashboardCharts: React.FC<AdminDashboardChartsProps> = ({ peri
           {renderMealChart(mealStats)}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

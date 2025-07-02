@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { isLoggedIn, getUserInfo, getToken } from '@/utils/auth';
+import { useWebSocketConnection } from '@/hooks/useWebSocketConnection';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Layout } from "../components/Layout";
@@ -25,6 +26,7 @@ import AdminHeader from '@/components/admin/AdminHeader';
 import StatsPeriodSelector from '@/components/admin/StatsPeriodSelector';
 import DashboardKPICards from '@/components/admin/DashboardKPICards';
 import AdminDashboardCharts from '@/components/admin/AdminDashboardCharts';
+import { useAllAnalytics } from '@/api/analyticsApi';
 
 interface User {
   id: string;
@@ -83,6 +85,20 @@ export const AdminPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // 🔧 어드민 사용자 ID 가져오기
+  const adminUserId = useMemo(() => {
+    const userInfo = getUserInfo();
+    return userInfo?.userId || null;
+  }, []);
+
+  // 🔧 어드민도 WebSocket에 연결하여 실시간 접속자에 포함
+  const { isConnected } = useWebSocketConnection({
+    userId: adminUserId?.toString() || '',
+    enabled: !!adminUserId, // 어드민 사용자 ID가 있을 때만 활성화
+    currentPage: 'admin' // 어드민 페이지임을 명시
+  });
+
   const [activeTab, setActiveTab] = useState<'catalog' | 'food' | 'users'>('catalog');
   const [catalogs, setCatalogs] = useState<CatalogItem[]>([]);
   const [foodCatalogs, setFoodCatalogs] = useState<FoodCatalogItem[]>([]);
@@ -194,6 +210,9 @@ export const AdminPage = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // 🔧 Analytics 데이터 가져오기 (실제 요약 데이터 포함)
+  const { data: analyticsData, isLoading: analyticsLoading, error: analyticsError } = useAllAnalytics(selectedPeriod);
 
   // 기간별 레이블 생성 함수
   const getPeriodLabel = () => {
@@ -795,6 +814,9 @@ export const AdminPage = () => {
           isRefreshing={isRefreshing}
           lastUpdated={lastUpdated}
         />
+        
+        {/* WebSocket 연결 상태 표시 (디버깅용) */}
+
 
         {/* 2. 접속자 통계 제목 + 기간 선택 버튼 */}
         <StatsPeriodSelector 
@@ -804,10 +826,11 @@ export const AdminPage = () => {
         
         {/* 3. KPI 카드 3개 (총 회원수, 접속자, 활동자) */}
         <DashboardKPICards 
-          totalUsers={getPeriodData('users')}
-          activeUsers={getPeriodData('activeUsers')}
-          recordingUsers={getPeriodData('activeRecorders')}
+          totalUsers={analyticsData?.summary?.current.totalUsers || getPeriodData('users')}
+          activeUsers={analyticsData?.summary?.current.activeUsers || getPeriodData('activeUsers')}
+          recordingUsers={analyticsData?.summary?.current.recordingUsers || getPeriodData('activeRecorders')}
           period={selectedPeriod}
+          summary={analyticsData?.summary} // 실제 요약 데이터 전달
         />
 
         {/* 4. 시각화 차트 (4개 메인 차트) */}

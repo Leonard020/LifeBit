@@ -54,5 +54,21 @@ public class AnalyticsResponseDto {
         private List<UserActivityDto> userActivity;
         private List<ExerciseStatsDto> exerciseStats;
         private List<MealStatsDto> mealStats;
+        private SummaryDto summary; // 요약 정보 추가
+    }
+    
+    @Getter
+    @Builder
+    public static class SummaryDto {
+        private PeriodSummaryDto current;
+        private PeriodSummaryDto previous;
+    }
+    
+    @Getter
+    @Builder
+    public static class PeriodSummaryDto {
+        private Long totalUsers;     // 총 회원수
+        private Long activeUsers;    // 접속자
+        private Long recordingUsers; // 활동 사용자
     }
 } 
