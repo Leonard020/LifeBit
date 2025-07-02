@@ -662,6 +662,15 @@ WHERE n.user_id IS NULL
     WHERE nr.user_id = u.user_id AND nr.notification_id = n.id
   );
 
+-- 모든 사용자-업적 조합이 user_achievements에 없으면 생성 (중복 없이)
+INSERT INTO user_achievements (user_id, achievement_id)
+SELECT u.user_id, a.achievement_id
+FROM users u
+CROSS JOIN achievements a
+WHERE NOT EXISTS (
+  SELECT 1 FROM user_achievements ua WHERE ua.user_id = u.user_id AND ua.achievement_id = a.achievement_id
+);
+
 
 
 
