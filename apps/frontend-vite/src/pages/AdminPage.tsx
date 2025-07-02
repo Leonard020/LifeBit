@@ -124,6 +124,10 @@ export const AdminPage = () => {
     monthlyActiveRecorders: 0
   });
 
+  // Add sort configs for catalog and food
+  const [catalogSortConfig, setCatalogSortConfig] = useState<{ key: keyof CatalogItem; direction: 'asc' | 'desc' } | null>(null);
+  const [foodSortConfig, setFoodSortConfig] = useState<{ key: keyof FoodCatalogItem; direction: 'asc' | 'desc' } | null>(null);
+
   // 영어 → 한글 변환 함수들
   const convertBodyPartToKorean = (english: string): string => {
     const mapping: Record<string, string> = {
@@ -677,11 +681,68 @@ export const AdminPage = () => {
   const indexOfFirst = indexOfLast - usersPerPage;
   let currentList: User[] | FoodCatalogItem[] | CatalogItem[] = [];
   if (activeTab === 'users') {
-    currentList = users.slice(indexOfFirst, indexOfLast);
+    const sortedUsers = [...users];
+    if (sortConfig) {
+      sortedUsers.sort((a, b) => {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        if (sortConfig.key === 'createdAt' || sortConfig.key === 'lastVisited') {
+          const aDate = aValue ? new Date(aValue) : new Date(0);
+          const bDate = bValue ? new Date(bValue) : new Date(0);
+          if (aDate < bDate) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (aDate > bDate) return sortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+        }
+        if (aValue === undefined || aValue === null) return 1;
+        if (bValue === undefined || bValue === null) return -1;
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    currentList = sortedUsers.slice(indexOfFirst, indexOfLast);
   } else if (activeTab === 'food') {
-    currentList = foodCatalogs.slice(indexOfFirst, indexOfLast);
+    const sortedFoods = [...foodCatalogs];
+    if (foodSortConfig) {
+      sortedFoods.sort((a, b) => {
+        const aValue = a[foodSortConfig.key];
+        const bValue = b[foodSortConfig.key];
+        if (foodSortConfig.key === 'createdAt') {
+          const aDate = aValue ? new Date(aValue as string) : new Date(0);
+          const bDate = bValue ? new Date(bValue as string) : new Date(0);
+          if (aDate < bDate) return foodSortConfig.direction === 'asc' ? -1 : 1;
+          if (aDate > bDate) return foodSortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+        }
+        if (aValue === undefined || aValue === null) return 1;
+        if (bValue === undefined || bValue === null) return -1;
+        if (aValue < bValue) return foodSortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return foodSortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    currentList = sortedFoods.slice(indexOfFirst, indexOfLast);
   } else {
-    currentList = filteredCatalogs.slice(indexOfFirst, indexOfLast);
+    const sortedCatalogs = [...filteredCatalogs];
+    if (catalogSortConfig) {
+      sortedCatalogs.sort((a, b) => {
+        const aValue = a[catalogSortConfig.key];
+        const bValue = b[catalogSortConfig.key];
+        if (catalogSortConfig.key === 'createdAt') {
+          const aDate = aValue ? new Date(aValue as string) : new Date(0);
+          const bDate = bValue ? new Date(bValue as string) : new Date(0);
+          if (aDate < bDate) return catalogSortConfig.direction === 'asc' ? -1 : 1;
+          if (aDate > bDate) return catalogSortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+        }
+        if (aValue === undefined || aValue === null) return 1;
+        if (bValue === undefined || bValue === null) return -1;
+        if (aValue < bValue) return catalogSortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return catalogSortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    currentList = sortedCatalogs.slice(indexOfFirst, indexOfLast);
   }
 
   const goToFirstPage = () => setCurrentPage(1);
@@ -696,6 +757,33 @@ export const AdminPage = () => {
       totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages
     ];
     return [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2];
+  };
+
+  const handleSort = (key: keyof User) => {
+    setSortConfig(prev => {
+      if (prev && prev.key === key) {
+        // Toggle direction
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const handleCatalogSort = (key: keyof CatalogItem) => {
+    setCatalogSortConfig(prev => {
+      if (prev && prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+  const handleFoodSort = (key: keyof FoodCatalogItem) => {
+    setFoodSortConfig(prev => {
+      if (prev && prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
   };
 
   return (
@@ -780,31 +868,116 @@ export const AdminPage = () => {
                 <TableRow className="bg-gray-100 dark:bg-gray-800">
                   {activeTab === 'users' ? (
                     <>
-                      <TableHead>이메일</TableHead>
-                      <TableHead>닉네임</TableHead>
-                      <TableHead>가입일</TableHead>
-                      <TableHead>마지막 접속</TableHead>
-                      <TableHead>권한</TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort('email')}
+                      >
+                        이메일 {sortConfig?.key === 'email' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort('nickname')}
+                      >
+                        닉네임 {sortConfig?.key === 'nickname' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort('createdAt')}
+                      >
+                        가입일 {sortConfig?.key === 'createdAt' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort('lastVisited')}
+                      >
+                        마지막 접속 {sortConfig?.key === 'lastVisited' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort('role')}
+                      >
+                        권한 {sortConfig?.key === 'role' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
                       <TableHead></TableHead>
                     </>
                   ) : activeTab === 'food' ? (
                     <>
-                      <TableHead>음식명</TableHead>
-                      <TableHead>기준량(g)</TableHead>
-                      <TableHead>칼로리(kcal)</TableHead>
-                      <TableHead>탄수화물(g)</TableHead>
-                      <TableHead>단백질(g)</TableHead>
-                      <TableHead>지방(g)</TableHead>
-                      <TableHead>생성일</TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('name')}
+                      >
+                        음식명 {foodSortConfig?.key === 'name' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('servingSize')}
+                      >
+                        기준량(g) {foodSortConfig?.key === 'servingSize' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('calories')}
+                      >
+                        칼로리(kcal) {foodSortConfig?.key === 'calories' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('carbs')}
+                      >
+                        탄수화물(g) {foodSortConfig?.key === 'carbs' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('protein')}
+                      >
+                        단백질(g) {foodSortConfig?.key === 'protein' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('fat')}
+                      >
+                        지방(g) {foodSortConfig?.key === 'fat' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleFoodSort('createdAt')}
+                      >
+                        생성일 {foodSortConfig?.key === 'createdAt' ? (foodSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
                       <TableHead></TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead>운동명</TableHead>
-                      <TableHead>운동 부위</TableHead>
-                      <TableHead>운동 타입</TableHead>
-                      <TableHead>강도</TableHead>
-                      <TableHead>생성일</TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleCatalogSort('name')}
+                      >
+                        운동명 {catalogSortConfig?.key === 'name' ? (catalogSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleCatalogSort('bodyPart')}
+                      >
+                        운동 부위 {catalogSortConfig?.key === 'bodyPart' ? (catalogSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleCatalogSort('exerciseType')}
+                      >
+                        운동 타입 {catalogSortConfig?.key === 'exerciseType' ? (catalogSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleCatalogSort('intensity')}
+                      >
+                        강도 {catalogSortConfig?.key === 'intensity' ? (catalogSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                      <TableHead
+                        className="cursor-pointer select-none"
+                        onClick={() => handleCatalogSort('createdAt')}
+                      >
+                        생성일 {catalogSortConfig?.key === 'createdAt' ? (catalogSortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
                       <TableHead></TableHead>
                     </>
                   )}

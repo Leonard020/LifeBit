@@ -60,4 +60,21 @@ export interface UserGoal {
   daily_protein_target?: number;
   daily_fat_target?: number;
   created_at?: string;
+}
+
+export interface GoalAchievements {
+  nutrition: {
+    carbs: {
+      percentage: number;
+      hasTarget: boolean;
+    };
+    protein: {
+      percentage: number;
+      hasTarget: boolean;
+    };
+    fat: {
+      percentage: number;
+      hasTarget: boolean;
+    };
+  };
 } 

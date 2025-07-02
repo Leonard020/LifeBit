@@ -4,8 +4,10 @@ import com.lifebit.coreapi.entity.FoodItem;
 import com.lifebit.coreapi.entity.MealLog;
 import com.lifebit.coreapi.entity.MealTimeType;
 import com.lifebit.coreapi.entity.User;
+import com.lifebit.coreapi.entity.UserGoal;
 import com.lifebit.coreapi.repository.FoodItemRepository;
 import com.lifebit.coreapi.repository.MealLogRepository;
+import com.lifebit.coreapi.repository.UserGoalRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,8 @@ import java.util.HashMap;
 public class MealService {
     private final MealLogRepository mealLogRepository;
     private final FoodItemRepository foodItemRepository;
+    private final UserGoalRepository userGoalRepository;
+    private final UserGoalService userGoalService;
 
     @Transactional
     public MealLog recordMeal(Long userId, Long foodItemId, BigDecimal quantity) {
@@ -276,11 +280,20 @@ public class MealService {
         List<MealLog> mealLogs = mealLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
         if (mealLogs.isEmpty()) return 0;
 
-        // 목표값(예시: 1일 200g 탄수, 120g 단백질, 60g 지방, 1500kcal)
-        double targetCarbs = 200 * 7;
-        double targetProtein = 120 * 7;
-        double targetFat = 60 * 7;
-        double targetCalories = 1500 * 7;
+        // 사용자별 목표 가져오기
+        UserGoal userGoal = userGoalRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
+            .orElse(userGoalService.getDefaultDietGoalByGender(userId));
+
+        if (userGoal == null) {
+            log.warn("사용자 목표를 찾을 수 없음 - 사용자 ID: {}", userId);
+            return 0;
+        }
+
+        // 사용자별 목표값 설정 (7일치)
+        double targetCarbs = userGoal.getDailyCarbsTarget() != null ? userGoal.getDailyCarbsTarget() * 7 : 200 * 7;
+        double targetProtein = userGoal.getDailyProteinTarget() != null ? userGoal.getDailyProteinTarget() * 7 : 120 * 7;
+        double targetFat = userGoal.getDailyFatTarget() != null ? userGoal.getDailyFatTarget() * 7 : 60 * 7;
+        double targetCalories = userGoal.getDailyCaloriesTarget() != null ? userGoal.getDailyCaloriesTarget() * 7 : 1500 * 7;
 
         double totalCarbs = 0, totalProtein = 0, totalFat = 0, totalCalories = 0;
         for (MealLog log : mealLogs) {
@@ -292,12 +305,19 @@ public class MealService {
             totalFat += food.getFat() != null ? food.getFat().doubleValue() * qty / 100.0 : 0;
             totalCalories += food.getCalories() != null ? food.getCalories().doubleValue() * qty / 100.0 : 0;
         }
+
+        // 각 영양소별 달성률 계산 (최대 100%로 제한)
         double carbsRate = Math.min(100, totalCarbs / targetCarbs * 100);
         double proteinRate = Math.min(100, totalProtein / targetProtein * 100);
         double fatRate = Math.min(100, totalFat / targetFat * 100);
         double caloriesRate = Math.min(100, totalCalories / targetCalories * 100);
+
         // 4개 항목 평균
         int avgRate = (int) Math.round((carbsRate + proteinRate + fatRate + caloriesRate) / 4.0);
+        
+        log.info("주간 영양소 달성률 계산 - 사용자 ID: {}, 탄수화물: {:.1f}%, 단백질: {:.1f}%, 지방: {:.1f}%, 칼로리: {:.1f}%, 평균: {}%",
+            userId, carbsRate, proteinRate, fatRate, caloriesRate, avgRate);
+            
         return avgRate;
     }
 } 

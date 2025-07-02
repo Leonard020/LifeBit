@@ -291,46 +291,52 @@ const Ranking = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8 pb-24">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">랭킹 데이터를 불러오는 중...</span>
+      <div className="min-h-screen bg-background">
+        <Layout>
+          <div className="container mx-auto px-4 py-8 pb-24">
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">랭킹 데이터를 불러오는 중...</span>
+            </div>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8 pb-24">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">랭킹</h1>
-            <p className="text-red-500">{error}</p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
-            >
-              다시 시도
-            </button>
+      <div className="min-h-screen bg-background">
+        <Layout>
+          <div className="container mx-auto px-4 py-8 pb-24">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-2">랭킹</h1>
+              <p className="text-red-500">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+              >
+                다시 시도
+              </button>
+            </div>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      </div>
     );
   }
 
   if (!rankingData) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8 pb-24">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">랭킹</h1>
-            <p className="text-muted-foreground">랭킹 데이터가 없습니다.</p>
+      <div className="min-h-screen bg-background">
+        <Layout>
+          <div className="container mx-auto px-4 py-8 pb-24">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-2">랭킹</h1>
+              <p className="text-muted-foreground">랭킹 데이터가 없습니다.</p>
+            </div>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      </div>
     );
   }
 
@@ -343,434 +349,443 @@ const Ranking = () => {
   const myTierMeta = getTierMeta(String(myRanking.tier));
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8 pb-24">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold mb-2">랭킹</h1>
-          <p className="text-muted-foreground">사용자들과 함께 건강한 경쟁을 즐겨보세요</p>
-        </div>
-
-        {/* 데이터가 없을 때 안내 메시지 */}
-        {hasNoData && (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🏆</div>
-            <h3 className="text-xl font-semibold mb-2">아직 랭킹 데이터가 없습니다</h3>
-            <p className="text-muted-foreground mb-6">
-              건강 기록을 시작하고 다른 사용자들과 함께 경쟁해보세요!
-            </p>
-            <div className="space-y-2 text-sm text-muted-foreground max-w-md mx-auto mb-8">
-              <p>• 꾸준한 운동과 기록으로 점수를 획득하세요</p>
-              <p>• 연속 기록 일수를 늘려 더 높은 순위에 도전하세요</p>
-              <p>• 다양한 업적을 달성하여 배지를 수집하세요</p>
-            </div>
-            <div className="space-y-3">
-              <button
-                onClick={() => navigate('/profile')}
-                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
-              >
-                프로필 작성하러 가기
-              </button>
-              <div>
-                <button
-                  onClick={() => navigate('/')}
-                  className="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors font-medium"
-                >
-                  메뉴로 돌아가기
-                </button>
-              </div>
-            </div>
+    <div className="min-h-screen bg-background">
+      <Layout>
+        <div className="container mx-auto px-4 py-8 pb-24">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-2">랭킹</h1>
+            <p className="text-muted-foreground">사용자들과 함께 건강한 경쟁을 즐겨보세요</p>
           </div>
-        )}
 
-        {/* My Ranking */}
-        {!hasNoData && (
-          <Card className="mb-8 border-primary/20 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-center">
-                <Trophy className="mr-2 h-5 w-5 text-primary" />
-                나의 랭킹
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center space-y-4">
-                {/* 등급명/색상 표시 + 툴클 */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      className="flex items-center justify-center gap-2 mb-2 tier-badge"
-                      style={{
-                        background: myTierMeta.color,
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '6px 16px',
-                        fontWeight: 'bold',
-                        fontSize: '1.1rem',
-                      }}
-                    >
-                      <Trophy className="mr-1 h-5 w-5" />
-                      {myTierMeta.name} 등급
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    점수에 따라 자동으로 부여되는 공식 등급입니다.
-                  </TooltipContent>
-                </Tooltip>
-                <div className="flex items-center justify-center space-x-8">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold gradient-text">{myRanking.rank || '-'}</div>
-                    <div className="text-sm text-muted-foreground">순위</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold">{myRanking.score.toLocaleString()}</div>
-                    <div className="text-sm text-muted-foreground">점수</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-orange-600">{myRanking.streakDays}</div>
-                    <div className="text-sm text-muted-foreground">연속 기록</div>
-                  </div>
+          {/* 데이터가 없을 때 안내 메시지 */}
+          {hasNoData && (
+            <div className="text-center py-16">
+              <div className="text-6xl mb-4">🏆</div>
+              <h3 className="text-xl font-semibold mb-2">아직 랭킹 데이터가 없습니다</h3>
+              <p className="text-muted-foreground mb-6">
+                건강 기록을 시작하고 다른 사용자들과 함께 경쟁해보세요!
+              </p>
+              <div className="space-y-2 text-sm text-muted-foreground max-w-md mx-auto mb-8">
+                <p>• 꾸준한 운동과 기록으로 점수를 획득하세요</p>
+                <p>• 연속 기록 일수를 늘려 더 높은 순위에 도전하세요</p>
+                <p>• 다양한 업적을 달성하여 배지를 수집하세요</p>
+              </div>
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                >
+                  프로필 작성하러 가기
+                </button>
+                <div>
+                  <button
+                    onClick={() => navigate('/')}
+                    className="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors font-medium"
+                  >
+                    메뉴로 돌아가기
+                  </button>
                 </div>
-                {myRanking.totalUsers > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    전체 {myRanking.totalUsers.toLocaleString()}명 중 {myRanking.rank}위
-                  </p>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
 
-        {/* Top Rankers */}
-        {!hasNoData && topRankers.length > 0 && (
-          <Card className="mb-8 hover-lift">
-            <CardHeader>
-              <CardTitle>상위 랭킹</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {topRankers.map((user: RankingUser) => {
-                  const tierMeta = getTierMeta(String(user.tier));
-                  const profileImageUrl = user.rank === 1 && myProfileImageUrl && user.userId === rankingData.myRanking.userId
-                    ? myProfileImageUrl
-                    : user.profileImageUrl;
-                  return (
-                    <div key={`${user.userId}-${user.rank}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 flex items-center justify-center">
-                          {getRankIcon(user.rank)}
-                        </div>
-                        <Avatar>
-                          {profileImageUrl ? (
-                            <img
-                              src={`${API_CONFIG.BASE_URL}${profileImageUrl}`}
-                              alt={user.nickname}
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
-                              <span className="text-white text-sm font-bold">
-                                {user.nickname.charAt(0)}
-                              </span>
-                            </div>
-                          )}
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{user.nickname}</div>
-                          <div className="flex items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className="flex items-center tier-badge"
-                                  style={{
-                                    background: tierMeta.color,
-                                    color: '#fff',
-                                    borderRadius: '8px',
-                                    padding: '2px 8px',
-                                    fontWeight: 'bold',
-                                    fontSize: '0.9rem',
-                                  }}
-                                >
-                                  <Medal className="mr-1 h-4 w-4" />
-                                  {tierMeta.name} 등급
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                점수에 따라 자동으로 부여되는 공식 등급입니다.
-                              </TooltipContent>
-                            </Tooltip>
-                            <span className="text-xs text-muted-foreground">{tierMeta.desc}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {user.streakDays}일 연속
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold">{user.score.toLocaleString()}점</div>
-                        {/* Badge(뱃지)는 등급과 혼동 방지를 위해 숨김 또는 별도 표기 */}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Achievement Badges */}
-        {!hasNoData && achievements.length > 0 && (
-          <Card className="hover-lift" ref={scrollRef}>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Award className="mr-2 h-5 w-5" />
-                나의 업적/뱃지
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {achievements.map((achievement: Achievement, index: number) => {
-                  const statusClass = getAchievementStatusClass(achievement);
-                  return (
-                    <div key={achievement.title} className="relative">
-                      <Tooltip>
+          {/* My Ranking */}
+          {!hasNoData && (
+            <Card className="mb-8 border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-center">
+                  <Trophy className="mr-2 h-5 w-5 text-primary" />
+                  나의 랭킹
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center space-y-4">
+                  {/* 등급명/색상 표시 + 툴클 */}
+                  <Tooltip>
                     <TooltipTrigger asChild>
-                      <div
-                            className={`p-4 rounded-lg border cursor-pointer hover:shadow-lg hover:border-primary transition ${statusClass.container}`}
-                            onClick={(e) => {
-                              // 버튼 클릭이 아닌 경우에만 Drawer 열기
-                              const target = e.target as HTMLElement;
-                              if (!target.closest('button')) {
-                                setSelectedAchievement(achievement);
-                                setDrawerOpen(true);
-                              }
-                            }}
-                        tabIndex={0}
-                        role="button"
-                            onKeyDown={e => { 
-                              if (e.key === 'Enter' || e.key === ' ') { 
-                                setSelectedAchievement(achievement); 
-                                setDrawerOpen(true); 
-                              } 
-                            }}
+                      <span
+                        className="flex items-center justify-center gap-2 mb-2 tier-badge"
+                        style={{
+                          background: myTierMeta.color,
+                          color: '#fff',
+                          borderRadius: '8px',
+                          padding: '6px 16px',
+                          fontWeight: 'bold',
+                          fontSize: '1.1rem',
+                        }}
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1">
-                                <h4 className={`font-medium ${statusClass.title}`}>{achievement.title}</h4>
-                                <p className={`text-sm ${statusClass.description}`}>{achievement.description}</p>
-                          </div>
-                          <span
-                            className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
-                            style={{ fontWeight: 'bold', fontSize: '0.95rem' }}
-                          >
-                            <Award className="mr-1 h-4 w-4" />
-                            {achievement.badge} 뱃지
-                          </span>
-                        </div>
-                        {achievement.achieved ? (
-                          <div className="flex items-center space-x-2 text-green-600">
-                            <Trophy className="h-4 w-4" />
-                                <span className="text-sm">
-                                  달성: {achievement.date || '날짜 정보 없음'}
-                                </span>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span>진행도</span>
-                              <span>{achievement.progress}/{achievement.target || 100}</span>
-                            </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
-                                  {isAchievementCompleted(achievement) ? (
-                                    // 완료된 경우: 그라데이션 배경 + 체크 아이콘 (애니메이션 제거)
-                                    <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-2 rounded-full transition-all duration-500 flex items-center justify-end pr-1">
-                                      <Check className="h-3 w-3 text-white" />
-                                    </div>
-                                  ) : (
-                                    // 진행 중인 경우: 기본 진행바
-                                    <div 
-                                      className="bg-primary h-2 rounded-full transition-all duration-300" 
-                                      style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} 
-                                    />
-                                  )}
-                                </div>
-                                {isAchievementCompleted(achievement) && !achievement.achieved && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setTimeout(() => handleCompleteAchievement(achievement), 0);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setTimeout(() => handleCompleteAchievement(achievement), 0);
-                                      }
-                                    }}
-                                    disabled={completingAchievement === achievement.title}
-                                    className="flex items-center justify-center text-sm text-green-600 font-medium animate-pulse mt-2 hover:text-green-700 hover:scale-105 transition-all duration-200 w-full py-2 rounded bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    {completingAchievement === achievement.title ? (
-                                      <>
-                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                        달성 처리 중...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Check className="h-3 w-3 mr-1" />
-                                        목표 달성! (클릭하여 달성)
-                                      </>
-                                    )}
-                                  </button>
-                                )}
-                          </div>
-                        )}
-                      </div>
+                        <Trophy className="mr-1 h-5 w-5" />
+                        {myTierMeta.name} 등급
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      특정 업적을 달성하면 획득할 수 있는 뱃지입니다.
+                      점수에 따라 자동으로 부여되는 공식 등급입니다.
                     </TooltipContent>
                   </Tooltip>
+                  <div className="flex items-center justify-center space-x-8">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold gradient-text">{myRanking.rank || '-'}</div>
+                      <div className="text-sm text-muted-foreground">순위</div>
                     </div>
-                  );
-                })}
-              </div>
-              {/* 업적 상세 Drawer */}
-              <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-                <DrawerContent>
-                  {selectedAchievement && (
-                    <div className="p-0 flex flex-col items-center justify-center w-full">
-                      <div className="mx-auto w-full max-w-sm bg-white rounded-xl shadow-lg p-8 flex flex-col items-center justify-center">
-                        <DrawerTitle>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span
-                              className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
-                              style={{ fontWeight: 'bold', fontSize: '0.95rem' }}
-                            >
-                              <Award className="mr-1 h-4 w-4" />
-                              {selectedAchievement.badge} 뱃지
-                            </span>
-                            <span className="font-bold text-lg">{selectedAchievement.title}</span>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold">{myRanking.score.toLocaleString()}</div>
+                      <div className="text-sm text-muted-foreground">점수</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-orange-600">{myRanking.streakDays}</div>
+                      <div className="text-sm text-muted-foreground">연속 기록</div>
+                    </div>
+                  </div>
+                  {myRanking.totalUsers > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      전체 {myRanking.totalUsers.toLocaleString()}명 중 {myRanking.rank}위
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top Rankers */}
+          {!hasNoData && topRankers.length > 0 && (
+            <Card className="mb-8 hover-lift">
+              <CardHeader>
+                <CardTitle>상위 랭킹</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {topRankers.map((user: RankingUser) => {
+                    const tierMeta = getTierMeta(String(user.tier));
+                    const profileImageUrl = user.rank === 1 && myProfileImageUrl && user.userId === rankingData.myRanking.userId
+                      ? myProfileImageUrl
+                      : user.profileImageUrl;
+                    return (
+                      <div key={`${user.userId}-${user.rank}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 flex items-center justify-center">
+                            {getRankIcon(user.rank)}
                           </div>
-                        </DrawerTitle>
-                        <DrawerDescription>
-                          {selectedAchievement.description}
-                        </DrawerDescription>
-                        {/* 진행 바를 항상 중앙에 표시 */}
-                        <div className="w-full my-6">
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>진행도</span>
-                            <span>{selectedAchievement.progress}/{selectedAchievement.target || 100}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-3 relative overflow-hidden">
-                            {isAchievementCompleted(selectedAchievement) ? (
-                              // 완료된 경우: 그라데이션 배경 + 체크 아이콘 (애니메이션 제거)
-                              <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2">
-                                <Check className="h-4 w-4 text-white" />
-                              </div>
-                            ) : (
-                              // 진행 중인 경우: 기본 진행바
-                              <div 
-                                className="bg-primary h-3 rounded-full transition-all duration-300" 
-                                style={{ width: `${Math.min(selectedAchievement.progress / (selectedAchievement.target || 100) * 100, 100)}%` }} 
+                          <Avatar>
+                            {profileImageUrl && typeof profileImageUrl === 'string' && profileImageUrl.trim() !== '' ? (
+                              <img
+                                src={profileImageUrl.startsWith('http') ? profileImageUrl : `${API_CONFIG.BASE_URL}${profileImageUrl}`}
+                                alt={user.nickname}
+                                className="w-8 h-8 rounded-full object-cover"
+                                onError={e => {
+                                  // fallback to first letter if image fails to load
+                                  const parent = e.currentTarget.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `<div class='w-8 h-8 gradient-bg rounded-full flex items-center justify-center'><span class='text-white text-sm font-bold'>${user.nickname.charAt(0)}</span></div>`;
+                                  }
+                                }}
                               />
+                            ) : (
+                              <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
+                                <span className="text-white text-sm font-bold">
+                                  {user.nickname.charAt(0)}
+                                </span>
+                              </div>
                             )}
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">{user.nickname}</div>
+                            <div className="flex items-center gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span
+                                    className="flex items-center tier-badge"
+                                    style={{
+                                      background: tierMeta.color,
+                                      color: '#fff',
+                                      borderRadius: '8px',
+                                      padding: '2px 8px',
+                                      fontWeight: 'bold',
+                                      fontSize: '0.9rem',
+                                    }}
+                                  >
+                                    <Medal className="mr-1 h-4 w-4" />
+                                    {tierMeta.name} 등급
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  점수에 따라 자동으로 부여되는 공식 등급입니다.
+                                </TooltipContent>
+                              </Tooltip>
+                              <span className="text-xs text-muted-foreground">{tierMeta.desc}</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {user.streakDays}일 연속
+                            </div>
                           </div>
-                          {isAchievementCompleted(selectedAchievement) && !selectedAchievement.achieved && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setTimeout(() => handleCompleteAchievement(selectedAchievement), 0);
-                              }}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold">{user.score.toLocaleString()}점</div>
+                          {/* Badge(뱃지)는 등급과 혼동 방지를 위해 숨김 또는 별도 표기 */}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Achievement Badges */}
+          {!hasNoData && achievements.length > 0 && (
+            <Card className="hover-lift" ref={scrollRef}>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Award className="mr-2 h-5 w-5" />
+                  나의 업적/뱃지
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {achievements.map((achievement: Achievement, index: number) => {
+                    const statusClass = getAchievementStatusClass(achievement);
+                    return (
+                      <div key={achievement.title} className="relative">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                                  className={`p-4 rounded-lg border cursor-pointer hover:shadow-lg hover:border-primary transition ${statusClass.container}`}
+                                  onClick={(e) => {
+                                    // 버튼 클릭이 아닌 경우에만 Drawer 열기
+                                    const target = e.target as HTMLElement;
+                                    if (!target.closest('button')) {
+                                      setSelectedAchievement(achievement);
+                                      setDrawerOpen(true);
+                                    }
+                                  }}
+                              tabIndex={0}
+                              role="button"
+                                  onKeyDown={e => { 
+                                    if (e.key === 'Enter' || e.key === ' ') { 
+                                      setSelectedAchievement(achievement); 
+                                      setDrawerOpen(true); 
+                                    } 
+                                  }}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                      <h4 className={`font-medium ${statusClass.title}`}>{achievement.title}</h4>
+                                      <p className={`text-sm ${statusClass.description}`}>{achievement.description}</p>
+                                </div>
+                                <span
+                                  className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
+                                  style={{ fontWeight: 'bold', fontSize: '0.95rem' }}
+                                >
+                                  <Award className="mr-1 h-4 w-4" />
+                                  {achievement.badge} 뱃지
+                                </span>
+                              </div>
+                              {achievement.achieved ? (
+                                <div className="flex items-center space-x-2 text-green-600">
+                                  <Trophy className="h-4 w-4" />
+                                      <span className="text-sm">
+                                        달성: {achievement.date || '날짜 정보 없음'}
+                                      </span>
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-sm">
+                                    <span>진행도</span>
+                                    <span>{achievement.progress}/{achievement.target || 100}</span>
+                                  </div>
+                                      <div className="w-full bg-gray-200 rounded-full h-2 relative overflow-hidden">
+                                        {isAchievementCompleted(achievement) ? (
+                                          // 완료된 경우: 그라데이션 배경 + 체크 아이콘 (애니메이션 제거)
+                                          <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-2 rounded-full transition-all duration-500 flex items-center justify-end pr-1">
+                                            <Check className="h-3 w-3 text-white" />
+                                          </div>
+                                        ) : (
+                                          // 진행 중인 경우: 기본 진행바
+                                          <div 
+                                            className="bg-primary h-2 rounded-full transition-all duration-300" 
+                                            style={{ width: `${Math.min(achievement.progress / (achievement.target || 100) * 100, 100)}%` }} 
+                                          />
+                                        )}
+                                      </div>
+                                      {isAchievementCompleted(achievement) && !achievement.achieved && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setTimeout(() => handleCompleteAchievement(achievement), 0);
+                                          }}
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              setTimeout(() => handleCompleteAchievement(achievement), 0);
+                                            }
+                                          }}
+                                          disabled={completingAchievement === achievement.title}
+                                          className="flex items-center justify-center text-sm text-green-600 font-medium animate-pulse mt-2 hover:text-green-700 hover:scale-105 transition-all duration-200 w-full py-2 rounded bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                          {completingAchievement === achievement.title ? (
+                                            <>
+                                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                              달성 처리 중...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Check className="h-3 w-3 mr-1" />
+                                              목표 달성! (클릭하여 달성)
+                                            </>
+                                          )}
+                                        </button>
+                                      )}
+                                </div>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            특정 업적을 달성하면 획득할 수 있는 뱃지입니다.
+                          </TooltipContent>
+                        </Tooltip>
+                          </div>
+                        );
+                      })}
+                </div>
+                {/* 업적 상세 Drawer */}
+                <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+                  <DrawerContent>
+                    {selectedAchievement && (
+                      <div className="p-0 flex flex-col items-center justify-center w-full">
+                        <div className="mx-auto w-full max-w-sm bg-white rounded-xl shadow-lg p-8 flex flex-col items-center justify-center">
+                          <DrawerTitle>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span
+                                className="badge-outline border border-gray-400 text-gray-700 px-2 py-0.5 rounded-full flex items-center"
+                                style={{ fontWeight: 'bold', fontSize: '0.95rem' }}
+                              >
+                                <Award className="mr-1 h-4 w-4" />
+                                {selectedAchievement.badge} 뱃지
+                              </span>
+                              <span className="font-bold text-lg">{selectedAchievement.title}</span>
+                            </div>
+                          </DrawerTitle>
+                          <DrawerDescription>
+                            {selectedAchievement.description}
+                          </DrawerDescription>
+                          {/* 진행 바를 항상 중앙에 표시 */}
+                          <div className="w-full my-6">
+                            <div className="flex justify-between text-sm mb-1">
+                              <span>진행도</span>
+                              <span>{selectedAchievement.progress}/{selectedAchievement.target || 100}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                              {isAchievementCompleted(selectedAchievement) ? (
+                                // 완료된 경우: 그라데이션 배경 + 체크 아이콘 (애니메이션 제거)
+                                <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-500 flex items-center justify-end pr-2">
+                                  <Check className="h-4 w-4 text-white" />
+                                </div>
+                              ) : (
+                                // 진행 중인 경우: 기본 진행바
+                                <div 
+                                  className="bg-primary h-3 rounded-full transition-all duration-300" 
+                                  style={{ width: `${Math.min(selectedAchievement.progress / (selectedAchievement.target || 100) * 100, 100)}%` }} 
+                                />
+                              )}
+                            </div>
+                            {isAchievementCompleted(selectedAchievement) && !selectedAchievement.achieved && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setTimeout(() => handleCompleteAchievement(selectedAchievement), 0);
-                                }
-                              }}
-                              disabled={completingAchievement === selectedAchievement.title}
-                              className="flex items-center justify-center text-sm text-green-600 font-medium animate-pulse mt-2 hover:text-green-700 hover:scale-105 transition-all duration-200 w-full py-2 rounded bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {completingAchievement === selectedAchievement.title ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                  달성 처리 중...
-                                </>
-                              ) : (
-                                <>
-                                  <Check className="h-4 w-4 mr-1" />
-                                  목표 달성! (클릭하여 달성)
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        {selectedAchievement.achieved ? (
-                          <div className="flex items-center space-x-2 text-green-600 mb-2">
-                            <Trophy className="h-4 w-4" />
-                            <span className="text-sm">
-                              달성: {selectedAchievement.date || '날짜 정보 없음'}
-                            </span>
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setTimeout(() => handleCompleteAchievement(selectedAchievement), 0);
+                                  }
+                                }}
+                                disabled={completingAchievement === selectedAchievement.title}
+                                className="flex items-center justify-center text-sm text-green-600 font-medium animate-pulse mt-2 hover:text-green-700 hover:scale-105 transition-all duration-200 w-full py-2 rounded bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {completingAchievement === selectedAchievement.title ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    달성 처리 중...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="h-4 w-4 mr-1" />
+                                    목표 달성! (클릭하여 달성)
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
-                        ) : null}
-                        <button className="mt-4 px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 text-base font-medium" style={{minWidth:'120px'}} onClick={() => setDrawerOpen(false)}>닫기</button>
+                          {selectedAchievement.achieved ? (
+                            <div className="flex items-center space-x-2 text-green-600 mb-2">
+                              <Trophy className="h-4 w-4" />
+                              <span className="text-sm">
+                                달성: {selectedAchievement.date || '날짜 정보 없음'}
+                              </span>
+                            </div>
+                          ) : null}
+                          <button className="mt-4 px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 text-base font-medium" style={{minWidth:'120px'}} onClick={() => setDrawerOpen(false)}>닫기</button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </DrawerContent>
-              </Drawer>
-            </CardContent>
-          </Card>
-        )}
+                    )}
+                  </DrawerContent>
+                </Drawer>
+              </CardContent>
+            </Card>
+          )}
 
-        {/* 업적이 없을 때 초기화 버튼 */}
-        {!hasNoData && achievements.length === 0 && (
-          <Card className="hover-lift">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Award className="mr-2 h-5 w-5" />
-                나의 업적/뱃지
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <div className="text-4xl mb-4">🏆</div>
-                <h4 className="text-lg font-medium mb-2">업적이 초기화되지 않았습니다</h4>
-                <p className="text-muted-foreground mb-6">
-                  업적을 초기화하여 다양한 뱃지를 수집해보세요!
-                </p>
-                <Button
-                  onClick={handleInitializeAchievements}
-                  disabled={initializing}
-                  className="px-6 py-3"
-                >
-                  {initializing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      초기화 중...
-                    </>
-                  ) : (
-                    '업적 초기화하기'
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </Layout>
+          {/* 업적이 없을 때 초기화 버튼 */}
+          {!hasNoData && achievements.length === 0 && (
+            <Card className="hover-lift">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Award className="mr-2 h-5 w-5" />
+                  나의 업적/뱃지
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">🏆</div>
+                  <h4 className="text-lg font-medium mb-2">업적이 초기화되지 않았습니다</h4>
+                  <p className="text-muted-foreground mb-6">
+                    업적을 초기화하여 다양한 뱃지를 수집해보세요!
+                  </p>
+                  <Button
+                    onClick={handleInitializeAchievements}
+                    disabled={initializing}
+                    className="px-6 py-3"
+                  >
+                    {initializing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        초기화 중...
+                      </>
+                    ) : (
+                      '업적 초기화하기'
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </Layout>
+    </div>
   );
 };
 

@@ -53,10 +53,22 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
 }) => (
   <Card className="hover-lift">
     <CardHeader>
-      <CardTitle className="flex items-center">
-        <User className="mr-2 h-5 w-5" />
-        기본 정보
-      </CardTitle>
+      <div className="flex items-center justify-between w-full">
+        <CardTitle className="flex items-center">
+          <User className="mr-2 h-5 w-5" />
+          기본 정보
+        </CardTitle>
+        {onUnregister && (
+          <button
+            type="button"
+            onClick={onUnregister}
+            className="text-xs text-red-500 hover:underline bg-transparent border-none p-0 cursor-pointer"
+            disabled={loading}
+          >
+            회원탈퇴
+          </button>
+        )}
+      </div>
     </CardHeader>
     <CardContent className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -203,11 +215,6 @@ export const BasicInfoBox: React.FC<BasicInfoBoxProps> = ({
       <Button onClick={onSave} disabled={loading} className="w-full gradient-bg hover:opacity-90 transition-opacity">
         {loading ? '저장 중...' : '기본 정보 저장'}
       </Button>
-      {onUnregister && (
-        <Button onClick={onUnregister} disabled={loading} variant="destructive" className="w-full mt-2">
-          회원탈퇴
-        </Button>
-      )}
     </CardContent>
   </Card>
 ); 

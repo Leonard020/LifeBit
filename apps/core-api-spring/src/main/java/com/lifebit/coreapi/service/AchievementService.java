@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.lifebit.coreapi.entity.enums.AchievementType;
+import com.lifebit.coreapi.event.AchievementCompletedEvent;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ public class AchievementService {
     private final UserAchievementRepository userAchievementRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
     
     /**
      * 특정 사용자의 업적 정보를 조회합니다.
@@ -97,23 +100,34 @@ public class AchievementService {
      */
     @Transactional
     public void updateUserAchievementProgress(Long userId, String achievementTitle, int progress) {
-        log.debug("Updating achievement progress for user: {}, achievement: {}, progress: {}", 
+        log.info("🟣 [AchievementService] 업적 진행도 업데이트 시작 - 사용자: {}, 업적: {}, 진행도: {}", 
                   userId, achievementTitle, progress);
         
         Achievement achievement = achievementRepository.findByTitle(achievementTitle);
         if (achievement == null) {
-            log.warn("Achievement not found: {}", achievementTitle);
+            log.error("❌ [AchievementService] 업적을 찾을 수 없음: {}", achievementTitle);
+            // DB에 있는 모든 업적 제목을 로그로 출력
+            List<Achievement> allAchievements = achievementRepository.findByIsActiveTrue();
+            log.info("🟣 [AchievementService] DB에 있는 모든 업적 제목:");
+            for (Achievement a : allAchievements) {
+                log.info("  - {}", a.getTitle());
+            }
             return;
         }
+        
+        log.info("✅ [AchievementService] 업적 찾음 - ID: {}, 제목: {}, 목표: {}", 
+                achievement.getAchievementId(), achievement.getTitle(), achievement.getTargetDays());
         
         UserAchievement userAchievement = userAchievementRepository
             .findByUserIdAndAchievementId(userId, achievement.getAchievementId())
             .orElse(null);
         
         if (userAchievement == null) {
-            log.warn("User achievement not found for user: {}, achievement: {}", userId, achievementTitle);
+            log.error("❌ [AchievementService] 사용자 업적을 찾을 수 없음 - 사용자: {}, 업적: {}", userId, achievementTitle);
             return;
         }
+        
+        log.info("🟣 [AchievementService] 현재 진행도: {} → 새 진행도: {}", userAchievement.getProgress(), progress);
         
         userAchievement.setProgress(progress);
         
@@ -121,11 +135,17 @@ public class AchievementService {
         if (achievement.getTargetDays() != null && progress >= achievement.getTargetDays() && !userAchievement.getIsAchieved()) {
             userAchievement.setIsAchieved(true);
             userAchievement.setAchievedDate(LocalDate.now());
-            log.info("Achievement unlocked for user: {}, achievement: {}", userId, achievementTitle);
+            log.info("🎉 [AchievementService] 업적 달성! - 사용자: {}, 업적: {}", userId, achievementTitle);
             notificationService.saveNotification(userId, "ACHIEVEMENT", "업적 달성", String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()), userAchievement.getUserAchievementId());
+            
+            // 랭킹 점수 업데이트 이벤트 발행
+            eventPublisher.publishEvent(new AchievementCompletedEvent(userId));
+            log.info("📢 [AchievementService] 업적 달성 이벤트 발행 - 사용자: {}", userId);
         }
         
         userAchievementRepository.save(userAchievement);
+        log.info("✅ [AchievementService] 업적 진행도 업데이트 완료 - 사용자: {}, 업적: {}, 진행도: {}", 
+                userId, achievementTitle, progress);
     }
     
     /**
@@ -162,24 +182,13 @@ public class AchievementService {
         // 사용자 업적이 없으면 초기화
         initializeUserAchievements(userId);
         
-        // 연속 운동 업적 업데이트 (설정 기반)
-        if (streakDays >= 7) {
-            updateUserAchievementProgress(userId, AchievementType.STREAK_7.getTitle(), streakDays);
-        }
-        
-        if (streakDays >= 30) {
-            updateUserAchievementProgress(userId, AchievementType.STREAK_30.getTitle(), streakDays);
-        }
-        
-        if (streakDays >= 90) {
-            updateUserAchievementProgress(userId, AchievementType.STREAK_90.getTitle(), streakDays);
-        }
-        
-        if (streakDays >= 180) {
-            updateUserAchievementProgress(userId, AchievementType.STREAK_180.getTitle(), streakDays);
-        }
-        }
-        
+        // 연속 운동 업적 업데이트 (모든 업적을 항상 업데이트)
+        updateUserAchievementProgress(userId, AchievementType.STREAK_7.getTitle(), streakDays);
+        updateUserAchievementProgress(userId, AchievementType.STREAK_30.getTitle(), streakDays);
+        updateUserAchievementProgress(userId, AchievementType.STREAK_90.getTitle(), streakDays);
+        updateUserAchievementProgress(userId, AchievementType.STREAK_180.getTitle(), streakDays);
+    }
+    
     /**
      * 사용자가 수동으로 업적을 달성 처리합니다.
      */
@@ -223,6 +232,10 @@ public class AchievementService {
         
         log.info("Achievement manually completed for user: {}, achievement: {}", userId, achievementTitle);
         notificationService.saveNotification(userId, "ACHIEVEMENT", "업적 달성", String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()), userAchievement.getUserAchievementId());
+        
+        // 랭킹 점수 업데이트 이벤트 발행
+        eventPublisher.publishEvent(new AchievementCompletedEvent(userId));
+        log.info("Achievement completion event published for user: {}", userId);
     }
     
     /**

@@ -202,7 +202,69 @@ public class UserGoalController {
     }
 
     /**
-     * 목표 달성률에 따른 랭킹 점수 업데이트
+     * 운동 목표 달성률에 따른 랭킹 점수 업데이트 (주간 기준)
+     */
+    @PostMapping("/update-exercise-score")
+    public ResponseEntity<Map<String, Object>> updateExerciseScore(
+            @RequestHeader("Authorization") String tokenHeader) {
+        try {
+            String token = tokenHeader != null && tokenHeader.startsWith("Bearer ")
+                    ? tokenHeader.substring(7)
+                    : tokenHeader;
+            Long userId = jwtTokenProvider.getUserIdFromToken(token);
+            
+            // 운동 목표 달성률에 따른 점수 업데이트
+            rankingService.updateExerciseScore(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "운동 점수가 업데이트되었습니다.");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("운동 점수 업데이트 실패: {}", e.getMessage());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "운동 점수 업데이트 중 오류가 발생했습니다.");
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 식단 목표 달성률에 따른 랭킹 점수 업데이트 (일간 기준)
+     */
+    @PostMapping("/update-nutrition-score")
+    public ResponseEntity<Map<String, Object>> updateNutritionScore(
+            @RequestHeader("Authorization") String tokenHeader) {
+        try {
+            String token = tokenHeader != null && tokenHeader.startsWith("Bearer ")
+                    ? tokenHeader.substring(7)
+                    : tokenHeader;
+            Long userId = jwtTokenProvider.getUserIdFromToken(token);
+            
+            // 식단 목표 달성률에 따른 점수 업데이트
+            rankingService.updateNutritionScore(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "식단 점수가 업데이트되었습니다.");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("식단 점수 업데이트 실패: {}", e.getMessage());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "식단 점수 업데이트 중 오류가 발생했습니다.");
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 목표 달성률에 따른 랭킹 점수 업데이트 (기존 메서드 - 하위 호환성)
      */
     @PostMapping("/update-achievement-score")
     public ResponseEntity<Map<String, Object>> updateAchievementScore(

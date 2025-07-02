@@ -409,32 +409,24 @@ const HealthLog: React.FC = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-900">
         <div className="container mx-auto px-4 py-6 md:py-8">
           {/* 헤더 */}
           <div className="mb-6 md:mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-                  <Activity className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Activity className="h-6 w-6 md:h-8 md:w-8 text-blue-600 dark:text-blue-300" />
                   건강 로그
                 </h1>
-                <p className="text-sm md:text-base text-gray-600 mt-1">
+                <p className="text-sm md:text-base text-gray-600 dark:text-gray-300 mt-1">
                   나의 건강 데이터를 한눈에 확인하고 분석해보세요
                 </p>
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  사용자 ID: {userId}
-                </Badge>
-                <Badge 
-                  variant={isConnected ? "default" : "secondary"} 
-                  className="text-xs flex items-center gap-1"
-                >
-                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                  {isConnected ? '자동 새로고침 활성' : '비활성'}
-                </Badge>
+
+
               </div>
             </div>
           </div>
@@ -454,27 +446,55 @@ const HealthLog: React.FC = () => {
             const newTab = value as 'enhanced' | 'react' | 'python';
             setActiveTab(newTab);
             localStorage.setItem('healthlog-active-tab', newTab);
-          }} className="mb-6">
-            <TabsList className="grid w-full grid-cols-2 max-w-2xl">
-              <TabsTrigger value="enhanced" className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4" />
-                나의활동
-              </TabsTrigger>
-              <TabsTrigger value="python" className="flex items-center gap-2">
-                <Brain className="h-4 w-4" />
-                기간별차트
-              </TabsTrigger>
-            </TabsList>
-
-            {/* 향상된 UI 탭 */}
+          }}>
+            <div className="w-full flex justify-center my-4">
+              <TabsList className="flex gap-4 justify-center w-full bg-transparent p-0 rounded-none shadow-none">
+                {/* 나의활동 버튼 */}
+                <div className="dark:p-[2px] dark:rounded-xl dark:bg-gradient-to-r dark:from-[#a259fa] dark:to-[#ff6ec4]">
+                  <TabsTrigger value="enhanced" className="rounded-xl px-5 py-2 h-12 min-w-[120px] font-bold text-base flex items-center gap-2 transition border-none overflow-hidden
+                    data-[state=active]:bg-white
+                    data-[state=active]:text-black
+                    data-[state=active]:dark:bg-gradient-to-r
+                    data-[state=active]:dark:from-[#a259fa]
+                    data-[state=active]:dark:to-[#ff6ec4]
+                    data-[state=active]:dark:text-white
+                    data-[state=inactive]:bg-[#f6fafd]
+                    data-[state=inactive]:text-gray-800
+                    data-[state=inactive]:dark:bg-[#232946]
+                    data-[state=inactive]:dark:text-gray-300
+                  ">
+                    <Smartphone className="h-5 w-5 mr-2" />
+                    나의활동
+                  </TabsTrigger>
+                </div>
+                {/* 기간별차트 버튼 */}
+                <div className="dark:p-[2px] dark:rounded-xl dark:bg-gradient-to-r dark:from-[#ff9770] dark:via-[#43e97b] dark:to-[#38b6ff]">
+                  <TabsTrigger value="python" className="rounded-xl px-5 py-2 h-12 min-w-[120px] font-bold text-base flex items-center gap-2 transition border-none overflow-hidden
+                    data-[state=active]:bg-white
+                    data-[state=active]:text-black
+                    data-[state=active]:dark:bg-gradient-to-r
+                    data-[state=active]:dark:from-[#ff9770]
+                    data-[state=active]:dark:via-[#43e97b]
+                    data-[state=active]:dark:to-[#38b6ff]
+                    data-[state=active]:dark:text-white
+                    data-[state=inactive]:bg-[#f6fafd]
+                    data-[state=inactive]:text-gray-800
+                    data-[state=inactive]:dark:bg-[#232946]
+                    data-[state=inactive]:dark:text-gray-300
+                  ">
+                    <Brain className="h-5 w-5 mr-2" />
+                    기간별차트
+                  </TabsTrigger>
+                </div>
+              </TabsList>
+            </div>
             <TabsContent value="enhanced" className="mt-6">
-              <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
-                <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 rounded-lg p-3">
+              <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border p-1 mb-4">
+                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900 rounded-lg p-3">
                   <Heart className="h-4 w-4" />
                   <span className="font-medium">사용자 제공 UI를 반영한 향상된 건강 대시보드</span>
                 </div>
               </div>
-              
               <ErrorBoundary>
                 <EnhancedHealthDashboard 
                   userId={userId?.toString() || ''} 
@@ -482,7 +502,6 @@ const HealthLog: React.FC = () => {
                 />
               </ErrorBoundary>
             </TabsContent>
-
             <TabsContent value="python" className="mt-6">
               {/* 기간 선택 - AI분석용 */}
               <div className="mb-6">
@@ -491,15 +510,6 @@ const HealthLog: React.FC = () => {
                   onPeriodChange={setPythonPeriod}
                 />
               </div>
-              
-              {/* AI 고급 분석 차트 */}
-              <div className="bg-white rounded-xl shadow-sm border p-1 mb-4">
-                <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg p-3">
-                  <Zap className="h-4 w-4" />
-                  <span className="font-medium">AI 기반 고급 데이터 분석 및 인사이트</span>
-                </div>
-              </div>
-              
               <ErrorBoundary>
                 <PythonAnalyticsCharts 
                   userId={userId || 0} 

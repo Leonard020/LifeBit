@@ -190,11 +190,16 @@ public class HealthStatisticsController {
                         rankerMap.put("rank", ranking.getRankPosition());
                         rankerMap.put("userId", ranking.getUserId());
                         String nickname = "사용자" + ranking.getUserId();
+                        String profileImageUrl = null;
                         try {
                             User user = userService.getUserById(ranking.getUserId());
-                            if (user != null && user.getNickname() != null) nickname = user.getNickname();
+                            if (user != null) {
+                                if (user.getNickname() != null) nickname = user.getNickname();
+                                profileImageUrl = user.getProfileImageUrl();
+                            }
                         } catch (Exception ignore) {}
                         rankerMap.put("nickname", nickname);
+                        rankerMap.put("profileImageUrl", profileImageUrl);
                         rankerMap.put("score", ranking.getTotalScore());
                         rankerMap.put("badge", getBadgeFromScore(ranking.getTotalScore()));
                         rankerMap.put("streakDays", ranking.getStreakDays());

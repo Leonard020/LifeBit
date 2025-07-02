@@ -57,51 +57,133 @@ const NotificationSettings: React.FC = () => {
   // 임시 설정 (저장 전)
   const [tempSettings, setTempSettings] = useState<NotificationSettings>({ ...savedSettings });
 
-  // 설정이 변경되었는지 확인
-  const hasUnsavedChanges = JSON.stringify(tempSettings) !== JSON.stringify(savedSettings);
+  // 각 카테고리별 변경사항 추적
+  const [fontSizeChanged, setFontSizeChanged] = useState(false);
+  const [allNotificationsChanged, setAllNotificationsChanged] = useState(false);
+  const [individualNotificationsChanged, setIndividualNotificationsChanged] = useState(false);
+  const [notificationMethodChanged, setNotificationMethodChanged] = useState(false);
+  const [quietHoursChanged, setQuietHoursChanged] = useState(false);
+
+  // 폰트 크기 상태 및 함수
+  const {
+    tempSettings: themeTempSettings,
+    hasUnsavedChanges: themeHasUnsavedChanges,
+    setFontSize,
+    saveSettings: saveThemeSettings,
+    cancelSettings: cancelThemeSettings,
+    resetToDefaults: resetThemeDefaults
+  } = useTheme();
 
   const handleSettingChange = (key: keyof NotificationSettings, value: boolean | string) => {
     setTempSettings(prev => ({ ...prev, [key]: value }));
+    
+    // 변경사항 추적
+    if (key === 'allNotifications') {
+      setAllNotificationsChanged(true);
+    } else if (['rankingNotifications', 'achievementNotifications', 'systemNotifications'].includes(key)) {
+      setIndividualNotificationsChanged(true);
+    } else if (['soundEnabled', 'vibrationEnabled'].includes(key)) {
+      setNotificationMethodChanged(true);
+    } else if (['quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd'].includes(key)) {
+      setQuietHoursChanged(true);
+    }
   };
 
-  const handleSave = () => {
-    setSavedSettings(tempSettings);
-    localStorage.setItem('notificationSettings', JSON.stringify(tempSettings));
+  // 폰트 크기 변경 핸들러
+  const handleFontSizeChange = (size: FontSize) => {
+    setFontSize(size);
+    setFontSizeChanged(true);
+  };
+
+  // 폰트 크기 저장
+  const handleFontSizeSave = () => {
     saveThemeSettings();
+    setFontSizeChanged(false);
     toast({
-      title: '설정 저장됨',
-      description: '설정이 성공적으로 저장되었습니다.',
+      title: '폰트 크기 저장됨',
+      description: '폰트 크기가 성공적으로 저장되었습니다.',
     });
   };
 
-  const handleCancel = () => {
-    setTempSettings(savedSettings);
+  // 폰트 크기 취소
+  const handleFontSizeCancel = () => {
     cancelThemeSettings();
+    setFontSizeChanged(false);
     toast({
-      title: '설정 취소됨',
-      description: '변경사항이 취소되었습니다.',
+      title: '폰트 크기 변경 취소됨',
+      description: '폰트 크기 변경이 취소되었습니다.',
     });
   };
 
-  const handleReset = () => {
-    const defaultSettings = {
-      allNotifications: true,
-      rankingNotifications: true,
-      achievementNotifications: true,
-      systemNotifications: true,
-      soundEnabled: true,
-      vibrationEnabled: true,
-      quietHoursEnabled: false,
-      quietHoursStart: '22:00',
-      quietHoursEnd: '08:00'
-    };
-    setTempSettings(defaultSettings);
-    resetThemeDefaults();
+  // 전체 알림 저장
+  const handleAllNotificationsSave = () => {
+    setSavedSettings(prev => ({ ...prev, allNotifications: tempSettings.allNotifications }));
+    localStorage.setItem('notificationSettings', JSON.stringify({
+      ...savedSettings,
+      allNotifications: tempSettings.allNotifications
+    }));
+    setAllNotificationsChanged(false);
     toast({
-      title: '기본값으로 초기화',
-      description: '모든 설정이 기본값으로 초기화되었습니다.',
+      title: '전체 알림 설정 저장됨',
+      description: '전체 알림 설정이 성공적으로 저장되었습니다.',
     });
   };
+
+  // 개별 알림 저장
+  const handleIndividualNotificationsSave = () => {
+    const newSettings = {
+      ...savedSettings,
+      rankingNotifications: tempSettings.rankingNotifications,
+      achievementNotifications: tempSettings.achievementNotifications,
+      systemNotifications: tempSettings.systemNotifications
+    };
+    setSavedSettings(newSettings);
+    localStorage.setItem('notificationSettings', JSON.stringify(newSettings));
+    setIndividualNotificationsChanged(false);
+    toast({
+      title: '개별 알림 설정 저장됨',
+      description: '개별 알림 설정이 성공적으로 저장되었습니다.',
+    });
+  };
+
+  // 알림 방식 저장
+  const handleNotificationMethodSave = () => {
+    const newSettings = {
+      ...savedSettings,
+      soundEnabled: tempSettings.soundEnabled,
+      vibrationEnabled: tempSettings.vibrationEnabled
+    };
+    setSavedSettings(newSettings);
+    localStorage.setItem('notificationSettings', JSON.stringify(newSettings));
+    setNotificationMethodChanged(false);
+    toast({
+      title: '알림 방식 설정 저장됨',
+      description: '알림 방식 설정이 성공적으로 저장되었습니다.',
+    });
+  };
+
+  // 방해 금지 시간 저장
+  const handleQuietHoursSave = () => {
+    const newSettings = {
+      ...savedSettings,
+      quietHoursEnabled: tempSettings.quietHoursEnabled,
+      quietHoursStart: tempSettings.quietHoursStart,
+      quietHoursEnd: tempSettings.quietHoursEnd
+    };
+    setSavedSettings(newSettings);
+    localStorage.setItem('notificationSettings', JSON.stringify(newSettings));
+    setQuietHoursChanged(false);
+    toast({
+      title: '방해 금지 시간 설정 저장됨',
+      description: '방해 금지 시간 설정이 성공적으로 저장되었습니다.',
+    });
+  };
+
+  // 폰트 크기 옵션
+  const fontSizes = [
+    { value: 'small', label: '보통', size: 'text-base' },
+    { value: 'normal', label: '크게', size: 'text-lg' },
+  ];
 
   const notificationTypes = [
     {
@@ -127,22 +209,6 @@ const NotificationSettings: React.FC = () => {
     }
   ];
 
-  // 폰트 크기 상태 및 함수
-  const {
-    tempSettings: themeTempSettings,
-    hasUnsavedChanges: themeHasUnsavedChanges,
-    setFontSize,
-    saveSettings: saveThemeSettings,
-    cancelSettings: cancelThemeSettings,
-    resetToDefaults: resetThemeDefaults
-  } = useTheme();
-
-  // 폰트 크기 옵션
-  const fontSizes = [
-    { value: 'small', label: '보통', size: 'text-base' },
-    { value: 'normal', label: '크게', size: 'text-lg' },
-  ];
-
   return (
     <div className="space-y-6">
       {/* 폰트 크기 설정 */}
@@ -154,12 +220,12 @@ const NotificationSettings: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-row gap-4 justify-center">
+          <div className="flex flex-row gap-4 justify-center mb-4">
             {fontSizes.map((size) => (
               <Button
                 key={size.value}
                 variant={themeTempSettings.fontSize === size.value ? 'default' : 'outline'}
-                onClick={() => setFontSize(size.value as FontSize)}
+                onClick={() => handleFontSizeChange(size.value as FontSize)}
                 className="h-20 w-32 flex flex-col items-center justify-center gap-3 text-xl"
               >
                 <div className={`${size.size} font-bold text-2xl`}>Aa</div>
@@ -167,6 +233,27 @@ const NotificationSettings: React.FC = () => {
               </Button>
             ))}
           </div>
+          {fontSizeChanged && (
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={handleFontSizeCancel}
+                variant="outline"
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <X className="h-4 w-4" />
+                취소
+              </Button>
+              <Button
+                onClick={handleFontSizeSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                폰트 크기 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -200,6 +287,19 @@ const NotificationSettings: React.FC = () => {
               <p className="text-sm text-muted-foreground">
                 전체 알림이 꺼져 있습니다. 개별 알림 설정이 비활성화됩니다.
               </p>
+            </div>
+          )}
+          
+          {allNotificationsChanged && (
+            <div className="flex justify-end">
+              <Button
+                onClick={handleAllNotificationsSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                전체 알림 설정 저장
+              </Button>
             </div>
           )}
         </CardContent>
@@ -240,6 +340,19 @@ const NotificationSettings: React.FC = () => {
               {type.key !== 'systemNotifications' && <Separator className="mt-4" />}
             </div>
           ))}
+          
+          {individualNotificationsChanged && (
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleIndividualNotificationsSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                개별 알림 설정 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -283,6 +396,19 @@ const NotificationSettings: React.FC = () => {
               onCheckedChange={(checked) => handleSettingChange('vibrationEnabled', checked)}
             />
           </div>
+          
+          {notificationMethodChanged && (
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleNotificationMethodSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                알림 방식 설정 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -333,51 +459,59 @@ const NotificationSettings: React.FC = () => {
               </div>
             </div>
           )}
+          
+          {quietHoursChanged && (
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleQuietHoursSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                방해 금지 시간 설정 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* 저장/취소 버튼 */}
+      {/* 전체 초기화 버튼 */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {hasUnsavedChanges && (
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                  변경사항이 있습니다
-                </span>
-              )}
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={handleReset}
-                className="flex items-center gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                기본값
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                disabled={!hasUnsavedChanges}
-                className="flex items-center gap-2"
-              >
-                <X className="h-4 w-4" />
-                취소
-              </Button>
-              
-              <Button
-                onClick={handleSave}
-                disabled={!hasUnsavedChanges}
-                className="flex items-center gap-2"
-              >
-                <Save className="h-4 w-4" />
-                저장
-              </Button>
-            </div>
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const defaultSettings = {
+                  allNotifications: true,
+                  rankingNotifications: true,
+                  achievementNotifications: true,
+                  systemNotifications: true,
+                  soundEnabled: true,
+                  vibrationEnabled: true,
+                  quietHoursEnabled: false,
+                  quietHoursStart: '22:00',
+                  quietHoursEnd: '08:00'
+                };
+                setTempSettings(defaultSettings);
+                setSavedSettings(defaultSettings);
+                localStorage.setItem('notificationSettings', JSON.stringify(defaultSettings));
+                resetThemeDefaults();
+                setFontSizeChanged(false);
+                setAllNotificationsChanged(false);
+                setIndividualNotificationsChanged(false);
+                setNotificationMethodChanged(false);
+                setQuietHoursChanged(false);
+                toast({
+                  title: '기본값으로 초기화',
+                  description: '모든 설정이 기본값으로 초기화되었습니다.',
+                });
+              }}
+              className="flex items-center gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              모든 설정 초기화
+            </Button>
           </div>
         </CardContent>
       </Card>

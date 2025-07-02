@@ -115,7 +115,7 @@ const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      마이페이지
+                      프로필
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -162,6 +162,60 @@ const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void
   );
 };
 
+const GradientFileTextIcon = ({ className }: { className?: string }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} stroke="url(#sidebar-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <defs>
+      <linearGradient id="sidebar-gradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#7c3aed" />
+        <stop offset="1" stopColor="#ec4899" />
+      </linearGradient>
+    </defs>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+);
+const GradientUserIcon = ({ className }: { className?: string }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} stroke="url(#sidebar-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <defs>
+      <linearGradient id="sidebar-gradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#7c3aed" />
+        <stop offset="1" stopColor="#ec4899" />
+      </linearGradient>
+    </defs>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+const GradientTrophyIcon = ({ className }: { className?: string }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} stroke="url(#sidebar-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <defs>
+      <linearGradient id="sidebar-gradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#7c3aed" />
+        <stop offset="1" stopColor="#ec4899" />
+      </linearGradient>
+    </defs>
+    <path d="M21 4H17V2H7V4H3V6C3 10.4183 7.58172 14 12 14C16.4183 14 21 10.4183 21 6V4Z" />
+    <path d="M8 21H16" />
+    <path d="M12 17V21" />
+  </svg>
+);
+const GradientBarChartIcon = ({ className }: { className?: string }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} stroke="url(#sidebar-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <defs>
+      <linearGradient id="sidebar-gradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#7c3aed" />
+        <stop offset="1" stopColor="#ec4899" />
+      </linearGradient>
+    </defs>
+    <line x1="12" y1="20" x2="12" y2="10" />
+    <line x1="18" y1="20" x2="18" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="16" />
+  </svg>
+);
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -188,7 +242,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   if (!isMobile) {
     return (
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="min-h-screen bg-background flex w-full">
           <AppSidebar />
           <SidebarInset className="flex-1">
             <WebHeader setContactOpen={setContactOpen} />
@@ -263,7 +317,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      마이페이지
+                      프로필
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -344,6 +398,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
+              let GradientIcon = null;
+              if (item.path === '/note') GradientIcon = GradientFileTextIcon;
+              if (item.path === '/profile') GradientIcon = GradientUserIcon;
+              if (item.path === '/ranking') GradientIcon = GradientTrophyIcon;
+              if (item.path === '/healthlog') GradientIcon = GradientBarChartIcon;
               return (
                 <Link
                   key={item.path}
@@ -354,7 +413,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   }`}
                 >
-                  <Icon className="h-5 w-5" />
+                  {isActive && GradientIcon ? (
+                    <GradientIcon className="h-5 w-5 animate-bounce" />
+                  ) : (
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                  )}
                   <span className="text-xs font-medium">{item.label}</span>
                 </Link>
               );

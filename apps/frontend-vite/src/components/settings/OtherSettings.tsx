@@ -36,6 +36,10 @@ const OtherSettings: React.FC = () => {
   const [developerClickCount, setDeveloperClickCount] = useState(0);
   const [showEasterEgg, setShowEasterEgg] = useState(false);
   
+  // 각 카테고리별 변경사항 추적
+  const [languageChanged, setLanguageChanged] = useState(false);
+  const [privacyChanged, setPrivacyChanged] = useState(false);
+  
   // 저장된 설정 로드
   const [savedSettings, setSavedSettings] = useState<OtherSettings>(() => {
     const saved = localStorage.getItem('otherSettings');
@@ -93,11 +97,13 @@ const OtherSettings: React.FC = () => {
   const handleSettingChange = (category: keyof OtherSettings, key: string, value: boolean | string) => {
     setTempSettings(prev => {
       if (category === 'language') {
+        setLanguageChanged(true);
         return {
           ...prev,
           language: value as string
         };
       } else if (category === 'privacy') {
+        setPrivacyChanged(true);
         return {
           ...prev,
           privacy: {
@@ -110,11 +116,42 @@ const OtherSettings: React.FC = () => {
     });
   };
 
+  // 언어 설정 저장
+  const handleLanguageSave = () => {
+    setSavedSettings(prev => ({ ...prev, language: tempSettings.language }));
+    localStorage.setItem('otherSettings', JSON.stringify({
+      ...savedSettings,
+      language: tempSettings.language
+    }));
+    setLanguageChanged(false);
+    toast({
+      title: '언어 설정 저장됨',
+      description: '언어 설정이 성공적으로 저장되었습니다.',
+    });
+  };
+
+  // 개인정보 설정 저장
+  const handlePrivacySave = () => {
+    const newSettings = {
+      ...savedSettings,
+      privacy: tempSettings.privacy
+    };
+    setSavedSettings(newSettings);
+    localStorage.setItem('otherSettings', JSON.stringify(newSettings));
+    setPrivacyChanged(false);
+    toast({
+      title: '개인정보 설정 저장됨',
+      description: '개인정보 설정이 성공적으로 저장되었습니다.',
+    });
+  };
+
   const handleSave = (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
     setSavedSettings(tempSettings);
     localStorage.setItem('otherSettings', JSON.stringify(tempSettings));
+    setLanguageChanged(false);
+    setPrivacyChanged(false);
     toast({
       title: '설정 저장됨',
       description: '기타 설정이 성공적으로 저장되었습니다.',
@@ -125,6 +162,8 @@ const OtherSettings: React.FC = () => {
     e?.preventDefault();
     e?.stopPropagation();
     setTempSettings(savedSettings);
+    setLanguageChanged(false);
+    setPrivacyChanged(false);
     toast({
       title: '설정 취소됨',
       description: '변경사항이 취소되었습니다.',
@@ -143,6 +182,10 @@ const OtherSettings: React.FC = () => {
       }
     };
     setTempSettings(defaultSettings);
+    setSavedSettings(defaultSettings);
+    localStorage.setItem('otherSettings', JSON.stringify(defaultSettings));
+    setLanguageChanged(false);
+    setPrivacyChanged(false);
     toast({
       title: '기본값으로 초기화',
       description: '모든 기타 설정이 기본값으로 초기화되었습니다.',
@@ -287,6 +330,18 @@ const OtherSettings: React.FC = () => {
               언어 변경 시 앱이 재시작될 수 있습니다.
             </p>
           </div>
+          {languageChanged && (
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleLanguageSave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                언어 설정 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -353,6 +408,19 @@ const OtherSettings: React.FC = () => {
               className="w-4 h-4"
             />
           </div>
+          
+          {privacyChanged && (
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handlePrivacySave}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Save className="h-4 w-4" />
+                개인정보 설정 저장
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -420,7 +488,7 @@ const OtherSettings: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 저장/취소 버튼 */}
+      {/* 전체 저장/취소 버튼 */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
@@ -462,7 +530,7 @@ const OtherSettings: React.FC = () => {
                 className="flex items-center gap-2"
               >
                 <Save className="h-4 w-4" />
-                저장
+                모든 설정 저장
               </Button>
             </div>
           </div>

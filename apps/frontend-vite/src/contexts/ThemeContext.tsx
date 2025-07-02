@@ -69,7 +69,17 @@ const loadSettingsFromStorage = (): ThemeSettings => {
   try {
     const saved = localStorage.getItem('themeSettings');
     if (saved) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      // 필수값 누락 시 기본값으로 보완
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        fontSize: ['small', 'normal', 'large'].includes(parsed.fontSize) ? parsed.fontSize : DEFAULT_SETTINGS.fontSize,
+        themeMode: ['light', 'dark', 'system'].includes(parsed.themeMode) ? parsed.themeMode : DEFAULT_SETTINGS.themeMode,
+        colorScheme: ['default', 'blue', 'green', 'purple', 'orange'].includes(parsed.colorScheme) ? parsed.colorScheme : DEFAULT_SETTINGS.colorScheme,
+        highContrast: typeof parsed.highContrast === 'boolean' ? parsed.highContrast : DEFAULT_SETTINGS.highContrast,
+        reduceMotion: typeof parsed.reduceMotion === 'boolean' ? parsed.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
+      };
     }
   } catch (error) {
     console.error('Failed to load theme settings from storage:', error);
@@ -120,8 +130,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const applyTheme = (dark: boolean) => {
     if (dark) {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     }
     setIsDarkMode(dark);
   };
@@ -206,7 +218,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const setFontSize = (size: FontSize) => {
     setTempSettings(prev => ({ ...prev, fontSize: size }));
     
-    // 즉시 CSS 변수 업데이트
+    // 즉시 CSS 변수 업데이트 (미리보기)
     const root = document.documentElement;
     switch (size) {
       case 'small':
@@ -270,7 +282,46 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // 설정 취소
   const cancelSettings = () => {
     setTempSettings(savedSettings);
-    applySettings(savedSettings);
+    // 폰트 크기도 원래 설정으로 되돌리기
+    const root = document.documentElement;
+    switch (savedSettings.fontSize) {
+      case 'small':
+        root.style.setProperty('--font-size-xs', '12px');
+        root.style.setProperty('--font-size-sm', '14px');
+        root.style.setProperty('--font-size-base', '16px');
+        root.style.setProperty('--font-size-lg', '18px');
+        root.style.setProperty('--font-size-xl', '20px');
+        root.style.setProperty('--font-size-2xl', '22px');
+        root.style.setProperty('--font-size-3xl', '24px');
+        root.style.setProperty('--font-size-4xl', '26px');
+        root.style.setProperty('--font-size-5xl', '30px');
+        root.style.setProperty('--font-size-6xl', '36px');
+        break;
+      case 'normal':
+        root.style.setProperty('--font-size-xs', '14px');
+        root.style.setProperty('--font-size-sm', '16px');
+        root.style.setProperty('--font-size-base', '21px');
+        root.style.setProperty('--font-size-lg', '24px');
+        root.style.setProperty('--font-size-xl', '28px');
+        root.style.setProperty('--font-size-2xl', '32px');
+        root.style.setProperty('--font-size-3xl', '36px');
+        root.style.setProperty('--font-size-4xl', '40px');
+        root.style.setProperty('--font-size-5xl', '48px');
+        root.style.setProperty('--font-size-6xl', '60px');
+        break;
+      case 'large':
+        root.style.setProperty('--font-size-xs', '18px');
+        root.style.setProperty('--font-size-sm', '20px');
+        root.style.setProperty('--font-size-base', '30px');
+        root.style.setProperty('--font-size-lg', '34px');
+        root.style.setProperty('--font-size-xl', '38px');
+        root.style.setProperty('--font-size-2xl', '42px');
+        root.style.setProperty('--font-size-3xl', '46px');
+        root.style.setProperty('--font-size-4xl', '50px');
+        root.style.setProperty('--font-size-5xl', '58px');
+        root.style.setProperty('--font-size-6xl', '70px');
+        break;
+    }
   };
 
   // 기본값으로 초기화
@@ -280,19 +331,21 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   // 다크모드 토글 (즉시 적용)
   const toggleDarkMode = () => {
-    const newMode = isDarkMode ? 'light' : 'dark';
-    const newSettings = { ...currentSettings, themeMode: newMode as ThemeMode };
+    const newMode: ThemeMode = isDarkMode ? 'light' : 'dark';
+    // 기존 savedSettings에서 themeMode만 바꿔서 저장
+    const newSettings = { ...savedSettings, themeMode: newMode };
     setSavedSettings(newSettings);
     setCurrentSettings(newSettings);
     setTempSettings(newSettings);
     saveSettingsToStorage(newSettings);
-    applySettings(newSettings);
+    // 테마만 즉시 적용
+    applyTheme(newMode === 'dark');
   };
 
   // 초기 설정 적용
   useEffect(() => {
     applySettings(currentSettings);
-  }, []);
+  }, [currentSettings]);
 
   // 임시 설정 미리보기
   useEffect(() => {

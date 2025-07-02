@@ -406,268 +406,272 @@ const Profile = () => {
   // 로딩 중일 때 보여줄 컴포넌트
   if (loading || goalsLoading) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8 pb-24">
-          <div className="max-w-2xl mx-auto space-y-6">
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                <User className="h-10 w-10 text-gray-400" />
+      <div className="min-h-screen bg-background">
+        <Layout>
+          <div className="container mx-auto px-4 py-8 pb-24">
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="text-center mb-8">
+                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                  <User className="h-10 w-10 text-gray-400" />
+                </div>
+                <h1 className="text-2xl font-bold mb-2">프로필</h1>
+                <p className="text-muted-foreground">사용자 정보를 불러오는 중...</p>
               </div>
-              <h1 className="text-2xl font-bold mb-2">마이페이지</h1>
-              <p className="text-muted-foreground">사용자 정보를 불러오는 중...</p>
-            </div>
-            <div className="space-y-4">
-              <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
-              <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="space-y-4">
+                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
             </div>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8 pb-24">
-        <div className="max-w-2xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4">
-              {profileData.profileImageUrl ? (
-                <img 
-                  src={`${API_CONFIG.BASE_URL}${profileData.profileImageUrl}`} 
-                  alt="Profile" 
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <User className="h-10 w-10 text-white" />
-              )}
+    <div className="min-h-screen bg-background">
+      <Layout>
+        <div className="container mx-auto px-4 py-8 pb-24">
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4">
+                {profileData.profileImageUrl ? (
+                  <img 
+                    src={`${API_CONFIG.BASE_URL}${profileData.profileImageUrl}`} 
+                    alt="Profile" 
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <User className="h-10 w-10 text-white" />
+                )}
+              </div>
+              <h1 className="text-2xl font-bold mb-2">프로필</h1>
+              <p className="text-muted-foreground">개인정보와 건강 목표를 관리하세요</p>
             </div>
-            <h1 className="text-2xl font-bold mb-2">마이페이지</h1>
-            <p className="text-muted-foreground">개인정보와 건강 목표를 관리하세요</p>
-          </div>
 
-          {/* Basic Information */}
-          <BasicInfoBox
-            profileData={profileData}
-            setProfileData={setProfileData}
-            loading={loading}
-            onSave={handleProfileSave}
-            nicknameEditable={false}
-          />
+            {/* Basic Information */}
+            <BasicInfoBox
+              profileData={profileData}
+              setProfileData={setProfileData}
+              loading={loading}
+              onSave={handleProfileSave}
+              nicknameEditable={false}
+            />
 
-          {/* Health Goals */}
-          <Card className="hover-lift">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Target className="mr-2 h-5 w-5" />
-                건강 목표 설정
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Exercise Goals */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium flex items-center">
-                  <Dumbbell className="mr-2 h-5 w-5" />
-                  운동 목표
-                </h3>
-                
-                {/* Strength Training Goals */}
+            {/* Health Goals */}
+            <Card className="hover-lift">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Target className="mr-2 h-5 w-5" />
+                  건강 목표 설정
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Exercise Goals */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">근력 운동 목표</Label>
-                    <Select
-                      value=""
-                      onValueChange={handleAddExerciseSelect}
-                      disabled={availableBodyParts.length === 0}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue placeholder="부위 선택" />
+                  <h3 className="text-lg font-medium flex items-center">
+                    <Dumbbell className="mr-2 h-5 w-5" />
+                    운동 목표
+                  </h3>
+                  
+                  {/* Strength Training Goals */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">근력 운동 목표</Label>
+                      <Select
+                        value=""
+                        onValueChange={handleAddExerciseSelect}
+                        disabled={availableBodyParts.length === 0}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue placeholder="부위 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableBodyParts.map(option => (
+                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {bodyPartOptions.filter(opt => selectedBodyParts.includes(opt.value)).map((option, idx) => {
+                        const goal = strengthGoals.find(g => g.bodyPart === option.value);
+                        // Filter options for this row: allow current value + unselected
+                        const selected = bodyPartOptions
+                          .filter(o => o.value !== option.value && selectedBodyParts.includes(o.value))
+                          .map(o => o.value);
+                        const options = bodyPartOptions.filter(opt2 => !selected.includes(opt2.value) || opt2.value === option.value);
+                        return (
+                          <div key={goal?.id || option.value} className="flex items-center gap-3 p-3 border rounded-lg">
+                            <div className="flex-1 flex items-center pl-2 font-medium">{option.label}</div>
+                            <div className="flex-1">
+                              <Select 
+                                value={goal?.weeklyCount || '1'} 
+                                onValueChange={(value) => updateStrengthGoal(goal?.id || '', 'weeklyCount', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="주간 횟수" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">주 0회</SelectItem>
+                                  <SelectItem value="1">주 1회</SelectItem>
+                                  <SelectItem value="2">주 2회</SelectItem>
+                                  <SelectItem value="3">주 3회</SelectItem>
+                                  <SelectItem value="4">주 4회</SelectItem>
+                                  <SelectItem value="5">주 5회</SelectItem>
+                                  <SelectItem value="6">주 6회</SelectItem>
+                                  <SelectItem value="7">매일</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeStrengthGoal(goal?.id || '')}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Cardio Training */}
+                  <div className="space-y-2">
+                    <Label htmlFor="cardioTraining">유산소 운동 (회/주)</Label>
+                    <Select value={goals.weeklyCardio} onValueChange={(value) => setGoals({...goals, weeklyCardio: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="유산소 운동 횟수" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableBodyParts.map(option => (
-                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                        ))}
+                        <SelectItem value="0">주 0회</SelectItem>
+                        <SelectItem value="1">주 1회</SelectItem>
+                        <SelectItem value="2">주 2회</SelectItem>
+                        <SelectItem value="3">주 3회</SelectItem>
+                        <SelectItem value="4">주 4회</SelectItem>
+                        <SelectItem value="5">주 5회</SelectItem>
+                        <SelectItem value="6">주 6회</SelectItem>
+                        <SelectItem value="7">매일</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  
-                  <div className="space-y-3">
-                    {bodyPartOptions.filter(opt => selectedBodyParts.includes(opt.value)).map((option, idx) => {
-                      const goal = strengthGoals.find(g => g.bodyPart === option.value);
-                      // Filter options for this row: allow current value + unselected
-                      const selected = bodyPartOptions
-                        .filter(o => o.value !== option.value && selectedBodyParts.includes(o.value))
-                        .map(o => o.value);
-                      const options = bodyPartOptions.filter(opt2 => !selected.includes(opt2.value) || opt2.value === option.value);
-                      return (
-                        <div key={goal?.id || option.value} className="flex items-center gap-3 p-3 border rounded-lg">
-                          <div className="flex-1 flex items-center pl-2 font-medium">{option.label}</div>
-                          <div className="flex-1">
-                            <Select 
-                              value={goal?.weeklyCount || '1'} 
-                              onValueChange={(value) => updateStrengthGoal(goal?.id || '', 'weeklyCount', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="주간 횟수" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="0">주 0회</SelectItem>
-                                <SelectItem value="1">주 1회</SelectItem>
-                                <SelectItem value="2">주 2회</SelectItem>
-                                <SelectItem value="3">주 3회</SelectItem>
-                                <SelectItem value="4">주 4회</SelectItem>
-                                <SelectItem value="5">주 5회</SelectItem>
-                                <SelectItem value="6">주 6회</SelectItem>
-                                <SelectItem value="7">매일</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeStrengthGoal(goal?.id || '')}
-                            className="h-8 w-8"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
 
-                {/* Cardio Training */}
-                <div className="space-y-2">
-                  <Label htmlFor="cardioTraining">유산소 운동 (회/주)</Label>
-                  <Select value={goals.weeklyCardio} onValueChange={(value) => setGoals({...goals, weeklyCardio: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="유산소 운동 횟수" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">주 0회</SelectItem>
-                      <SelectItem value="1">주 1회</SelectItem>
-                      <SelectItem value="2">주 2회</SelectItem>
-                      <SelectItem value="3">주 3회</SelectItem>
-                      <SelectItem value="4">주 4회</SelectItem>
-                      <SelectItem value="5">주 5회</SelectItem>
-                      <SelectItem value="6">주 6회</SelectItem>
-                      <SelectItem value="7">매일</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Total Weekly Workout Target Display */}
-                <div className="mt-4">
-                  <Label className="text-sm text-muted-foreground">총 주간 운동 목표</Label>
-                  <div className="p-3 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
-                    <div className="text-lg font-semibold text-blue-700 dark:text-[#6ca0ff]">
-                      {totalWeeklyWorkoutTarget}회 / 주
-                    </div>
-                    <div className="text-sm text-blue-600 dark:text-[#b3b8d8]">
-                      (근력운동: {totalWeeklyWorkoutTarget - parseInt(goals.weeklyCardio)}회, 유산소: {goals.weeklyCardio}회)
+                  {/* Total Weekly Workout Target Display */}
+                  <div className="mt-4">
+                    <Label className="text-sm text-muted-foreground">총 주간 운동 목표</Label>
+                    <div className="p-3 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
+                      <div className="text-lg font-semibold text-blue-700 dark:text-[#6ca0ff]">
+                        {totalWeeklyWorkoutTarget}회 / 주
+                      </div>
+                      <div className="text-sm text-blue-600 dark:text-[#b3b8d8]">
+                        (근력운동: {totalWeeklyWorkoutTarget - parseInt(goals.weeklyCardio)}회, 유산소: {goals.weeklyCardio}회)
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <Separator />
+                <Separator />
 
-              {/* Diet Goals */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium flex items-center">
-                  <Heart className="mr-2 h-5 w-5" />
-                  식단 목표
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="calories">칼로리 (kcal/일)</Label>
-                    <Input
-                      id="calories"
-                      type="number"
-                      value={goals.dailyCalories}
-                      onChange={(e) => setGoals({...goals, dailyCalories: e.target.value})}
-                      placeholder="2000"
-                      onWheel={e => e.currentTarget.blur()}
-                    />
-                  </div>
+                {/* Diet Goals */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium flex items-center">
+                    <Heart className="mr-2 h-5 w-5" />
+                    식단 목표
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="calories">칼로리 (kcal/일)</Label>
+                      <Input
+                        id="calories"
+                        type="number"
+                        value={goals.dailyCalories}
+                        onChange={(e) => setGoals({...goals, dailyCalories: e.target.value})}
+                        placeholder="2000"
+                        onWheel={e => e.currentTarget.blur()}
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="carbs">탄수화물 (g/일)</Label>
-                    <Input
-                      id="carbs"
-                      type="number"
-                      value={goals.dailyCarbs}
-                      onChange={(e) => setGoals({...goals, dailyCarbs: e.target.value})}
-                      placeholder="200"
-                      onWheel={e => e.currentTarget.blur()}
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="carbs">탄수화물 (g/일)</Label>
+                      <Input
+                        id="carbs"
+                        type="number"
+                        value={goals.dailyCarbs}
+                        onChange={(e) => setGoals({...goals, dailyCarbs: e.target.value})}
+                        placeholder="200"
+                        onWheel={e => e.currentTarget.blur()}
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="protein">단백질 (g/일)</Label>
-                    <Input
-                      id="protein"
-                      type="number"
-                      value={goals.dailyProtein}
-                      onChange={(e) => setGoals({...goals, dailyProtein: e.target.value})}
-                      placeholder="120"
-                      onWheel={e => e.currentTarget.blur()}
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="protein">단백질 (g/일)</Label>
+                      <Input
+                        id="protein"
+                        type="number"
+                        value={goals.dailyProtein}
+                        onChange={(e) => setGoals({...goals, dailyProtein: e.target.value})}
+                        placeholder="120"
+                        onWheel={e => e.currentTarget.blur()}
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="fat">지방 (g/일)</Label>
-                    <Input
-                      id="fat"
-                      type="number"
-                      value={goals.dailyFat}
-                      onChange={(e) => setGoals({...goals, dailyFat: e.target.value})}
-                      placeholder="60"
-                      onWheel={e => e.currentTarget.blur()}
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="fat">지방 (g/일)</Label>
+                      <Input
+                        id="fat"
+                        type="number"
+                        value={goals.dailyFat}
+                        onChange={(e) => setGoals({...goals, dailyFat: e.target.value})}
+                        placeholder="60"
+                        onWheel={e => e.currentTarget.blur()}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <Button 
-                onClick={handleGoalsSave} 
-                className="w-full gradient-bg hover:opacity-90 transition-opacity"
-                disabled={createUserGoalMutation.isPending}
-              >
-                {createUserGoalMutation.isPending ? '저장 중...' : '건강 목표 저장'}
-              </Button>
-            </CardContent>
-          </Card>
+                <Button 
+                  onClick={handleGoalsSave} 
+                  className="w-full gradient-bg hover:opacity-90 transition-opacity"
+                  disabled={createUserGoalMutation.isPending}
+                >
+                  {createUserGoalMutation.isPending ? '저장 중...' : '건강 목표 저장'}
+                </Button>
+              </CardContent>
+            </Card>
 
-          {/* BMI Calculator */}
-          <Card className="hover-lift">
-            <CardHeader>
-              <CardTitle>BMI 계산기</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center space-y-2">
-                <div className="text-3xl font-bold gradient-text">
-                  {((parseFloat(profileData.weight) / Math.pow(parseFloat(profileData.height) / 100, 2)) || 0).toFixed(1)}
+            {/* BMI Calculator */}
+            <Card className="hover-lift">
+              <CardHeader>
+                <CardTitle>BMI 계산기</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center space-y-2">
+                  <div className="text-3xl font-bold gradient-text">
+                    {((parseFloat(profileData.weight) / Math.pow(parseFloat(profileData.height) / 100, 2)) || 0).toFixed(1)}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {parseFloat(profileData.height) && parseFloat(profileData.weight) ? (
+                      (() => {
+                        const bmi = parseFloat(profileData.weight) / Math.pow(parseFloat(profileData.height) / 100, 2);
+                        if (bmi < 18.5) return "저체중";
+                        if (bmi < 25) return "정상체중";
+                        if (bmi < 30) return "과체중";
+                        return "비만";
+                      })()
+                    ) : "키와 체중을 입력하세요"}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {parseFloat(profileData.height) && parseFloat(profileData.weight) ? (
-                    (() => {
-                      const bmi = parseFloat(profileData.weight) / Math.pow(parseFloat(profileData.height) / 100, 2);
-                      if (bmi < 18.5) return "저체중";
-                      if (bmi < 25) return "정상체중";
-                      if (bmi < 30) return "과체중";
-                      return "비만";
-                    })()
-                  ) : "키와 체중을 입력하세요"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
-    </Layout>
+      </Layout>
+    </div>
   );
 };
 

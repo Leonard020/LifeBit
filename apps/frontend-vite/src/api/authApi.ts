@@ -897,6 +897,53 @@ export const getDailyExerciseRecords = async (date: string, userId: number): Pro
   }
 };
 
+// 주간 운동 기록 조회 (bodyPart 정보가 포함된 일일 API 사용)
+export const getWeeklyExerciseRecords = async (startDate: string, endDate: string, userId: number): Promise<ExerciseRecordDTO[]> => {
+  try {
+    console.log('🏋️ [getWeeklyExerciseRecords] 주간 운동 기록 조회 시작 - 기간:', startDate, '~', endDate, '사용자:', userId);
+    
+    // 날짜 범위에서 각 날짜별로 일일 운동 기록 조회 (bodyPart 정보 포함)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const datePromises: Promise<ExerciseRecordDTO[]>[] = [];
+    
+    // 각 날짜별로 일일 운동 기록 조회
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      datePromises.push(getDailyExerciseRecords(dateStr, userId));
+    }
+    
+    // 모든 날짜의 데이터를 병렬로 조회
+    const allDayRecords = await Promise.all(datePromises);
+    
+    // 2차원 배열을 1차원으로 평면화
+    const allRecords = allDayRecords.flat();
+    
+    console.log('✅ [getWeeklyExerciseRecords] 주간 운동 기록 조회 성공:', allRecords.length, '개');
+    return allRecords;
+  } catch (error: unknown) {
+    console.error('❌ [getWeeklyExerciseRecords] 주간 운동 기록 조회 실패:', error);
+    
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as { response?: { status?: number; data?: { message?: string } } };
+      
+      if (axiosError.response?.status === 401) {
+        console.error('🚨 [getWeeklyExerciseRecords] 인증 실패 - 토큰이 만료되었거나 유효하지 않습니다.');
+        throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
+      }
+      
+      if (axiosError.response?.status === 403) {
+        console.error('🚨 [getWeeklyExerciseRecords] 권한 없음');
+        throw new Error('접근 권한이 없습니다.');
+      }
+      
+      throw new Error(axiosError.response?.data?.message || '주간 운동 기록 조회 중 오류가 발생했습니다.');
+    }
+    
+    throw new Error('주간 운동 기록 조회 중 오류가 발생했습니다.');
+  }
+};
+
 // ============================================================================
 // React Query Hooks - 운동 세션 CRUD
 // ============================================================================

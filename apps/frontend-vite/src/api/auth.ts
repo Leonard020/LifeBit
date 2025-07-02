@@ -585,13 +585,35 @@ export const completeAchievement = async (userId: number, achievementTitle: stri
   return response.data;
 };
 
-// 목표 달성률 점수 업데이트
+// 목표 달성률 점수 업데이트 (전체)
 export const updateAchievementScore = async () => {
   try {
     const response = await axios.post('/api/user-goals/update-achievement-score');
     return response.data;
   } catch (error) {
     console.error('목표 달성률 점수 업데이트 실패:', error);
+    throw error;
+  }
+};
+
+// 운동 점수 업데이트 (주간 기준)
+export const updateExerciseScore = async () => {
+  try {
+    const response = await axios.post('/api/user-goals/update-exercise-score');
+    return response.data;
+  } catch (error) {
+    console.error('운동 점수 업데이트 실패:', error);
+    throw error;
+  }
+};
+
+// 식단 점수 업데이트 (일간 기준)
+export const updateNutritionScore = async () => {
+  try {
+    const response = await axios.post('/api/user-goals/update-nutrition-score');
+    return response.data;
+  } catch (error) {
+    console.error('식단 점수 업데이트 실패:', error);
     throw error;
   }
 };
