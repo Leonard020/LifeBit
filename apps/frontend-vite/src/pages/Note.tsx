@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import axios from 'axios';
 import axiosInstance from '@/utils/axios';
 import { getUserInfo, getToken, getUserIdFromToken, isTokenValid, removeToken, debugToken } from '@/utils/auth';
-import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
+import { getExerciseCatalog, type ExerciseCatalog, getDailyDietRecords, type DietRecord, getDailyExerciseRecords, getWeeklyExerciseRecords, type ExerciseRecordDTO, createDietRecord, searchFoodItems, deleteDietRecord, updateDietRecord, createExerciseSession, updateExerciseSession, deleteExerciseSession } from '@/api/authApi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { useUserGoals } from '@/api/auth';
@@ -90,9 +90,16 @@ const Note = () => {
 
   // Mock data for records on specific dates (유지)
   const [todayExercise, setTodayExercise] = useState<ExerciseRecordDTO[]>([]);
+  
+  // 주간 운동 데이터 (레이더 차트용)
+  const [weeklyExerciseData, setWeeklyExerciseData] = useState<ExerciseRecordDTO[]>([]);
 
   // ✅ 토큰을 맨 처음에 한 번만 가져와서 저장
   const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // 운동 카탈로그 상태 - 동적 매핑용
+  const [exerciseCatalog, setExerciseCatalog] = useState<ExerciseCatalog[]>([]);
+  const [exerciseNameToBodyPartMap, setExerciseNameToBodyPartMap] = useState<Record<string, string>>({});
 
   // 1. 기록 날짜 상태 추가
   const [dietRecordedDates, setDietRecordedDates] = useState<string[]>([]);
@@ -155,6 +162,34 @@ const Note = () => {
     }
     setAuthToken(token);
   }, [navigate]);
+
+  // ✅ 운동 카탈로그 불러와서 매핑 Map 생성
+  useEffect(() => {
+    const fetchExerciseCatalog = async () => {
+      try {
+        const catalog = await getExerciseCatalog();
+        setExerciseCatalog(catalog);
+        
+        // 운동 이름 → 부위 매핑 Map 생성
+        const nameToBodyPartMap: Record<string, string> = {};
+        catalog.forEach(exercise => {
+          const bodyPart = exercise.target_body_part || 'cardio';
+          const part = getBodyPartLabel(bodyPart);
+          if (part && part !== '기타') {
+            nameToBodyPartMap[exercise.name.toLowerCase()] = part;
+          }
+        });
+        setExerciseNameToBodyPartMap(nameToBodyPartMap);
+        console.log('🗺️ [Note] 운동 이름-부위 매핑 Map 생성:', nameToBodyPartMap);
+      } catch (error) {
+        console.error('❌ [Note] 운동 카탈로그 불러오기 실패:', error);
+      }
+    };
+    
+    if (authToken) {
+      fetchExerciseCatalog();
+    }
+  }, [authToken]);
 
   // 2. 달력 월이 바뀔 때마다 기록 날짜 fetch
   useEffect(() => {
@@ -272,20 +307,20 @@ const Note = () => {
 
   const dateArr = getDateRangeArray(weekStartDate, weekEndDate);
 
-  // todayExercise를 날짜별로 그룹화 (bodyPart가 cardio/유산소면 유산소로)
-  const todayExerciseByDate = todayExercise.reduce((acc, rec) => {
+  // weeklyExerciseData를 날짜별로 그룹화 (bodyPart가 cardio/유산소면 유산소로)
+  const weeklyExerciseByDate = weeklyExerciseData.reduce((acc, rec) => {
     const date = rec.exerciseDate ? rec.exerciseDate.slice(0, 10) : null;
     if (!date) return acc;
     if (!acc[date]) acc[date] = [];
     acc[date].push(rec);
     return acc;
-  }, {});
+  }, {} as Record<string, ExerciseRecordDTO[]>);
 
   // 누락된 날짜의 운동 기록을 NoteExerciseDTO 형태로 변환 (유산소 보정 포함)
   const extraRecords = dateArr
-    .filter(date => !weeklySummary.some(item => item.workoutDate.slice(0, 10) === date) && todayExerciseByDate[date])
+    .filter(date => !weeklySummary.some(item => item.workoutDate.slice(0, 10) === date) && weeklyExerciseByDate[date])
     .map(date => {
-      const records = todayExerciseByDate[date];
+      const records = weeklyExerciseByDate[date];
       return {
         workoutDate: date,
         totalSets: records.reduce((sum, r) => sum + (r.sets || 0), 0),
@@ -314,14 +349,8 @@ const Note = () => {
   const weeklyBodyPartCounts = React.useMemo(() => {
     const counts: Record<string, number> = {};
     
-    // 1. todayExercise에서 주간 범위에 포함되는 데이터만 사용
-    const weeklyTodayExercise = todayExercise.filter(record => {
-      if (!record.exerciseDate) return false;
-      const recordDate = record.exerciseDate.slice(0, 10);
-      return recordDate >= weekStartStr && recordDate <= weekEndStr;
-    });
-    
-    weeklyTodayExercise.forEach((record) => {
+    // 1. weeklyExerciseData 사용 (이미 주간 범위 데이터)
+    weeklyExerciseData.forEach((record) => {
       if (record.bodyPart) {
         const part = getBodyPartLabel(record.bodyPart);
         if (part && part !== '기타') {
@@ -344,21 +373,15 @@ const Note = () => {
     });
     
     return counts;
-  }, [todayExercise, filteredSummary, weekStartStr, weekEndStr]);
+  }, [weeklyExerciseData, filteredSummary, weekStartStr, weekEndStr]);
 
   // ✅ 주간 Strength-Days / Cardio-Days 계산 (하루에 1회만 인정)
   const { weeklyStrengthDays, weeklyCardioDays } = React.useMemo(() => {
     // 날짜별로 strength, cardio 여부 저장
     const dayMap: Record<string, { strength: boolean; cardio: boolean }> = {};
 
-    // todayExercise에서 주간 범위에 포함되는 데이터만 사용
-    const weeklyTodayExercise = todayExercise.filter(record => {
-      if (!record.exerciseDate) return false;
-      const recordDate = record.exerciseDate.slice(0, 10);
-      return recordDate >= weekStartStr && recordDate <= weekEndStr;
-    });
-
-    weeklyTodayExercise.forEach((record) => {
+    // weeklyExerciseData 사용 (이미 주간 범위 데이터)
+    weeklyExerciseData.forEach((record) => {
       if (record.exerciseDate) {
         const date = record.exerciseDate.slice(0, 10);
         if (!dayMap[date]) {
@@ -401,21 +424,15 @@ const Note = () => {
     });
 
     return { weeklyStrengthDays: strengthDays, weeklyCardioDays: cardioDays };
-  }, [todayExercise, filteredSummary, weekStartStr, weekEndStr]);
+  }, [weeklyExerciseData, filteredSummary, weekStartStr, weekEndStr]);
 
   // ✅ 부위별 일일 1회 기준 주간 집계 (Radar 차트용)
   const weeklyBodyPartDays = React.useMemo(() => {
     // 날짜별 부위 Set 저장
     const datePartSet: Record<string, Set<string>> = {};
     
-    // 1. todayExercise에서 주간 범위에 포함되는 데이터만 사용
-    const weeklyTodayExercise = todayExercise.filter(record => {
-      if (!record.exerciseDate) return false;
-      const recordDate = record.exerciseDate.slice(0, 10);
-      return recordDate >= weekStartStr && recordDate <= weekEndStr;
-    });
-    
-    weeklyTodayExercise.forEach((record) => {
+    // 1. weeklyExerciseData 사용 (이미 주간 범위 데이터)
+    weeklyExerciseData.forEach((record) => {
       if (record.exerciseDate && record.bodyPart) {
         const date = record.exerciseDate.slice(0, 10);
         if (!datePartSet[date]) datePartSet[date] = new Set();
@@ -426,18 +443,25 @@ const Note = () => {
       }
     });
     
-    // 2. weeklySummary에서도 체크
+    // 2. weeklySummary에서도 체크 - 동적 매핑 Map 사용
     filteredSummary.forEach((item) => {
       if (!Array.isArray(item.exerciseNames) || item.exerciseNames.length === 0) return;
       const date = item.workoutDate;
       if (!datePartSet[date]) datePartSet[date] = new Set();
       
       item.exerciseNames.forEach((name: string) => {
-        // 유산소 운동만 특별 처리
         const lower = name.toLowerCase();
-        const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝'].some(c => lower.includes(c));
-        if (isCardio) {
-          datePartSet[date].add('유산소');
+        
+        // 운동 카탈로그 매핑에서 부위 찾기
+        const mappedBodyPart = exerciseNameToBodyPartMap[lower];
+        if (mappedBodyPart) {
+          datePartSet[date].add(mappedBodyPart);
+        } else {
+          // 매핑에 없는 경우 기본 유산소 키워드로 체크
+          const isCardio = ['수영', '사이클링', '조깅', '러닝', 'cardio', '유산소', '걷기', '런닝', '트레드밀', '러닝머신'].some(c => lower.includes(c));
+          if (isCardio) {
+            datePartSet[date].add('유산소');
+          }
         }
       });
     });
@@ -450,7 +474,7 @@ const Note = () => {
       });
     });
     return counts;
-  }, [todayExercise, filteredSummary, weekStartStr, weekEndStr]);
+  }, [weeklyExerciseData, filteredSummary, weekStartStr, weekEndStr, exerciseNameToBodyPartMap]);
 
   // 3. exerciseData: 주간 누적만 사용
   const exerciseData = bodyPartMap.map(({ label }) => ({
@@ -683,12 +707,43 @@ const Note = () => {
     }
   };
 
+  // ✅ 주간 운동 기록 불러오기 (레이더 차트용)
+  const fetchWeeklyExercise = useCallback(async () => {
+    const userId = getUserIdFromToken();
+    if (!userId) {
+      setWeeklyExerciseData([]);
+      return;
+    }
+    
+    try {
+      console.log('📅 [fetchWeeklyExercise] 주간 운동 데이터 조회 시작:', weekStartStr, '~', weekEndStr);
+      const data = await getWeeklyExerciseRecords(weekStartStr, weekEndStr, userId);
+      
+      // 데이터 정제
+      const cleanedData = data.map(record => ({
+        ...record,
+        sets: record.sets,
+        reps: record.reps,
+        weight: record.weight,
+        duration_minutes: record.duration_minutes || undefined,
+        calories_burned: record.calories_burned || undefined
+      }));
+      
+      setWeeklyExerciseData(cleanedData);
+      console.log('✅ [fetchWeeklyExercise] 주간 운동 데이터 조회 성공:', cleanedData.length, '개');
+    } catch (err) {
+      console.error("❌ [fetchWeeklyExercise] 주간 운동 기록 불러오기 실패:", err);
+      setWeeklyExerciseData([]);
+    }
+  }, [weekStartStr, weekEndStr]);
+
   useEffect(() => {
     if (authToken) {
       fetchDiet(); // 식단 먼저
       fetchExercise();
+      fetchWeeklyExercise(); // 주간 운동 데이터도 가져오기
     }
-  }, [selectedDate, authToken]);
+  }, [selectedDate, authToken, fetchWeeklyExercise]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
