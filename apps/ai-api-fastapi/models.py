@@ -60,6 +60,12 @@ class MealTimeType(enum.Enum):
     lunch = "lunch"
     dinner = "dinner"
     snack = "snack"
+    midnight = "midnight"
+    아침 = "아침"
+    점심 = "점심"
+    저녁 = "저녁"
+    야식 = "야식"
+    간식 = "간식"
 
 # 🏋️ 운동 기록
 class ExerciseSession(Base):

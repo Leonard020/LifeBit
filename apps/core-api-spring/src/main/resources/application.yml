@@ -116,7 +116,7 @@ spring:
       
   jpa:
     hibernate:
-      ddl-auto: update  # 로컬 테스트용으로 validate로 변경
+      ddl-auto: validate  # 로컬 테스트용으로 validate로 변경
     show-sql: true  # 개발환경에서는 SQL 로그 표시
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
