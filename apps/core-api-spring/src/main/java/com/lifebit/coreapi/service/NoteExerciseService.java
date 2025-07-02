@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 import com.lifebit.coreapi.entity.enums.AchievementType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class NoteExerciseService {
     private final ExerciseCatalogRepository exerciseCatalogRepository;
     private final UserRepository userRepository;
     private final AchievementService achievementService;
+    private static final Logger log = LoggerFactory.getLogger(NoteExerciseService.class);
 
     // ✅ 주간 요약 데이터
     public List<NoteExerciseDTO> getWeeklyExerciseSummary(Long userId, LocalDate weekStart) {
@@ -98,26 +101,33 @@ public class NoteExerciseService {
 
         // ✅ 업적 체크 및 업데이트
         try {
+            log.info("🟣 [NoteExerciseService] 업적 업데이트 시작 - 사용자: {}", dto.getUserId());
+            
             // 사용자 업적 초기화 (없으면 생성)
             achievementService.initializeUserAchievements(dto.getUserId());
             
             // 연속 운동 일수 계산 및 업적 업데이트
             int currentStreak = calculateCurrentStreak(dto.getUserId());
+            log.info("🟣 [NoteExerciseService] 연속 운동 일수: {}", currentStreak);
             achievementService.updateStreakAchievements(dto.getUserId(), currentStreak);
             
             // 총 운동 일수 업적 업데이트 (설정 기반)
             int totalWorkoutDays = getTotalWorkoutDays(dto.getUserId());
+            log.info("🟣 [NoteExerciseService] 총 운동 일수: {}", totalWorkoutDays);
             achievementService.updateUserAchievementProgress(dto.getUserId(), 
                 AchievementType.TOTAL_WORKOUT_DAYS.getTitle(), totalWorkoutDays);
             
             // 주간 운동 횟수 업적 업데이트 (설정 기반)
             int weeklyExerciseCount = getWeeklyExerciseCount(dto.getUserId());
+            log.info("🟣 [NoteExerciseService] 주간 운동 횟수: {}", weeklyExerciseCount);
             achievementService.updateUserAchievementProgress(dto.getUserId(), 
                 AchievementType.WEEKLY_EXERCISE.getTitle(), weeklyExerciseCount);
             
+            log.info("✅ [NoteExerciseService] 업적 업데이트 완료 - 사용자: {}", dto.getUserId());
+            
         } catch (Exception e) {
             // 업적 업데이트 실패 시 로그만 남기고 계속 진행
-            System.err.println("Failed to update achievements: " + e.getMessage());
+            log.error("❌ [NoteExerciseService] 업적 업데이트 실패 - 사용자: {}, 오류: {}", dto.getUserId(), e.getMessage(), e);
         }
 
         // ✅ DTO 반환
@@ -165,6 +175,7 @@ public class NoteExerciseService {
         sessions.sort(java.util.Comparator.comparing(ExerciseSession::getExerciseDate).reversed());
         
         if (sessions.isEmpty()) {
+            log.info("🟣 [NoteExerciseService] 운동 기록 없음 - 사용자: {}", userId);
             return 0;
         }
 
@@ -172,15 +183,24 @@ public class NoteExerciseService {
         LocalDate currentDate = LocalDate.now();
         
         // 오늘부터 역순으로 연속 운동 일수 계산
-        for (ExerciseSession session : sessions) {
-            if (session.getExerciseDate().equals(currentDate)) {
+        for (int i = 0; i < sessions.size(); i++) {
+            ExerciseSession session = sessions.get(i);
+            LocalDate sessionDate = session.getExerciseDate();
+            
+            // 현재 확인하려는 날짜와 세션 날짜가 일치하는지 확인
+            if (sessionDate.equals(currentDate)) {
                 streak++;
                 currentDate = currentDate.minusDays(1);
-            } else if (session.getExerciseDate().isBefore(currentDate)) {
-                break; // 연속이 끊어짐
+                log.debug("🟣 [NoteExerciseService] 연속 운동 일수 증가 - 날짜: {}, 현재 연속: {}", sessionDate, streak);
+            } else if (sessionDate.isBefore(currentDate)) {
+                // 연속이 끊어짐 - 더 이상 확인할 필요 없음
+                log.debug("🟣 [NoteExerciseService] 연속 운동 끊어짐 - 날짜: {}, 현재 연속: {}", sessionDate, streak);
+                break;
             }
+            // sessionDate가 currentDate보다 미래인 경우는 무시 (이론적으로 불가능하지만 안전장치)
         }
         
+        log.info("🟣 [NoteExerciseService] 연속 운동 일수 계산 완료 - 사용자: {}, 연속 일수: {}", userId, streak);
         return streak;
     }
 
@@ -189,10 +209,13 @@ public class NoteExerciseService {
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
             userId, LocalDate.now().minusDays(365), LocalDate.now());
         
-        return (int) sessions.stream()
+        int totalDays = (int) sessions.stream()
             .map(ExerciseSession::getExerciseDate)
             .distinct()
             .count();
+            
+        log.info("🟣 [NoteExerciseService] 총 운동 일수 계산 - 사용자: {}, 총 일수: {}", userId, totalDays);
+        return totalDays;
     }
 
     // ✅ 주간 운동 횟수 계산
@@ -200,6 +223,8 @@ public class NoteExerciseService {
         List<ExerciseSession> sessions = exerciseSessionRepository.findByUser_UserIdAndExerciseDateBetween(
             userId, LocalDate.now().minusDays(7), LocalDate.now());
         
-        return sessions.size();
+        int weeklyCount = sessions.size();
+        log.info("🟣 [NoteExerciseService] 주간 운동 횟수 계산 - 사용자: {}, 주간 횟수: {}", userId, weeklyCount);
+        return weeklyCount;
     }
 }

@@ -77,7 +77,11 @@ public class AchievementController {
             }
             
             achievementService.completeAchievement(userId, achievementTitle);
-            return ResponseEntity.ok(Map.of("message", "업적이 달성되었습니다."));
+            return ResponseEntity.ok(Map.of(
+                "message", "업적이 달성되었습니다.",
+                "achievementTitle", achievementTitle,
+                "rankingUpdated", true
+            ));
         } catch (Exception e) {
             log.error("Failed to complete achievement", e);
             return ResponseEntity.badRequest().body(Map.of("error", "업적 달성 처리에 실패했습니다."));

@@ -15,6 +15,7 @@ import com.lifebit.coreapi.repository.UserRepository;
 import com.lifebit.coreapi.repository.ranking.UserRankingRepository;
 import com.lifebit.coreapi.repository.ranking.RankingHistoryRepository;
 import com.lifebit.coreapi.repository.ranking.RankingNotificationRepository;
+import com.lifebit.coreapi.repository.UserAchievementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.event.EventListener;
+import com.lifebit.coreapi.event.AchievementCompletedEvent;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,7 +34,6 @@ import java.util.stream.Collectors;
 
 import com.lifebit.coreapi.entity.enums.RankingTier;
 import com.lifebit.coreapi.service.HealthStatisticsService;
-import com.lifebit.coreapi.service.AchievementService;
 import com.lifebit.coreapi.service.ExerciseService;
 import com.lifebit.coreapi.service.MealService;
 import com.lifebit.coreapi.service.NotificationService;
@@ -55,8 +57,8 @@ public class RankingService {
     private final UserRepository userRepository;
     private final RankingHistoryRepository rankingHistoryRepository;
     private final RankingNotificationRepository rankingNotificationRepository;
+    private final UserAchievementRepository userAchievementRepository;
     private final HealthStatisticsService healthStatisticsService;
-    private final AchievementService achievementService;
     private final ExerciseService exerciseService;
     private final MealService mealService;
     private final NotificationService notificationService;
@@ -395,7 +397,8 @@ public class RankingService {
         int streakScore = streakDays * 10;
 
         // 4. 업적 점수: 달성 업적 개수 ×50
-        int achievementCount = achievementService.getUserAchievementCount(userId);
+        // UserAchievementRepository를 직접 사용하여 달성된 업적 개수 계산
+        int achievementCount = userAchievementRepository.countAchievedByUserId(userId).intValue();
         int achievementScore = achievementCount * 50;
 
         return exerciseScore + mealScore + streakScore + achievementScore;
@@ -796,5 +799,20 @@ public class RankingService {
         }
         
         return result;
+    }
+
+    /**
+     * 업적 달성 완료 이벤트 리스너
+     */
+    @EventListener
+    @Transactional
+    public void handleAchievementCompleted(AchievementCompletedEvent event) {
+        try {
+            log.info("📢 [RankingService] 업적 달성 이벤트 수신 - 사용자: {}", event.getUserId());
+            updateGoalAchievementScore(event.getUserId());
+            log.info("✅ [RankingService] 랭킹 점수 업데이트 완료 - 사용자: {}", event.getUserId());
+        } catch (Exception e) {
+            log.error("❌ [RankingService] 업적 달성 후 랭킹 점수 업데이트 실패 - 사용자: {}, 오류: {}", event.getUserId(), e.getMessage(), e);
+        }
     }
 } 

@@ -116,6 +116,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   const [error, setError] = useState<string | null>(null);
   const [goalPeriod, setGoalPeriod] = useState<'day' | 'week' | 'month'>('day');
   const navigate = useNavigate();
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // 인증 체크
   useEffect(() => {
@@ -125,6 +126,18 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       return;
     }
   }, [navigate]);
+
+  // 다크모드 판별
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+      const observer = new MutationObserver(() => {
+        setIsDarkMode(document.documentElement.classList.contains('dark'));
+      });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      return () => observer.disconnect();
+    }
+  }, []);
 
   // API 데이터 가져오기 (에러 처리 포함)
   const { 
@@ -674,7 +687,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           />
 
           {/* 목표 달성률 섹션 */}
-          <Card className="bg-gradient-to-r from-indigo-50 to-pink-50 dark:from-[#232946] dark:to-[#181c2a] border-2 border-border">
+          <Card className={isDarkMode ? 'bg-gradient-to-r from-indigo-50 to-pink-50 dark:from-[#232946] dark:to-[#181c2a] !border-2 !border-[#7c3aed]' : 'bg-gradient-to-r from-indigo-50 to-pink-50 dark:from-[#232946] dark:to-[#181c2a] border-none'}>
             <CardHeader className="text-center">
               <CardTitle className="flex items-center justify-center text-2xl">
                 <Target className="h-6 w-6 mr-2 text-blue-600" />
@@ -996,7 +1009,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           {/* 상세 목표 달성률 섹션 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 📊 상세 운동 목표 달성률 */}
-          <Card>
+          <Card className={isDarkMode ? '!border-2 !border-[#7c3aed]' : 'border-none'}>
             <CardHeader>
                 <CardTitle className="flex items-center">
                   <Activity className="h-5 w-5 mr-2 text-green-600" />
@@ -1044,7 +1057,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           
                             {/* 가슴 운동 */}
                             {exerciseDetails.chest.hasTarget && (
-                              <div className="bg-red-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-red-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-red-600 dark:text-red-300">💪 가슴 운동</span>
                                   <span className="text-sm font-bold text-red-600 dark:text-red-300">
@@ -1060,7 +1073,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 등 운동 */}
                             {exerciseDetails.back.hasTarget && (
-                              <div className="bg-green-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-green-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-green-600 dark:text-green-300">🏋️‍♂️ 등 운동</span>
                                   <span className="text-sm font-bold text-green-600 dark:text-green-300">
@@ -1076,7 +1089,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 다리 운동 */}
                             {exerciseDetails.legs.hasTarget && (
-                              <div className="bg-purple-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-purple-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-purple-600 dark:text-purple-300">🦵 다리 운동</span>
                                   <span className="text-sm font-bold text-purple-600 dark:text-purple-300">
@@ -1092,7 +1105,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 어깨 운동 */}
                             {exerciseDetails.shoulders.hasTarget && (
-                              <div className="bg-orange-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-orange-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-orange-600 dark:text-orange-300">🤸‍♂️ 어깨 운동</span>
                                   <span className="text-sm font-bold text-orange-600 dark:text-orange-300">
@@ -1108,7 +1121,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 팔 운동 */}
                             {exerciseDetails.arms.hasTarget && (
-                              <div className="bg-pink-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-pink-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-pink-600 dark:text-pink-300">💪 팔 운동</span>
                                   <span className="text-sm font-bold text-pink-600 dark:text-pink-300">
@@ -1124,7 +1137,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 복근 운동 */}
                             {exerciseDetails.abs.hasTarget && (
-                              <div className="bg-yellow-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-yellow-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-yellow-600 dark:text-yellow-300">🏃‍♀️ 복근 운동</span>
                                   <span className="text-sm font-bold text-yellow-600 dark:text-yellow-300">
@@ -1140,7 +1153,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 유산소 운동 */}
                             {exerciseDetails.cardio.hasTarget && (
-                              <div className="bg-cyan-50 rounded-lg p-3">
+                              <div className={(isDarkMode ? 'bg-card border border-[#7c3aed]' : 'bg-cyan-50 border-none') + ' rounded-lg p-3'}>
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-cyan-600 dark:text-cyan-300">🏃 유산소 운동</span>
                                   <span className="text-sm font-bold text-cyan-600 dark:text-cyan-300">
@@ -1192,7 +1205,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           </Card>
 
             {/* 🍎 상세 영양소 목표 달성률 */}
-          <Card>
+          <Card className={isDarkMode ? '!border-2 !border-[#7c3aed]' : 'border-none'}>
             <CardHeader>
                 <CardTitle className="flex items-center">
                   <Utensils className="h-5 w-5 mr-2 text-blue-600" />

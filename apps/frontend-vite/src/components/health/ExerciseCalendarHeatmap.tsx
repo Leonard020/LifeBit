@@ -37,6 +37,8 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
   const currentMonth = new Date(today).getMonth();
   const currentYear = new Date(today).getFullYear();
 
+  const isDarkMode = typeof window !== 'undefined' && document.documentElement.classList.contains('dark');
+
   // 운동 데이터를 날짜별로 그룹핑
   const exerciseByDate = useMemo(() => {
     const grouped: Record<string, { workouts: number; totalMinutes: number; totalCalories: number }> = {};
@@ -186,7 +188,11 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
   );
 
   return (
-    <Card className="w-full bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100">
+    <Card className={
+      (isDarkMode
+        ? 'w-full bg-card !border-2 !border-[#7c3aed]'
+        : 'w-full bg-gradient-to-br from-white to-green-50/30 border-none')
+    }>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-3">
@@ -212,7 +218,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
       </CardHeader>
       <CardContent className="space-y-6">
         {/* 월별 구분 히트맵 그리드 */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-green-100">
+        <div className={isDarkMode ? 'bg-card rounded-xl p-6 shadow-sm !border-2 !border-[#7c3aed]' : 'bg-white rounded-xl p-6 shadow-sm border-none'}>
           {/* 요일 라벨 */}
           <div className="flex items-center gap-3 text-sm font-medium text-gray-600 mb-4">
             <div className="w-24 flex items-center justify-center text-xs text-blue-600 font-semibold">
@@ -335,7 +341,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
 
         {/* 💎 개선된 통계 요약 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="relative overflow-hidden text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 hover:shadow-lg hover:scale-105 transition-all duration-200">
+          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
             <div className="flex items-center justify-center gap-2 text-blue-600 mb-2">
               <div className="p-1.5 bg-blue-500 rounded-full shadow-sm">
                 <Activity className="h-3 w-3 text-white" />
@@ -349,7 +355,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
             <div className="absolute top-2 right-2 text-2xl opacity-20">💪</div>
           </div>
           
-          <div className="relative overflow-hidden text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 hover:shadow-lg hover:scale-105 transition-all duration-200">
+          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
             <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
               <div className="p-1.5 bg-green-500 rounded-full shadow-sm">
                 <Clock className="h-3 w-3 text-white" />
@@ -363,7 +369,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
             <div className="absolute top-2 right-2 text-2xl opacity-20">⏱️</div>
           </div>
           
-          <div className="relative overflow-hidden text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200 hover:shadow-lg hover:scale-105 transition-all duration-200">
+          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
             <div className="flex items-center justify-center gap-2 text-orange-600 mb-2">
               <div className="p-1.5 bg-orange-500 rounded-full shadow-sm">
                 <Flame className="h-3 w-3 text-white" />
@@ -377,7 +383,7 @@ export const ExerciseCalendarHeatmap: React.FC<ExerciseCalendarHeatmapProps> = (
             <div className="absolute top-2 right-2 text-2xl opacity-20">🔥</div>
           </div>
           
-          <div className="relative overflow-hidden text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200 hover:shadow-lg hover:scale-105 transition-all duration-200">
+          <div className={(isDarkMode ? 'relative overflow-hidden text-center p-4 bg-card rounded-xl !border-2 !border-[#7c3aed]' : 'relative overflow-hidden text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border-none hover:shadow-lg hover:scale-105 transition-all duration-200')}>
             <div className="flex items-center justify-center gap-2 text-purple-600 mb-2">
               <div className="p-1.5 bg-purple-500 rounded-full shadow-sm">
                 <Target className="h-3 w-3 text-white" />

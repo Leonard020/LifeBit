@@ -123,6 +123,7 @@ const Settings: React.FC = () => {
           .animate-fade-in { animation: fade-in 0.7s; }
           @keyframes fade-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         `}</style>
+        
         <div className="w-full max-w-6xl mx-auto mt-10">
           <NotificationSettings />
         </div>
