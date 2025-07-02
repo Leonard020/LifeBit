@@ -90,9 +90,7 @@
     --border: 265 90% 50%;
     --input: 217.2 32.6% 17.5%;
     --ring: 265 90% 70%;
-
     --radius: 0.5rem;
-
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -101,29 +99,14 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-
     --exercise-color: 34 197% 94%;
     --diet-color: 221 100% 95%;
     --both-color: 316 70% 95%;
-
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-
-    /* 폰트 크기 변수 */
-    --font-size-xs: 14px;
-    --font-size-sm: 16px;
-    --font-size-base: 21px;
-    --font-size-lg: 24px;
-    --font-size-xl: 28px;
-    --font-size-2xl: 32px;
-    --font-size-3xl: 36px;
-    --font-size-4xl: 40px;
-    --font-size-5xl: 48px;
-    --font-size-6xl: 60px;
-
     /* 컬러 스킴 변수 */
     --primary-hue: 222.2;
     --primary-saturation: 47.4%;
@@ -220,7 +203,7 @@
     font-size: var(--font-size-lg) !important;
   }
 
-  /* 모든 폰트 크기 클래스를 CSS 변수로 재정의 (높은 우선순위) */
+  /* 폰트 크기 클래스들 */
   .text-xs,
   .text-xs * {
     font-size: var(--font-size-xs) !important;

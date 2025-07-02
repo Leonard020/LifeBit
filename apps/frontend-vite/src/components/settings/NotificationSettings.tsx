@@ -105,6 +105,16 @@ const NotificationSettings: React.FC = () => {
     });
   };
 
+  // 폰트 크기 취소
+  const handleFontSizeCancel = () => {
+    cancelThemeSettings();
+    setFontSizeChanged(false);
+    toast({
+      title: '폰트 크기 변경 취소됨',
+      description: '폰트 크기 변경이 취소되었습니다.',
+    });
+  };
+
   // 전체 알림 저장
   const handleAllNotificationsSave = () => {
     setSavedSettings(prev => ({ ...prev, allNotifications: tempSettings.allNotifications }));
@@ -224,7 +234,16 @@ const NotificationSettings: React.FC = () => {
             ))}
           </div>
           {fontSizeChanged && (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={handleFontSizeCancel}
+                variant="outline"
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <X className="h-4 w-4" />
+                취소
+              </Button>
               <Button
                 onClick={handleFontSizeSave}
                 className="flex items-center gap-2"
