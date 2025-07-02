@@ -42,7 +42,7 @@ public class RankingScoreService {
     }
 
     private UserRanking findAndValidateRanking(Long userId) {
-        UserRanking ranking = userRankingRepository.findByUserId(userId)
+        UserRanking ranking = userRankingRepository.findActiveByUserId(userId)
                 .orElseThrow(() -> new RankingNotFoundException(userId));
         rankingValidator.validateRanking(ranking);
         return ranking;

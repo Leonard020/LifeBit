@@ -74,7 +74,7 @@ public class DataInitializerService {
         // 모든 사용자에 대해 랭킹 데이터가 없으면 생성
         List<Long> userIds = userRepository.findAll().stream()
             .map(user -> user.getUserId())
-            .filter(userId -> userRankingRepository.findByUserId(userId).isEmpty())
+            .filter(userId -> userRankingRepository.findActiveByUserId(userId).isEmpty())
             .toList();
 
         if (userIds.isEmpty()) {

@@ -32,6 +32,9 @@ public class UserRanking {
     @Column(name = "total_score", nullable = false)
     private int totalScore = 0;
 
+    @Column(name = "goal_based_score", nullable = false)
+    private int goalBasedScore = 0;
+
     @Column(name = "streak_days", nullable = false)
     private int streakDays = 0;
 

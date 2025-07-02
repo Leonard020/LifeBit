@@ -33,7 +33,8 @@ import {
   RefreshCw,
   Dumbbell,
   AlertTriangle,
-  X
+  X,
+  Trophy
 } from 'lucide-react';
 import { useHealthRecords, useMealLogs, useExerciseSessions, useUserGoals, useHealthStatistics, UserGoal } from '../../api/auth';
 import { useExerciseCalendarHeatmap } from '../../api/authApi';
@@ -298,7 +299,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
   // 목표 달성률 계산 함수들
   const weeklyWorkoutTarget = useMemo(() => (
-    Number(userGoals?.data?.weekly_workout_target || (userGoals as any)?.weekly_workout_target || 0)
+    Number(userGoals?.data?.weekly_workout_target || (userGoals as { weekly_workout_target?: number })?.weekly_workout_target || 0)
   ), [userGoals]);
 
   const calculateExerciseScore = () => {
@@ -397,20 +398,53 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     return (allTargetsMet && hasAnyTarget) ? 1 : 0;
   };
 
-  // 운동 점수 업데이트 핸들러 (주간 기준)
+  // 운동 점수 업데이트 핸들러 (증분 방식)
   const handleExerciseScoreUpdate = async () => {
     try {
-      await updateExerciseScore();
+      console.log('🎯 [운동 점수 업데이트] 시작:', { userId });
+      
+      // 현재 운동 달성률 계산
+      const currentExerciseScore = calculateExerciseScore();
+      console.log('💪 [운동 점수 계산] 결과:', { currentExerciseScore });
+      
+      const url = `${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/add-exercise-score?achievementCount=${currentExerciseScore}`;
+      console.log('🚀 [API 호출] URL:', url);
+      
+      // 토큰 가져오기
+      const token = getToken();
+      console.log('🔑 [토큰 확인]:', { hasToken: !!token, tokenLength: token?.length || 0 });
+      
+      // 새로운 증분 점수 API 호출
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('📡 [API 응답] 상태:', { status: response.status, ok: response.ok });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [API 에러] 응답:', errorText);
+        throw new Error(`운동 점수 업데이트 실패: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ [API 성공] 응답:', result);
+      
       toast({
         title: '운동 점수 업데이트',
-        description: '운동 점수가 성공적으로 업데이트되었습니다.',
+        description: `운동 목표 달성으로 ${currentExerciseScore}점이 추가되었습니다!`,
         variant: 'default'
       });
+      
       // 데이터 새로고침
       refetchHealth();
       refetchHealthStats();
     } catch (error) {
-      console.error('운동 점수 업데이트 실패:', error);
+      console.error('❌ [운동 점수 업데이트] 실패:', error);
       toast({
         title: '업데이트 실패',
         description: '운동 점수 업데이트에 실패했습니다.',
@@ -419,20 +453,57 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     }
   };
 
-  // 식단 점수 업데이트 핸들러 (일간 기준)
+  // 식단 점수 업데이트 핸들러 (증분 방식)
   const handleNutritionScoreUpdate = async () => {
     try {
-      await updateNutritionScore();
+      console.log('🍎 [식단 점수 업데이트] 시작:', { userId });
+      
+      // 오늘 식단 목표 달성 여부 확인
+      const nutritionScore = calculateDashboardNutritionScore();
+      const isDailyGoalAchieved = nutritionScore >= 1;
+      console.log('🥗 [식단 점수 계산] 결과:', { nutritionScore, isDailyGoalAchieved });
+      
+      const url = `${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/add-nutrition-score?isDailyGoalAchieved=${isDailyGoalAchieved}`;
+      console.log('🚀 [API 호출] URL:', url);
+      
+      // 토큰 가져오기
+      const token = getToken();
+      console.log('🔑 [토큰 확인]:', { hasToken: !!token, tokenLength: token?.length || 0 });
+      
+      // 새로운 증분 점수 API 호출
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('📡 [API 응답] 상태:', { status: response.status, ok: response.ok });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [API 에러] 응답:', errorText);
+        throw new Error(`식단 점수 업데이트 실패: ${response.status}`);
+      }
+
+      const result = await response.json() as { scoreAdded?: number };
+      const scoreAdded = result.scoreAdded || 0;
+      console.log('✅ [API 성공] 응답:', result);
+      
       toast({
         title: '식단 점수 업데이트',
-        description: '식단 점수가 성공적으로 업데이트되었습니다.',
-        variant: 'default'
+        description: isDailyGoalAchieved 
+          ? `오늘 식단 목표 달성으로 ${scoreAdded}점이 추가되었습니다!`
+          : '오늘 식단 목표를 아직 달성하지 못했습니다.',
+        variant: isDailyGoalAchieved ? 'default' : 'destructive'
       });
+      
       // 데이터 새로고침
       refetchHealth();
       refetchMeals();
     } catch (error) {
-      console.error('식단 점수 업데이트 실패:', error);
+      console.error('❌ [식단 점수 업데이트] 실패:', error);
       toast({
         title: '업데이트 실패',
         description: '식단 점수 업데이트에 실패했습니다.',
@@ -564,7 +635,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     // 1️⃣ healthStats.bodyPartFrequency 우선
     if (healthStats?.bodyPartFrequency && Array.isArray(healthStats.bodyPartFrequency)) {
       const counts: Record<string, number> = {};
-      healthStats.bodyPartFrequency.forEach((item: any) => {
+      healthStats.bodyPartFrequency.forEach((item: { bodyPart?: string; count?: number }) => {
         const part = (item.bodyPart || '').toLowerCase();
         counts[part] = item.count || 0;
       });
@@ -951,6 +1022,39 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                     })()}개 달성 완료
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 🎯 점수 업데이트 버튼 섹션 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Trophy className="h-5 w-5 mr-2 text-yellow-600" />
+                랭킹 점수 업데이트
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button
+                  onClick={handleExerciseScoreUpdate}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  size="lg"
+                >
+                  <Activity className="h-4 w-4 mr-2" />
+                  운동 목표 점수 추가
+                </Button>
+                <Button
+                  onClick={handleNutritionScoreUpdate}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="lg"
+                >
+                  <Utensils className="h-4 w-4 mr-2" />
+                  식단 목표 점수 추가
+                </Button>
+              </div>
+              <div className="mt-3 text-sm text-gray-600 text-center">
+                목표 달성 시 버튼을 눌러 랭킹 점수를 업데이트하세요
               </div>
             </CardContent>
           </Card>

@@ -15,6 +15,9 @@ import java.util.Optional;
 public interface UserRankingRepository extends JpaRepository<UserRanking, Long> {
     Optional<UserRanking> findByUserId(Long userId);
 
+    @Query("SELECT ur FROM UserRanking ur WHERE ur.userId = :userId AND ur.isActive = true")
+    Optional<UserRanking> findActiveByUserId(@Param("userId") Long userId);
+
     @Query("SELECT ur FROM UserRanking ur WHERE ur.isActive = true ORDER BY ur.totalScore DESC")
     Page<UserRanking> findTopRankings(Pageable pageable);
 

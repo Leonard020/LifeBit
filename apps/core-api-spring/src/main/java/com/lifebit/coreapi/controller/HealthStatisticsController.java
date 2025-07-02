@@ -212,7 +212,7 @@ public class HealthStatisticsController {
                 
                 // 현재 사용자의 랭킹 정보 조회 (없으면 자동 생성)
                 User currentUser = userService.getUserById(currentUserId);
-                Optional<UserRanking> userRankingOpt = userRankingRepository.findByUserId(currentUserId);
+                Optional<UserRanking> userRankingOpt = userRankingRepository.findActiveByUserId(currentUserId);
                 
                 // 사용자 랭킹이 없으면 자동 생성
                 if (userRankingOpt.isEmpty()) {
@@ -470,6 +470,146 @@ public class HealthStatisticsController {
             fallback.put("error", "서버 오류가 발생했습니다. 관리자에게 문의해주세요.");
             
             return ResponseEntity.ok(fallback);
+        }
+    }
+
+    /**
+     * 운동 목표 달성 시 점수 추가 API
+     */
+    @PostMapping("/{userId}/add-exercise-score")
+    public ResponseEntity<Map<String, Object>> addExerciseAchievementScore(
+            @PathVariable Long userId,
+            @RequestParam int achievementCount,
+            HttpServletRequest request) {
+        
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
+            }
+            
+            // ✅ 운동 목표 달성 점수 추가
+            rankingService.addExerciseAchievementScore(tokenUserId, achievementCount);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "운동 목표 달성 점수가 추가되었습니다.");
+            response.put("achievementCount", achievementCount);
+            response.put("userId", tokenUserId);
+            
+            log.info("운동 목표 달성 점수 추가 완료 - 사용자: {}, 달성 횟수: {}", tokenUserId, achievementCount);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("운동 목표 달성 점수 추가 실패 - 사용자: {}, 달성 횟수: {}, 오류: {}", 
+                    userId, achievementCount, e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "운동 목표 달성 점수 추가에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+
+    /**
+     * 식단 목표 달성 시 점수 추가 API
+     */
+    @PostMapping("/{userId}/add-nutrition-score")
+    public ResponseEntity<Map<String, Object>> addNutritionAchievementScore(
+            @PathVariable Long userId,
+            @RequestParam boolean isDailyGoalAchieved,
+            HttpServletRequest request) {
+        
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
+            }
+            
+            // ✅ 식단 목표 달성 점수 추가
+            rankingService.addNutritionAchievementScore(tokenUserId, isDailyGoalAchieved);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "식단 목표 달성 점수가 추가되었습니다.");
+            response.put("isDailyGoalAchieved", isDailyGoalAchieved);
+            response.put("scoreAdded", isDailyGoalAchieved ? 1 : 0);
+            response.put("userId", tokenUserId);
+            
+            log.info("식단 목표 달성 점수 추가 완료 - 사용자: {}, 목표 달성: {}, 추가 점수: {}", 
+                    tokenUserId, isDailyGoalAchieved, isDailyGoalAchieved ? 1 : 0);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("식단 목표 달성 점수 추가 실패 - 사용자: {}, 목표 달성: {}, 오류: {}", 
+                    userId, isDailyGoalAchieved, e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "식단 목표 달성 점수 추가에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+
+    /**
+     * 증분 점수 업데이트 API (범용)
+     */
+    @PostMapping("/{userId}/add-incremental-score")
+    public ResponseEntity<Map<String, Object>> addIncrementalScore(
+            @PathVariable Long userId,
+            @RequestParam int scoreToAdd,
+            @RequestParam String scoreType,
+            HttpServletRequest request) {
+        
+        try {
+            // 토큰에서 사용자 ID 추출하여 권한 확인
+            Long tokenUserId = getUserIdFromToken(request);
+            
+            // 🔐 인증된 사용자만 자신의 데이터에 접근 가능
+            if (!tokenUserId.equals(userId)) {
+                log.warn("권한 없는 접근 시도 - 토큰 사용자: {}, 요청 사용자: {}", tokenUserId, userId);
+                return ResponseEntity.status(403).build();
+            }
+            
+            // ✅ 증분 점수 업데이트
+            rankingService.addIncrementalScore(tokenUserId, scoreToAdd, scoreType);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "점수가 성공적으로 추가되었습니다.");
+            response.put("scoreAdded", scoreToAdd);
+            response.put("scoreType", scoreType);
+            response.put("userId", tokenUserId);
+            
+            log.info("증분 점수 업데이트 완료 - 사용자: {}, 추가 점수: {}, 점수 타입: {}", 
+                    tokenUserId, scoreToAdd, scoreType);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("증분 점수 업데이트 실패 - 사용자: {}, 추가 점수: {}, 점수 타입: {}, 오류: {}", 
+                    userId, scoreToAdd, scoreType, e.getMessage(), e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "점수 추가에 실패했습니다.");
+            errorResponse.put("message", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 

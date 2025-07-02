@@ -67,8 +67,8 @@ public class RankingService {
         User currentUser = getCurrentUser();
         Long currentUserId = currentUser.getUserId();
 
-        // 1. 상위 10명 랭커 조회
-        List<UserRanking> topRankings = userRankingRepository.findTopRankingsByStreakDays(PageRequest.of(0, 10));
+        // 1. 상위 10명 랭커 조회 (total_score 기준으로 변경)
+        List<UserRanking> topRankings = userRankingRepository.findTopRankings(PageRequest.of(0, 10)).getContent();
         List<RankingUserDto> topRankers = new java.util.ArrayList<>();
         int rank = 1;
         for (UserRanking ranking : topRankings) {
@@ -86,8 +86,8 @@ public class RankingService {
                     .build());
         }
 
-        // 2. 나의 랭킹 정보 조회
-        UserRanking myRankingEntity = userRankingRepository.findByUserId(currentUserId)
+        // 2. 나의 랭킹 정보 조회 (활성 레코드만)
+        UserRanking myRankingEntity = userRankingRepository.findActiveByUserId(currentUserId)
                 .orElseGet(() -> createDefaultRanking(currentUserId));
         // 내 랭킹의 실시간 순위 계산
         int myRank = 0;
@@ -118,7 +118,7 @@ public class RankingService {
     public MyRankingResponseDto getMyRanking() {
         User currentUser = getCurrentUser();
         Long currentUserId = currentUser.getUserId();
-        UserRanking myRankingEntity = userRankingRepository.findByUserId(currentUserId)
+        UserRanking myRankingEntity = userRankingRepository.findActiveByUserId(currentUserId)
                 .orElseGet(() -> createDefaultRanking(currentUserId));
         return MyRankingResponseDto.builder()
                 .rank(myRankingEntity.getRankPosition())
@@ -225,7 +225,7 @@ public class RankingService {
     public RankingStatsDto getRankingStats() {
         User currentUser = getCurrentUser();
         Long currentUserId = currentUser.getUserId();
-        UserRanking myRankingEntity = userRankingRepository.findByUserId(currentUserId)
+        UserRanking myRankingEntity = userRankingRepository.findActiveByUserId(currentUserId)
                 .orElseGet(() -> createDefaultRanking(currentUserId));
         return RankingStatsDto.builder()
                 .totalRankings(userRankingRepository.count())
@@ -303,7 +303,7 @@ public class RankingService {
     public RankingRewardDto getMyReward() {
         User currentUser = getCurrentUser();
         Long currentUserId = currentUser.getUserId();
-        UserRanking myRanking = userRankingRepository.findByUserId(currentUserId).orElseGet(() -> createDefaultRanking(currentUserId));
+        UserRanking myRanking = userRankingRepository.findActiveByUserId(currentUserId).orElseGet(() -> createDefaultRanking(currentUserId));
         // 예시: 내 순위에 따라 보상 계산
         int reward = 0;
         if (myRanking.getRankPosition() == 1) reward = 10000;
@@ -472,42 +472,70 @@ public class RankingService {
     }
 
     /**
-     * 목표 달성률 기반 점수 업데이트
+     * 목표 달성률 기반 점수 업데이트 (개선된 증분 계산 방식)
+     * 점수 변경이 있을 때만 새 레코드 생성
      */
     @Transactional
     public void updateGoalAchievementScore(Long userId) {
         try {
             log.info("목표 달성률 점수 업데이트 시작 - 사용자 ID: {}", userId);
             
-            UserRanking userRanking = userRankingRepository.findByUserId(userId)
-                    .orElseGet(() -> {
-                        UserRanking newRanking = new UserRanking();
-                        newRanking.setUserId(userId);
-                        newRanking.setTotalScore(0);
-                        newRanking.setTier(RankingTier.BRONZE);
-                        newRanking.setCreatedAt(LocalDateTime.now());
-                        return userRankingRepository.save(newRanking);
-                    });
-
-            // ✅ 목표 달성률 기반 점수 계산 (운동, 식단, 출석, 업적 포함)
-            int totalScore = calculateGoalBasedScore(userId);
+            // 1. 현재 활성 랭킹 레코드 조회
+            UserRanking currentRanking = userRankingRepository.findActiveByUserId(userId)
+                    .orElseGet(() -> createDefaultRanking(userId));
             
-            // ✅ 점수 교체 (누적 방지)
-            userRanking.setTotalScore(totalScore);
-            userRanking.setLastUpdatedAt(LocalDateTime.now());
+            // 2. 현재 목표 달성 점수 계산 (운동 + 식단)
+            int newGoalBasedScore = calculateGoalBasedScore(userId);
             
-            // 티어 업데이트
-            RankingTier newTier = calculateTier(totalScore);
-            userRanking.setTier(newTier);
+            // 3. 이전 목표 달성 점수와 비교
+            int previousGoalBasedScore = currentRanking.getGoalBasedScore();
             
-            userRankingRepository.save(userRanking);
+            // 4. 점수 변경이 있는 경우에만 처리
+            if (newGoalBasedScore != previousGoalBasedScore) {
+                
+                // 5. 기존 레코드 비활성화
+                currentRanking.setActive(false);
+                userRankingRepository.save(currentRanking);
+                
+                // 6. 새로운 레코드 생성
+                UserRanking newRanking = new UserRanking();
+                newRanking.setUserId(userId);
+                
+                // 7. 점수 계산 및 설정
+                int goalScoreDifference = newGoalBasedScore - previousGoalBasedScore;
+                int newTotalScore = currentRanking.getTotalScore() + goalScoreDifference;
+                
+                newRanking.setTotalScore(newTotalScore);
+                newRanking.setGoalBasedScore(newGoalBasedScore);
+                newRanking.setActive(true);
+                
+                // 8. 기타 필드 복사
+                newRanking.setStreakDays(currentRanking.getStreakDays());
+                newRanking.setPreviousRank(currentRanking.getRankPosition());
+                newRanking.setSeason(currentRanking.getSeason());
+                newRanking.setCreatedAt(LocalDateTime.now());
+                newRanking.setLastUpdatedAt(LocalDateTime.now());
+                
+                // 9. 티어 계산 및 저장
+                RankingTier newTier = calculateTier(newTotalScore);
+                newRanking.setTier(newTier);
+                userRankingRepository.save(newRanking);
+                
+                // 10. 랭킹 순위 업데이트
+                updateUserRankingPosition(userId);
+                
+                log.info("목표 달성률 점수 업데이트 완료 - 사용자 ID: {}, 이전 목표점수: {}점, 새 목표점수: {}점, 증분: {}점, 새 총점: {}점", 
+                        userId, previousGoalBasedScore, newGoalBasedScore, goalScoreDifference, newTotalScore);
+                        
+                // 11. 티어 변경 시 알림 발송
+                RankingTier previousTier = currentRanking.getTier();
+                if (previousTier != newTier) {
+                    sendTierChangeNotification(userId, previousTier, newTier);
+                }
+            } else {
+                log.info("목표 달성률 점수 변경 없음 - 사용자 ID: {}, 현재 목표점수: {}점", userId, newGoalBasedScore);
+            }
             
-            // ✅ 개별 사용자 랭킹 순위 업데이트 (성능 최적화)
-            updateUserRankingPosition(userId);
-            
-            log.info("목표 달성률 점수 업데이트 완료 - 사용자 ID: {}, 총 점수: {}", 
-                    userId, totalScore);
-                    
         } catch (Exception e) {
             log.error("목표 달성률 점수 업데이트 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
             throw new RuntimeException("목표 달성률 점수 업데이트에 실패했습니다.", e);
@@ -522,7 +550,7 @@ public class RankingService {
         try {
             log.info("운동 점수 업데이트 시작 - 사용자 ID: {}", userId);
             
-            UserRanking userRanking = userRankingRepository.findByUserId(userId)
+            UserRanking userRanking = userRankingRepository.findActiveByUserId(userId)
                     .orElseGet(() -> {
                         UserRanking newRanking = new UserRanking();
                         newRanking.setUserId(userId);
@@ -564,7 +592,7 @@ public class RankingService {
         try {
             log.info("식단 점수 업데이트 시작 - 사용자 ID: {}", userId);
             
-            UserRanking userRanking = userRankingRepository.findByUserId(userId)
+            UserRanking userRanking = userRankingRepository.findActiveByUserId(userId)
                     .orElseGet(() -> {
                         UserRanking newRanking = new UserRanking();
                         newRanking.setUserId(userId);
@@ -606,8 +634,8 @@ public class RankingService {
         try {
             log.info("개별 사용자 랭킹 순위 업데이트 시작 - 사용자 ID: {}", userId);
             
-            // 현재 사용자의 점수 조회
-            UserRanking currentUserRanking = userRankingRepository.findByUserId(userId)
+            // 현재 사용자의 점수 조회 (활성 레코드만)
+            UserRanking currentUserRanking = userRankingRepository.findActiveByUserId(userId)
                     .orElseThrow(() -> new RuntimeException("User ranking not found: " + userId));
             
             // 전체 사용자 중 현재 사용자보다 높은 점수를 가진 사용자 수 계산
@@ -827,5 +855,203 @@ public class RankingService {
         }
         
         return result;
+    }
+
+    /**
+     * 증분 점수 업데이트 (새로운 레코드 생성하여 점수 추가)
+     * 운동이나 식단 목표 달성 시 호출
+     */
+    @Transactional
+    public void addIncrementalScore(Long userId, int scoreToAdd, String scoreType) {
+        try {
+            log.info("증분 점수 업데이트 시작 (새 레코드 생성) - 사용자 ID: {}, 추가 점수: {}, 점수 타입: {}", userId, scoreToAdd, scoreType);
+            
+            // 가장 최근 활성 랭킹 조회하여 현재 점수 확인
+            UserRanking latestRanking = userRankingRepository.findActiveByUserId(userId)
+                    .orElse(null);
+            
+            // 이전 점수 및 시즌 정보 계산
+            int previousScore = 0;
+            int previousRank = 0;
+            int currentSeason = getCurrentSeason();
+            RankingTier previousTier = RankingTier.UNRANK;
+            
+            if (latestRanking != null) {
+                previousScore = latestRanking.getTotalScore();
+                previousTier = latestRanking.getTier();
+                
+                // 시즌이 같으면 기존 랭킹을 previous_rank로 사용
+                // 시즌이 다르면 previous_rank는 0으로 초기화
+                if (latestRanking.getSeason() == currentSeason) {
+                    previousRank = latestRanking.getRankPosition();
+                    log.info("같은 시즌 내 점수 업데이트 - 이전 순위 유지: {}", previousRank);
+                } else {
+                    previousRank = 0;
+                    log.info("새 시즌 시작 - 이전 순위 초기화");
+                }
+                
+                // 기존 레코드를 비활성화
+                latestRanking.setActive(false);
+                latestRanking.setLastUpdatedAt(LocalDateTime.now());
+                userRankingRepository.save(latestRanking);
+                log.info("기존 랭킹 레코드 비활성화 - 사용자 ID: {}, 기존 점수: {}, 기존 순위: {}", userId, previousScore, latestRanking.getRankPosition());
+            }
+            
+            // 새로운 점수 계산 (기존 점수 + 증분 점수)
+            int newTotalScore = previousScore + scoreToAdd;
+            
+            // 새로운 랭킹 레코드 생성
+            UserRanking newRanking = new UserRanking();
+            newRanking.setUserId(userId);
+            newRanking.setTotalScore(newTotalScore);
+            newRanking.setStreakDays(latestRanking != null ? latestRanking.getStreakDays() : 0);
+            newRanking.setRankPosition(0); // 순위는 나중에 계산
+            newRanking.setPreviousRank(previousRank); // 시즌에 따른 previous_rank 설정
+            newRanking.setSeason(currentSeason);
+            newRanking.setCreatedAt(LocalDateTime.now());
+            newRanking.setLastUpdatedAt(LocalDateTime.now());
+            newRanking.setActive(true);
+            
+            // 티어 계산
+            RankingTier newTier = calculateTier(newTotalScore);
+            newRanking.setTier(newTier);
+            
+            // 새 랭킹 레코드 저장
+            UserRanking savedRanking = userRankingRepository.save(newRanking);
+            
+            // 랭킹 순위 업데이트
+            updateUserRankingPosition(userId);
+            
+            log.info("새 랭킹 레코드 생성 완료 - 사용자 ID: {}, 레코드 ID: {}, 이전 점수: {}, 추가 점수: {}, 새 총점: {}, 점수 타입: {}, 이전 티어: {}, 새 티어: {}", 
+                    userId, savedRanking.getId(), previousScore, scoreToAdd, newTotalScore, scoreType, 
+                    previousTier.name(), newTier.name());
+            
+            // 티어 변경 시 알림 발송
+            if (previousTier != newTier) {
+                sendTierChangeNotification(userId, previousTier, newTier);
+            }
+                    
+        } catch (Exception e) {
+            log.error("증분 점수 업데이트 실패 - 사용자 ID: {}, 추가 점수: {}, 점수 타입: {}, 오류: {}", 
+                    userId, scoreToAdd, scoreType, e.getMessage(), e);
+            throw new RuntimeException("증분 점수 업데이트에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 운동 목표 달성 시 점수 추가
+     * @param userId 사용자 ID
+     * @param achievementCount 달성한 운동 횟수 (1~7)
+     */
+    @Transactional
+    public void addExerciseAchievementScore(Long userId, int achievementCount) {
+        try {
+            log.info("운동 목표 달성 점수 추가 시작 - 사용자 ID: {}, 달성 횟수: {}", userId, achievementCount);
+            
+            // 달성 횟수에 따른 점수 계산 (1회당 1점, 최대 7점)
+            int scoreToAdd = Math.min(achievementCount, 7);
+            
+            if (scoreToAdd > 0) {
+                addIncrementalScore(userId, scoreToAdd, "EXERCISE_ACHIEVEMENT");
+            }
+            
+            log.info("운동 목표 달성 점수 추가 완료 - 사용자 ID: {}, 달성 횟수: {}, 추가된 점수: {}", 
+                    userId, achievementCount, scoreToAdd);
+                    
+        } catch (Exception e) {
+            log.error("운동 목표 달성 점수 추가 실패 - 사용자 ID: {}, 달성 횟수: {}, 오류: {}", 
+                    userId, achievementCount, e.getMessage(), e);
+            throw new RuntimeException("운동 목표 달성 점수 추가에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 식단 목표 달성 시 점수 추가
+     * @param userId 사용자 ID
+     * @param isDailyGoalAchieved 오늘 식단 목표 달성 여부
+     */
+    @Transactional
+    public void addNutritionAchievementScore(Long userId, boolean isDailyGoalAchieved) {
+        try {
+            log.info("식단 목표 달성 점수 추가 시작 - 사용자 ID: {}, 오늘 목표 달성: {}", userId, isDailyGoalAchieved);
+            
+            // 일일 목표 달성 시 1점 추가
+            int scoreToAdd = isDailyGoalAchieved ? 1 : 0;
+            
+            if (scoreToAdd > 0) {
+                addIncrementalScore(userId, scoreToAdd, "NUTRITION_ACHIEVEMENT");
+            }
+            
+            log.info("식단 목표 달성 점수 추가 완료 - 사용자 ID: {}, 오늘 목표 달성: {}, 추가된 점수: {}", 
+                    userId, isDailyGoalAchieved, scoreToAdd);
+                    
+        } catch (Exception e) {
+            log.error("식단 목표 달성 점수 추가 실패 - 사용자 ID: {}, 오늘 목표 달성: {}, 오류: {}", 
+                    userId, isDailyGoalAchieved, e.getMessage(), e);
+            throw new RuntimeException("식단 목표 달성 점수 추가에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 티어 변경 알림 발송
+     */
+    private void sendTierChangeNotification(Long userId, RankingTier previousTier, RankingTier newTier) {
+        try {
+            String message = String.format("축하합니다! 티어가 %s에서 %s로 상승했습니다!", 
+                    previousTier != null ? previousTier.getKoreanName() : "없음", 
+                    newTier.getKoreanName());
+            
+            // 알림 발송 (NotificationService 사용)
+            notificationService.saveNotification(userId, "TIER_CHANGE", "티어 승급!", message);
+            
+            log.info("티어 변경 알림 발송 완료 - 사용자 ID: {}, {} -> {}", 
+                    userId, 
+                    previousTier != null ? previousTier.name() : "없음", 
+                    newTier.name());
+                    
+        } catch (Exception e) {
+            log.warn("티어 변경 알림 발송 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage());
+            // 알림 발송 실패는 전체 프로세스를 중단하지 않음
+        }
+    }
+
+    /**
+     * 운동 완료 시 자동으로 점수 업데이트
+     * ExerciseService에서 운동 세션 저장 후 호출
+     */
+    @Transactional
+    public void handleExerciseCompletion(Long userId) {
+        try {
+            log.info("운동 완료 처리 시작 - 사용자 ID: {}", userId);
+            
+            // 새로운 목표 달성률 점수 업데이트 로직 사용
+            updateGoalAchievementScore(userId);
+            
+            log.info("운동 완료 처리 완료 - 사용자 ID: {}", userId);
+            
+        } catch (Exception e) {
+            log.error("운동 완료 처리 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            // 점수 업데이트 실패가 운동 기록을 방해하지 않도록 예외를 던지지 않음
+        }
+    }
+
+    /**
+     * 식사 기록 시 자동으로 점수 업데이트
+     * MealService에서 식사 로그 저장 후 호출
+     */
+    @Transactional
+    public void handleMealCompletion(Long userId) {
+        try {
+            log.info("식사 기록 처리 시작 - 사용자 ID: {}", userId);
+            
+            // 새로운 목표 달성률 점수 업데이트 로직 사용
+            updateGoalAchievementScore(userId);
+            
+            log.info("식사 기록 처리 완료 - 사용자 ID: {}", userId);
+            
+        } catch (Exception e) {
+            log.error("식사 기록 처리 실패 - 사용자 ID: {}, 오류: {}", userId, e.getMessage(), e);
+            // 점수 업데이트 실패가 식사 기록을 방해하지 않도록 예외를 던지지 않음
+        }
     }
 } 

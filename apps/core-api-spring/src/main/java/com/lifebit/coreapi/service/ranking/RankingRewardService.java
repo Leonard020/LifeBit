@@ -90,7 +90,7 @@ public class RankingRewardService {
 
     @Transactional(readOnly = true)
     public RankingRewardDto getMyReward(Long userId) {
-        UserRanking myRanking = userRankingRepository.findByUserId(userId).orElseGet(() -> null);
+        UserRanking myRanking = userRankingRepository.findActiveByUserId(userId).orElseGet(() -> null);
         com.lifebit.coreapi.entity.User user = userService.getUserById(userId);
         int reward = 0;
         if (myRanking != null) {
@@ -109,7 +109,7 @@ public class RankingRewardService {
     }
 
     private UserRanking findAndValidateRanking(Long userId) {
-        UserRanking ranking = userRankingRepository.findByUserId(userId)
+        UserRanking ranking = userRankingRepository.findActiveByUserId(userId)
                 .orElseThrow(() -> new RankingNotFoundException(userId));
         return ranking;
     }
