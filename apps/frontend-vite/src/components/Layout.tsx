@@ -115,7 +115,7 @@ const WebHeader = ({ setContactOpen }: { setContactOpen: (open: boolean) => void
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      마이페이지
+                      프로필
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -263,7 +263,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      마이페이지
+                      프로필
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

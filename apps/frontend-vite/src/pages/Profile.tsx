@@ -414,7 +414,7 @@ const Profile = () => {
                 <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                   <User className="h-10 w-10 text-gray-400" />
                 </div>
-                <h1 className="text-2xl font-bold mb-2">마이페이지</h1>
+                <h1 className="text-2xl font-bold mb-2">프로필</h1>
                 <p className="text-muted-foreground">사용자 정보를 불러오는 중...</p>
               </div>
               <div className="space-y-4">
@@ -446,7 +446,7 @@ const Profile = () => {
                   <User className="h-10 w-10 text-white" />
                 )}
               </div>
-              <h1 className="text-2xl font-bold mb-2">마이페이지</h1>
+              <h1 className="text-2xl font-bold mb-2">프로필</h1>
               <p className="text-muted-foreground">개인정보와 건강 목표를 관리하세요</p>
             </div>
 
