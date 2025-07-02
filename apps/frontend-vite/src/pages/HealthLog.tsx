@@ -425,16 +425,8 @@ const HealthLog: React.FC = () => {
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  사용자 ID: {userId}
-                </Badge>
-                <Badge 
-                  variant={isConnected ? "default" : "secondary"} 
-                  className="text-xs flex items-center gap-1"
-                >
-                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                  {isConnected ? '자동 새로고침 활성' : '비활성'}
-                </Badge>
+
+
               </div>
             </div>
           </div>
@@ -492,13 +484,7 @@ const HealthLog: React.FC = () => {
                 />
               </div>
               
-              {/* AI 고급 분석 차트 */}
-              <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border p-1 mb-4">
-                <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-900 rounded-lg p-3">
-                  <Zap className="h-4 w-4" />
-                  <span className="font-medium">AI 기반 고급 데이터 분석 및 인사이트</span>
-                </div>
-              </div>
+
               
               <ErrorBoundary>
                 <PythonAnalyticsCharts 
