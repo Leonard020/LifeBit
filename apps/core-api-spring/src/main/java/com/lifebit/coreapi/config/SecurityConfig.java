@@ -41,7 +41,8 @@ public class SecurityConfig {
                                 "/actuator/**",
                                 "/ws/**",
                                 "/api/exercises/find-or-create",
-                                "/api/admin/analytics/**"
+                                "/api/admin/analytics/**",
+                                "/api/py/auth/**"
                         )
                         .permitAll()
                         .anyRequest().authenticated())

@@ -35,6 +35,11 @@ class BadgeType(enum.Enum):
     SOCIAL_SHARE = "SOCIAL_SHARE"
     PERFECT_WEEK = "PERFECT_WEEK"
     MONTHLY_CHAMPION = "MONTHLY_CHAMPION"
+    # legacy constants for backward compatibility
+    bronze = "bronze"
+    silver = "silver"
+    gold = "gold"
+    platinum = "platinum"
 
 class BodyPartType(enum.Enum):
     chest = "chest"
@@ -91,7 +96,7 @@ class ExerciseSession(Base):
     input_source = Column(SqlEnum(InputSourceType, name="input_source_type", create_type=True), nullable=True)
     confidence_score = Column(DECIMAL(4, 2), nullable=True)
     validation_status = Column(SqlEnum(ValidationStatusType, name="validation_status_type", create_type=True), default=ValidationStatusType.PENDING, nullable=True)
-    validation_notes = Column(Text, nullable=True)
+    validation_notes = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, default=get_kst_now)
 
     @validates('confidence_score')
@@ -120,7 +125,7 @@ class MealLog(Base):
     confidence_score = Column(DECIMAL(4, 2), nullable=True)
     original_audio_path = Column(String(255), nullable=True)
     validation_status = Column(SqlEnum(ValidationStatusType, name="validation_status_type", create_type=True), default=ValidationStatusType.PENDING, nullable=True)
-    validation_notes = Column(Text, nullable=True)
+    validation_notes = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, default=get_kst_now)
 
     @validates('confidence_score')
@@ -240,7 +245,7 @@ class UserRanking(Base):
     created_at = Column(TIMESTAMP, default=get_kst_now)
     last_updated_at = Column(TIMESTAMP, default=get_kst_now, onupdate=get_kst_now)
     is_active = Column(Boolean, default=True, nullable=False)
-    tier = Column(String(32), default='UNRANK')
+    tier = Column(String(255), default='UNRANK')
 
 class Achievement(Base):
     __tablename__ = "achievements"

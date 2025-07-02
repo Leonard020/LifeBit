@@ -84,7 +84,7 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_nickname ON users(nickname);
 CREATE INDEX idx_users_provider ON users(provider);
 
--- user_goals
+-- user_goals (weekly_*_set 컬럼들 제거)
 CREATE TABLE user_goals (
     user_goal_id BIGSERIAL PRIMARY KEY,
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
@@ -97,14 +97,6 @@ CREATE TABLE user_goals (
 	weekly_arms INTEGER DEFAULT 0,
 	weekly_abs INTEGER DEFAULT 0,
 	weekly_cardio INTEGER DEFAULT 0,
-    weekly_workout_target_set INTEGER DEFAULT 3,
-	weekly_chest_set INTEGER DEFAULT 0,
-	weekly_back_set INTEGER DEFAULT 0,
-	weekly_legs_set INTEGER DEFAULT 0,
-	weekly_shoulders_set INTEGER DEFAULT 0,
-	weekly_arms_set INTEGER DEFAULT 0,
-	weekly_abs_set INTEGER DEFAULT 0,
-	weekly_cardio_set INTEGER DEFAULT 0,
     daily_carbs_target INTEGER DEFAULT 200,
     daily_protein_target INTEGER DEFAULT 120,
     daily_fat_target INTEGER DEFAULT 60,
@@ -152,12 +144,12 @@ CREATE TABLE exercise_sessions (
     sets INTEGER,
     notes TEXT,
     exercise_date DATE NULL,
-    time_period time_period_type, 
+    time_period VARCHAR(20), 
     input_source input_source_type,
     confidence_score DECIMAL(4,2),
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
-    validation_notes TEXT,
+    validation_notes VARCHAR(255),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -192,7 +184,7 @@ CREATE TABLE meal_logs (
     confidence_score DECIMAL(4,2) DEFAULT 1.0,
     original_audio_path VARCHAR(255),
     validation_status validation_status_type DEFAULT 'PENDING',
-    validation_notes TEXT,
+    validation_notes VARCHAR(255),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -200,7 +192,7 @@ CREATE INDEX idx_meal_logs_user_date ON meal_logs(user_id, log_date);
 CREATE INDEX idx_meal_logs_food ON meal_logs(food_item_id);
 CREATE INDEX idx_meal_logs_validation ON meal_logs(validation_status);
 
--- user_ranking (단수형)
+-- user_ranking (tier 컬럼 타입을 character varying(255)로 변경)
 CREATE TABLE user_ranking (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -212,7 +204,7 @@ CREATE TABLE user_ranking (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    tier VARCHAR(32) DEFAULT 'UNRANK'
+    tier VARCHAR(255) DEFAULT 'UNRANK'
 );
 
 CREATE INDEX idx_user_ranking_user_id ON user_ranking(user_id);
@@ -325,7 +317,7 @@ CREATE TABLE validation_history (
     record_type record_type NOT NULL,
     record_id BIGINT NOT NULL,
     validation_status validation_status_type NOT NULL,
-    validation_notes TEXT,
+    validation_notes VARCHAR(255),
     validated_by VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );

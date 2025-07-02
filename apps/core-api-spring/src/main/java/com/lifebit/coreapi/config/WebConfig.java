@@ -9,6 +9,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.core.env.Environment;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
