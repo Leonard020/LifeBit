@@ -83,7 +83,6 @@ public class RankingService {
                     .streakDays(ranking.getStreakDays())
                     .tier(ranking.getTier() != null ? ranking.getTier().name() : null)
                     .colorCode(ranking.getTier() != null ? ranking.getTier().getColorCode() : null)
-                    .profileImageUrl(user.getProfileImageUrl())
                     .build());
         }
 
@@ -148,7 +147,6 @@ public class RankingService {
                             .streakDays(ranking.getStreakDays())
                             .tier(ranking.getTier() != null ? ranking.getTier().name() : null)
                             .colorCode(ranking.getTier() != null ? ranking.getTier().getColorCode() : null)
-                            .profileImageUrl(user.getProfileImageUrl())
                             .build();
                 })
                 .collect(java.util.stream.Collectors.toList());
@@ -171,7 +169,6 @@ public class RankingService {
                             .streakDays(history.getStreakDays())
                             .tier(ranking.getTier() != null ? ranking.getTier().name() : null)
                             .colorCode(ranking.getTier() != null ? ranking.getTier().getColorCode() : null)
-                            .profileImageUrl(user.getProfileImageUrl())
                             .build();
                 })
                 .collect(java.util.stream.Collectors.toList());
@@ -192,7 +189,6 @@ public class RankingService {
                             .streakDays(ranking.getStreakDays())
                             .tier(ranking.getTier() != null ? ranking.getTier().name() : null)
                             .colorCode(ranking.getTier() != null ? ranking.getTier().getColorCode() : null)
-                            .profileImageUrl(user.getProfileImageUrl())
                             .build();
                 })
                 .collect(java.util.stream.Collectors.toList());

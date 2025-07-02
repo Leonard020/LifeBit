@@ -467,11 +467,18 @@ const Ranking = () => {
                             {getRankIcon(user.rank)}
                           </div>
                           <Avatar>
-                            {profileImageUrl ? (
+                            {profileImageUrl && typeof profileImageUrl === 'string' && profileImageUrl.trim() !== '' ? (
                               <img
-                                src={`${API_CONFIG.BASE_URL}${profileImageUrl}`}
+                                src={profileImageUrl.startsWith('http') ? profileImageUrl : `${API_CONFIG.BASE_URL}${profileImageUrl}`}
                                 alt={user.nickname}
                                 className="w-8 h-8 rounded-full object-cover"
+                                onError={e => {
+                                  // fallback to first letter if image fails to load
+                                  const parent = e.currentTarget.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `<div class='w-8 h-8 gradient-bg rounded-full flex items-center justify-center'><span class='text-white text-sm font-bold'>${user.nickname.charAt(0)}</span></div>`;
+                                  }
+                                }}
                               />
                             ) : (
                               <div className="w-8 h-8 gradient-bg rounded-full flex items-center justify-center">
