@@ -44,4 +44,14 @@ public interface ExerciseSessionRepository extends JpaRepository<ExerciseSession
     // 기간별 활동 사용자 수 통계용 메서드
     @Query("SELECT COUNT(DISTINCT es.user.userId) FROM ExerciseSession es WHERE es.exerciseDate BETWEEN :startDate AND :endDate")
     long countDistinctUsersByDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    // 애널리틱스용 추가 메서드들 (임시 주석처리)
+    // @Query("SELECT COUNT(DISTINCT es.user.userId) FROM ExerciseSession es WHERE es.createdAt BETWEEN :start AND :end")
+    // Long countDistinctUsersByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    
+    // @Query("SELECT COUNT(DISTINCT es.user.userId) FROM ExerciseSession es " +
+    //        "JOIN es.exerciseCatalog ec WHERE ec.bodyPart = :bodyPart AND es.createdAt BETWEEN :start AND :end")
+    // Long countByBodyPartAndDateBetween(@Param("bodyPart") String bodyPart, 
+    //                                    @Param("start") LocalDateTime start, 
+    //                                    @Param("end") LocalDateTime end);
 }
