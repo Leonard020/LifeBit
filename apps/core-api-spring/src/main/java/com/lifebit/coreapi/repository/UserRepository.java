@@ -18,9 +18,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByLastVisitedAfter(LocalDateTime dateTime);
     long countByCreatedAtAfter(LocalDateTime dateTime);
     
-    // 애널리틱스용 추가 메서드들 (임시 주석처리)
-    // @Query("SELECT COUNT(u) FROM User u WHERE u.lastVisited BETWEEN :start AND :end")
-    // Long countUsersLoginBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    // 애널리틱스용 추가 메서드들
+    @Query("SELECT COUNT(u) FROM User u WHERE u.lastVisited BETWEEN :start AND :end")
+    Long countByLastVisitedBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    
+    @Query("SELECT COUNT(u) FROM User u WHERE u.createdAt BETWEEN :start AND :end")
+    Long countByCreatedAtBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    
+    // ✨ 활동 사용자 합집합 (운동 OR 식사 기록을 남긴 고유 사용자 수)
+    @Query(value = """
+        SELECT COUNT(DISTINCT user_id) FROM (
+            SELECT DISTINCT user_id FROM exercise_sessions 
+            WHERE created_at BETWEEN :start AND :end
+            UNION
+            SELECT DISTINCT user_id FROM meal_logs 
+            WHERE created_at BETWEEN :start AND :end
+        ) AS active_users
+        """, nativeQuery = true)
+    Long countDistinctActiveUsersInPeriod(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     // 커스텀 저장 메서드 제거 - 표준 JPA save() 사용
 } 

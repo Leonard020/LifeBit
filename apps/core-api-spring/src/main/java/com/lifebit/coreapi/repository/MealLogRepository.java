@@ -44,12 +44,15 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     @Query("SELECT COUNT(DISTINCT ml.user.userId) FROM MealLog ml WHERE ml.logDate BETWEEN :startDate AND :endDate")
     long countDistinctUsersByDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
     
-    // 애널리틱스용 추가 메서드들 (임시 주석처리)
-    // @Query("SELECT COUNT(DISTINCT ml.user.userId) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
-    // Long countDistinctUsersByDateBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    // 애널리틱스용 추가 메서드들
+    @Query("SELECT COUNT(DISTINCT ml.user.userId) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
+    Long countDistinctUsersInPeriod(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     
-    // @Query("SELECT COUNT(ml) FROM MealLog ml WHERE ml.mealTime = :mealTime AND ml.createdAt BETWEEN :start AND :end")
-    // Long countByMealTimeAndDateBetween(@Param("mealTime") String mealTime, 
-    //                                    @Param("start") LocalDateTime start, 
-    //                                    @Param("end") LocalDateTime end);
+    @Query("SELECT ml.mealTime, COUNT(ml) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end " +
+           "GROUP BY ml.mealTime")
+    List<Object[]> countByMealTimeAndDateBetween(@Param("start") LocalDateTime start, 
+                                                @Param("end") LocalDateTime end);
+    
+    @Query("SELECT COUNT(ml) FROM MealLog ml WHERE ml.createdAt BETWEEN :start AND :end")
+    Long countMealLogsBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 } 

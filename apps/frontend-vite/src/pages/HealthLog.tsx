@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Layout } from '../components/Layout';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
+import { useWebSocketConnection } from '../hooks/useWebSocketConnection';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast } from '../components/ui/use-toast';
 import { Message } from '@/api/chatApi';
@@ -127,6 +128,13 @@ const HealthLog: React.FC = () => {
   const { isConnected, refreshData, requestNotificationPermission } = useRealTimeUpdates({
     userId: userId?.toString() || '',
     enabled: true // 폴링 방식으로 활성화
+  });
+
+  // 🔧 WebSocket 연결 추가 (실시간 접속자 추적용)
+  const { isConnected: wsConnected } = useWebSocketConnection({
+    userId: userId?.toString() || '',
+    enabled: !!userId,
+    currentPage: 'health-log' // HealthLog 페이지임을 명시
   });
 
   // ✅ React Query Hook으로 건강 통계 조회 (건강로그 전용)

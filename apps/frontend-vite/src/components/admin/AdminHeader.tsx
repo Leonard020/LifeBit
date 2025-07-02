@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
+import { useOnlineUsersDetail } from '@/api/analyticsApi';
 
 interface RealTimeData {
   timestamp: string;
@@ -24,6 +25,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   isRefreshing,
   lastUpdated
 }) => {
+  // 실제 실시간 접속자 상세 데이터 사용
+  const { data: onlineUsersData, isLoading: isOnlineLoading } = useOnlineUsersDetail();
+  
   const [realTimeData, setRealTimeData] = useState<RealTimeData>({
     timestamp: new Date().toISOString(),
     onlineUsers: 0,
@@ -31,34 +35,23 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     activeRecorders: 0,
     recentActivity: { exercise: 0, diet: 0 }
   });
-  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
 
+  // 실제 API 데이터로 업데이트 (이제 진짜 데이터!)
   useEffect(() => {
-    // WebSocket 연결 (추후 실제 구현)
-    // 현재는 시뮬레이션 데이터로 테스트
-    const simulateRealTimeData = () => {
-      const mockData: RealTimeData = {
-        timestamp: new Date().toISOString(),
-        onlineUsers: Math.floor(Math.random() * 100) + 20,
-        authenticatedUsers: Math.floor(Math.random() * 50) + 10,
-        activeRecorders: Math.floor(Math.random() * 10) + 2,
+    if (onlineUsersData) {
+      setRealTimeData(prev => ({
+        ...prev,
+        onlineUsers: onlineUsersData.onlineUsers,
+        authenticatedUsers: onlineUsersData.authenticatedUsers, // 실제 데이터
+        activeRecorders: onlineUsersData.activeRecorders, // 실제 데이터 (HealthLog 페이지 사용자)
+        timestamp: new Date(onlineUsersData.timestamp).toISOString(),
         recentActivity: {
-          exercise: Math.floor(Math.random() * 5),
-          diet: Math.floor(Math.random() * 8)
+          exercise: onlineUsersData.pageStats?.['health-log'] || 0,
+          diet: onlineUsersData.pageStats?.['health-log'] || 0
         }
-      };
-      setRealTimeData(mockData);
-      setIsWebSocketConnected(true);
-    };
-
-    // 초기 데이터 설정
-    simulateRealTimeData();
-
-    // 10초마다 업데이트 (실제로는 WebSocket으로 실시간)
-    const interval = setInterval(simulateRealTimeData, 10000);
-
-    return () => clearInterval(interval);
-  }, []);
+      }));
+    }
+  }, [onlineUsersData]);
 
   return (
     <div className="flex justify-between items-start mb-6">
@@ -77,7 +70,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         {/* 실시간 접속자 정보 */}
         <div className="flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <div className={`w-2 h-2 rounded-full ${
-            isWebSocketConnected 
+            !isOnlineLoading && onlineUsersData
               ? 'bg-green-500 animate-pulse' 
               : 'bg-red-500'
           }`} />
@@ -85,9 +78,6 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
           <div className="text-sm">
             <div className="font-semibold text-green-700 dark:text-green-300">
               실시간 접속: {realTimeData.onlineUsers.toLocaleString()}명
-            </div>
-            <div className="text-xs text-green-600 dark:text-green-400 mt-0.5">
-              활동 중: {realTimeData.authenticatedUsers}명 | 기록 중: {realTimeData.activeRecorders}명
             </div>
           </div>
         </div>
