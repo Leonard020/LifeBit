@@ -19,8 +19,14 @@ interface BodyPartFrequencyChartProps {
   goals?: Record<string, number>;
 }
 
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: BodyPartData }>;
+  label?: string;
+}
+
 // 커스텀 툴팁 컴포넌트
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
@@ -35,8 +41,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+interface CustomizedLabelProps {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  percent: number;
+}
+
 // 파이 차트 커스텀 라벨
-const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: CustomizedLabelProps) => {
   if (percent < 0.05) return null; // 5% 미만은 라벨 숨김
   
   const RADIAN = Math.PI / 180;
@@ -117,7 +132,7 @@ export const BodyPartFrequencyChart: React.FC<BodyPartFrequencyChartProps> = ({
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-orange-600" />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {getPeriodTitle(period)} 운동 부위별 빈도
             </h3>
           </div>
@@ -206,7 +221,7 @@ export const BodyPartFrequencyChart: React.FC<BodyPartFrequencyChartProps> = ({
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Activity className="h-5 w-5 text-orange-600" />
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {getPeriodTitle(period)} 운동 부위별 비율
           </h3>
         </div>
@@ -237,7 +252,13 @@ export const BodyPartFrequencyChart: React.FC<BodyPartFrequencyChartProps> = ({
             <Legend 
               verticalAlign="bottom" 
               height={36}
-              formatter={(value, entry: any) => entry.payload.bodyPartKorean}
+              formatter={(value, entry) => {
+                if (entry && typeof entry === 'object' && entry.payload && 'bodyPartKorean' in entry.payload) {
+                  // @ts-ignore
+                  return entry.payload.bodyPartKorean;
+                }
+                return value;
+              }}
             />
           </PieChart>
         </ResponsiveContainer>
