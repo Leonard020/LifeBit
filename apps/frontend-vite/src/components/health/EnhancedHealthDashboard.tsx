@@ -116,6 +116,13 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [goalPeriod, setGoalPeriod] = useState<'day' | 'week' | 'month'>('day');
+  
+  // 🎯 점수 추가 기능 상태 관리
+  const [lastExerciseScoreUpdate, setLastExerciseScoreUpdate] = useState<string | null>(null);
+  const [lastNutritionScoreUpdate, setLastNutritionScoreUpdate] = useState<string | null>(null);
+  const [isExerciseButtonEnabled, setIsExerciseButtonEnabled] = useState(false);
+  const [isNutritionButtonEnabled, setIsNutritionButtonEnabled] = useState(false);
+  
   const navigate = useNavigate();
 
   // 인증 체크
@@ -126,6 +133,86 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       return;
     }
   }, [navigate]);
+
+  // 📅 주간/일간 초기화 체크 함수들 (새로운 로직)
+  const checkWeeklyReset = useCallback(() => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dayOfWeek = now.getDay(); // 0 = Sunday
+    
+    // 이번 주 일요일 날짜 계산
+    const thisWeekSunday = new Date(now);
+    thisWeekSunday.setDate(now.getDate() - dayOfWeek);
+    const sundayString = thisWeekSunday.toISOString().split('T')[0];
+    
+    const lastUpdateKey = `exercise_score_last_update_${userId}`;
+    const lastUpdate = localStorage.getItem(lastUpdateKey);
+    
+    // 이번 주 일요일 이후로 아직 업데이트하지 않았다면
+    if (!lastUpdate || lastUpdate < sundayString) {
+      console.log('🔄 [주간 초기화] 이번 주 운동 점수 초기화 필요:', { today, sundayString, lastUpdate });
+      setLastExerciseScoreUpdate(null);
+      return true;
+    }
+    return false;
+  }, [userId]);
+
+  const checkDailyReset = useCallback(() => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    const lastUpdateKey = `nutrition_score_last_update_${userId}`;
+    const lastUpdate = localStorage.getItem(lastUpdateKey);
+    
+    // 오늘 아직 점수를 추가하지 않았다면
+    if (!lastUpdate || lastUpdate !== today) {
+      console.log('🔄 [일간 초기화] 오늘 식단 점수 초기화 필요:', { today, lastUpdate });
+      setLastNutritionScoreUpdate(null);
+      return true;
+    }
+    return false;
+  }, [userId]);
+
+  // 💾 LocalStorage에서 마지막 업데이트 시간 로드 및 초기화 체크
+  useEffect(() => {
+    const exerciseKey = `exercise_score_last_update_${userId}`;
+    const nutritionKey = `nutrition_score_last_update_${userId}`;
+    
+    const lastExerciseUpdate = localStorage.getItem(exerciseKey);
+    const lastNutritionUpdate = localStorage.getItem(nutritionKey);
+    
+    setLastExerciseScoreUpdate(lastExerciseUpdate);
+    setLastNutritionScoreUpdate(lastNutritionUpdate);
+    
+    // 🔄 초기화 체크 (자동 실행)
+    const weeklyReset = checkWeeklyReset();
+    const dailyReset = checkDailyReset();
+    
+    // 초기화가 필요한 경우 LocalStorage에서 해당 키들 제거
+    if (weeklyReset) {
+      const exerciseScoreKey = `exercise_score_last_value_${userId}`;
+      localStorage.removeItem(exerciseKey);
+      localStorage.removeItem(exerciseScoreKey);
+      console.log('🗑️ [주간 초기화] LocalStorage에서 운동 점수 기록 제거');
+    }
+    if (dailyReset) {
+      const nutritionScoreKey = `nutrition_score_last_value_${userId}`;
+      localStorage.removeItem(nutritionKey);
+      localStorage.removeItem(nutritionScoreKey);
+      console.log('🗑️ [일간 초기화] LocalStorage에서 식단 점수 기록 제거');
+    }
+    
+    console.log('🔄 [초기화 체크] 결과:', { 
+      weeklyReset, 
+      dailyReset, 
+      lastExerciseUpdate, 
+      lastNutritionUpdate,
+      afterReset: {
+        exercise: weeklyReset ? null : lastExerciseUpdate,
+        nutrition: dailyReset ? null : lastNutritionUpdate
+      }
+    });
+  }, [userId, checkWeeklyReset, checkDailyReset]);
 
   // API 데이터 가져오기 (에러 처리 포함)
   const { 
@@ -200,7 +287,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     } else {
       setError(null);
     }
-  }, [hasError, healthError, mealError, exerciseWeekError, goalsError, healthStatsError]);
+  }, [hasError, healthError, mealError, exerciseWeekError, goalsError, healthStatsError, heatmapError, nutritionError]);
 
   // 전체 재시도 함수
   const handleRetry = useCallback(() => {
@@ -210,6 +297,53 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     refetchGoals();
     refetchHealthStats();
   }, [refetchHealth, refetchMeals, refetchGoals, refetchHealthStats]);
+
+  // API 호출을 위한 새로운 함수들 추가
+  const checkWeeklyExerciseReset = async () => {
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/check-weekly-reset`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('주간 초기화 체크 실패');
+      }
+      
+      const result = await response.json();
+      return result.needsReset || false;
+    } catch (error) {
+      console.error('주간 초기화 체크 오류:', error);
+      return false;
+    }
+  };
+
+  const checkDailyNutritionReset = async () => {
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/check-daily-reset`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('일간 초기화 체크 실패');
+      }
+      
+      const result = await response.json();
+      return result.needsReset || false;
+    } catch (error) {
+      console.error('일간 초기화 체크 오류:', error);
+      return false;
+    }
+  };
 
   // 오늘의 데이터 계산 (실제 API 데이터 기반)
   const todayData = useMemo(() => {
@@ -305,17 +439,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   const calculateExerciseScore = () => {
     if (!weeklyWorkoutTarget) return 0;
     
-    const weeklyWorkoutCurrent = totalWeeklyCount;
-    const target = weeklyWorkoutTarget;
-    const percentage = (weeklyWorkoutCurrent / target) * 100;
-    
-    if (percentage >= 100) return 7;
-    if (percentage >= 80) return 6;
-    if (percentage >= 60) return 5;
-    if (percentage >= 40) return 4;
-    if (percentage >= 20) return 3;
-    if (percentage >= 10) return 2;
-    return 1;
+    // PythonAnalyticsCharts 방식: 달성률에 비례한 점수 계산
+    const achievementRate = Math.min(totalWeeklyCount / weeklyWorkoutTarget, 1.0);
+    return Math.round(achievementRate * 7);
   };
 
   const calculateNutritionScore = (achievements: GoalAchievements | undefined) => {
@@ -443,6 +569,16 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       // 데이터 새로고침
       refetchHealth();
       refetchHealthStats();
+      
+      // 업데이트 시간과 점수 저장
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const exerciseKey = `exercise_score_last_update_${userId}`;
+      const exerciseScoreKey = `exercise_score_last_value_${userId}`;
+      localStorage.setItem(exerciseKey, today);
+      localStorage.setItem(exerciseScoreKey, currentExerciseScore.toString());
+      setLastExerciseScoreUpdate(today);
+      setIsExerciseButtonEnabled(false);
     } catch (error) {
       console.error('❌ [운동 점수 업데이트] 실패:', error);
       toast({
@@ -502,6 +638,16 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       // 데이터 새로고침
       refetchHealth();
       refetchMeals();
+      
+      // 업데이트 시간과 점수 저장
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const nutritionKey = `nutrition_score_last_update_${userId}`;
+      const nutritionScoreKey = `nutrition_score_last_value_${userId}`;
+      localStorage.setItem(nutritionKey, today);
+      localStorage.setItem(nutritionScoreKey, nutritionScore.toString());
+      setLastNutritionScoreUpdate(today);
+      setIsNutritionButtonEnabled(false);
     } catch (error) {
       console.error('❌ [식단 점수 업데이트] 실패:', error);
       toast({
@@ -512,7 +658,67 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
     }
   };
 
-  // 점수는 수동으로만 업데이트 (자동 업데이트 제거)
+  // 📊 버튼 활성화 상태 업데이트 (점수 변경 감지 로직)
+  useEffect(() => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const dayOfWeek = now.getDay(); // 0 = Sunday
+    
+    // 🏃‍♂️ 운동 버튼 상태 확인 (점수 변경 감지)
+    const currentExerciseScore = calculateExerciseScore();
+    
+    // 이번 주 일요일 날짜 계산
+    const thisWeekSunday = new Date(now);
+    thisWeekSunday.setDate(now.getDate() - dayOfWeek);
+    const sundayString = thisWeekSunday.toISOString().split('T')[0];
+    
+    const exerciseKey = `exercise_score_last_update_${userId}`;
+    const exerciseScoreKey = `exercise_score_last_value_${userId}`;
+    const lastExerciseUpdate = localStorage.getItem(exerciseKey);
+    const lastExerciseScore = parseInt(localStorage.getItem(exerciseScoreKey) || '0');
+    
+    // 운동 버튼 활성화 조건: 
+    // 1. 운동 점수가 있고 
+    // 2. (이번 주에 아직 업데이트하지 않았거나 OR 점수가 변경되었다면)
+    const isThisWeekUpdated = lastExerciseUpdate && lastExerciseUpdate >= sundayString;
+    const hasScoreChanged = currentExerciseScore !== lastExerciseScore;
+    const exerciseButtonEnabled = currentExerciseScore > 0 && (!isThisWeekUpdated || hasScoreChanged);
+    setIsExerciseButtonEnabled(exerciseButtonEnabled);
+    
+    // 🍎 식단 버튼 상태 확인 (점수 변경 감지)
+    const currentNutritionScore = calculateDashboardNutritionScore();
+    
+    const nutritionKey = `nutrition_score_last_update_${userId}`;
+    const nutritionScoreKey = `nutrition_score_last_value_${userId}`;
+    const lastNutritionUpdate = localStorage.getItem(nutritionKey);
+    const lastNutritionScore = parseInt(localStorage.getItem(nutritionScoreKey) || '0');
+    
+    // 식단 버튼 활성화 조건:
+    // 1. 식단 점수가 1점이고
+    // 2. (오늘 아직 업데이트하지 않았거나 OR 점수가 변경되었다면)
+    const isTodayUpdated = lastNutritionUpdate === today;
+    const hasNutritionScoreChanged = currentNutritionScore !== lastNutritionScore;
+    const nutritionButtonEnabled = currentNutritionScore >= 1 && (!isTodayUpdated || hasNutritionScoreChanged);
+    setIsNutritionButtonEnabled(nutritionButtonEnabled);
+    
+    console.log('🔄 [버튼 상태 업데이트]', {
+      currentExerciseScore,
+      lastExerciseScore,
+      hasScoreChanged,
+      currentNutritionScore,
+      lastNutritionScore,
+      hasNutritionScoreChanged,
+      exerciseButtonEnabled,
+      nutritionButtonEnabled,
+      today,
+      dayOfWeek,
+      sundayString,
+      lastExerciseUpdate,
+      lastNutritionUpdate,
+      isThisWeekUpdated,
+      isTodayUpdated
+    });
+  }, [userId, healthStats, nutritionStats, exerciseSessionsWeek, userGoals, calculateExerciseScore, calculateDashboardNutritionScore]);
 
   // 상세 운동 데이터 계산 함수 (주간 기준)
   const calculateDetailedExerciseData = () => {
@@ -1038,23 +1244,41 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Button
                   onClick={handleExerciseScoreUpdate}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  disabled={!isExerciseButtonEnabled}
+                  className={`${
+                    isExerciseButtonEnabled 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                   size="lg"
                 >
                   <Activity className="h-4 w-4 mr-2" />
-                  운동 목표 점수 추가
+                  운동 목표 점수 추가 (주간)
+                  {isExerciseButtonEnabled && <span className="ml-2 text-xs">🔥</span>}
                 </Button>
                 <Button
                   onClick={handleNutritionScoreUpdate}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={!isNutritionButtonEnabled}
+                  className={`${
+                    isNutritionButtonEnabled 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                   size="lg"
                 >
                   <Utensils className="h-4 w-4 mr-2" />
-                  식단 목표 점수 추가
+                  식단 목표 점수 추가 (일간)
+                  {isNutritionButtonEnabled && <span className="ml-2 text-xs">🔥</span>}
                 </Button>
               </div>
               <div className="mt-3 text-sm text-gray-600 text-center">
-                목표 달성 시 버튼을 눌러 랭킹 점수를 업데이트하세요
+                <div>🏃‍♂️ 운동: 주간 목표 달성 시 활성화 (매주 일요일 초기화)</div>
+                <div>🍎 식단: 일간 목표 달성 시 활성화 (매일 자정 초기화)</div>
+                <div className="mt-1 text-xs">
+                  {!isExerciseButtonEnabled && !isNutritionButtonEnabled && '목표를 달성하면 버튼이 활성화됩니다'}
+                  {isExerciseButtonEnabled && '운동 목표 달성! 점수를 추가하세요 🎉'}
+                  {isNutritionButtonEnabled && '식단 목표 달성! 점수를 추가하세요 🎉'}
+                </div>
               </div>
             </CardContent>
           </Card>

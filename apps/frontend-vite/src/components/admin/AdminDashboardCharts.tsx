@@ -105,19 +105,19 @@ export const AdminDashboardCharts: React.FC<AdminDashboardChartsProps> = ({ peri
 
   const getExerciseTitle = () => {
     switch (period) {
-      case 'daily': return '일간 운동 종류별 참여자';
-      case 'weekly': return '주간 요일별 운동 참여자';
-      case 'monthly': return '월간 주차별 운동 참여자';
-      case 'yearly': return '년간 월별 운동 참여자';
+      case 'daily': return '일간 종류별 운동 기록 통계';
+      case 'weekly': return '주간 요일별 운동 기록 통계';
+      case 'monthly': return '월간 주차별 운동 기록 통계';
+      case 'yearly': return '년간 월별 운동 기록 통계';
     }
   };
 
   const getMealTitle = () => {
     switch (period) {
-      case 'daily': return '일간 끼니별 기록';
-      case 'weekly': return '주간 끼니별 기록 추이';
-      case 'monthly': return '월간 주차별 식사 기록자';
-      case 'yearly': return '년간 월별 식사 기록자';
+      case 'daily': return '일간 끼니별 식사 기록 통계';
+      case 'weekly': return '주간 요일별 식사 기록 통계';
+      case 'monthly': return '월간 주차별 식사 기록 통계';
+      case 'yearly': return '년간 월별 식사 기록 통계';
     }
   };
 
