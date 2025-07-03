@@ -469,11 +469,24 @@ const Index = () => {
           return;
         }
         const catalogId = catalogRes.data.exerciseCatalogId;
+        // 2. timePeriod 변환 (한글 → 영문 Enum)
+        const korTimePeriod = chatStructuredData.timePeriod || '';
+        let timePeriodEnum = null;
+        switch (korTimePeriod.trim()) {
+          case '새벽': timePeriodEnum = 'dawn'; break;
+          case '아침': timePeriodEnum = 'morning'; break;
+          case '오후': timePeriodEnum = 'afternoon'; break;
+          case '저녁': timePeriodEnum = 'evening'; break;
+          case '밤': timePeriodEnum = 'night'; break;
+          default: timePeriodEnum = null;
+        }
         // 2. 운동 기록 저장
         const sessionData: any = {
           exercise_catalog_id: catalogId,
           notes: exerciseName,
-          exercise_date: new Date().toISOString().split('T')[0]
+          exercise_date: new Date().toISOString().split('T')[0],
+          bodyPart: bodyPartEnum, // 명확하게 Enum 값 전달
+          timePeriod: timePeriodEnum // 명확하게 Enum 값 전달
         };
 
         // 유산소 운동과 근력 운동 구분 처리

@@ -1,3 +1,7 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+BEGIN;
+SET CONSTRAINTS ALL DEFERRED;
+
 -- ===================================================================
 -- 1. 사용자 데이터 50명 (관리자 1명 + 일반 사용자 49명)
 -- ===================================================================
@@ -352,7 +356,7 @@ INSERT INTO meal_logs (
 SELECT 
     u.user_id,
     f.food_item_id,
-    (ARRAY['breakfast', 'lunch', 'dinner', 'snack'])[1 + (random() * 3)::integer]::meal_time_type,
+    (ARRAY['breakfast', 'lunch', 'dinner', 'snack'])[1 + (random() * 3)::integer],
     (50 + random() * 200)::decimal(6,2) AS quantity,
     DATE '2025-01-01' + (random() * 176)::integer * INTERVAL '1 day' AS log_date,
     (ARRAY['VOICE', 'TYPING'])[1 + (random() * 1)::integer]::input_source_type,
@@ -1130,3 +1134,4 @@ INSERT INTO exercise_sessions (user_id, exercise_catalog_id, duration_minutes, c
 INSERT INTO meal_logs (user_id, food_item_id, meal_time, quantity, log_date, created_at) VALUES (50, 16, 'snack', 1.04, '2025-07-03', NOW());
 INSERT INTO meal_logs (user_id, food_item_id, meal_time, quantity, log_date, created_at) VALUES (50, 37, 'midnight', 1.34, '2025-07-03', NOW());
 INSERT INTO health_records (user_id, height, weight, record_date, created_at) VALUES (50, 151.8, 81.1, '2025-07-03', NOW());
+COMMIT;

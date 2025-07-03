@@ -11,9 +11,19 @@ export type MealTimeType = '아침' | '점심' | '저녁' | '야식' | '간식';
  * @returns MealTimeType 또는 null (변환 불가능한 경우)
  */
 export const convertTimeToMealType = (timeInput: string): MealTimeType | null => {
+  // 입력값 검증
+  if (!timeInput || typeof timeInput !== 'string') {
+    return null;
+  }
+  
   const input = timeInput.toLowerCase().trim();
   
-  // 이미 식사 카테고리로 입력된 경우
+  // 빈 문자열 체크
+  if (input === '') {
+    return null;
+  }
+  
+  // 이미 식사 카테고리로 입력된 경우 (우선순위 1)
   if (input.includes('아침') || input.includes('breakfast')) return '아침';
   if (input.includes('점심') || input.includes('lunch')) return '점심';
   if (input.includes('저녁') || input.includes('dinner')) return '저녁';
@@ -117,15 +127,30 @@ export const hasTimeInformation = (input: string): boolean => {
   const timeKeywords = [
     '아침', '점심', '저녁', '야식', '간식',
     '오전', '오후', '새벽', '밤',
-    /\d{1,2}시/, /\d{1,2}:\d{2}/,
-    'breakfast', 'lunch', 'dinner', 'snack'
+    'breakfast', 'lunch', 'dinner', 'snack',
+    '저녁', '아침', '점심', '야식', '간식'  // 중복 제거를 위해 한 번 더 추가
   ];
   
-  return timeKeywords.some(keyword => {
-    if (typeof keyword === 'string') {
-      return input.toLowerCase().includes(keyword);
-    } else {
-      return keyword.test(input);
-    }
-  });
+  const timePatterns = [
+    /\d{1,2}시/,           // "8시", "14시"
+    /\d{1,2}:\d{2}/,       // "8:30", "14:30"
+    /오전\s*\d{1,2}/,      // "오전 8시", "오전 8"
+    /오후\s*\d{1,2}/,      // "오후 2시", "오후 2"
+    /새벽\s*\d{1,2}/,      // "새벽 3시"
+    /밤\s*\d{1,2}/,        // "밤 11시"
+  ];
+  
+  const inputLower = input.toLowerCase();
+  
+  // 키워드 매칭
+  const hasKeyword = timeKeywords.some(keyword => 
+    inputLower.includes(keyword.toLowerCase())
+  );
+  
+  // 패턴 매칭
+  const hasPattern = timePatterns.some(pattern => 
+    pattern.test(input)
+  );
+  
+  return hasKeyword || hasPattern;
 }; 
