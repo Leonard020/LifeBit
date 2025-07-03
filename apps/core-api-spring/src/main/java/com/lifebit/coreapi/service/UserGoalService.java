@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.Objects;
 import com.lifebit.coreapi.service.NotificationService;
+import com.lifebit.coreapi.service.AchievementService;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +20,7 @@ public class UserGoalService {
     private final UserGoalRepository userGoalRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final AchievementService achievementService;
 
     @Transactional(readOnly = true)
     public UserGoal getUserGoal(Long userId) {
@@ -97,6 +99,7 @@ public class UserGoalService {
                 notificationService.saveNotification(userId, "GOAL_IMMINENT", "목표 임박", "주간 운동 목표 달성이 임박했습니다! (" + progress + "/" + savedGoal.getWeeklyWorkoutTarget() + ")");
             }
         }
+        // 목표 progress 갱신은 DB 트리거에서 처리하므로, 서비스에서는 별도 호출하지 않음
         return savedGoal;
     }
 
@@ -178,6 +181,7 @@ public class UserGoalService {
         UserGoal savedGoal = userGoalRepository.save(userGoal);
         // 목표 설정 알림
         notificationService.saveNotification(userGoal.getUserId(), "GOAL_SET", "목표 설정", "목표가 성공적으로 설정되었습니다.");
+        // 목표 progress 갱신은 DB 트리거에서 처리하므로, 서비스에서는 별도 호출하지 않음
         return savedGoal;
     }
 

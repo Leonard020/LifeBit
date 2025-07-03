@@ -108,11 +108,9 @@ public class AchievementService {
     public void updateUserAchievementProgress(Long userId, String achievementTitle, int progress) {
         log.info("🟣 [AchievementService] 업적 진행도 업데이트 시작 - 사용자: {}, 업적: {}, 진행도: {}", 
                   userId, achievementTitle, progress);
-        
         Achievement achievement = achievementRepository.findByTitle(achievementTitle);
         if (achievement == null) {
             log.error("❌ [AchievementService] 업적을 찾을 수 없음: {}", achievementTitle);
-            // DB에 있는 모든 업적 제목을 로그로 출력
             List<Achievement> allAchievements = achievementRepository.findByIsActiveTrue();
             log.info("🟣 [AchievementService] DB에 있는 모든 업적 제목:");
             for (Achievement a : allAchievements) {
@@ -120,35 +118,28 @@ public class AchievementService {
             }
             return;
         }
-        
         log.info("✅ [AchievementService] 업적 찾음 - ID: {}, 제목: {}, 목표: {}", 
                 achievement.getAchievementId(), achievement.getTitle(), achievement.getTargetDays());
-        
         UserAchievement userAchievement = userAchievementRepository
             .findByUserIdAndAchievementId(userId, achievement.getAchievementId())
             .orElse(null);
-        
         if (userAchievement == null) {
             log.error("❌ [AchievementService] 사용자 업적을 찾을 수 없음 - 사용자: {}, 업적: {}", userId, achievementTitle);
             return;
         }
-        
         log.info("🟣 [AchievementService] 현재 진행도: {} → 새 진행도: {}", userAchievement.getProgress(), progress);
-        
         userAchievement.setProgress(progress);
-        
         // 목표 달성 확인 (진행도가 목표 이상이고 아직 달성되지 않은 경우)
-        if (achievement.getTargetDays() != null && progress >= achievement.getTargetDays() && !userAchievement.getIsAchieved()) {
+        // 단, '목표 설정자' 업적은 자동 달성 처리하지 않음
+        if (!"목표 설정자".equals(achievementTitle) && achievement.getTargetDays() != null && progress >= achievement.getTargetDays() && !userAchievement.getIsAchieved()) {
             userAchievement.setIsAchieved(true);
             userAchievement.setAchievedDate(LocalDate.now());
             log.info("🎉 [AchievementService] 업적 달성! - 사용자: {}, 업적: {}", userId, achievementTitle);
             notificationService.saveNotification(userId, "ACHIEVEMENT", "업적 달성", String.format("'%s' 업적을 달성했습니다! 🎉", achievement.getTitle()), userAchievement.getUserAchievementId());
-            
             // 랭킹 점수 업데이트 이벤트 발행
             eventPublisher.publishEvent(new AchievementCompletedEvent(userId));
             log.info("📢 [AchievementService] 업적 달성 이벤트 발행 - 사용자: {}", userId);
         }
-        
         userAchievementRepository.save(userAchievement);
         log.info("✅ [AchievementService] 업적 진행도 업데이트 완료 - 사용자: {}, 업적: {}, 진행도: {}", 
                 userId, achievementTitle, progress);
@@ -320,5 +311,27 @@ public class AchievementService {
         // 3. 총 운동 시간
         int totalMinutes = exerciseSessionRepository.sumTotalWorkoutMinutesByUserId(userId);
         updateUserAchievementProgress(userId, "총 운동 1000분 달성", totalMinutes);
+    }
+
+    /**
+     * 업적의 progress만 갱신 (달성 체크는 하지 않음)
+     */
+    @Transactional
+    public void updateUserAchievementProgressOnly(Long userId, String achievementTitle, int progress) {
+        Achievement achievement = achievementRepository.findByTitle(achievementTitle);
+        if (achievement == null) {
+            log.error("❌ [AchievementService] 업적을 찾을 수 없음: {}", achievementTitle);
+            return;
+        }
+        UserAchievement userAchievement = userAchievementRepository
+            .findByUserIdAndAchievementId(userId, achievement.getAchievementId())
+            .orElse(null);
+        if (userAchievement == null) {
+            log.error("❌ [AchievementService] 사용자 업적을 찾을 수 없음 - 사용자: {}, 업적: {}", userId, achievementTitle);
+            return;
+        }
+        userAchievement.setProgress(progress);
+        userAchievementRepository.save(userAchievement);
+        log.info("[AchievementService] 업적 progress만 갱신 - 사용자: {}, 업적: {}, 진행도: {}", userId, achievementTitle, progress);
     }
 } 
