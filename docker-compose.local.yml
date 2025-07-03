@@ -8,8 +8,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
       - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro,Z
-      - ./trigger.sql:/docker-entrypoint-initdb.d/02-trigger.sql:ro,Z
       - ./Mockup.sql:/docker-entrypoint-initdb.d/03-mockup.sql:ro,Z
+      - ./trigger.sql:/docker-entrypoint-initdb.d/02-trigger.sql:ro,Z
     environment:
       - POSTGRES_DB=lifebit_db
       - POSTGRES_USER=lifebit_user

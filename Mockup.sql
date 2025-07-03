@@ -378,16 +378,14 @@ LIMIT 900;
 -- ===================================================================
 -- 8. 사용자 랭킹 49개 (각 사용자당 1개)
 -- ===================================================================
-INSERT INTO user_ranking (user_id, total_score, streak_days, rank_position, previous_rank, season, is_active)
-SELECT 
-    u.user_id,
-    (100 + random() * 900)::integer, -- 총점: 100-1000점
-    (random() * 30)::integer, -- 연속일: 0-30일
-    ROW_NUMBER() OVER (ORDER BY random()), -- 임시 순위
-    ROW_NUMBER() OVER (ORDER BY random()), -- 이전 순위
-    1, -- 현재 시즌
-    true -- 활성 상태
-FROM users u WHERE role = 'USER';
+-- user_ranking은 트리거에 의해 자동 생성되므로 UPDATE로 점수만 설정
+UPDATE user_ranking 
+SET 
+    total_score = (100 + random() * 900)::integer, -- 총점: 100-1000점
+    streak_days = (random() * 30)::integer, -- 연속일: 0-30일
+    season = 1, -- 현재 시즌
+    is_active = true -- 활성 상태
+WHERE user_id IN (SELECT user_id FROM users WHERE role = 'USER');
 
 -- 점수 기반 순위 재정렬
 UPDATE user_ranking 
