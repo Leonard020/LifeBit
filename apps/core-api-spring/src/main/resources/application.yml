@@ -20,7 +20,7 @@ spring:
       validation-timeout: 5000
   jpa:
     hibernate:
-      ddl-auto: update  # 개발환경에서는 update 사용
+      ddl-auto: validate  # 개발환경에서는 update 사용
     show-sql: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
