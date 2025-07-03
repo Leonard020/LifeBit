@@ -12,6 +12,7 @@ import { HealthCharacter } from './HealthCharacter';
 import { MealCard } from './MealCard';
 import { NutritionChart } from './NutritionChart';
 import { AIRecommendations } from './AIRecommendations';
+import { useTheme } from '../../contexts/ThemeContext';
 import { 
   Activity, 
   Apple, 
@@ -110,6 +111,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 }) => {
   console.log('🚀 [EnhancedHealthDashboard] 컴포넌트 렌더링 시작!', { userId, period });
   
+  const { isDarkMode } = useTheme();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [activeTab, setActiveTab] = useState<'dashboard' | 'nutrition' | 'exercise' | 'goal'>('dashboard');
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -891,8 +893,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       <div className="space-y-6">
         <div className="text-center py-8">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">데이터를 불러올 수 없습니다</h3>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">데이터를 불러올 수 없습니다</h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
           <Button onClick={handleRetry} className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4" />
             다시 시도
@@ -908,7 +910,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       <div className="space-y-6">
         <div className="text-center py-16">
           <div className="text-6xl mb-4">📊</div>
-          <h3 className="text-xl font-semibold mb-2">아직 건강 데이터가 없습니다</h3>
+          <h3 className="text-xl font-semibold mb-2 dark:text-gray-100">아직 건강 데이터가 없습니다</h3>
           <p className="text-muted-foreground mb-6">
             운동과 식단을 기록하여 건강 대시보드를 시작해보세요!
           </p>
@@ -951,13 +953,13 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
           />
 
           {/* 목표 달성률 섹션 */}
-          <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200">
+          <Card className={`bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-2 border-blue-200 dark:border-blue-700`}>
             <CardHeader className="text-center">
-              <CardTitle className="flex items-center justify-center text-2xl">
-                <Target className="h-6 w-6 mr-2 text-blue-600" />
+              <CardTitle className="flex items-center justify-center text-2xl dark:text-gray-100">
+                <Target className="h-6 w-6 mr-2 text-blue-600 dark:text-blue-400" />
                 목표 달성률
               </CardTitle>
-              <div className="text-sm text-gray-600 mb-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 {goalPeriod === 'day' && new Date().toLocaleDateString('ko-KR', { 
                   year: 'numeric', 
                   month: 'long', 
@@ -974,8 +976,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* 운동 그룹 */}
-                <div className="p-6 bg-white rounded-xl shadow-sm border">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center">
                     <span className="mr-2">💪</span>
                     운동 목표 달성률 (주간)
                   </h3>
@@ -998,7 +1000,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xl font-bold text-gray-800">
+                        <span className="text-xl font-bold text-gray-800 dark:text-gray-100">
                           {weeklyWorkoutTarget 
                             ? Math.round(((totalWeeklyCount) / weeklyWorkoutTarget) * 100)
                             : 0}%
@@ -1006,7 +1008,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       </div>
                     </div>
                     
-                    <p className="text-sm text-gray-600 mb-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                       {weeklyWorkoutTarget 
                         ? `${totalWeeklyCount}회 / ${weeklyWorkoutTarget}회`
                         : `${totalWeeklyCount}회 / 목표 미설정`
@@ -1026,8 +1028,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   </div>
                   
                   <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-2">주간 운동 달성 시 최대 7점</p>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">주간 운동 달성 시 최대 7점</p>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
                       <div 
                         className="bg-blue-500 h-2 rounded-full transition-all duration-500"
                         style={{ 
@@ -1038,8 +1040,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       />
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">현재 획득 점수</span>
-                      <span className="text-sm font-bold text-blue-600">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">현재 획득 점수</span>
+                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
                         {calculateExerciseScore()}점 / 7점
                       </span>
                     </div>
@@ -1048,8 +1050,8 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                 </div>
 
                 {/* 식단 그룹 */}
-                <div className="p-6 bg-white rounded-xl shadow-sm border">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center">
                     <span className="mr-2">🍽️</span>
                     식단 목표 달성률 (일간)
                   </h3>
@@ -1074,14 +1076,14 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-800">
+                          <span className="text-xs font-bold text-gray-800 dark:text-gray-100">
                             {todayData?.nutritionGoals?.carbs 
                               ? Math.round((todayData.nutrition.carbs / todayData.nutritionGoals.carbs) * 100)
                               : 0}%
                           </span>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-600 font-medium">탄수화물</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">탄수화물</p>
                     </div>
 
                     {/* 단백질 */}
@@ -1103,14 +1105,14 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-800">
+                          <span className="text-xs font-bold text-gray-800 dark:text-gray-100">
                             {todayData?.nutritionGoals?.protein 
                               ? Math.round((todayData.nutrition.protein / todayData.nutritionGoals.protein) * 100)
                               : 0}%
                           </span>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-600 font-medium">단백질</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">단백질</p>
                     </div>
 
                     {/* 지방 */}
@@ -1132,25 +1134,25 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-800">
+                          <span className="text-xs font-bold text-gray-800 dark:text-gray-100">
                             {todayData?.nutritionGoals?.fat 
                               ? Math.round((todayData.nutrition.fat / todayData.nutritionGoals.fat) * 100)
                               : 0}%
                           </span>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-600 font-medium">지방</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">지방</p>
                     </div>
                   </div>
                   
                   <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-2">일일 식단 100% 달성 시 1점 (주간 최대 7점)</p>
-                    <div className="text-sm text-gray-600 mb-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">일일 식단 100% 달성 시 1점 (주간 최대 7점)</p>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                       모든 영양소 100% 달성 시 해당 날짜 1점 획득
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-xs text-gray-500">오늘 획득 점수</span>
-                      <span className="text-sm font-bold text-green-600">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">오늘 획득 점수</span>
+                      <span className="text-sm font-bold text-green-600 dark:text-green-400">
                         {calculateDashboardNutritionScore()}점 / 1점
                       </span>
                     </div>
@@ -1160,9 +1162,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
               </div>
 
               {/* 기간별 목표 달성률 요약 정보 */}
-              <div className="mt-6 p-4 bg-white rounded-lg border">
+              <div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700">
                 <div className="text-center">
-                  <h4 className="font-semibold text-gray-800 mb-2">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
                     {goalPeriod === 'day' && '오늘의'}
                     {goalPeriod === 'week' && '이번 주'}
                     {goalPeriod === 'month' && '이번 달'} 
@@ -1171,20 +1173,20 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   
                   {/* 기본값인지 실제 설정된 목표인지 구분 표시 */}
                   {userGoals?.data?.user_goal_id ? (
-                    <div className="mb-3 p-2 bg-green-50 rounded-lg border border-green-200">
-                      <p className="text-xs text-green-700">
+                    <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                      <p className="text-xs text-green-700 dark:text-green-300">
                         ✅ 설정된 목표로 계산 중 (설정일: {new Date(userGoals.data.created_at).toLocaleDateString('ko-KR')})
                       </p>
                     </div>
                   ) : (
-                    <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-xs text-blue-700">
+                    <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
                         📋 기본 목표로 계산 중 (프로필에서 개인 목표를 설정하세요)
                       </p>
                     </div>
                   )}
                   
-                  <div className="text-3xl font-bold text-blue-600 mb-2">
+                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
                     {(() => {
                       const exercisePercentage = weeklyWorkoutTarget 
                         ? Math.min(((totalWeeklyCount) / weeklyWorkoutTarget) * 100, 100)
@@ -1207,7 +1209,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       return Math.round(totalPercentage);
                     })()}%
                   </div>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     4개 목표 중 {(() => {
                       let completedCount = 0;
                       
@@ -1271,7 +1273,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   {isNutritionButtonEnabled && <span className="ml-2 text-xs">🔥</span>}
                 </Button>
               </div>
-              <div className="mt-3 text-sm text-gray-600 text-center">
+              <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 text-center">
                 <div>🏃‍♂️ 운동: 주간 목표 달성 시 활성화 (매주 일요일 초기화)</div>
                 <div>🍎 식단: 일간 목표 달성 시 활성화 (매일 자정 초기화)</div>
                 <div className="mt-1 text-xs">
@@ -1318,7 +1320,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                             </span>
                           </div>
                         </div>
-                        <div className="flex justify-between text-sm text-gray-600 mt-1">
+                        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mt-1">
                           <span>0회</span>
                           <span>목표: {target}회</span>
                         </div>
@@ -1330,19 +1332,19 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                         const hasAnyTarget = Object.values(exerciseDetails).some(detail => detail.hasTarget);
                         return hasAnyTarget && (
                           <div className="space-y-4">
-                            <h4 className="font-medium text-gray-900">운동 부위별 달성률 (횟수 기준)</h4>
+                            <h4 className="font-medium text-gray-900 dark:text-gray-100">운동 부위별 달성률 (횟수 기준)</h4>
                           
                             {/* 가슴 운동 */}
                             {exerciseDetails.chest.hasTarget && (
-                              <div className="bg-red-50 rounded-lg p-3">
+                              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">💪 가슴 운동</span>
-                                  <span className="text-sm font-bold text-red-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">💪 가슴 운동</span>
+                                  <span className="text-sm font-bold text-red-600 dark:text-red-400">
                                     {exerciseDetails.chest.current}회 / {exerciseDetails.chest.target}회
                                   </span>
                                 </div>
                                 <Progress value={exerciseDetails.chest.percentage} className="h-2" />
-                                <div className="text-xs text-red-600 mt-1 text-center">
+                                <div className="text-xs text-red-600 dark:text-red-400 mt-1 text-center">
                                   {Math.round(exerciseDetails.chest.percentage)}% 달성
                                 </div>
                               </div>
@@ -1350,10 +1352,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 등 운동 */}
                             {exerciseDetails.back.hasTarget && (
-                              <div className="bg-green-50 rounded-lg p-3">
+                              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">🏋️‍♂️ 등 운동</span>
-                                  <span className="text-sm font-bold text-green-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">🏋️‍♂️ 등 운동</span>
+                                  <span className="text-sm font-bold text-green-600 dark:text-green-400">
                                     {exerciseDetails.back.current}회 / {exerciseDetails.back.target}회
                                   </span>
                                 </div>
@@ -1366,15 +1368,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 다리 운동 */}
                             {exerciseDetails.legs.hasTarget && (
-                              <div className="bg-purple-50 rounded-lg p-3">
+                              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">🦵 다리 운동</span>
-                                  <span className="text-sm font-bold text-purple-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">🦵 다리 운동</span>
+                                  <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
                                     {exerciseDetails.legs.current}회 / {exerciseDetails.legs.target}회
                                   </span>
                                 </div>
                                 <Progress value={exerciseDetails.legs.percentage} className="h-2" />
-                                <div className="text-xs text-purple-600 mt-1 text-center">
+                                <div className="text-xs text-purple-600 dark:text-purple-400 mt-1 text-center">
                                   {Math.round(exerciseDetails.legs.percentage)}% 달성
                                 </div>
                               </div>
@@ -1382,15 +1384,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 어깨 운동 */}
                             {exerciseDetails.shoulders.hasTarget && (
-                              <div className="bg-orange-50 rounded-lg p-3">
+                              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">🤸‍♂️ 어깨 운동</span>
-                                  <span className="text-sm font-bold text-orange-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">🤸‍♂️ 어깨 운동</span>
+                                  <span className="text-sm font-bold text-orange-600 dark:text-orange-400">
                                     {exerciseDetails.shoulders.current}회 / {exerciseDetails.shoulders.target}회
                                   </span>
                                 </div>
                                 <Progress value={exerciseDetails.shoulders.percentage} className="h-2" />
-                                <div className="text-xs text-orange-600 mt-1 text-center">
+                                <div className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center">
                                   {Math.round(exerciseDetails.shoulders.percentage)}% 달성
                                 </div>
                               </div>
@@ -1398,15 +1400,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 팔 운동 */}
                             {exerciseDetails.arms.hasTarget && (
-                              <div className="bg-pink-50 rounded-lg p-3">
+                              <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">💪 팔 운동</span>
-                                  <span className="text-sm font-bold text-pink-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">💪 팔 운동</span>
+                                  <span className="text-sm font-bold text-pink-600 dark:text-pink-400">
                                     {exerciseDetails.arms.current}회 / {exerciseDetails.arms.target}회
                                   </span>
                                 </div>
                                 <Progress value={exerciseDetails.arms.percentage} className="h-2" />
-                                <div className="text-xs text-pink-600 mt-1 text-center">
+                                <div className="text-xs text-pink-600 dark:text-pink-400 mt-1 text-center">
                                   {Math.round(exerciseDetails.arms.percentage)}% 달성
                                 </div>
                               </div>
@@ -1414,15 +1416,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 복근 운동 */}
                             {exerciseDetails.abs.hasTarget && (
-                              <div className="bg-yellow-50 rounded-lg p-3">
+                              <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">🏃‍♀️ 복근 운동</span>
-                                  <span className="text-sm font-bold text-yellow-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">🏃‍♀️ 복근 운동</span>
+                                  <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
                                     {exerciseDetails.abs.current}회 / {exerciseDetails.abs.target}회
                                   </span>
                                 </div>
                                 <Progress value={exerciseDetails.abs.percentage} className="h-2" />
-                                <div className="text-xs text-yellow-600 mt-1 text-center">
+                                <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 text-center">
                                   {Math.round(exerciseDetails.abs.percentage)}% 달성
                                 </div>
                               </div>
@@ -1430,15 +1432,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 유산소 운동 */}
                             {exerciseDetails.cardio.hasTarget && (
-                              <div className="bg-cyan-50 rounded-lg p-3">
+                              <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium">🏃 유산소 운동</span>
-                                  <span className="text-sm font-bold text-cyan-600">
+                                  <span className="text-sm font-medium dark:text-gray-100">🏃 유산소 운동</span>
+                                  <span className="text-sm font-bold text-cyan-600 dark:text-cyan-400">
                                     {exerciseDetails.cardio.current}회 / {exerciseDetails.cardio.target}회
                                   </span>
                                 </div>
                                 <Progress value={exerciseDetails.cardio.percentage} className="h-2" />
-                                <div className="text-xs text-cyan-600 mt-1 text-center">
+                                <div className="text-xs text-cyan-600 dark:text-cyan-400 mt-1 text-center">
                                   {Math.round(exerciseDetails.cardio.percentage)}% 달성
                                 </div>
                               </div>
@@ -1450,10 +1452,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                       {/* 운동 상태 메시지 */}
                       <div className={`p-4 rounded-lg border-l-4 ${
                         target && totalWeeklyCountLocal >= target
-                          ? 'bg-green-50 border-green-500 text-green-700'
+                          ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-400 text-green-700 dark:text-green-300'
                           : target && totalWeeklyCountLocal >= target * 0.5
-                          ? 'bg-yellow-50 border-yellow-500 text-yellow-700'
-                          : 'bg-red-50 border-red-500 text-red-700'
+                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500 dark:border-yellow-400 text-yellow-700 dark:text-yellow-300'
+                          : 'bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-400 text-red-700 dark:text-red-300'
                       }`}>
                         <div className="flex items-center">
                           {target && totalWeeklyCountLocal >= target ? (
@@ -1485,7 +1487,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <Utensils className="h-5 w-5 mr-2 text-blue-600" />
+                  <Utensils className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
                   상세 영양소 목표 달성률 (일간)
                 </CardTitle>
               </CardHeader>
@@ -1494,10 +1496,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   {/* 탄수화물 */}
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="font-medium flex items-center">
+                      <span className="font-medium flex items-center dark:text-gray-100">
                         🍞 탄수화물
                       </span>
-                      <span className="font-bold text-blue-600">
+                      <span className="font-bold text-blue-600 dark:text-blue-400">
                         {(todayData?.nutrition?.carbs || 0).toFixed(1)}g / {(todayData?.nutritionGoals?.carbs || 0).toFixed(1)}g
                       </span>
                     </div>
@@ -1518,10 +1520,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   {/* 단백질 */}
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="font-medium flex items-center">
+                      <span className="font-medium flex items-center dark:text-gray-100">
                         🥩 단백질
                       </span>
-                      <span className="font-bold text-purple-600">
+                      <span className="font-bold text-purple-600 dark:text-purple-400">
                         {(todayData?.nutrition?.protein || 0).toFixed(1)}g / {(todayData?.nutritionGoals?.protein || 0).toFixed(1)}g
                       </span>
                     </div>
@@ -1542,10 +1544,10 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   {/* 지방 */}
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="font-medium flex items-center">
+                      <span className="font-medium flex items-center dark:text-gray-100">
                         🥑 지방
                       </span>
-                      <span className="font-bold text-pink-600">
+                      <span className="font-bold text-pink-600 dark:text-pink-400">
                         {(todayData?.nutrition?.fat || 0).toFixed(1)}g / {(todayData?.nutritionGoals?.fat || 0).toFixed(1)}g
                       </span>
                     </div>
@@ -1564,22 +1566,22 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   </div>
 
                   {/* 영양소 상태 요약 */}
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-800 mb-2">📈 영양소 섭취 현황</h4>
+                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-2">📈 영양소 섭취 현황</h4>
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className={`p-2 rounded ${todayData?.nutritionGoals?.carbs && (todayData.nutrition.carbs / todayData.nutritionGoals.carbs * 100) >= 80 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      <div className={`p-2 rounded ${todayData?.nutritionGoals?.carbs && (todayData.nutrition.carbs / todayData.nutritionGoals.carbs * 100) >= 80 ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <div className="text-xs">탄수화물</div>
                         <div className="font-bold">{todayData?.nutritionGoals?.carbs 
                           ? Math.round((todayData.nutrition.carbs / todayData.nutritionGoals.carbs) * 100)
                           : 0}%</div>
                       </div>
-                      <div className={`p-2 rounded ${todayData?.nutritionGoals?.protein && (todayData.nutrition.protein / todayData.nutritionGoals.protein * 100) >= 80 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      <div className={`p-2 rounded ${todayData?.nutritionGoals?.protein && (todayData.nutrition.protein / todayData.nutritionGoals.protein * 100) >= 80 ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <div className="text-xs">단백질</div>
                         <div className="font-bold">{todayData?.nutritionGoals?.protein 
                           ? Math.round((todayData.nutrition.protein / todayData.nutritionGoals.protein) * 100)
                           : 0}%</div>
                       </div>
-                      <div className={`p-2 rounded ${todayData?.nutritionGoals?.fat && (todayData.nutrition.fat / todayData.nutritionGoals.fat * 100) >= 80 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      <div className={`p-2 rounded ${todayData?.nutritionGoals?.fat && (todayData.nutrition.fat / todayData.nutritionGoals.fat * 100) >= 80 ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <div className="text-xs">지방</div>
                         <div className="font-bold">{todayData?.nutritionGoals?.fat 
                           ? Math.round((todayData.nutrition.fat / todayData.nutritionGoals.fat) * 100)
