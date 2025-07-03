@@ -154,7 +154,19 @@ public class ExerciseSessionController {
             java.time.LocalDate exerciseDate = request.get("exercise_date") != null
                     ? java.time.LocalDate.parse(request.get("exercise_date").toString())
                     : java.time.LocalDate.now();
-            TimePeriodType timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
+            // timePeriod 처리: 프론트엔드에서 보낸 값 우선, 없으면 현재 시간 기준
+            TimePeriodType timePeriod = null;
+            if (request.get("timePeriod") != null) {
+                String timePeriodStr = request.get("timePeriod").toString();
+                try {
+                    timePeriod = TimePeriodType.valueOf(timePeriodStr);
+                } catch (IllegalArgumentException e) {
+                    log.warn("잘못된 timePeriod 값: {}, 현재 시간 기준으로 설정", timePeriodStr);
+                    timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
+                }
+            } else {
+                timePeriod = getTimePeriodByHour(java.time.LocalTime.now().getHour());
+            }
 
             // ✅ 운동 카탈로그 조회하여 유산소 운동인지 확인
             ExerciseCatalog catalog = exerciseService.getExerciseCatalogById(catalogId);

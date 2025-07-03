@@ -93,9 +93,9 @@ class ExerciseSession(Base):
     notes = Column(Text, nullable=True)
     exercise_date = Column(Date, nullable=True)
     time_period = Column(String(20), nullable=True)
-    input_source = Column(SqlEnum(InputSourceType, name="input_source_type", create_type=True), nullable=True)
+    input_source = Column(String(20), nullable=True)
     confidence_score = Column(DECIMAL(4, 2), nullable=True)
-    validation_status = Column(SqlEnum(ValidationStatusType, name="validation_status_type", create_type=True), default=ValidationStatusType.PENDING, nullable=True)
+    validation_status = Column(String(20), default="PENDING", nullable=True)
     validation_notes = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, default=get_kst_now)
 
@@ -118,13 +118,13 @@ class MealLog(Base):
     uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     food_item_id = Column(Integer, nullable=True)
-    meal_time = Column(SqlEnum(MealTimeType, name="meal_time_type", create_type=True), nullable=False)
+    meal_time = Column(String(20), nullable=True)
     quantity = Column(DECIMAL(6, 2), nullable=True)
     log_date = Column(Date, nullable=False)
-    input_source = Column(SqlEnum(InputSourceType, name="input_source_type", create_type=True), nullable=True)
+    input_source = Column(String(20), nullable=True)
     confidence_score = Column(DECIMAL(4, 2), nullable=True)
     original_audio_path = Column(String(255), nullable=True)
-    validation_status = Column(SqlEnum(ValidationStatusType, name="validation_status_type", create_type=True), default=ValidationStatusType.PENDING, nullable=True)
+    validation_status = Column(String(20), default="PENDING", nullable=True)
     validation_notes = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, default=get_kst_now)
 
@@ -369,7 +369,7 @@ class ExerciseCatalog(Base):
     __tablename__ = "exercise_catalog"
     exercise_catalog_id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    body_part = Column(SqlEnum(BodyPartType, name="body_part_type", create_type=True), nullable=False)
+    body_part = Column(String(20), nullable=False)
     exercise_type = Column(String(50), nullable=True)  # 예: strength/cardio 등
     description = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP, default=get_kst_now)

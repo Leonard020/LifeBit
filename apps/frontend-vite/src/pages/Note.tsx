@@ -426,12 +426,12 @@ const Note = () => {
     return { weeklyStrengthDays: strengthDays, weeklyCardioDays: cardioDays };
   }, [weeklyExerciseData, filteredSummary, weekStartStr, weekEndStr]);
 
-  // ✅ 부위별 일일 1회 기준 주간 집계 (Radar 차트용)
+  // ✅ 부위별 일일 1회 기준 주간 집계 (Radar 차트용) - 중복 제거
   const weeklyBodyPartDays = React.useMemo(() => {
     // 날짜별 부위 Set 저장
     const datePartSet: Record<string, Set<string>> = {};
     
-    // 1. weeklyExerciseData 사용 (이미 주간 범위 데이터)
+    // 1. weeklyExerciseData 사용 (이미 주간 범위 데이터) - 우선순위 높음
     weeklyExerciseData.forEach((record) => {
       if (record.exerciseDate && record.bodyPart) {
         const date = record.exerciseDate.slice(0, 10);
@@ -443,10 +443,17 @@ const Note = () => {
       }
     });
     
-    // 2. weeklySummary에서도 체크 - 동적 매핑 Map 사용
+    // 2. weeklySummary에서 체크 - weeklyExerciseData에 없는 날짜만 처리
     filteredSummary.forEach((item) => {
       if (!Array.isArray(item.exerciseNames) || item.exerciseNames.length === 0) return;
       const date = item.workoutDate;
+      
+      // 이미 weeklyExerciseData에서 처리된 날짜는 건너뛰기
+      if (datePartSet[date]) {
+        console.log(`🔄 [weeklyBodyPartDays] ${date}는 이미 weeklyExerciseData에서 처리됨, 건너뛰기`);
+        return;
+      }
+      
       if (!datePartSet[date]) datePartSet[date] = new Set();
       
       item.exerciseNames.forEach((name: string) => {
@@ -473,6 +480,8 @@ const Note = () => {
         counts[part] = (counts[part] || 0) + 1;
       });
     });
+    
+    console.log('📊 [weeklyBodyPartDays] 최종 집계 결과:', counts);
     return counts;
   }, [weeklyExerciseData, filteredSummary, weekStartStr, weekEndStr, exerciseNameToBodyPartMap]);
 
@@ -528,6 +537,14 @@ const Note = () => {
       console.log('🔍 workoutDate:', day.workoutDate, 'exerciseNames:', day.exerciseNames);
     });
   }, [weeklySummary]);
+
+  // weeklyExerciseData 디버깅용 useEffect 추가
+  React.useEffect(() => {
+    console.log('🔵 weeklyExerciseData:', weeklyExerciseData);
+    weeklyExerciseData.forEach(record => {
+      console.log('🔍 exerciseDate:', record.exerciseDate, 'bodyPart:', record.bodyPart, 'exerciseName:', record.exerciseName);
+    });
+  }, [weeklyExerciseData]);
 
   useEffect(() => {
     if (location.state?.refreshDiet) {

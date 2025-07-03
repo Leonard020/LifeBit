@@ -6,35 +6,35 @@
 
 
 -- [누적 운동 기록 업적] (ex. 운동 초보자, 운동 애호가, 100회 돌파, 운동 매니아)
-CREATE OR REPLACE FUNCTION calc_workout_progress(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_workout_progress(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt
     FROM exercise_sessions
-    WHERE user_id = calc_workout_progress.user_id
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [누적 식단 기록 업적] (ex. 식단 기록자, 균형 식단)
-CREATE OR REPLACE FUNCTION calc_meal_progress(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_meal_progress(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
-    SELECT COUNT(DISTINCT log_date) INTO cnt
+    SELECT COUNT(DISTINCT meal_logs.log_date) INTO cnt
     FROM meal_logs
-    WHERE user_id = calc_meal_progress.user_id
-      AND validation_status = 'VALIDATED';
+    WHERE meal_logs.user_id = p_user_id
+      AND meal_logs.validation_status = 'VALIDATED';
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [연속 운동 기록 업적] (ex. 주간 전사, 2주 챌린지, 월간 마스터, 3개월 챌린지, 6개월 레전드, 꾸준함의 시작)
-CREATE OR REPLACE FUNCTION calc_workout_streak(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_workout_streak(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     max_streak INTEGER := 0;
@@ -43,10 +43,10 @@ DECLARE
     rec RECORD;
 BEGIN
     FOR rec IN
-        SELECT DISTINCT exercise_date::date AS d
+        SELECT DISTINCT exercise_sessions.exercise_date::date AS d
         FROM exercise_sessions
-        WHERE user_id = calc_workout_streak.user_id
-          AND validation_status = 'VALIDATED'
+        WHERE exercise_sessions.user_id = p_user_id
+          AND exercise_sessions.validation_status = 'VALIDATED'
         ORDER BY d
     LOOP
         IF prev_date IS NULL OR rec.d = prev_date + 1 THEN
@@ -64,7 +64,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- [연속 식단 기록 업적] (ex. 식단 전문가, 식단 완벽주의자)
-CREATE OR REPLACE FUNCTION calc_meal_streak(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_meal_streak(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     max_streak INTEGER := 0;
@@ -73,10 +73,10 @@ DECLARE
     rec RECORD;
 BEGIN
     FOR rec IN
-        SELECT DISTINCT log_date::date AS d
+        SELECT DISTINCT meal_logs.log_date::date AS d
         FROM meal_logs
-        WHERE user_id = calc_meal_streak.user_id
-          AND validation_status = 'VALIDATED'
+        WHERE meal_logs.user_id = p_user_id
+          AND meal_logs.validation_status = 'VALIDATED'
         ORDER BY d
     LOOP
         IF prev_date IS NULL OR rec.d = prev_date + 1 THEN
@@ -94,52 +94,52 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- [아침 운동 업적] (ex. 아침 운동러, 아침형 인간, 아침 운동 마스터)
-CREATE OR REPLACE FUNCTION calc_morning_workout(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_morning_workout(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt
     FROM exercise_sessions
-    WHERE user_id = calc_morning_workout.user_id
-      AND time_period = 'morning'
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND exercise_sessions.time_period = 'morning'
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [저녁 운동 업적] (ex. 저녁 운동러, 저녁 루틴 마스터, 저녁 운동 전문가)
-CREATE OR REPLACE FUNCTION calc_night_workout(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_night_workout(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt
     FROM exercise_sessions
-    WHERE user_id = calc_night_workout.user_id
-      AND time_period = 'night'
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND exercise_sessions.time_period = 'night'
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [주말 운동 업적] (ex. 주말 전사, 주말 활동가, 주말 운동 킹)
-CREATE OR REPLACE FUNCTION calc_weekend_workout(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_weekend_workout(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt
     FROM exercise_sessions
-    WHERE user_id = calc_weekend_workout.user_id
-      AND EXTRACT(ISODOW FROM exercise_date) IN (6, 7)
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND EXTRACT(ISODOW FROM exercise_sessions.exercise_date) IN (6, 7)
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [유산소 운동 업적] (ex. 유산소 초보자, 유산소 매니아, 유산소 킹)
-CREATE OR REPLACE FUNCTION calc_cardio_workout(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_cardio_workout(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
@@ -147,7 +147,7 @@ BEGIN
     SELECT COUNT(*) INTO cnt
     FROM exercise_sessions es
     JOIN exercise_catalog ec ON es.exercise_catalog_id = ec.exercise_catalog_id
-    WHERE es.user_id = calc_cardio_workout.user_id
+    WHERE es.user_id = p_user_id
       AND ec.exercise_type = 'aerobic'
       AND es.validation_status = 'VALIDATED';
     RETURN cnt;
@@ -155,7 +155,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- [근력 운동 업적] (ex. 근력 초보자, 근력 향상자, 근력 킹)
-CREATE OR REPLACE FUNCTION calc_strength_workout(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_strength_workout(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
@@ -163,7 +163,7 @@ BEGIN
     SELECT COUNT(*) INTO cnt
     FROM exercise_sessions es
     JOIN exercise_catalog ec ON es.exercise_catalog_id = ec.exercise_catalog_id
-    WHERE es.user_id = calc_strength_workout.user_id
+    WHERE es.user_id = p_user_id
       AND ec.exercise_type = 'strength'
       AND es.validation_status = 'VALIDATED';
     RETURN cnt;
@@ -171,28 +171,28 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- [체중 기록 업적] (ex. 체중 관리자, 체중 관리 전문가, 체중 변화 추적자)
-CREATE OR REPLACE FUNCTION calc_weight_record_count(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_weight_record_count(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt
     FROM health_records
-    WHERE user_id = calc_weight_record_count.user_id;
+    WHERE health_records.user_id = p_user_id;
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [목표 체중 달성 업적] (ex. 체중 감량 성공, 체중 관리 마스터, 완벽한 변화)
 -- (목표 체중 파라미터 필요, 임시로 60kg로 예시)
-CREATE OR REPLACE FUNCTION calc_weight_goal_achieved(user_id BIGINT, target_weight DECIMAL)
+CREATE OR REPLACE FUNCTION calc_weight_goal_achieved(p_user_id BIGINT, target_weight DECIMAL)
 RETURNS INTEGER AS $$
 DECLARE
     achieved INTEGER := 0;
 BEGIN
     SELECT 1 INTO achieved
     FROM health_records
-    WHERE user_id = calc_weight_goal_achieved.user_id
+    WHERE health_records.user_id = p_user_id
       AND weight <= target_weight
     LIMIT 1;
     RETURN COALESCE(achieved, 0);
@@ -200,67 +200,67 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- [총 칼로리 소모 업적] (ex. 칼로리 버너, 칼로리 소모 킹, 칼로리 소모 레전드)
-CREATE OR REPLACE FUNCTION calc_total_calories_burned(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_total_calories_burned(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     total INTEGER;
 BEGIN
-    SELECT COALESCE(SUM(calories_burned), 0) INTO total
+    SELECT COALESCE(SUM(exercise_sessions.calories_burned), 0) INTO total
     FROM exercise_sessions
-    WHERE user_id = calc_total_calories_burned.user_id
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN total;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [총 운동 시간 업적] (ex. 피트니스 구루)
-CREATE OR REPLACE FUNCTION calc_total_workout_minutes(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_total_workout_minutes(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     total INTEGER;
 BEGIN
-    SELECT COALESCE(SUM(duration_minutes), 0) INTO total
+    SELECT COALESCE(SUM(exercise_sessions.duration_minutes), 0) INTO total
     FROM exercise_sessions
-    WHERE user_id = calc_total_workout_minutes.user_id
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN total;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [다양한 운동 업적] (ex. 운동 다양성, 운동 전문가, 운동 올라운더)
-CREATE OR REPLACE FUNCTION calc_unique_exercise_count(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_unique_exercise_count(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
-    SELECT COUNT(DISTINCT exercise_catalog_id) INTO cnt
+    SELECT COUNT(DISTINCT exercise_sessions.exercise_catalog_id) INTO cnt
     FROM exercise_sessions
-    WHERE user_id = calc_unique_exercise_count.user_id
-      AND validation_status = 'VALIDATED';
+    WHERE exercise_sessions.user_id = p_user_id
+      AND exercise_sessions.validation_status = 'VALIDATED';
     RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
 
 -- [하루 운동+식단 모두 기록 업적] (ex. 건강한 하루, 건강한 생활, 건강 생활 마스터, 건강 생활 레전드)
-CREATE OR REPLACE FUNCTION calc_perfect_day(user_id BIGINT)
+CREATE OR REPLACE FUNCTION calc_perfect_day(p_user_id BIGINT)
 RETURNS INTEGER AS $$
 DECLARE
     cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt
     FROM (
-        SELECT d
+        SELECT e.d
         FROM (
-            SELECT DISTINCT exercise_date::date AS d
+            SELECT DISTINCT exercise_sessions.exercise_date::date AS d
             FROM exercise_sessions
-            WHERE user_id = calc_perfect_day.user_id
-              AND validation_status = 'VALIDATED'
+            WHERE exercise_sessions.user_id = p_user_id
+              AND exercise_sessions.validation_status = 'VALIDATED'
         ) e
         INNER JOIN (
-            SELECT DISTINCT log_date AS d
+            SELECT DISTINCT meal_logs.log_date AS d
             FROM meal_logs
-            WHERE user_id = calc_perfect_day.user_id
-              AND validation_status = 'VALIDATED'
+            WHERE meal_logs.user_id = p_user_id
+              AND meal_logs.validation_status = 'VALIDATED'
         ) m ON e.d = m.d
     ) days;
     RETURN cnt;

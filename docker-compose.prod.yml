@@ -10,6 +10,8 @@ services:
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data/
       - ./LifeBit.sql:/docker-entrypoint-initdb.d/01-lifebit.sql:ro
+      - ./trigger.sql:/docker-entrypoint-initdb.d/02-trigger.sql:ro
+      - ./Mockup.sql:/docker-entrypoint-initdb.d/03-mockup.sql:ro
       - ./scripts/db-health-check.sh:/usr/local/bin/db-health-check.sh:ro
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-lifebit_db}

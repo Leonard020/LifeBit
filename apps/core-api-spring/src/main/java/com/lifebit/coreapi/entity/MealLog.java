@@ -35,7 +35,7 @@ public class MealLog {
     private FoodItem foodItem;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "meal_time", nullable = false)
+    @Column(name = "meal_time", nullable = true)
     private MealTimeType mealTime;
     
     @Column(precision = 6, scale = 2)

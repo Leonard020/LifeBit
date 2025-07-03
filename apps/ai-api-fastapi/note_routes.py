@@ -505,6 +505,12 @@ def estimate_grams_from_korean_amount(food_name: str, amount: str) -> float:
 # 🍽️ 식단 기록 저장 API
 @router.post("/diet")
 def save_diet_record(data: MealInput, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    print(f"[DEBUG] save_diet_record 시작")
+    print(f"[DEBUG] 입력 데이터: {data}")
+    print(f"[DEBUG] current_user_id: {current_user_id}")
+    print(f"[DEBUG] data.user_id: {data.user_id}")
+    print(f"[DEBUG] data.meal_time: {data.meal_time}")
+    
     # 1. food_item_id가 없으면 food_items에 자동 생성
     food_item_id = data.food_item_id  # type: ignore
     debug_info = {}
@@ -561,12 +567,15 @@ def save_diet_record(data: MealInput, current_user_id: int = Depends(get_current
         user_nutrition = calculate_nutrition_from_gpt(data.food_name, amount_str, db)
 
     # 3. meal_logs에 저장 (Spring 구조와 호환)
+    # meal_time이 None이면 기본값 설정
+    meal_time = data.meal_time if data.meal_time else "snack"
+    
     meal_log = models.MealLog(
         user_id=data.user_id,
         food_item_id=food_item_id,
         quantity=estimated_quantity,
         log_date=data.log_date,
-        meal_time=data.meal_time,  # ← 원본 값 사용 (한글/영어 모두 지원)
+        meal_time=meal_time,  # ← 기본값 처리
     )
     db.add(meal_log)
     db.commit()
@@ -609,7 +618,7 @@ def get_today_diet(current_user_id: int = Depends(get_current_user_id), date: Op
             target_date = date
     
     records = db.query(models.MealLog).filter(
-        models.MealLog.user_id == user_id,
+        models.MealLog.user_id == current_user_id,
         models.MealLog.log_date == target_date
     ).all()
     return [

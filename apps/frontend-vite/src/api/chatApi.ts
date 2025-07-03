@@ -87,6 +87,10 @@ export const sendChatMessage = async (
   
   try {
     console.log(`📤 [Chat API] 메시지 전송 시작 (시도: ${retryCount + 1}/${maxRetries + 1})`);
+    console.log('[DEBUG] sendChatMessage 호출:');
+    console.log('  message:', message);
+    console.log('  recordType:', recordType);
+    console.log('  userId:', userId);
     const token = getToken();
 
     const body: ChatRequestBody = {
@@ -103,6 +107,7 @@ export const sendChatMessage = async (
       const hasTime = hasTimeInformation(message);
       const mappedTime = hasTime ? convertTimeToMealType(message) : null;
       
+      // 🚀 시간 정보가 있으면 더 정확한 매핑 정보 제공
       body.meal_time_mapping = {
         has_time_info: hasTime,
         ...(mappedTime && { 
@@ -110,6 +115,14 @@ export const sendChatMessage = async (
           mapped_meal_type: mappedTime 
         })
       };
+      
+      // 디버깅 로그 추가
+      console.log('[ChatAPI] 시간 정보 감지:', {
+        message,
+        hasTime,
+        mappedTime,
+        mealTimeMapping: body.meal_time_mapping
+      });
     }
 
     // ✅ AI API 전용 인스턴스 사용 (인터셉터에서 자동으로 Authorization 헤더 추가)
@@ -119,6 +132,12 @@ export const sendChatMessage = async (
     return response.data;
   } catch (error: unknown) {
     console.error(`❌ [Chat API] 메시지 전송 실패 (시도: ${retryCount + 1}):`, error);
+    console.error('[DEBUG] 에러 상세 정보:', {
+      error,
+      errorType: typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorResponse: error instanceof AxiosError ? error.response?.data : 'Not AxiosError'
+    });
     
     // 재시도 가능한 네트워크 오류인지 확인
     const isRetryableError = error instanceof AxiosError && (

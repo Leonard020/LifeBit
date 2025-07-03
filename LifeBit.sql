@@ -24,8 +24,8 @@ CREATE TYPE exercise_part_type AS ENUM ('strength','cardio');
 -- 시간대 타입
 CREATE TYPE time_period_type AS ENUM ('dawn', 'morning', 'afternoon', 'evening', 'night');
 
--- 식사 시간 타입
-CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack', 'midnight', '아침', '점심', '저녁', '야식', '간식');
+-- 식사 시간 타입 (ENUM 제거, VARCHAR로 변경)
+-- CREATE TYPE meal_time_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack', 'midnight', '아침', '점심', '저녁', '야식', '간식');
 
 -- 입력 소스 타입
 CREATE TYPE input_source_type AS ENUM ('VOICE', 'TYPING');
@@ -125,7 +125,7 @@ CREATE TABLE exercise_catalog (
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     name VARCHAR(100) NOT NULL,
     exercise_type VARCHAR(50),
-    body_part body_part_type NOT NULL,
+    body_part VARCHAR(20) NOT NULL,
     description TEXT,
     intensity VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW()
@@ -145,10 +145,10 @@ CREATE TABLE exercise_sessions (
     notes TEXT,
     exercise_date DATE NULL,
     time_period VARCHAR(20), 
-    input_source input_source_type,
+    input_source VARCHAR(20),
     confidence_score DECIMAL(4,2),
     original_audio_path VARCHAR(255),
-    validation_status validation_status_type DEFAULT 'PENDING',
+    validation_status VARCHAR(20) DEFAULT 'PENDING',
     validation_notes VARCHAR(255),
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -177,7 +177,7 @@ CREATE TABLE meal_logs (
     uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(), 
     user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
     food_item_id BIGINT REFERENCES food_items(food_item_id) ON DELETE CASCADE,
-    meal_time meal_time_type NOT NULL,
+    meal_time VARCHAR(20),
     quantity DECIMAL(6,2),
     log_date DATE NOT NULL DEFAULT CURRENT_DATE,
     input_source input_source_type DEFAULT 'TYPING',

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import date
-from typing import Optional
+from typing import Optional, Union
 
 # 🏋️ 운동 기록 - 요청용 (입력 데이터)
 class ExerciseInput(BaseModel):
@@ -16,7 +16,7 @@ class MealInput(BaseModel):
     food_item_id: Optional[int] = None
     quantity: float
     log_date: Optional[date] = date.today()
-    meal_time: str
+    meal_time: Optional[str] = None
     food_name: Optional[str] = None
     nutrition: Optional[dict] = None
 
@@ -76,3 +76,16 @@ class ExerciseChatInput(BaseModel):
 class ExerciseChatOutput(ExerciseChatInput):
     class Config:
         from_attributes = True
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: Optional[list] = []
+    record_type: Optional[str] = None  # "exercise" or "diet" or None
+    chat_step: Optional[str] = None
+    current_data: Optional[Union[dict, list]] = None  # dict 또는 list 모두 허용
+    meal_time_mapping: Optional[dict] = None  # 식단 시간 매핑
+    user_id: Optional[int] = None  # 사용자 ID 추가 
+
+    class Config:
+        # 추가 필드 허용 (meal_time_mapping의 동적 필드들)
+        extra = "allow"

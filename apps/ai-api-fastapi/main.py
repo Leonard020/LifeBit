@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
-from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, ExerciseRecord, MealInput
+from schemas import ExerciseChatInput, DailyExerciseRecord, ExerciseChatOutput, ExerciseRecord, MealInput, ChatRequest
 import models
 from note_routes import router as note_router, estimate_grams_from_korean_amount
 import requests
@@ -144,6 +144,17 @@ print(f"[ENV] GOOGLE_REDIRECT_URI: {os.getenv('GOOGLE_REDIRECT_URI')}")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
+
+# 모든 요청/응답 로깅 미들웨어
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"[DEBUG] 요청 시작: {request.method} {request.url}")
+    print(f"[DEBUG] 요청 헤더: {dict(request.headers)}")
+    
+    response = await call_next(request)
+    
+    print(f"[DEBUG] 응답 상태: {response.status_code}")
+    return response
 
 # =======================
 # CORS 설정 (동적/배포 대응)
@@ -471,6 +482,9 @@ DIET_EXTRACTION_PROMPT = """
 당신은 LifeBit의 식단 기록 AI 어시스턴트입니다.
 사용자와 친근하고 자연스러운 대화를 통해 식단 정보를 정확히 수집합니다.
 
+🚨 **절대 규칙: 반드시 JSON 형식으로만 응답하세요! 일반 텍스트 응답은 금지입니다!**
+🚨 **모든 응답은 반드시 { } 안에 JSON 형식으로 작성하세요!**
+
 [중요]
 - 사용자가 한 문장에 여러 음식을 언급하면, parsed_data는 각 음식을 별도의 객체로 갖는 배열(array)로 반환하세요.
 - 음식이 하나만 언급된 경우에도 parsed_data는 한 개의 객체를 가진 배열로 반환하세요.
@@ -496,16 +510,20 @@ DIET_EXTRACTION_PROMPT = """
 - 일반 음식: "1인분", "반인분", "2인분"
 - 액체: "1컵", "200ml", "500ml"
 
-⏰ **식사시간 분류:**
-- 아침: 사용자가 "아침" 언급 또는 오전 시간대
-- 점심: 사용자가 "점심" 언급 또는 낮 시간대
-- 저녁: 사용자가 "저녁" 언급 또는 저녁 시간대
-- 야식: 사용자가 "야식" 명시적 언급
-- 간식: 위에 해당하지 않는 경우 또는 "간식" 언급
+⏰ **식사시간 분류 (매우 중요한 규칙):**
+🚨 **절대로 시간 정보가 없을 때 랜덤하게 시간을 설정하지 마세요!**
+🚨 **사용자가 명시적으로 시간을 언급하지 않으면 meal_time을 null로 설정하고 validation 단계로 넘어가세요!**
+
+시간 정보 처리 규칙:
+1. 사용자가 명시적으로 시간을 언급한 경우만 meal_time 설정
+   - 직접 언급: "아침", "점심", "저녁", "야식", "간식"
+   - 시간대 표현: "오전 8시", "오후 2시", "밤 9시" 등
+2. 시간 정보가 없으면 meal_time = null로 설정
+3. 이미 설정된 시간이 있어도 사용자가 새로운 시간을 언급하면 새 시간으로 덮어쓰기
 
 💬 **응답 형식 (JSON):**
 
-**🚨 핵심 규칙: 사용자가 한 번에 모든 필수 정보를 제공한 경우, 바로 confirmation 단계로 넘어가세요!**
+**🚨 핵심 규칙: 사용자가 한 번에 모든 필수 정보를 제공한 경우에만 confirmation 단계로 넘어가세요!**
 
 모든 정보 제공 시 (confirmation):
 {
@@ -525,13 +543,13 @@ DIET_EXTRACTION_PROMPT = """
   "response_type": "validation",
   "system_message": {
     "data": [
-      { "food_name": "계란", "amount": null, "meal_time": null }
+      { "food_name": "계란", "amount": "2개", "meal_time": null }
     ],
-    "missing_fields": ["amount", "meal_time"],
+    "missing_fields": ["meal_time"],
     "next_step": "validation"
   },
   "user_message": {
-    "text": "계란을 드셨군요! 🥚 몇 개 드셨나요?"
+    "text": "계란 2개를 드셨군요! 🥚 언제 드셨나요? (아침/점심/저녁/야식/간식) ⏰"
   }
 }
 
@@ -539,6 +557,8 @@ DIET_EXTRACTION_PROMPT = """
 - 영양성분(칼로리, 탄수화물, 단백질, 지방)은 자동으로 계산됩니다
 - 기본 3가지 정보(음식명, 섭취량, 식사시간)만 수집합니다
 - 데이터베이스에 없는 음식은 인터넷에서 영양정보를 검색하여 자동 생성됩니다
+- 사용자가 시간을 수정하면 기존 시간 정보를 덮어쓰세요
+- **시간 정보가 없으면 절대로 랜덤하게 설정하지 말고 사용자에게 물어보세요!**
 
 🔄 **진행 조건:**
 - 모든 필수 정보 수집 완료 → 바로 confirmation 단계로
@@ -549,6 +569,9 @@ DIET_EXTRACTION_PROMPT = """
 DIET_CONFIRMATION_PROMPT = """
 당신은 LifeBit의 식단 기록 확인 도우미입니다.
 수집된 정보를 사용자에게 최종 확인받습니다.
+
+🚨 **절대 규칙: 반드시 JSON 형식으로만 응답하세요! 일반 텍스트 응답은 금지입니다!**
+🚨 **모든 응답은 반드시 { } 안에 JSON 형식으로 작성하세요!**
 
 💬 **응답 형식:**
 {
@@ -578,6 +601,8 @@ DIET_CONFIRMATION_PROMPT = """
 - 영양 정보는 GPT 기반으로 자동 계산됩니다
 - 데이터베이스에 없는 음식은 인터넷에서 검색하여 자동 생성됩니다
 - 확인 후 저장 진행
+- **모든 필수 정보(음식명, 섭취량, 식사시간)가 완전히 수집되었을 때만 confirmation 단계로 넘어가세요!**
+- **시간 정보가 없으면 절대로 confirmation 단계로 넘어가지 마세요!**
 """
 
 # 🚩 [식단 기록 검증 프롬프트] - 사용자 요구사항에 맞게 수정
@@ -614,17 +639,17 @@ DIET_VALIDATION_PROMPT = """
 - 3가지 정보가 모두 충족될 때까지 반복 질문
 - 영양 정보는 자동으로 계산되므로 사용자에게 묻지 않습니다
 - 친근하고 자연스러운 말투로 질문하세요
+- **시간 정보가 없으면 반드시 사용자에게 시간을 물어보세요!**
+- **절대로 시간 정보를 랜덤하게 설정하지 마세요!**
+
+🚨 **시간 정보 질문 시 주의사항:**
+- 사용자가 시간을 명시하지 않았으면 반드시 "언제 드셨나요?"라고 질문하세요
+- 시간 옵션을 명확히 제시: "(아침/점심/저녁/야식/간식)"
+- 사용자가 시간을 답변하면 즉시 meal_time에 설정하세요
 """
 
-# 채팅 요청을 위한 스키마
-class ChatRequest(BaseModel):
-    message: str
-    conversation_history: Optional[list] = []
-    record_type: Optional[str] = None  # "exercise" or "diet" or None
-    chat_step: Optional[str] = None
-    current_data: Optional[dict] = None  # 현재 수집된 데이터
-    meal_time_mapping: Optional[dict] = None  # 식단 시간 매핑
-    user_id: Optional[int] = None  # 사용자 ID 추가 
+# 채팅 요청을 위한 스키마 - schemas.py에서 임포트
+from schemas import ChatRequest
 
 # 차트 분석 요청을 위한 스키마
 class AnalyticsRequest(BaseModel):
@@ -1002,6 +1027,10 @@ def is_bodyweight_exercise(exercise_name: str) -> bool:
 
 @app.post("/api/py/chat")
 async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    print(f"[DEBUG] 채팅 요청 시작 - 사용자 ID: {current_user_id}")
+    print(f"[DEBUG] 요청 데이터: {request}")
+    print(f"[DEBUG] meal_time_mapping: {getattr(request, 'meal_time_mapping', 'None')}")
+    
     try:
         if not request.message:
             raise HTTPException(status_code=400, detail="메시지가 비어있습니다.")
@@ -1158,7 +1187,7 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                                 reps=data.get("reps"),
                                 duration_minutes=data.get("duration_min"),
                                 calories_burned=data.get("calories_burned"),
-                                exercise_date=request.current_data.get("exercise_date") if request.current_data else None
+                                exercise_date=request.current_data.get("exercise_date") if isinstance(request.current_data, dict) and request.current_data else None
                             )
                             category = data.get("category")
                             subcategory = data.get("subcategory")
@@ -1192,7 +1221,15 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                                 "parsed_data": parsed_response  # 저장 성공 시에도 반환
                             }
                     elif request.record_type == "diet" and response_type == "confirmation":
+                        print(f"[DEBUG] 저장 조건 확인:")
+                        print(f"  record_type: {request.record_type}")
+                        print(f"  response_type: {response_type}")
+                        print(f"  user_message: '{user_message}'")
+                        
                         save_keywords = ["네", "예", "저장", "y", "yes", "Y", "YES", "ㅇ"]
+                        print(f"  save_keywords: {save_keywords}")
+                        print(f"  user_message in save_keywords: {user_message in save_keywords}")
+                        
                         if user_message in save_keywords:
                             # 🥗 식단 자동 저장 로직
                             system_data = parsed_response.get("system_message", {}).get("data")
@@ -1215,22 +1252,80 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                                 amount_str = food.get("amount", "1개")
                                 grams = estimate_grams_from_korean_amount(food["food_name"], amount_str)
 
+                                # 🚀 meal_time_mapping 정보를 활용하여 시간 정보 처리
                                 meal_time = food.get("meal_time", "간식")
+                                
+                                print(f"[DEBUG] 시간 매핑 처리 시작:")
+                                print(f"  원본 meal_time: {meal_time}")
+                                print(f"  request.meal_time_mapping: {request.meal_time_mapping}")
+                                
+                                # 🚨 시간 정보 우선순위 처리 (사용자 입력 > AI 추론)
+                                # 1. 사용자가 이번 메시지에서 시간을 명시한 경우 (meal_time_mapping)
+                                # 2. AI가 이전에 추론한 시간 정보 (parsed_data)
+                                # 3. 기본값
+                                
+                                if request.meal_time_mapping and request.meal_time_mapping.get("has_time_info"):
+                                    mapped_meal_type = request.meal_time_mapping.get("mapped_meal_type", "")
+                                    print(f"[DEBUG] mapped_meal_type: {mapped_meal_type}")
+                                    if mapped_meal_type:
+                                        meal_time = mapped_meal_type
+                                        print(f"[DEBUG] 사용자 입력 시간 사용: {mapped_meal_type}")
+                                    else:
+                                        print(f"[DEBUG] mapped_meal_type이 비어있음")
+                                elif meal_time and meal_time != "null" and meal_time != "":
+                                    print(f"[DEBUG] AI 추론 시간 사용: {meal_time}")
+                                else:
+                                    # 시간 정보가 없으면 저장하지 않고 validation으로 돌아감
+                                    print(f"[DEBUG] 시간 정보 없음 - validation으로 돌아감")
+                                    return {
+                                        "type": "validation",
+                                        "message": "식사 시간이 입력되지 않았습니다. 언제 드셨나요? (아침/점심/저녁/야식/간식)",
+                                        "parsed_data": parsed_response,
+                                        "missing_fields": ["meal_time"]
+                                    }
+                                
+                                print(f"[DEBUG] 최종 meal_time: {meal_time}")
+                                
+                                # 한글 → 영어 변환
+                                meal_time_mapping = {
+                                    "아침": "breakfast",
+                                    "점심": "lunch", 
+                                    "저녁": "dinner",
+                                    "야식": "midnight",
+                                    "간식": "snack"
+                                }
+                                english_meal_time = meal_time_mapping.get(meal_time, "snack")
 
+                                # 시간 정보가 없으면 저장하지 않음
+                                if not english_meal_time or english_meal_time == "snack" and not request.meal_time_mapping:
+                                    print(f"[DEBUG] 시간 정보 없음 - 저장 건너뜀")
+                                    continue
+                                
+                                print(f"[DEBUG] MealInput 생성:")
+                                print(f"  user_id: {current_user_id}")
+                                print(f"  food_name: {food['food_name']}")
+                                print(f"  quantity: {grams}")
+                                print(f"  meal_time: {english_meal_time}")
+                                print(f"  log_date: {date.today()}")
+                                
                                 meal_input = MealInput(
-                                    user_id=user_id,
+                                    user_id=current_user_id,  # current_user_id 사용
                                     food_name=food["food_name"],
                                     quantity=grams,
-                                    meal_time=meal_time,
+                                    meal_time=english_meal_time,
                                     log_date=date.today(),
                                 )
 
                                 try:
+                                    print(f"[DEBUG] save_diet_record 호출 시작")
                                     result = save_diet_record(meal_input, current_user_id, db)
                                     saved_results.append(result)
-                                    print(f"[✅ 식단 저장] {food['food_name']} 저장 완료")
+                                    print(f"[✅ 식단 저장] {food['food_name']} 저장 완료 (시간: {meal_time} → {english_meal_time})")
                                 except Exception as save_err:
                                     print(f"[❌ 식단 저장 실패] {food.get('food_name')} - {save_err}")
+                                    print(f"[DEBUG] 에러 상세: {type(save_err).__name__}: {str(save_err)}")
+                                    import traceback
+                                    print(f"[DEBUG] 스택 트레이스: {traceback.format_exc()}")
 
                             if saved_results:
                                 return {
@@ -1332,8 +1427,8 @@ async def chat(request: ChatRequest, current_user_id: int = Depends(get_current_
                 # AI에게 JSON 형식으로 다시 응답하도록 요청
                 try:
                     retry_messages = [
-                        {"role": "system", "content": "당신은 반드시 JSON 형식으로만 응답해야 합니다. 일반 텍스트 응답은 금지입니다."},
-                        {"role": "user", "content": f"다음 응답을 JSON 형식으로 다시 작성해주세요: {raw}"}
+                        {"role": "system", "content": "당신은 반드시 JSON 형식으로만 응답해야 합니다. 일반 텍스트 응답은 금지입니다. 모든 응답은 반드시 { } 안에 JSON 형식으로 작성하세요."},
+                        {"role": "user", "content": f"다음 응답을 JSON 형식으로 다시 작성해주세요. 반드시 {{ }} 안에 JSON 형식으로만 응답하세요: {raw}"}
                     ]
                     
                     retry_response = openai.ChatCompletion.create(  # type: ignore
