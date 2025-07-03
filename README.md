@@ -200,8 +200,63 @@ cd ../..
 ```bash
 cp apps/ai-api-fastapi/.env.example apps/ai-api-fastapi/.env
 cp apps/frontend-vite/.env.example apps/frontend-vite/.env
+
 ```
-5. **애플리케이션 실행**
+
+5. **포트 사용 현황 및 프로세스 종료 방법**
+
+서버 실행 시 포트 충돌이 발생할 수 있습니다.  
+아래 방법으로 **포트 사용 현황을 확인**하고, **필요시 프로세스를 종료**하세요.
+
+---
+
+#### 🪟 Windows
+
+1. **명령 프롬프트(cmd)를 관리자 권한으로 실행**  
+   (일반 권한에서는 일부 명령이 거부될 수 있습니다.)
+
+2. **포트 사용 현황 확인 (예: 8080 포트)**
+   ```bash
+   netstat -ano | findstr :8080
+   ```
+   - 결과 예시:  
+     ```
+     TCP    0.0.0.0:8080   ...   LISTENING   4996
+     ```
+   - 마지막 숫자가 **PID(프로세스 ID)** 입니다.
+
+3. **프로세스 종료**
+   ```bash
+   taskkill /PID <PID> /F
+   ```
+   - 예시:  
+     ```bash
+     taskkill /PID 4996 /F
+     ```
+
+#### 🍏 macOS / 🐧 Linux
+
+1. **포트 사용 현황 확인 (예: 8080 포트)**
+   ```bash
+   lsof -i :8080
+   ```
+   - 결과 예시:  
+     ```
+     COMMAND   PID USER   ...   TCP *:8080 (LISTEN)
+     ```
+
+2. **프로세스 종료**
+   ```bash
+   kill -9 <PID>
+   ```
+   - 예시:  
+     ```bash
+     kill -9 12345
+     ```
+
+---
+
+6. **애플리케이션 실행**
 
 **개별 실행:**
 ```bash
