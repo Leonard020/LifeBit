@@ -1,9 +1,3 @@
-// ===================================================================
-// [개발용 서버 상태 확인] - 추후 이 부분의 import 3줄을 삭제하면 됩니다.
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-// ===================================================================
-
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -18,102 +12,13 @@ import HealthLog from './pages/HealthLog';
 import Ranking from './pages/Ranking';
 import NotFound from './pages/NotFound';
 import SocialRedirect from './pages/SocialRedirect';
-import { AuthProvider } from './AuthContext'; // ← 이 줄 추가
+import { AuthProvider } from './AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AdminPage } from './pages/AdminPage';
 import UserInfo from './pages/UserInfo';
-import { API_CONFIG } from './config/env';
 import Settings from './pages/Settings';
 import FindPassword from './pages/FindPassword';
 import ResetPassword from './pages/ResetPassword';
-
-
-// ===================================================================
-// [개발용 서버 상태 확인] - 추후 이 부분 2줄을 삭제하면 됩니다.
-const CORE_API_URL = API_CONFIG.BASE_URL;
-const AI_API_URL = API_CONFIG.AI_API_URL;
-// ===================================================================
-
-
-// ===================================================================
-// [개발용 서버 상태 확인] - 추후 이 부분 전체를 삭제하면 됩니다. (시작)
-// ===================================================================
-const ServerStatus = () => {
-  const [coreStatus, setCoreStatus] = useState({ status: 'Checking...', color: 'gray' });
-  const [aiStatus, setAiStatus] = useState({ status: 'Checking...', color: 'gray' });
-
-  useEffect(() => {
-    // 1. Core API (Spring Boot) 상태 확인
-    axios.get(`${CORE_API_URL}/actuator/health`)
-      .then(response => {
-        if (response.data.status === 'UP') {
-          setCoreStatus({ status: 'OK', color: 'limegreen' });
-        } else {
-          setCoreStatus({ status: 'WARN', color: 'orange' });
-        }
-      })
-      .catch(() => {
-        setCoreStatus({ status: 'Error', color: 'red' });
-      });
-
-    // 2. AI API (FastAPI) 상태 확인 - 현재 개발 중
-    axios.get(`${AI_API_URL}/api/py/health`)
-      .then(response => {
-        if (response.data.status === 'OK') {
-          setAiStatus({ status: 'OK', color: 'limegreen' });
-        } else {
-          setAiStatus({ status: 'WARN', color: 'orange' });
-        }
-      })
-      .catch(() => {
-        setAiStatus({ status: 'Error', color: 'red' });
-      });
-
-  }, []); // 컴포넌트가 처음 마운트될 때 한 번만 실행
-
-  // 상태 표시기 스타일
-  const statusIndicatorStyle: React.CSSProperties = {
-    position: 'fixed',
-    bottom: '20px',
-    left: '20px',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    backdropFilter: 'blur(5px)',
-    color: 'white',
-    padding: '10px 20px',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-    zIndex: 9999,
-    fontSize: '14px',
-    fontFamily: 'sans-serif',
-  };
-
-  const statusDotStyle = (color: string): React.CSSProperties => ({
-    display: 'inline-block',
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    backgroundColor: color,
-    marginRight: '8px',
-    verticalAlign: 'middle',
-  });
-
-  return (
-    <div style={statusIndicatorStyle}>
-      <div style={{ marginBottom: '5px' }}>
-        <span style={statusDotStyle(coreStatus.color)}></span>
-        Core API: <strong>{coreStatus.status}</strong>
-      </div>
-      <div>
-        <span style={statusDotStyle(aiStatus.color)}></span>
-        AI API: <strong>{aiStatus.status}</strong>
-      </div>
-    </div>
-  );
-};
-// ===================================================================
-// [개발용 서버 상태 확인] - 추후 이 부분 전체를 삭제하면 됩니다. (끝)
-// ===================================================================
-
 
 const queryClient = new QueryClient();
 
@@ -142,12 +47,6 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
-
-          {/* ============================================================ */}
-          {/* [개발용 서버 상태 확인] - 추후 이 라인을 삭제하면 됩니다.       */}
-          <ServerStatus />
-          {/* ============================================================ */}
-
         </TooltipProvider>
       </QueryClientProvider>
     </AuthProvider>
