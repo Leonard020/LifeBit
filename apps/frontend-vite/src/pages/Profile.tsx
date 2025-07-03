@@ -61,6 +61,7 @@ const Profile = () => {
   const [strengthGoals, setStrengthGoals] = useState<StrengthGoal[]>([]);
   const [selectedBodyParts, setSelectedBodyParts] = useState<string[]>([]);
 
+  // 건강 목표 상태
   const [goals, setGoals] = useState({
     weeklyWorkoutTarget: '0',
     dailyCalories: '2000',
@@ -110,20 +111,20 @@ const Profile = () => {
     return strengthGoals.filter(goal => selectedBodyParts.includes(goal.bodyPart));
   }, [strengthGoals, selectedBodyParts]);
 
-  // --- 2. Delete logic: remove from selectedBodyParts and strengthGoals, set value to 0 in goals ---
+  // --- 2. 삭제 로직 : 선택된 부위 삭제 및 주간 운동 횟수 0으로 설정 ---
   const removeStrengthGoal = (id: string) => {
     const goalToRemove = strengthGoals.find(goal => goal.id === id);
     if (!goalToRemove) return;
 
-    // Remove from selectedBodyParts
+    // 선택된 부위에서 삭제
     const updatedParts = selectedBodyParts.filter(part => part !== goalToRemove.bodyPart);
     setSelectedBodyParts(updatedParts);
     setSelectedBodyPartsToStorage(updatedParts);
 
-    // Remove from strengthGoals (for UI)
+    // strengthGoals에서 삭제
     setStrengthGoals(strengthGoals.filter(goal => goal.id !== id));
 
-    // Set value to 0 in goals state for DB
+    // 목표 상태에서 주간 운동 횟수 0으로 설정
     setGoals(prevGoals => {
       const newGoals = { ...prevGoals };
       switch (goalToRemove.bodyPart) {
@@ -139,12 +140,12 @@ const Profile = () => {
     });
   };
 
-  // --- Simplified add logic: add on select ---
+  // 근력 운동 부위 : 선택시 추가
   const handleAddExerciseSelect = (selectedPart: string) => {
     addStrengthGoal(selectedPart);
   };
 
-  // --- 3. Add logic: only allow adding exercises not in selectedBodyParts ---
+  // --- 추가 로직 : 선택된 부위가 아닌 경우에만 추가 ---
   const addStrengthGoal = (selectedPart?: string) => {
     const newPart = selectedPart || (availableBodyParts.length > 0 ? availableBodyParts[0].value : undefined);
     if (!newPart) return;
@@ -159,7 +160,7 @@ const Profile = () => {
     setSelectedBodyPartsToStorage(updatedParts);
   };
 
-  // Restore updateStrengthGoal function
+  // 주간 운동 횟수 변경시 업데이트
   const updateStrengthGoal = (id: string, field: keyof StrengthGoal, value: string) => {
     setStrengthGoals(strengthGoals.map(goal => 
       goal.id === id ? { ...goal, [field]: value } : goal
@@ -475,10 +476,11 @@ const Profile = () => {
                     운동 목표
                   </h3>
                   
-                  {/* Strength Training Goals */}
+                  {/* 근력 운동 목표*/}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium">근력 운동 목표</Label>
+                      {/* 근력 운동 부위 선택 드롭다운*/}
                       <Select
                         value=""
                         onValueChange={handleAddExerciseSelect}
@@ -507,6 +509,7 @@ const Profile = () => {
                           <div key={goal?.id || option.value} className="flex items-center gap-3 p-3 border rounded-lg">
                             <div className="flex-1 flex items-center pl-2 font-medium">{option.label}</div>
                             <div className="flex-1">
+                              {/* 주간 운동 횟수 드롭다운*/}
                               <Select 
                                 value={goal?.weeklyCount || '1'} 
                                 onValueChange={(value) => updateStrengthGoal(goal?.id || '', 'weeklyCount', value)}
@@ -526,6 +529,7 @@ const Profile = () => {
                                 </SelectContent>
                               </Select>
                             </div>
+                            {/* 근력 운동 부위 삭제 버튼*/}
                             <Button
                               type="button"
                               size="icon"
@@ -541,7 +545,7 @@ const Profile = () => {
                     </div>
                   </div>
 
-                  {/* Cardio Training */}
+                  {/* 유산소 운동 목표*/}
                   <div className="space-y-2">
                     <Label htmlFor="cardioTraining">유산소 운동 (회/주)</Label>
                     <Select value={goals.weeklyCardio} onValueChange={(value) => setGoals({...goals, weeklyCardio: value})}>
@@ -561,7 +565,7 @@ const Profile = () => {
                     </Select>
                   </div>
 
-                  {/* Total Weekly Workout Target Display */}
+                  {/* 총 주간 운동 목표 표시*/}
                   <div className="mt-4">
                     <Label className="text-sm text-muted-foreground">총 주간 운동 목표</Label>
                     <div className="p-3 bg-white dark:bg-[#232946] border border-gray-200 dark:border-[#3a3a5a] rounded-lg">
@@ -577,7 +581,7 @@ const Profile = () => {
 
                 <Separator />
 
-                {/* Diet Goals */}
+                {/* 식단 목표 입력 필드*/}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium flex items-center">
                     <Heart className="mr-2 h-5 w-5" />
@@ -633,7 +637,8 @@ const Profile = () => {
                     </div>
                   </div>
                 </div>
-
+                
+                {/* 건강 목표 저장 버튼 */}
                 <Button 
                   onClick={handleGoalsSave} 
                   className="w-full gradient-bg hover:opacity-90 transition-opacity"
