@@ -70,23 +70,14 @@ AI 추천·실시간 소통·개인화·소셜 동기부여를 통해 건강한 
 
 ```mermaid
 graph TB
-    subgraph "Frontend Layer"
-        FE[React + Vite<br/>사용자 인터페이스]
-    end
-    subgraph "API Gateway Layer"
-        CORE[Spring Boot API<br/>핵심 비즈니스 로직]
-        AI[FastAPI<br/>AI 서비스]
-    end
-    subgraph "Data Processing Layer"
-        AF[Apache Airflow<br/>데이터 파이프라인]
-    end
-    subgraph "Database Layer"
-        DB[(PostgreSQL<br/>메인 데이터베이스)]
-    end
-    subgraph "External Services"
-        OPENAI[OpenAI API<br/>AI 추천]
-        SOCIAL[소셜 로그인<br/>(카카오, 구글)]
-    end
+    FE([🖥️ Frontend: React+Vite])
+    CORE([🛠️ Core API: Spring Boot])
+    AI([🤖 AI API: FastAPI])
+    AF([📊 Airflow Pipeline])
+    DB[(🗄️ PostgreSQL)]
+    OPENAI([🌐 OpenAI API])
+    SOCIAL([🔑 소셜 로그인: 카카오, 구글])
+
     FE --> CORE
     FE --> AI
     CORE --> DB
@@ -96,6 +87,16 @@ graph TB
     AF --> DB
     AF --> AI
 ```
+
+| 구성요소 | 설명 |
+|---|---|
+| 🖥️ Frontend | React+Vite 기반 사용자 인터페이스 |
+| 🛠️ Core API | Spring Boot, 핵심 비즈니스 로직 및 인증/데이터 처리 |
+| 🤖 AI API | FastAPI, AI 추천·분석 서비스 (OpenAI 연동) |
+| 📊 Airflow Pipeline | 데이터 분석/자동화 파이프라인 (설계만 존재) |
+| 🗄️ PostgreSQL | 메인 데이터베이스 |
+| 🌐 OpenAI API | GPT 기반 AI 추천/분석 외부 서비스 |
+| 🔑 소셜 로그인 | 카카오/구글 등 외부 인증 연동 |
 
 ---
 
