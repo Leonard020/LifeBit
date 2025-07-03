@@ -1029,15 +1029,16 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                   
                   <div className="text-center">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">주간 운동 달성 시 최대 7점</p>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                      <div 
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                        style={{ 
-                          width: `${weeklyWorkoutTarget 
-                            ? Math.min(((totalWeeklyCount) / weeklyWorkoutTarget) * 100, 100)
-                            : 0}%` 
-                        }}
+                    <div className="relative w-full h-4 rounded-full bg-blue-200 dark:bg-blue-900/60 mt-1">
+                      <div
+                        className="absolute left-0 top-0 h-4 rounded-full bg-blue-600 dark:bg-blue-400 transition-all duration-500"
+                        style={{ width: `${weeklyWorkoutTarget ? Math.min((totalWeeklyCount / weeklyWorkoutTarget) * 100, 100) : 0}%` }}
                       />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-white text-xs font-semibold drop-shadow">
+                          {weeklyWorkoutTarget ? `${Math.round(Math.min((totalWeeklyCount / weeklyWorkoutTarget) * 100, 100))}%` : '0%'}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-gray-500 dark:text-gray-400">현재 획득 점수</span>
@@ -1336,15 +1337,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                           
                             {/* 가슴 운동 */}
                             {exerciseDetails.chest.hasTarget && (
-                              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+                              <div className="bg-red-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">💪 가슴 운동</span>
-                                  <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-300">💪 가슴 운동</span>
+                                  <span className="text-sm font-bold text-red-600 dark:text-red-300">
                                     {exerciseDetails.chest.current}회 / {exerciseDetails.chest.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.chest.percentage} className="h-2" />
-                                <div className="text-xs text-red-600 dark:text-red-400 mt-1 text-center">
+                                <Progress value={exerciseDetails.chest.percentage} className="h-2 [&>div]:bg-red-600 dark:[&>div]:bg-red-700" />
+                                <div className="text-xs text-red-600 dark:text-red-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.chest.percentage)}% 달성
                                 </div>
                               </div>
@@ -1352,15 +1353,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 등 운동 */}
                             {exerciseDetails.back.hasTarget && (
-                              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
+                              <div className="bg-green-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">🏋️‍♂️ 등 운동</span>
-                                  <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                  <span className="text-sm font-medium text-green-600 dark:text-green-300">🏋️‍♂️ 등 운동</span>
+                                  <span className="text-sm font-bold text-green-600 dark:text-green-300">
                                     {exerciseDetails.back.current}회 / {exerciseDetails.back.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.back.percentage} className="h-2" />
-                                <div className="text-xs text-green-600 mt-1 text-center">
+                                <Progress value={exerciseDetails.back.percentage} className="h-2 [&>div]:bg-green-600 dark:[&>div]:bg-green-700" />
+                                <div className="text-xs text-green-600 dark:text-green-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.back.percentage)}% 달성
                                 </div>
                               </div>
@@ -1368,15 +1369,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 다리 운동 */}
                             {exerciseDetails.legs.hasTarget && (
-                              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
+                              <div className="bg-purple-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">🦵 다리 운동</span>
-                                  <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                                  <span className="text-sm font-medium text-purple-600 dark:text-purple-300">🦵 다리 운동</span>
+                                  <span className="text-sm font-bold text-purple-600 dark:text-purple-300">
                                     {exerciseDetails.legs.current}회 / {exerciseDetails.legs.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.legs.percentage} className="h-2" />
-                                <div className="text-xs text-purple-600 dark:text-purple-400 mt-1 text-center">
+                                <Progress value={exerciseDetails.legs.percentage} className="h-2 [&>div]:bg-purple-600 dark:[&>div]:bg-purple-700" />
+                                <div className="text-xs text-purple-600 dark:text-purple-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.legs.percentage)}% 달성
                                 </div>
                               </div>
@@ -1384,15 +1385,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 어깨 운동 */}
                             {exerciseDetails.shoulders.hasTarget && (
-                              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3">
+                              <div className="bg-orange-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">🤸‍♂️ 어깨 운동</span>
-                                  <span className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                                  <span className="text-sm font-medium text-orange-600 dark:text-orange-300">🤸‍♂️ 어깨 운동</span>
+                                  <span className="text-sm font-bold text-orange-600 dark:text-orange-300">
                                     {exerciseDetails.shoulders.current}회 / {exerciseDetails.shoulders.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.shoulders.percentage} className="h-2" />
-                                <div className="text-xs text-orange-600 dark:text-orange-400 mt-1 text-center">
+                                <Progress value={exerciseDetails.shoulders.percentage} className="h-2 [&>div]:bg-orange-600 dark:[&>div]:bg-orange-700" />
+                                <div className="text-xs text-orange-600 dark:text-orange-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.shoulders.percentage)}% 달성
                                 </div>
                               </div>
@@ -1400,15 +1401,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 팔 운동 */}
                             {exerciseDetails.arms.hasTarget && (
-                              <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-3">
+                              <div className="bg-pink-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">💪 팔 운동</span>
-                                  <span className="text-sm font-bold text-pink-600 dark:text-pink-400">
+                                  <span className="text-sm font-medium text-pink-600 dark:text-pink-300">💪 팔 운동</span>
+                                  <span className="text-sm font-bold text-pink-600 dark:text-pink-300">
                                     {exerciseDetails.arms.current}회 / {exerciseDetails.arms.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.arms.percentage} className="h-2" />
-                                <div className="text-xs text-pink-600 dark:text-pink-400 mt-1 text-center">
+                                <Progress value={exerciseDetails.arms.percentage} className="h-2 [&>div]:bg-pink-600 dark:[&>div]:bg-pink-700" />
+                                <div className="text-xs text-pink-600 dark:text-pink-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.arms.percentage)}% 달성
                                 </div>
                               </div>
@@ -1416,15 +1417,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 복근 운동 */}
                             {exerciseDetails.abs.hasTarget && (
-                              <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
+                              <div className="bg-yellow-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">🏃‍♀️ 복근 운동</span>
-                                  <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
+                                  <span className="text-sm font-medium text-yellow-600 dark:text-yellow-300">🏃‍♀️ 복근 운동</span>
+                                  <span className="text-sm font-bold text-yellow-600 dark:text-yellow-300">
                                     {exerciseDetails.abs.current}회 / {exerciseDetails.abs.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.abs.percentage} className="h-2" />
-                                <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 text-center">
+                                <Progress value={exerciseDetails.abs.percentage} className="h-2 [&>div]:bg-yellow-600 dark:[&>div]:bg-yellow-700" />
+                                <div className="text-xs text-yellow-600 dark:text-yellow-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.abs.percentage)}% 달성
                                 </div>
                               </div>
@@ -1432,15 +1433,15 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
 
                             {/* 유산소 운동 */}
                             {exerciseDetails.cardio.hasTarget && (
-                              <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-3">
+                              <div className="bg-cyan-50 dark:bg-card border-none dark:border-[#7c3aed] rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium dark:text-gray-100">🏃 유산소 운동</span>
-                                  <span className="text-sm font-bold text-cyan-600 dark:text-cyan-400">
+                                  <span className="text-sm font-medium text-cyan-600 dark:text-cyan-300">🏃 유산소 운동</span>
+                                  <span className="text-sm font-bold text-cyan-600 dark:text-cyan-300">
                                     {exerciseDetails.cardio.current}회 / {exerciseDetails.cardio.target}회
                                   </span>
                                 </div>
-                                <Progress value={exerciseDetails.cardio.percentage} className="h-2" />
-                                <div className="text-xs text-cyan-600 dark:text-cyan-400 mt-1 text-center">
+                                <Progress value={exerciseDetails.cardio.percentage} className="h-2 [&>div]:bg-cyan-600 dark:[&>div]:bg-cyan-700" />
+                                <div className="text-xs text-cyan-600 dark:text-cyan-300 mt-1 text-center">
                                   {Math.round(exerciseDetails.cardio.percentage)}% 달성
                                 </div>
                               </div>
@@ -1506,9 +1507,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                     <div className="relative">
                       <Progress value={todayData?.nutritionGoals?.carbs 
                         ? Math.min((todayData.nutrition.carbs / todayData.nutritionGoals.carbs) * 100, 100)
-                        : 0} className="h-3" />
+                        : 0} className="h-3 bg-blue-200 dark:bg-blue-900/60 [&>div]:bg-blue-600 dark:[&>div]:bg-blue-400" />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs font-semibold text-white drop-shadow">
+                        <span className="text-white text-xs font-semibold drop-shadow">
                           {todayData?.nutritionGoals?.carbs 
                             ? Math.round((todayData.nutrition.carbs / todayData.nutritionGoals.carbs) * 100)
                             : 0}%
@@ -1530,9 +1531,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                     <div className="relative">
                       <Progress value={todayData?.nutritionGoals?.protein 
                         ? Math.min((todayData.nutrition.protein / todayData.nutritionGoals.protein) * 100, 100)
-                        : 0} className="h-3" />
+                        : 0} className="h-3 bg-purple-200 dark:bg-purple-900/60 [&>div]:bg-purple-600 dark:[&>div]:bg-purple-400" />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs font-semibold text-white drop-shadow">
+                        <span className="text-white text-xs font-semibold drop-shadow">
                           {todayData?.nutritionGoals?.protein 
                             ? Math.round((todayData.nutrition.protein / todayData.nutritionGoals.protein) * 100)
                             : 0}%
@@ -1554,9 +1555,9 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
                     <div className="relative">
                       <Progress value={todayData?.nutritionGoals?.fat 
                         ? Math.min((todayData.nutrition.fat / todayData.nutritionGoals.fat) * 100, 100)
-                        : 0} className="h-3" />
+                        : 0} className="h-3 bg-pink-200 dark:bg-pink-900/60 [&>div]:bg-pink-600 dark:[&>div]:bg-pink-400" />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs font-semibold text-white drop-shadow">
+                        <span className="text-white text-xs font-semibold drop-shadow">
                           {todayData?.nutritionGoals?.fat 
                             ? Math.round((todayData.nutrition.fat / todayData.nutritionGoals.fat) * 100)
                             : 0}%
