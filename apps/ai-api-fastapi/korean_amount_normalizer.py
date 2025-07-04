@@ -1,3 +1,5 @@
+import re
+
 def normalize_korean_amount(amount: str) -> str:
     synonyms = [
         ('뚝배기', '그릇'), ('1뚝배기', '1그릇'),
@@ -29,4 +31,10 @@ def normalize_korean_amount(amount: str) -> str:
     normalized = amount.replace(' ', '')  # Remove all spaces for robust matching
     for from_str, to_str in synonyms:
         normalized = normalized.replace(from_str.replace(' ', ''), to_str)
+    # 정규식: 숫자+덩이 → 숫자+개
+    normalized = re.sub(r'(\d+)덩이', r'\1개', normalized)
+    # 한글 숫자+덩이 → 한글 숫자+개
+    normalized = re.sub(r'(한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)덩이', r'\1개', normalized)
+    # 단독 '덩이' → '개'
+    normalized = re.sub(r'덩이', '개', normalized)
     return normalized 
