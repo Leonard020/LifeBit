@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev:windows": "concurrently \"powershell -File ./scripts/start-ai-api.ps1\" \"powershell -File ./scripts/start-core-api.ps1\" \"powershell -File ./scripts/start-frontend.ps1\"",
+    "dev:windows": "powershell -Command \"Start-Process powershell -ArgumentList '-File', './scripts/start-ai-api.ps1'; Start-Sleep -Seconds 5; Start-Process powershell -ArgumentList '-File', './scripts/start-core-api.ps1'; Start-Sleep -Seconds 10; Start-Process powershell -ArgumentList '-File', './scripts/start-frontend.ps1'\"",
     "dev:mac": "concurrently \"bash ./scripts/start-ai-api.sh\" \"bash ./scripts/start-core-api.sh\" \"bash ./scripts/start-frontend.sh\""
   },
   "keywords": [],
