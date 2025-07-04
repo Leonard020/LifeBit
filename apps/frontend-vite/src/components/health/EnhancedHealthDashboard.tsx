@@ -304,7 +304,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   const checkWeeklyExerciseReset = async () => {
     try {
       const token = getToken();
-      const response = await fetch(`${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/check-weekly-reset`, {
+      const response = await fetch(`${import.meta.env.VITE_CORE_API_URL}/health-statistics/${userId}/check-weekly-reset`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -327,7 +327,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
   const checkDailyNutritionReset = async () => {
     try {
       const token = getToken();
-      const response = await fetch(`${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/check-daily-reset`, {
+      const response = await fetch(`${import.meta.env.VITE_CORE_API_URL}/health-statistics/${userId}/check-daily-reset`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -535,7 +535,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       const currentExerciseScore = calculateExerciseScore();
       console.log('💪 [운동 점수 계산] 결과:', { currentExerciseScore });
       
-      const url = `${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/add-exercise-score?achievementCount=${currentExerciseScore}`;
+      const url = `${import.meta.env.VITE_CORE_API_URL}/health-statistics/${userId}/add-exercise-score?achievementCount=${currentExerciseScore}`;
       console.log('🚀 [API 호출] URL:', url);
       
       // 토큰 가져오기
@@ -601,7 +601,7 @@ export const EnhancedHealthDashboard: React.FC<EnhancedHealthDashboardProps> = (
       const isDailyGoalAchieved = nutritionScore >= 1;
       console.log('🥗 [식단 점수 계산] 결과:', { nutritionScore, isDailyGoalAchieved });
       
-      const url = `${import.meta.env.VITE_CORE_API_URL}/api/health-statistics/${userId}/add-nutrition-score?isDailyGoalAchieved=${isDailyGoalAchieved}`;
+      const url = `${import.meta.env.VITE_CORE_API_URL}/health-statistics/${userId}/add-nutrition-score?isDailyGoalAchieved=${isDailyGoalAchieved}`;
       console.log('🚀 [API 호출] URL:', url);
       
       // 토큰 가져오기
