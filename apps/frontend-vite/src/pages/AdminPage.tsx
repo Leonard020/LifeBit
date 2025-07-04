@@ -391,7 +391,7 @@ export const AdminPage = () => {
 
   const fetchCatalogs = async () => {
     try {
-      const res = await fetch('/api/exercises/admin/catalog', {
+      const res = await fetch('http://localhost:8080/api/exercises/admin/catalog', {
         headers: {
           'Authorization': `Bearer ${getToken()}`
         }
@@ -408,7 +408,7 @@ export const AdminPage = () => {
 
   const fetchFoodCatalogs = async () => {
     try {
-      const res = await fetch('/api/diet/admin/food-catalog', {
+      const res = await fetch('http://localhost:8080/api/diet/admin/food-catalog', {
         headers: {
           'Authorization': `Bearer ${getToken()}`
         }
@@ -477,7 +477,7 @@ export const AdminPage = () => {
   // 운동 카탈로그 삭제 함수
   const handleDeleteCatalog = async (catalogId: number) => {
     try {
-      const res = await fetch(`/api/exercises/admin/catalog/${catalogId}`, {
+      const res = await fetch(`http://localhost:8080/api/exercises/admin/catalog/${catalogId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${getToken()}`
@@ -526,7 +526,7 @@ export const AdminPage = () => {
       console.log('🔧 [수정 요청] 원본 데이터:', editingCatalog);
       console.log('🔧 [수정 요청] 변환된 데이터:', requestData);
       
-      const res = await fetch(`/api/exercises/admin/catalog/${editingCatalog.exerciseCatalogId}`, {
+      const res = await fetch(`http://localhost:8080/api/exercises/admin/catalog/${editingCatalog.exerciseCatalogId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -547,7 +547,7 @@ export const AdminPage = () => {
       console.log('✅ [수정 성공] 전체 필드:', Object.keys(updatedCatalog));
       
       // 목록을 다시 불러와서 최신 데이터 반영
-      const refreshRes = await fetch('/api/exercises/admin/catalog', {
+      const refreshRes = await fetch('http://localhost:8080/api/exercises/admin/catalog', {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       if (refreshRes.ok) {
@@ -602,7 +602,7 @@ export const AdminPage = () => {
       
       console.log('🔧 [음식 수정 요청] 데이터:', requestData);
       
-      const res = await fetch(`/api/diet/admin/food-catalog/${editingFoodCatalog.foodItemId}`, {
+      const res = await fetch(`http://localhost:8080/api/diet/admin/food-catalog/${editingFoodCatalog.foodItemId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -621,7 +621,7 @@ export const AdminPage = () => {
       console.log('✅ [음식 수정 성공] 응답 데이터:', updatedFood);
       
       // 목록을 다시 불러와서 최신 데이터 반영
-      const refreshRes = await fetch('/api/diet/admin/food-catalog', {
+      const refreshRes = await fetch('http://localhost:8080/api/diet/admin/food-catalog', {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
       if (refreshRes.ok) {
@@ -648,7 +648,7 @@ export const AdminPage = () => {
   // 음식 카탈로그 삭제 함수
   const handleDeleteFoodCatalog = async (foodId: number) => {
     try {
-      const res = await fetch(`/api/diet/admin/food-catalog/${foodId}`, {
+      const res = await fetch(`http://localhost:8080/api/diet/admin/food-catalog/${foodId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${getToken()}`
