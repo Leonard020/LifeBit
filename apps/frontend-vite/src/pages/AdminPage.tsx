@@ -255,7 +255,7 @@ export const AdminPage = () => {
   const fetchDashboardData = async () => {
     try {
       setIsRefreshing(true);
-      const res = await axiosInstance.get('/api/admin/dashboard');
+      const res = await axiosInstance.get('/admin/dashboard');
       if (res.data) {
         setDashboardStats({
           totalUsers: res.data.totalUsers || 0,
@@ -335,7 +335,7 @@ export const AdminPage = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await axiosInstance.get('/api/admin/users');
+      const res = await axiosInstance.get('/admin/users');
       if (res.data) {
         setUsers(res.data);
       }
@@ -432,7 +432,7 @@ export const AdminPage = () => {
 
   const handleDelete = async (userId: string) => {
     try {
-      await axiosInstance.delete(`/api/admin/users/${userId}`);
+      await axiosInstance.delete(`/admin/users/${userId}`);
       setUsers(prev => prev.filter(u => u.id !== userId));
       toast({ title: '삭제 성공', description: '사용자가 삭제되었습니다.' });
     } catch {

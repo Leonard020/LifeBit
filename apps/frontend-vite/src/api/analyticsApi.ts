@@ -235,7 +235,7 @@ export const getAccessStats = async (period: string): Promise<AccessStatsDto[]> 
   console.log('🔍 [API] getAccessStats 요청:', { period });
   
   try {
-    const response = await axiosInstance.get(`/api/admin/analytics/access-stats?period=${period}`);
+    const response = await axiosInstance.get(`/admin/analytics/access-stats?period=${period}`);
     console.log('✅ [API] getAccessStats 성공:', response.status);
     return response.data;
   } catch (error: any) {
@@ -249,7 +249,7 @@ export const getUserActivityStats = async (period: string): Promise<UserActivity
   console.log('🔍 [API] getUserActivityStats 요청:', { period });
   
   try {
-    const response = await axiosInstance.get(`/api/admin/analytics/user-activity?period=${period}`);
+    const response = await axiosInstance.get(`/admin/analytics/user-activity?period=${period}`);
     console.log('✅ [API] getUserActivityStats 성공:', response.status);
     return response.data;
   } catch (error: any) {
@@ -263,7 +263,7 @@ export const getExerciseStats = async (period: string): Promise<ExerciseStatsDto
   console.log('🔍 [API] getExerciseStats 요청:', { period });
   
   try {
-    const response = await axiosInstance.get(`/api/admin/analytics/exercise-stats?period=${period}`);
+    const response = await axiosInstance.get(`/admin/analytics/exercise-stats?period=${period}`);
     console.log('✅ [API] getExerciseStats 성공:', response.status);
     return response.data;
   } catch (error: any) {
@@ -277,7 +277,7 @@ export const getMealStats = async (period: string): Promise<MealStatsDto[]> => {
   console.log('🔍 [API] getMealStats 요청:', { period });
   
   try {
-    const response = await axiosInstance.get(`/api/admin/analytics/meal-stats?period=${period}`);
+    const response = await axiosInstance.get(`/admin/analytics/meal-stats?period=${period}`);
     console.log('✅ [API] getMealStats 성공:', response.status);
     return response.data;
   } catch (error: any) {
@@ -291,7 +291,7 @@ export const getAllAnalytics = async (period: string): Promise<AnalyticsDataDto>
   console.log('🔍 [API] getAllAnalytics 요청 시작:', { period, timestamp: new Date().toISOString() });
   
   try {
-    const url = `/api/admin/analytics/all?period=${period}`;
+    const url = `/admin/analytics/all?period=${period}`;
     console.log('🌐 [API] 요청 URL:', url);
     
     const response = await axiosInstance.get(url);
@@ -363,7 +363,7 @@ export const checkServerHealth = async (): Promise<{
 
     // Analytics API 직접 테스트
     try {
-      const analyticsResponse = await axiosInstance.get('/api/admin/analytics/all?period=daily');
+      const analyticsResponse = await axiosInstance.get('/admin/analytics/all?period=daily');
       results.details.analytics = '연결 성공';
       console.log('✅ [Health Check] Analytics API 연결 성공');
     } catch (analyticsError: any) {
@@ -386,7 +386,7 @@ export const getRealtimeAnalytics = async (): Promise<AnalyticsDataDto> => {
   console.log('📡 [API] getRealtimeAnalytics 요청');
   
   try {
-    const response = await axiosInstance.get('/api/admin/analytics/realtime');
+    const response = await axiosInstance.get('/admin/analytics/realtime');
     console.log('✅ [API] getRealtimeAnalytics 성공:', response.status);
     return response.data;
   } catch (error: any) {
@@ -402,7 +402,7 @@ export const getOnlineUsers = async (): Promise<OnlineUsersDto> => {
   console.log('👥 [API] 실시간 접속자 수 요청');
   
   try {
-    const response = await axiosInstance.get('/api/admin/analytics/online-users');
+    const response = await axiosInstance.get('/admin/analytics/online-users');
     console.log('✅ [API] 실시간 접속자 수 수신 성공:', response.data);
     return response.data;
   } catch (error: any) {
@@ -418,7 +418,7 @@ export const getOnlineUsersDetail = async (): Promise<OnlineUsersDetailDto> => {
   console.log('👥 [API] 실시간 접속자 상세 정보 요청');
   
   try {
-    const response = await axiosInstance.get('/api/admin/analytics/online-users-detail');
+    const response = await axiosInstance.get('/admin/analytics/online-users-detail');
     console.log('✅ [API] 실시간 접속자 상세 정보 수신 성공:', response.data);
     return response.data;
   } catch (error: any) {
