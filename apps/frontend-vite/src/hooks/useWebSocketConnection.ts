@@ -24,8 +24,17 @@ export const useWebSocketConnection = ({ userId, enabled = true, currentPage = '
       return;
     }
 
-    // WebSocket URL 생성
-    const wsUrl = `ws://${API_CONFIG.BASE_URL.replace('http://', '')}/ws/health/${userId}?token=${encodeURIComponent(token)}`;
+    // WebSocket URL 생성 - HTTPS 환경에서는 wss:// 사용
+    const baseUrl = API_CONFIG.BASE_URL;
+    let wsUrl: string;
+    
+    if (baseUrl.startsWith('https://')) {
+      // HTTPS 환경: wss:// 사용
+      wsUrl = `wss://${baseUrl.replace('https://', '')}/ws/health/${userId}?token=${encodeURIComponent(token)}`;
+    } else {
+      // HTTP 환경: ws:// 사용
+      wsUrl = `ws://${baseUrl.replace('http://', '')}/ws/health/${userId}?token=${encodeURIComponent(token)}`;
+    }
     
     console.log('🔗 [WebSocket] 연결 시도:', { userId, wsUrl });
 
