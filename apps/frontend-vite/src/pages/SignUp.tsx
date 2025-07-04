@@ -94,16 +94,15 @@ const SignUp = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center space-x-2">
-            <div className="gradient-bg w-12 h-12 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-2xl">L</span>
-            </div>
-            <span className="gradient-text text-3xl font-bold">LifeBit</span>
-          </Link>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-full max-w-md space-y-8 p-8">
+        <div className="text-center pt-2">
+          <img
+            src="/LifeBitLogo2.png"
+            alt="LifeBit 로고"
+            className="h-14 w-auto mx-auto mb-4"
+            style={{ objectFit: 'contain' }}
+          />
           <p className="text-muted-foreground mt-2">새로운 건강 여정을 시작하세요</p>
         </div>
 

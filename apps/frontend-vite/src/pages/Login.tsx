@@ -159,10 +159,10 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
         <div className="text-center">
-          <img
-            src="/LifeBitLogo1.png"
+        <img
+            src="/LifeBitLogo2.png"
             alt="LifeBit 로고"
-            className="h-32 w-auto mx-auto mb-4"
+            className="h-14 w-auto mx-auto mb-4"
             style={{ objectFit: 'contain' }}
           />
           <h2 className="text-2xl font-bold tracking-tight">
