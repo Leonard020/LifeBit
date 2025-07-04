@@ -439,7 +439,7 @@ const getHealthAnalyticsReport = async (
   try {
   console.log('🤖 [AI Analytics] 건강 분석 리포트 요청:', { userId, period });
   
-    const response = await aiAxiosInstance.post('/api/py/analytics/health-report', {
+    const response = await aiAxiosInstance.post('/py/analytics/health-report', {
       user_id: userId,
       period: period
     });
@@ -477,7 +477,7 @@ const getAIHealthInsights = async (
   try {
   console.log('🧠 [AI Insights] AI 인사이트 요청:', { userId, period });
   
-    const response = await aiAxiosInstance.post('/api/py/analytics/ai-insights', {
+    const response = await aiAxiosInstance.post('/py/analytics/ai-insights', {
       user_id: userId,
       period: period
     });

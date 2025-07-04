@@ -20,6 +20,7 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-r
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import axiosInstance from '@/utils/axios';
 
 // 새로운 컴포넌트들 import
 import AdminHeader from '@/components/admin/AdminHeader';
@@ -254,27 +255,21 @@ export const AdminPage = () => {
   const fetchDashboardData = async () => {
     try {
       setIsRefreshing(true);
-      const res = await fetch('/api/admin/dashboard', {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      if (!res.ok) {
-        console.error('대시보드 응답 실패:', await res.text());
-        return;
+      const res = await axiosInstance.get('/api/admin/dashboard');
+      if (res.data) {
+        setDashboardStats({
+          totalUsers: res.data.totalUsers || 0,
+          weeklyNewUsers: res.data.weeklyNewUsers || 0,
+          monthlyNewUsers: res.data.monthlyNewUsers || 0,
+          dailyActiveUsers: res.data.dailyActiveUsers || 0,
+          weeklyActiveUsers: res.data.weeklyActiveUsers || 0,
+          monthlyActiveUsers: res.data.monthlyActiveUsers || 0,
+          dailyActiveRecorders: res.data.dailyActiveRecorders || 0,
+          weeklyActiveRecorders: res.data.weeklyActiveRecorders || 0,
+          monthlyActiveRecorders: res.data.monthlyActiveRecorders || 0
+        });
+        setLastUpdated(new Date());
       }
-      const data = await res.json();
-      
-      setDashboardStats({
-        totalUsers: data.totalUsers || 0,
-        weeklyNewUsers: data.weeklyNewUsers || 0,
-        monthlyNewUsers: data.monthlyNewUsers || 0,
-        dailyActiveUsers: data.dailyActiveUsers || 0,
-        weeklyActiveUsers: data.weeklyActiveUsers || 0,
-        monthlyActiveUsers: data.monthlyActiveUsers || 0,
-        dailyActiveRecorders: data.dailyActiveRecorders || 0,
-        weeklyActiveRecorders: data.weeklyActiveRecorders || 0,
-        monthlyActiveRecorders: data.monthlyActiveRecorders || 0
-      });
-      setLastUpdated(new Date());
     } catch (err) {
       console.error('대시보드 데이터 fetch 오류:', err);
     } finally {
@@ -340,12 +335,10 @@ export const AdminPage = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/admin/users', {
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-      });
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const data = await res.json();
-      setUsers(data);
+      const res = await axiosInstance.get('/api/admin/users');
+      if (res.data) {
+        setUsers(res.data);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -391,15 +384,11 @@ export const AdminPage = () => {
 
   const fetchCatalogs = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/exercises/admin/catalog', {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch catalogs');
-      const data = await res.json();
-      console.log('🏋️ [AdminPage] 운동 카탈로그 API 응답:', data);
-      setCatalogs(data);
+      const res = await axiosInstance.get('/api/exercises/admin/catalog');
+      if (res.data) {
+        console.log('🏋️ [AdminPage] 운동 카탈로그 API 응답:', res.data);
+        setCatalogs(res.data);
+      }
     } catch (err) {
       console.error('❌ [AdminPage] 운동 카탈로그 로딩 실패:', err);
       toast({ title: "오류", description: "운동 카탈로그 로딩 실패", variant: "destructive" });
@@ -408,15 +397,11 @@ export const AdminPage = () => {
 
   const fetchFoodCatalogs = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/diet/admin/food-catalog', {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch food catalogs');
-      const data = await res.json();
-      console.log('🍽️ [AdminPage] 음식 카탈로그 API 응답:', data);
-      setFoodCatalogs(data);
+      const res = await axiosInstance.get('/api/diet/admin/food-catalog');
+      if (res.data) {
+        console.log('🍽️ [AdminPage] 음식 카탈로그 API 응답:', res.data);
+        setFoodCatalogs(res.data);
+      }
     } catch (err) {
       console.error('❌ [AdminPage] 음식 카탈로그 로딩 실패:', err);
       toast({ title: "오류", description: "음식 카탈로그 로딩 실패", variant: "destructive" });
@@ -447,11 +432,7 @@ export const AdminPage = () => {
 
   const handleDelete = async (userId: string) => {
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-      });
-      if (!res.ok) throw new Error();
+      await axiosInstance.delete(`/api/admin/users/${userId}`);
       setUsers(prev => prev.filter(u => u.id !== userId));
       toast({ title: '삭제 성공', description: '사용자가 삭제되었습니다.' });
     } catch {
@@ -477,16 +458,7 @@ export const AdminPage = () => {
   // 운동 카탈로그 삭제 함수
   const handleDeleteCatalog = async (catalogId: number) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/exercises/admin/catalog/${catalogId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error(`삭제 실패: ${res.status}`);
-      }
+      await axiosInstance.delete(`/api/exercises/admin/catalog/${catalogId}`);
 
       // 목록에서 삭제된 항목 제거
       setCatalogs(prev => prev.filter(catalog => catalog.exerciseCatalogId !== catalogId));
@@ -526,39 +498,24 @@ export const AdminPage = () => {
       console.log('🔧 [수정 요청] 원본 데이터:', editingCatalog);
       console.log('🔧 [수정 요청] 변환된 데이터:', requestData);
       
-      const res = await fetch(`http://localhost:8080/api/exercises/admin/catalog/${editingCatalog.exerciseCatalogId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
-        },
-        body: JSON.stringify(requestData)
-      });
+      const res = await axiosInstance.put(`/api/exercises/admin/catalog/${editingCatalog.exerciseCatalogId}`, requestData);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('❌ [수정 실패] 응답:', errorText);
-        throw new Error(`수정 실패: ${res.status} - ${errorText}`);
+      if (res.data) {
+        console.log('✅ [수정 성공] 응답 데이터:', res.data);
+        console.log('✅ [수정 성공] bodyPart 필드:', res.data.bodyPart);
+        console.log('✅ [수정 성공] 전체 필드:', Object.keys(res.data));
+        
+        // 목록을 다시 불러와서 최신 데이터 반영
+        const refreshRes = await axiosInstance.get('/api/exercises/admin/catalog');
+        if (refreshRes.data) {
+          setCatalogs(refreshRes.data);
+          console.log('🔄 [목록 새로고침] 완료');
+        }
+        
+        toast({ title: '수정 완료', description: '운동 카탈로그가 수정되었습니다.' });
+        setShowEditModal(false);
+        setEditingCatalog(null);
       }
-      
-      const updatedCatalog = await res.json();
-      console.log('✅ [수정 성공] 응답 데이터:', updatedCatalog);
-      console.log('✅ [수정 성공] bodyPart 필드:', updatedCatalog.bodyPart);
-      console.log('✅ [수정 성공] 전체 필드:', Object.keys(updatedCatalog));
-      
-      // 목록을 다시 불러와서 최신 데이터 반영
-      const refreshRes = await fetch('http://localhost:8080/api/exercises/admin/catalog', {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      if (refreshRes.ok) {
-        const refreshedData = await refreshRes.json();
-        setCatalogs(refreshedData);
-        console.log('🔄 [목록 새로고침] 완료');
-      }
-      
-      toast({ title: '수정 완료', description: '운동 카탈로그가 수정되었습니다.' });
-      setShowEditModal(false);
-      setEditingCatalog(null);
     } catch (error) {
       console.error('❌ [AdminPage] 운동 카탈로그 수정 실패:', error);
       toast({ 
@@ -602,37 +559,22 @@ export const AdminPage = () => {
       
       console.log('🔧 [음식 수정 요청] 데이터:', requestData);
       
-      const res = await fetch(`http://localhost:8080/api/diet/admin/food-catalog/${editingFoodCatalog.foodItemId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
-        },
-        body: JSON.stringify(requestData)
-      });
+      const res = await axiosInstance.put(`/api/diet/admin/food-catalog/${editingFoodCatalog.foodItemId}`, requestData);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('❌ [음식 수정 실패] 응답:', errorText);
-        throw new Error(`수정 실패: ${res.status} - ${errorText}`);
+      if (res.data) {
+        console.log('✅ [음식 수정 성공] 응답 데이터:', res.data);
+        
+        // 목록을 다시 불러와서 최신 데이터 반영
+        const refreshRes = await axiosInstance.get('/api/diet/admin/food-catalog');
+        if (refreshRes.data) {
+          setFoodCatalogs(refreshRes.data);
+          console.log('🔄 [음식 목록 새로고침] 완료');
+        }
+        
+        toast({ title: '수정 완료', description: '음식 카탈로그가 수정되었습니다.' });
+        setShowEditFoodModal(false);
+        setEditingFoodCatalog(null);
       }
-      
-      const updatedFood = await res.json();
-      console.log('✅ [음식 수정 성공] 응답 데이터:', updatedFood);
-      
-      // 목록을 다시 불러와서 최신 데이터 반영
-      const refreshRes = await fetch('http://localhost:8080/api/diet/admin/food-catalog', {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-      if (refreshRes.ok) {
-        const refreshedData = await refreshRes.json();
-        setFoodCatalogs(refreshedData);
-        console.log('🔄 [음식 목록 새로고침] 완료');
-      }
-      
-      toast({ title: '수정 완료', description: '음식 카탈로그가 수정되었습니다.' });
-      setShowEditFoodModal(false);
-      setEditingFoodCatalog(null);
     } catch (error) {
       console.error('❌ [AdminPage] 음식 카탈로그 수정 실패:', error);
       toast({ 
@@ -648,17 +590,8 @@ export const AdminPage = () => {
   // 음식 카탈로그 삭제 함수
   const handleDeleteFoodCatalog = async (foodId: number) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/diet/admin/food-catalog/${foodId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error(`삭제 실패: ${res.status}`);
-      }
-
+      await axiosInstance.delete(`/api/diet/admin/food-catalog/${foodId}`);
+      
       // 목록에서 삭제된 항목 제거
       setFoodCatalogs(prev => prev.filter(food => food.foodItemId !== foodId));
       
