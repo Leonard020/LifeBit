@@ -10,7 +10,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -45,11 +44,12 @@ public class SecurityConfig {
                                 "/api/py/auth/**"
                         )
                         .permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter,
                         org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
         
-        System.out.println("✅ [SecurityConfig] 보안 설정 완료 - /api/admin/analytics/** 경로 허용됨");
+        System.out.println("✅ [SecurityConfig] 보안 설정 완료 - /api/admin/** 경로에 ADMIN 권한 설정됨");
         return http.build();
     }
 
