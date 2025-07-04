@@ -21,7 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/diet")
+@RequestMapping({"/api/diet", "/diet"})
 @RequiredArgsConstructor
 @Slf4j
 public class DietController {

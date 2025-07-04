@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/exercises")
+@RequestMapping({"/api/exercises", "/exercises"})
 @RequiredArgsConstructor
 public class ExerciseController {
     private final ExerciseService exerciseService;
