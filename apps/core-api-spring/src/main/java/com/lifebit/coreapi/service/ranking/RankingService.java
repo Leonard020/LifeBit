@@ -864,24 +864,17 @@ public class RankingService {
     @Transactional
     public void addIncrementalScore(Long userId, int scoreToAdd, String scoreType) {
         try {
-            log.info("증분 점수 업데이트 시작 (새 레코드 생성) - 사용자 ID: {}, 추가 점수: {}, 점수 타입: {}", userId, scoreToAdd, scoreType);
-            
+            log.info("증분 점수 업데이트 시작 (update or insert) - 사용자 ID: {}, 추가 점수: {}, 점수 타입: {}", userId, scoreToAdd, scoreType);
             // 가장 최근 활성 랭킹 조회하여 현재 점수 확인
             UserRanking latestRanking = userRankingRepository.findActiveByUserId(userId)
                     .orElse(null);
-            
-            // 이전 점수 및 시즌 정보 계산
             int previousScore = 0;
             int previousRank = 0;
             int currentSeason = getCurrentSeason();
             RankingTier previousTier = RankingTier.UNRANK;
-            
             if (latestRanking != null) {
                 previousScore = latestRanking.getTotalScore();
                 previousTier = latestRanking.getTier();
-                
-                // 시즌이 같으면 기존 랭킹을 previous_rank로 사용
-                // 시즌이 다르면 previous_rank는 0으로 초기화
                 if (latestRanking.getSeason() == currentSeason) {
                     previousRank = latestRanking.getRankPosition();
                     log.info("같은 시즌 내 점수 업데이트 - 이전 순위 유지: {}", previousRank);
@@ -889,51 +882,37 @@ public class RankingService {
                     previousRank = 0;
                     log.info("새 시즌 시작 - 이전 순위 초기화");
                 }
-                
-                // 기존 레코드를 비활성화
-                latestRanking.setActive(false);
+                // 기존 레코드에 점수만 update (insert 대신)
+                latestRanking.setTotalScore(previousScore + scoreToAdd);
                 latestRanking.setLastUpdatedAt(LocalDateTime.now());
+                RankingTier newTier = calculateTier(latestRanking.getTotalScore());
+                latestRanking.setTier(newTier);
                 userRankingRepository.save(latestRanking);
-                log.info("기존 랭킹 레코드 비활성화 - 사용자 ID: {}, 기존 점수: {}, 기존 순위: {}", userId, previousScore, latestRanking.getRankPosition());
+                updateUserRankingPosition(userId);
+                log.info("기존 랭킹 레코드 점수 update 완료 - 사용자 ID: {}, 기존 점수: {}, 추가 점수: {}, 새 총점: {}", userId, previousScore, scoreToAdd, latestRanking.getTotalScore());
+                if (previousTier != newTier) {
+                    sendTierChangeNotification(userId, previousTier, newTier);
+                }
+                return;
             }
-            
-            // 새로운 점수 계산 (기존 점수 + 증분 점수)
-            int newTotalScore = previousScore + scoreToAdd;
-            
-            // 새로운 랭킹 레코드 생성
+            // 기존 레코드가 없으면 insert
             UserRanking newRanking = new UserRanking();
             newRanking.setUserId(userId);
-            newRanking.setTotalScore(newTotalScore);
-            newRanking.setStreakDays(latestRanking != null ? latestRanking.getStreakDays() : 0);
-            newRanking.setRankPosition(0); // 순위는 나중에 계산
-            newRanking.setPreviousRank(previousRank); // 시즌에 따른 previous_rank 설정
+            newRanking.setTotalScore(scoreToAdd);
+            newRanking.setStreakDays(0);
+            newRanking.setRankPosition(0);
+            newRanking.setPreviousRank(0);
             newRanking.setSeason(currentSeason);
             newRanking.setCreatedAt(LocalDateTime.now());
             newRanking.setLastUpdatedAt(LocalDateTime.now());
             newRanking.setActive(true);
-            
-            // 티어 계산
-            RankingTier newTier = calculateTier(newTotalScore);
+            RankingTier newTier = calculateTier(scoreToAdd);
             newRanking.setTier(newTier);
-            
-            // 새 랭킹 레코드 저장
-            UserRanking savedRanking = userRankingRepository.save(newRanking);
-            
-            // 랭킹 순위 업데이트
+            userRankingRepository.save(newRanking);
             updateUserRankingPosition(userId);
-            
-            log.info("새 랭킹 레코드 생성 완료 - 사용자 ID: {}, 레코드 ID: {}, 이전 점수: {}, 추가 점수: {}, 새 총점: {}, 점수 타입: {}, 이전 티어: {}, 새 티어: {}", 
-                    userId, savedRanking.getId(), previousScore, scoreToAdd, newTotalScore, scoreType, 
-                    previousTier.name(), newTier.name());
-            
-            // 티어 변경 시 알림 발송
-            if (previousTier != newTier) {
-                sendTierChangeNotification(userId, previousTier, newTier);
-            }
-                    
+            log.info("새 랭킹 레코드 insert 완료 - 사용자 ID: {}, 추가 점수: {}", userId, scoreToAdd);
         } catch (Exception e) {
-            log.error("증분 점수 업데이트 실패 - 사용자 ID: {}, 추가 점수: {}, 점수 타입: {}, 오류: {}", 
-                    userId, scoreToAdd, scoreType, e.getMessage(), e);
+            log.error("증분 점수 업데이트 실패 - 사용자 ID: {}, 추가 점수: {}, 점수 타입: {}, 오류: {}", userId, scoreToAdd, scoreType, e.getMessage(), e);
             throw new RuntimeException("증분 점수 업데이트에 실패했습니다.", e);
         }
     }
