@@ -25,7 +25,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        System.out.println("🔧 [SecurityConfig] 보안 설정 로딩 중... Admin Analytics 경로 허용됨");
+        System.out.println("🔧 [SecurityConfig] 보안 설정 로딩 중... Admin 경로 허용됨");
         
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -41,7 +41,7 @@ public class SecurityConfig {
                                 "/actuator/**",
                                 "/ws/**",
                                 "/api/exercises/find-or-create",
-                                "/api/admin/analytics/**",
+                                "/api/admin/**",
                                 "/api/py/auth/**"
                         )
                         .permitAll()
@@ -49,7 +49,7 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter,
                         org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
         
-        System.out.println("✅ [SecurityConfig] 보안 설정 완료 - /api/admin/analytics/** 경로 허용됨");
+        System.out.println("✅ [SecurityConfig] 보안 설정 완료 - /api/admin/** 경로 허용됨");
         return http.build();
     }
 
