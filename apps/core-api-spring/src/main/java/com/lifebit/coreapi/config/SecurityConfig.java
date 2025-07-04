@@ -47,6 +47,8 @@ public class SecurityConfig {
                                 "/exercises/admin/**",
                                 "/api/diet/admin/**",
                                 "/diet/admin/**",
+                                "/api/health-statistics/**",
+                                "/health-statistics/**",
                                 "/api/py/auth/**"
                         )
                         .permitAll()

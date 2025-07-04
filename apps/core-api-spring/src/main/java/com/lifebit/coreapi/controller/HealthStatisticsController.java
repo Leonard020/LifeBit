@@ -28,7 +28,7 @@ import java.util.Optional;
 import com.lifebit.coreapi.entity.enums.RankingTier;
 
 @RestController
-@RequestMapping("/api/health-statistics")
+@RequestMapping({"/api/health-statistics", "/health-statistics"})
 @RequiredArgsConstructor
 @Slf4j
 public class HealthStatisticsController {
